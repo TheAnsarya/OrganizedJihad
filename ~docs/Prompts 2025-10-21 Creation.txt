@@ -9,6 +9,18 @@ directives:
 use my editorconfig for formatting, use crlf, use tabs for all documents, use UTF-8, and always use the most modern code and practices, use yarn instead of npm when appropriate, comment everything including the code inside methods, add links in the comments to explanitory articles, always format, for this session and all sessions
 &&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&
 
+----------------
+Next Steps:
+Build the script: yarn build (already works!)
+Install in TamperMonkey: Open organized-jihad.user.js in browser
+Test on Hero Wars: Visit https://www.hero-wars.com
+Push to GitHub: Create repo and push
+----------------------
+
+save all of the past and future copilot chats to a folder so I know what's happening
+-----------------------------------
+Check `~docs/copilot-chats/` for past decisions, Review `.github/copilot-instructions.md` for coding standards
+-----------------------------------
 
 
 
@@ -18,6 +30,62 @@ use my editorconfig for formatting, use crlf, use tabs for all documents, use UT
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Check `~docs/copilot-chats/` for past decisions, Review `.github/copilot-instructions.md` for coding standards
 
 
 
