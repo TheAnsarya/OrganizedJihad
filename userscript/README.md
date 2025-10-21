@@ -1,134 +1,68 @@
-# OrganizedJihad - Hero Wars Workspace# OrganizedJihad - Hero Wars Tracker
+# OrganizedJihad - Hero Wars Tracker
 
+A comprehensive TamperMonkey userscript for tracking and managing your Hero Wars gameplay with an interactive browser overlay.
 
+## Features
 
-A collection of tools and projects for tracking and managing Hero Wars gameplay.A comprehensive TamperMonkey userscript for tracking and managing your Hero Wars gameplay with an interactive browser overlay.
+- **Game Data Tracking**: Automatically tracks heroes, resources, battles, and game events
+- **Goals Management**: Set and track short-term and long-term goals with progress tracking
+- **Calendar & Events**: Track game events, daily tasks, and custom reminders
+- **Smart Suggestions**: Get intelligent recommendations based on your gameplay patterns
+- **Detailed Reports**: View comprehensive statistics and progress reports
+- **Data Export/Import**: Backup and restore your tracking data
+- **Customizable UI**: Draggable overlay with multiple views and themes
 
+## Installation
 
+### Prerequisites
 
-## 📁 Project Structure## Features
+1. Install [TamperMonkey](https://www.tampermonkey.net/) browser extension:
+   - [Chrome](https://chrome.google.com/webstore/detail/tampermonkey/dhdgffkkebhmkfjojejmpbldmpobfkfo)
+   - [Firefox](https://addons.mozilla.org/en-US/firefox/addon/tampermonkey/)
+   - [Edge](https://microsoftedge.microsoft.com/addons/detail/tampermonkey/iikmkjmpaadaobahmlepeloendndfphd)
+   - [Safari](https://apps.apple.com/us/app/tampermonkey/id1482490089)
 
+### Install the Userscript
 
-
-```- **Game Data Tracking**: Automatically tracks heroes, resources, battles, and game events
-
-OrganizedJihad/- **Goals Management**: Set and track short-term and long-term goals with progress tracking
-
-├── userscript/              # Main TamperMonkey userscript- **Calendar & Events**: Track game events, daily tasks, and custom reminders
-
-│   ├── src/                # Source code modules- **Smart Suggestions**: Get intelligent recommendations based on your gameplay patterns
-
-│   ├── dist/               # Compiled userscript output- **Detailed Reports**: View comprehensive statistics and progress reports
-
-│   └── package.json        # Dependencies and scripts- **Data Export/Import**: Backup and restore your tracking data
-
-│- **Customizable UI**: Draggable overlay with multiple views and themes
-
-├── ~docs/                  # Documentation and research
-
-│   ├── API-Integration-Research.md## Installation
-
-│   └── copilot-chats/      # Development chat history
-
-│### Prerequisites
-
-├── ~reference-code/        # Reference implementations (gitignored)
-
-│   └── Hero Wars extensions for analysis1. Install [TamperMonkey](https://www.tampermonkey.net/) browser extension:
-
-│   - [Chrome](https://chrome.google.com/webstore/detail/tampermonkey/dhdgffkkebhmkfjojejmpbldmpobfkfo)
-
-└── .github/                # GitHub configuration   - [Firefox](https://addons.mozilla.org/en-US/firefox/addon/tampermonkey/)
-
-    └── copilot-instructions.md   - [Edge](https://microsoftedge.microsoft.com/addons/detail/tampermonkey/iikmkjmpaadaobahmlepeloendndfphd)
-
-```   - [Safari](https://apps.apple.com/us/app/tampermonkey/id1482490089)
-
-
-
-## 🚀 Getting Started### Install the Userscript
-
-
-
-### TamperMonkey Userscript1. Build the project (see Development section)
-
+1. Build the project (see Development section)
 2. Open `dist/organized-jihad.user.js` in your browser
-
-The main userscript project for browser-based gameplay tracking:3. TamperMonkey will prompt you to install the script
-
+3. TamperMonkey will prompt you to install the script
 4. Click "Install" to confirm
 
-```bash
-
-cd userscriptAlternatively, you can:
-
-yarn install1. Open TamperMonkey dashboard
-
-yarn build2. Click "Create a new script"
-
-```3. Copy and paste the contents of `dist/organized-jihad.user.js`
-
+Alternatively, you can:
+1. Open TamperMonkey dashboard
+2. Click "Create a new script"
+3. Copy and paste the contents of `dist/organized-jihad.user.js`
 4. Save the script
-
-See [userscript/README.md](userscript/README.md) for detailed installation and usage instructions.
 
 ## Usage
 
-## 📚 Documentation
-
 ### Accessing the Overlay
 
-- **[API Integration Research](~docs/API-Integration-Research.md)** - Comprehensive API documentation and patterns
-
-- **[Copilot Chat History](~docs/copilot-chats/)** - Development conversation logs- **Automatic**: The overlay appears automatically when you visit Hero Wars (if enabled in settings)
-
+- **Automatic**: The overlay appears automatically when you visit Hero Wars (if enabled in settings)
 - **Keyboard Shortcut**: Press `Ctrl+Shift+H` to toggle the overlay visibility
+- **Position**: Drag the header to reposition the overlay anywhere on screen
 
-## 🎯 Future Projects- **Position**: Drag the header to reposition the overlay anywhere on screen
+### Navigation
 
+The overlay includes several tabs:
 
-
-This workspace is designed to support multiple related projects:### Navigation
-
-- Browser extensions (Chrome/Firefox)
-
-- Desktop applicationsThe overlay includes several tabs:
-
-- Mobile companion apps
-
-- Web-based dashboards1. **Dashboard**: Quick overview of your stats, suggestions, and upcoming events
-
-- Data analysis tools2. **Goals**: Manage short-term and long-term goals
-
+1. **Dashboard**: Quick overview of your stats, suggestions, and upcoming events
+2. **Goals**: Manage short-term and long-term goals
 3. **Calendar**: View and manage events and reminders
-
-## 📝 Development4. **Heroes**: Track your hero roster and stats
-
+4. **Heroes**: Track your hero roster and stats
 5. **Resources**: Monitor your in-game resources
+6. **Reports**: View detailed statistics and analytics
+7. **Settings**: Configure the tracker and manage your data
 
-All projects follow consistent formatting rules:6. **Reports**: View detailed statistics and analytics
+### Managing Goals
 
-- **Tabs** for indentation (width: 4)7. **Settings**: Configure the tracker and manage your data
-
-- **CRLF** line endings
-
-- **UTF-8** encoding### Managing Goals
-
-- **Single quotes** for strings
-
-- **ES2024+** modern JavaScript1. Click the **Goals** tab
-
+1. Click the **Goals** tab
 2. Click **+ Add Goal** to create a new goal
-
-See `.github/copilot-instructions.md` for complete development guidelines.3. Choose between "Short Term" or "Long Term" tabs
-
+3. Choose between "Short Term" or "Long Term" tabs
 4. Track progress automatically or manually update
 
-## 📄 License
-
 ### Calendar Features
-
-See [LICENSE](userscript/LICENSE) for details.
 
 1. Click the **Calendar** tab
 2. Add custom events with **+ Add Event**
