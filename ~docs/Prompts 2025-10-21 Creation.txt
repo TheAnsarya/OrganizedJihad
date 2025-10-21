@@ -1,4 +1,8 @@
 
+****************************
+Step One: Install Tamper Monkey https://www.tampermonkey.net/
+Step Two: Install the HWH Script https://greasyfork.org/en/scripts/450693-herowarshelper
+****************************
 
 
 
@@ -25,16 +29,8 @@ Push to GitHub: Create repo and push
 The `OrganizedJihad` repos already exists, use that
 install `GitHub CLI` for future use
 install prettier and use the editorconfig for styling and use crlf, tabs (4), and utf-8, etc
-
-
-
-
-
-
-
-
-
-
+use `https://hw-assist.com/` as an example of how to use and hook into the HeroWars API and also `https://greasyfork.org/en/scripts/450693-herowarshelper`
+Add `C:\Users\me\source\repos\OrganizedJihad\~reference-code` to gitignore, and then for the `hw-assist` reference code, use `C:\Users\me\source\repos\OrganizedJihad\~reference-code` and expand the api and ui
 
 
 
