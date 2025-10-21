@@ -60,12 +60,15 @@ Record team compositions and battle results
 Create trend analysis over time
 ***********************************
 where is the tracking and other data stored? We want to store them long time, do we need a C#dotnet10 back project running at a publicly available URL for long term and collective storage? And a local SQL db to store everything for shorter term storage that we can then upload to the remote c# API.
+&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&
+Next steps:
+Desktop App (.NET MAUI or Electron) with SQLite
+C# .NET 10 Web API with full cloud infrastructure
+Update userscript with sync capabilities
+All three for complete architecture
+&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&
 make a fully complete TODO list for Tier 1 to 3 and also the `Next Steps` listed above, implementing all of the reccomendations and missing parts, and everything. Make sure to plan everything. After that, start implementing todo lists
-
-
-
-
-
+sure!     yes!
 
 
 
