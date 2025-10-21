@@ -39,30 +39,30 @@ class UIManager {
 		this.overlay.className = 'oj-overlay';
 
 		this.overlay.innerHTML = `
-            <div class="oj-container">
-                <div class="oj-header">
-                    <h2 class="oj-title">OrganizedJihad Tracker</h2>
-                    <div class="oj-header-actions">
-                        <button class="oj-btn oj-btn-icon" id="oj-minimize" title="Minimize">−</button>
-                        <button class="oj-btn oj-btn-icon" id="oj-close" title="Close">×</button>
-                    </div>
-                </div>
-                
-                <div class="oj-nav">
-                    <button class="oj-nav-btn active" data-view="dashboard">Dashboard</button>
-                    <button class="oj-nav-btn" data-view="goals">Goals</button>
-                    <button class="oj-nav-btn" data-view="calendar">Calendar</button>
-                    <button class="oj-nav-btn" data-view="heroes">Heroes</button>
-                    <button class="oj-nav-btn" data-view="resources">Resources</button>
-                    <button class="oj-nav-btn" data-view="reports">Reports</button>
-                    <button class="oj-nav-btn" data-view="settings">Settings</button>
-                </div>
-                
-                <div class="oj-content" id="oj-content">
-                    <!-- Content will be dynamically loaded here -->
-                </div>
-            </div>
-        `;
+			<div class="oj-container">
+				<div class="oj-header">
+					<h2 class="oj-title">OrganizedJihad Tracker</h2>
+					<div class="oj-header-actions">
+						<button class="oj-btn oj-btn-icon" id="oj-minimize" title="Minimize">−</button>
+						<button class="oj-btn oj-btn-icon" id="oj-close" title="Close">×</button>
+					</div>
+				</div>
+				
+				<div class="oj-nav">
+					<button class="oj-nav-btn active" data-view="dashboard">Dashboard</button>
+					<button class="oj-nav-btn" data-view="goals">Goals</button>
+					<button class="oj-nav-btn" data-view="calendar">Calendar</button>
+					<button class="oj-nav-btn" data-view="heroes">Heroes</button>
+					<button class="oj-nav-btn" data-view="resources">Resources</button>
+					<button class="oj-nav-btn" data-view="reports">Reports</button>
+					<button class="oj-nav-btn" data-view="settings">Settings</button>
+				</div>
+				
+				<div class="oj-content" id="oj-content">
+					<!-- Content will be dynamically loaded here -->
+				</div>
+			</div>
+		`;
 
 		document.body.appendChild(this.overlay);
 
@@ -177,101 +177,101 @@ class UIManager {
 		const upcomingEvents = this.calendarManager.getUpcomingEvents(3);
 
 		return `
-            <div class="oj-dashboard">
-                <div class="oj-section">
-                    <h3>Quick Stats</h3>
-                    <div class="oj-stats-grid">
-                        <div class="oj-stat-card">
-                            <div class="oj-stat-value">${gameData.heroes.length}</div>
-                            <div class="oj-stat-label">Heroes Tracked</div>
-                        </div>
-                        <div class="oj-stat-card">
-                            <div class="oj-stat-value">${activeGoals.shortTerm.length + activeGoals.longTerm.length}</div>
-                            <div class="oj-stat-label">Active Goals</div>
-                        </div>
-                        <div class="oj-stat-card">
-                            <div class="oj-stat-value">${upcomingEvents.length}</div>
-                            <div class="oj-stat-label">Upcoming Events</div>
-                        </div>
-                        <div class="oj-stat-card">
-                            <div class="oj-stat-value">${suggestions.length}</div>
-                            <div class="oj-stat-label">Suggestions</div>
-                        </div>
-                    </div>
-                </div>
-                
-                <div class="oj-section">
-                    <h3>Suggestions</h3>
-                    <div class="oj-suggestions-list">
-                        ${
+			<div class="oj-dashboard">
+				<div class="oj-section">
+					<h3>Quick Stats</h3>
+					<div class="oj-stats-grid">
+						<div class="oj-stat-card">
+							<div class="oj-stat-value">${gameData.heroes.length}</div>
+							<div class="oj-stat-label">Heroes Tracked</div>
+						</div>
+						<div class="oj-stat-card">
+							<div class="oj-stat-value">${activeGoals.shortTerm.length + activeGoals.longTerm.length}</div>
+							<div class="oj-stat-label">Active Goals</div>
+						</div>
+						<div class="oj-stat-card">
+							<div class="oj-stat-value">${upcomingEvents.length}</div>
+							<div class="oj-stat-label">Upcoming Events</div>
+						</div>
+						<div class="oj-stat-card">
+							<div class="oj-stat-value">${suggestions.length}</div>
+							<div class="oj-stat-label">Suggestions</div>
+						</div>
+					</div>
+				</div>
+				
+				<div class="oj-section">
+					<h3>Suggestions</h3>
+					<div class="oj-suggestions-list">
+						${
 							suggestions
 								.slice(0, 5)
 								.map(
 									(s) => `
-                            <div class="oj-suggestion ${s.priority}">
-                                <div class="oj-suggestion-header">
-                                    <span class="oj-suggestion-title">${s.title}</span>
-                                    <span class="oj-suggestion-priority">${s.priority}</span>
-                                </div>
-                                <p class="oj-suggestion-desc">${s.description}</p>
-                                <button class="oj-btn oj-btn-sm" onclick="dismissSuggestion(${s.id})">Dismiss</button>
-                            </div>
-                        `
+							<div class="oj-suggestion ${s.priority}">
+								<div class="oj-suggestion-header">
+									<span class="oj-suggestion-title">${s.title}</span>
+									<span class="oj-suggestion-priority">${s.priority}</span>
+								</div>
+								<p class="oj-suggestion-desc">${s.description}</p>
+								<button class="oj-btn oj-btn-sm" onclick="dismissSuggestion(${s.id})">Dismiss</button>
+							</div>
+						`
 								)
 								.join('') || '<p class="oj-empty">No suggestions at the moment!</p>'
 						}
-                    </div>
-                </div>
-                
-                <div class="oj-section">
-                    <h3>Upcoming Events (Next 3 Days)</h3>
-                    <div class="oj-events-list">
-                        ${
+					</div>
+				</div>
+				
+				<div class="oj-section">
+					<h3>Upcoming Events (Next 3 Days)</h3>
+					<div class="oj-events-list">
+						${
 							upcomingEvents
 								.map(
 									(e) => `
-                            <div class="oj-event-item">
-                                <div class="oj-event-date">${new Date(e.startDate).toLocaleDateString()}</div>
-                                <div class="oj-event-title">${e.title}</div>
-                            </div>
-                        `
+							<div class="oj-event-item">
+								<div class="oj-event-date">${new Date(e.startDate).toLocaleDateString()}</div>
+								<div class="oj-event-title">${e.title}</div>
+							</div>
+						`
 								)
 								.join('') || '<p class="oj-empty">No upcoming events</p>'
 						}
-                    </div>
-                </div>
-            </div>
-        `;
+					</div>
+				</div>
+			</div>
+		`;
 	}
 
 	renderGoals() {
 		const goals = this.goalsManager.getAllGoals();
 
 		return `
-            <div class="oj-goals">
-                <div class="oj-section-header">
-                    <h3>Goals Management</h3>
-                    <button class="oj-btn" id="oj-add-goal">+ Add Goal</button>
-                </div>
-                
-                <div class="oj-tabs">
-                    <button class="oj-tab-btn active" data-tab="short">Short Term</button>
-                    <button class="oj-tab-btn" data-tab="long">Long Term</button>
-                </div>
-                
-                <div class="oj-tab-content active" data-tab="short">
-                    <div class="oj-goals-list">
-                        ${this.renderGoalsList(goals.shortTerm)}
-                    </div>
-                </div>
-                
-                <div class="oj-tab-content" data-tab="long">
-                    <div class="oj-goals-list">
-                        ${this.renderGoalsList(goals.longTerm)}
-                    </div>
-                </div>
-            </div>
-        `;
+			<div class="oj-goals">
+				<div class="oj-section-header">
+					<h3>Goals Management</h3>
+					<button class="oj-btn" id="oj-add-goal">+ Add Goal</button>
+				</div>
+				
+				<div class="oj-tabs">
+					<button class="oj-tab-btn active" data-tab="short">Short Term</button>
+					<button class="oj-tab-btn" data-tab="long">Long Term</button>
+				</div>
+				
+				<div class="oj-tab-content active" data-tab="short">
+					<div class="oj-goals-list">
+						${this.renderGoalsList(goals.shortTerm)}
+					</div>
+				</div>
+				
+				<div class="oj-tab-content" data-tab="long">
+					<div class="oj-goals-list">
+						${this.renderGoalsList(goals.longTerm)}
+					</div>
+				</div>
+			</div>
+		`;
 	}
 
 	renderGoalsList(goals) {
@@ -283,28 +283,28 @@ class UIManager {
 			.map((goal) => {
 				const progress = goal.target ? ((goal.current / goal.target) * 100).toFixed(1) : 0;
 				return `
-                <div class="oj-goal-card ${goal.status}">
-                    <div class="oj-goal-header">
-                        <h4>${goal.title}</h4>
-                        <span class="oj-badge ${goal.priority}">${goal.priority}</span>
-                    </div>
-                    <p class="oj-goal-desc">${goal.description}</p>
-                    ${
+				<div class="oj-goal-card ${goal.status}">
+					<div class="oj-goal-header">
+						<h4>${goal.title}</h4>
+						<span class="oj-badge ${goal.priority}">${goal.priority}</span>
+					</div>
+					<p class="oj-goal-desc">${goal.description}</p>
+					${
 						goal.target
 							? `
-                        <div class="oj-progress-bar">
-                            <div class="oj-progress-fill" style="width: ${progress}%"></div>
-                            <span class="oj-progress-text">${goal.current} / ${goal.target}</span>
-                        </div>
-                    `
+						<div class="oj-progress-bar">
+							<div class="oj-progress-fill" style="width: ${progress}%"></div>
+							<span class="oj-progress-text">${goal.current} / ${goal.target}</span>
+						</div>
+					`
 							: ''
 					}
-                    <div class="oj-goal-footer">
-                        <span class="oj-goal-category">${goal.category}</span>
-                        ${goal.deadline ? `<span class="oj-goal-deadline">Due: ${new Date(goal.deadline).toLocaleDateString()}</span>` : ''}
-                    </div>
-                </div>
-            `;
+					<div class="oj-goal-footer">
+						<span class="oj-goal-category">${goal.category}</span>
+						${goal.deadline ? `<span class="oj-goal-deadline">Due: ${new Date(goal.deadline).toLocaleDateString()}</span>` : ''}
+					</div>
+				</div>
+			`;
 			})
 			.join('');
 	}
@@ -313,87 +313,87 @@ class UIManager {
 		const events = this.calendarManager.getUpcomingEvents(30);
 
 		return `
-            <div class="oj-calendar">
-                <div class="oj-section-header">
-                    <h3>Calendar & Events</h3>
-                    <button class="oj-btn" id="oj-add-event">+ Add Event</button>
-                </div>
-                
-                <div class="oj-events-list">
-                    ${
+			<div class="oj-calendar">
+				<div class="oj-section-header">
+					<h3>Calendar & Events</h3>
+					<button class="oj-btn" id="oj-add-event">+ Add Event</button>
+				</div>
+				
+				<div class="oj-events-list">
+					${
 						events
 							.map(
 								(e) => `
-                        <div class="oj-event-card ${e.type}">
-                            <div class="oj-event-header">
-                                <h4>${e.title}</h4>
-                                <span class="oj-badge">${e.type}</span>
-                            </div>
-                            <p>${e.description}</p>
-                            <div class="oj-event-dates">
-                                <span>Start: ${new Date(e.startDate).toLocaleString()}</span>
-                                <span>End: ${new Date(e.endDate).toLocaleString()}</span>
-                            </div>
-                        </div>
-                    `
+						<div class="oj-event-card ${e.type}">
+							<div class="oj-event-header">
+								<h4>${e.title}</h4>
+								<span class="oj-badge">${e.type}</span>
+							</div>
+							<p>${e.description}</p>
+							<div class="oj-event-dates">
+								<span>Start: ${new Date(e.startDate).toLocaleString()}</span>
+								<span>End: ${new Date(e.endDate).toLocaleString()}</span>
+							</div>
+						</div>
+					`
 							)
 							.join('') || '<p class="oj-empty">No upcoming events</p>'
 					}
-                </div>
-            </div>
-        `;
+				</div>
+			</div>
+		`;
 	}
 
 	renderHeroes() {
 		const heroes = this.gameTracker.getHeroes();
 
 		return `
-            <div class="oj-heroes">
-                <h3>Heroes</h3>
-                <div class="oj-heroes-grid">
-                    ${
+			<div class="oj-heroes">
+				<h3>Heroes</h3>
+				<div class="oj-heroes-grid">
+					${
 						heroes
 							.map(
 								(hero) => `
-                        <div class="oj-hero-card">
-                            <h4>${hero.name}</h4>
-                            <div class="oj-hero-stats">
-                                <span>Level: ${hero.level}</span>
-                                <span>Power: ${hero.power}</span>
-                            </div>
-                        </div>
-                    `
+						<div class="oj-hero-card">
+							<h4>${hero.name}</h4>
+							<div class="oj-hero-stats">
+								<span>Level: ${hero.level}</span>
+								<span>Power: ${hero.power}</span>
+							</div>
+						</div>
+					`
 							)
 							.join('') || '<p class="oj-empty">No hero data tracked yet</p>'
 					}
-                </div>
-            </div>
-        `;
+				</div>
+			</div>
+		`;
 	}
 
 	renderResources() {
 		const resources = this.gameTracker.getResources();
 
 		return `
-            <div class="oj-resources">
-                <h3>Resources</h3>
-                <div class="oj-resources-grid">
-                    ${
+			<div class="oj-resources">
+				<h3>Resources</h3>
+				<div class="oj-resources-grid">
+					${
 						Object.keys(resources)
 							.map(
 								(key) => `
-                        <div class="oj-resource-card">
-                            <h4>${key}</h4>
-                            <div class="oj-resource-amount">${resources[key].amount}</div>
-                            <div class="oj-resource-time">Updated: ${new Date(resources[key].timestamp).toLocaleString()}</div>
-                        </div>
-                    `
+						<div class="oj-resource-card">
+							<h4>${key}</h4>
+							<div class="oj-resource-amount">${resources[key].amount}</div>
+							<div class="oj-resource-time">Updated: ${new Date(resources[key].timestamp).toLocaleString()}</div>
+						</div>
+					`
 							)
 							.join('') || '<p class="oj-empty">No resource data tracked yet</p>'
 					}
-                </div>
-            </div>
-        `;
+				</div>
+			</div>
+		`;
 	}
 
 	renderReports() {
@@ -402,106 +402,106 @@ class UIManager {
 		const suggestionStats = this.suggestionsEngine.getStats();
 
 		return `
-            <div class="oj-reports">
-                <h3>Reports & Statistics</h3>
-                
-                <div class="oj-report-section">
-                    <h4>Goals Statistics</h4>
-                    <div class="oj-stats-grid">
-                        <div class="oj-stat-card">
-                            <div class="oj-stat-value">${goalStats.total}</div>
-                            <div class="oj-stat-label">Total Goals</div>
-                        </div>
-                        <div class="oj-stat-card">
-                            <div class="oj-stat-value">${goalStats.active}</div>
-                            <div class="oj-stat-label">Active</div>
-                        </div>
-                        <div class="oj-stat-card">
-                            <div class="oj-stat-value">${goalStats.completed}</div>
-                            <div class="oj-stat-label">Completed</div>
-                        </div>
-                        <div class="oj-stat-card">
-                            <div class="oj-stat-value">${goalStats.completionRate}%</div>
-                            <div class="oj-stat-label">Completion Rate</div>
-                        </div>
-                    </div>
-                </div>
-                
-                <div class="oj-report-section">
-                    <h4>Calendar Statistics</h4>
-                    <div class="oj-stats-grid">
-                        <div class="oj-stat-card">
-                            <div class="oj-stat-value">${calendarStats.total}</div>
-                            <div class="oj-stat-label">Total Events</div>
-                        </div>
-                        <div class="oj-stat-card">
-                            <div class="oj-stat-value">${calendarStats.upcoming}</div>
-                            <div class="oj-stat-label">Upcoming</div>
-                        </div>
-                        <div class="oj-stat-card">
-                            <div class="oj-stat-value">${calendarStats.activeGameEvents}</div>
-                            <div class="oj-stat-label">Active Game Events</div>
-                        </div>
-                    </div>
-                </div>
-                
-                <div class="oj-report-section">
-                    <h4>Suggestions Statistics</h4>
-                    <div class="oj-stats-grid">
-                        <div class="oj-stat-card">
-                            <div class="oj-stat-value">${suggestionStats.active}</div>
-                            <div class="oj-stat-label">Active Suggestions</div>
-                        </div>
-                        <div class="oj-stat-card high">
-                            <div class="oj-stat-value">${suggestionStats.high}</div>
-                            <div class="oj-stat-label">High Priority</div>
-                        </div>
-                        <div class="oj-stat-card medium">
-                            <div class="oj-stat-value">${suggestionStats.medium}</div>
-                            <div class="oj-stat-label">Medium Priority</div>
-                        </div>
-                        <div class="oj-stat-card low">
-                            <div class="oj-stat-value">${suggestionStats.low}</div>
-                            <div class="oj-stat-label">Low Priority</div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        `;
+			<div class="oj-reports">
+				<h3>Reports & Statistics</h3>
+				
+				<div class="oj-report-section">
+					<h4>Goals Statistics</h4>
+					<div class="oj-stats-grid">
+						<div class="oj-stat-card">
+							<div class="oj-stat-value">${goalStats.total}</div>
+							<div class="oj-stat-label">Total Goals</div>
+						</div>
+						<div class="oj-stat-card">
+							<div class="oj-stat-value">${goalStats.active}</div>
+							<div class="oj-stat-label">Active</div>
+						</div>
+						<div class="oj-stat-card">
+							<div class="oj-stat-value">${goalStats.completed}</div>
+							<div class="oj-stat-label">Completed</div>
+						</div>
+						<div class="oj-stat-card">
+							<div class="oj-stat-value">${goalStats.completionRate}%</div>
+							<div class="oj-stat-label">Completion Rate</div>
+						</div>
+					</div>
+				</div>
+				
+				<div class="oj-report-section">
+					<h4>Calendar Statistics</h4>
+					<div class="oj-stats-grid">
+						<div class="oj-stat-card">
+							<div class="oj-stat-value">${calendarStats.total}</div>
+							<div class="oj-stat-label">Total Events</div>
+						</div>
+						<div class="oj-stat-card">
+							<div class="oj-stat-value">${calendarStats.upcoming}</div>
+							<div class="oj-stat-label">Upcoming</div>
+						</div>
+						<div class="oj-stat-card">
+							<div class="oj-stat-value">${calendarStats.activeGameEvents}</div>
+							<div class="oj-stat-label">Active Game Events</div>
+						</div>
+					</div>
+				</div>
+				
+				<div class="oj-report-section">
+					<h4>Suggestions Statistics</h4>
+					<div class="oj-stats-grid">
+						<div class="oj-stat-card">
+							<div class="oj-stat-value">${suggestionStats.active}</div>
+							<div class="oj-stat-label">Active Suggestions</div>
+						</div>
+						<div class="oj-stat-card high">
+							<div class="oj-stat-value">${suggestionStats.high}</div>
+							<div class="oj-stat-label">High Priority</div>
+						</div>
+						<div class="oj-stat-card medium">
+							<div class="oj-stat-value">${suggestionStats.medium}</div>
+							<div class="oj-stat-label">Medium Priority</div>
+						</div>
+						<div class="oj-stat-card low">
+							<div class="oj-stat-value">${suggestionStats.low}</div>
+							<div class="oj-stat-label">Low Priority</div>
+						</div>
+					</div>
+				</div>
+			</div>
+		`;
 	}
 
 	renderSettings() {
 		return `
-            <div class="oj-settings">
-                <h3>Settings</h3>
-                
-                <div class="oj-settings-group">
-                    <h4>Data Management</h4>
-                    <button class="oj-btn" id="oj-export-data">Export Data</button>
-                    <button class="oj-btn" id="oj-import-data">Import Data</button>
-                    <button class="oj-btn oj-btn-danger" id="oj-clear-data">Clear All Data</button>
-                </div>
-                
-                <div class="oj-settings-group">
-                    <h4>Display</h4>
-                    <label>
-                        <input type="checkbox" id="oj-auto-show" ${this.isVisible ? 'checked' : ''}>
-                        Show overlay on page load
-                    </label>
-                </div>
-                
-                <div class="oj-settings-group">
-                    <h4>Keyboard Shortcuts</h4>
-                    <p>Ctrl+Shift+H - Toggle overlay visibility</p>
-                </div>
-                
-                <div class="oj-settings-group">
-                    <h4>About</h4>
-                    <p>OrganizedJihad - Hero Wars Tracker v1.0.0</p>
-                    <p>Track your progress, manage goals, and optimize your gameplay!</p>
-                </div>
-            </div>
-        `;
+			<div class="oj-settings">
+				<h3>Settings</h3>
+				
+				<div class="oj-settings-group">
+					<h4>Data Management</h4>
+					<button class="oj-btn" id="oj-export-data">Export Data</button>
+					<button class="oj-btn" id="oj-import-data">Import Data</button>
+					<button class="oj-btn oj-btn-danger" id="oj-clear-data">Clear All Data</button>
+				</div>
+				
+				<div class="oj-settings-group">
+					<h4>Display</h4>
+					<label>
+						<input type="checkbox" id="oj-auto-show" ${this.isVisible ? 'checked' : ''}>
+						Show overlay on page load
+					</label>
+				</div>
+				
+				<div class="oj-settings-group">
+					<h4>Keyboard Shortcuts</h4>
+					<p>Ctrl+Shift+H - Toggle overlay visibility</p>
+				</div>
+				
+				<div class="oj-settings-group">
+					<h4>About</h4>
+					<p>OrganizedJihad - Hero Wars Tracker v1.0.0</p>
+					<p>Track your progress, manage goals, and optimize your gameplay!</p>
+				</div>
+			</div>
+		`;
 	}
 
 	attachGoalEventListeners() {

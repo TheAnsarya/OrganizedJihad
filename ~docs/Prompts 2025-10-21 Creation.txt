@@ -31,9 +31,18 @@ install `GitHub CLI` for future use
 install prettier and use the editorconfig for styling and use crlf, tabs (4), and utf-8, etc
 use `https://hw-assist.com/` as an example of how to use and hook into the HeroWars API and also `https://greasyfork.org/en/scripts/450693-herowarshelper`
 Add `C:\Users\me\source\repos\OrganizedJihad\~reference-code` to gitignore, and then for the `hw-assist` reference code, use `C:\Users\me\source\repos\OrganizedJihad\~reference-code` and expand the api and ui
+format everything using prettier
+No, there are tons of lines of code using spaces instead of tabs, fix those
 
+******************
+Get-ChildItem -Path src -Recurse -Include *.js,*.css | ForEach-Object { $content = Get-Content $_.FullName -Raw; $content = $content -replace '(?m)^( {4})+', { param($match) "`t" * ($match.Value.Length / 4) }; Set-Content -Path $_.FullName -Value $content -NoNewline }
+*****************
 
+no, you removed the indentation instead of using tabs, revert and fix it
 
+******************
+$files = Get-ChildItem -Path src -Recurse -Include *.js,*.css; foreach ($file in $files) { $content = Get-Content $file.FullName -Raw; $lines = $content -split "`r`n"; $newLines = @(); foreach ($line in $lines) { if ($line -match '^( +)') { $spaces = $matches[1].Length; $tabs = [math]::Floor($spaces / 4); $remainder = $spaces % 4; $line = ("`t" * $tabs) + (' ' * $remainder) + $line.Substring($spaces); }; $newLines += $line; }; $newContent = $newLines -join "`r`n"; Set-Content -Path $file.FullName -Value $newContent -NoNewline }
+*************************
 
 
 
