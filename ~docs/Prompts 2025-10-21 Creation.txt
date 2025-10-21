@@ -6,8 +6,9 @@
 
 &&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&
 directives:
-use my editorconfig for formatting, use crlf, use tabs for all documents, use UTF-8, and always use the most modern code and practices and comment everything including the code inside methods, add links in the comments to explanitory articles, always format, for this session and all sessions
+use my editorconfig for formatting, use crlf, use tabs for all documents, use UTF-8, and always use the most modern code and practices, use yarn instead of npm when appropriate, comment everything including the code inside methods, add links in the comments to explanitory articles, always format, for this session and all sessions
 &&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&
+
 
 
 
