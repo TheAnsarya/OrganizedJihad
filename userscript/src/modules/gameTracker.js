@@ -179,11 +179,20 @@ class GameTracker {
 	 *   ]
 	 * }
 	 *
-	 * Common API calls we track:
+	 * Comprehensive API calls we track:
 	 * - userGetInfo: Player level, VIP, resources, guild
-	 * - heroGetAll: Hero roster with stats
-	 * - inventoryGet: Items, consumables, fragments
-	 * - missionEnd, towerEnd, etc: Battle results
+	 * - heroGetAll: Hero roster with stats, equipment, skins
+	 * - inventoryGet: Items, consumables, fragments, chests
+	 * - missionEnd, towerEnd, etc: Battle results with teams
+	 * - arenaAttack, arenaGetEnemies: Arena opponents and results
+	 * - titanArenaAttack, titanArenaGetEnemies: Titan arena battles
+	 * - grandArenaAttack: Grand arena battles
+	 * - clanWarAttack, clanWarGetInfo: Guild war data
+	 * - bossRaid: Guild raid boss attacks
+	 * - shopBuy, shopRefresh: Shop purchases and inventory
+	 * - chestOpen: Chest opening results for drop rate analysis
+	 * - questComplete: Quest rewards tracking
+	 * - expeditionGetState, expeditionBattle: Expedition progress
 	 *
 	 * @param {Object} request - The request data with "calls" array
 	 * @param {Object} response - The response data with "results" array
@@ -194,19 +203,23 @@ class GameTracker {
 
 		// Map requests to responses by ident
 		const callMap = {};
+		const callArgs = {};
 		request.calls.forEach((call) => {
 			callMap[call.ident] = call.name;
+			callArgs[call.ident] = call.args || {};
 		});
 
 		// Process each result
 		for (const result of response.results) {
 			const callName = callMap[result.ident];
+			const args = callArgs[result.ident];
 			const responseData = result.result?.response;
 
 			if (!responseData) continue;
 
 			try {
 				switch (callName) {
+					// Core player data
 					case 'userGetInfo':
 						await this.trackPlayerData(responseData);
 						break;
@@ -216,17 +229,85 @@ class GameTracker {
 					case 'inventoryGet':
 						await this.trackInventoryData(responseData);
 						break;
+
+					// Battle systems
 					case 'missionEnd':
 					case 'towerEnd':
-					case 'arenaEnd':
 					case 'bossEnd':
-						await this.trackBattleResult(callName, responseData);
+						await this.trackBattleResult(callName, args, responseData);
 						break;
+
+					// Arena tracking
+					case 'arenaGetEnemies':
+						await this.trackArenaEnemies(responseData);
+						break;
+					case 'arenaAttack':
+					case 'arenaEnd':
+						await this.trackArenaBattle(args, responseData);
+						break;
+
+					// Titan Arena
+					case 'titanArenaGetEnemies':
+						await this.trackTitanArenaEnemies(responseData);
+						break;
+					case 'titanArenaAttack':
+						await this.trackTitanArenaBattle(args, responseData);
+						break;
+
+					// Grand Arena
+					case 'grandArenaGetEnemies':
+						await this.trackGrandArenaEnemies(responseData);
+						break;
+					case 'grandArenaAttack':
+						await this.trackGrandArenaBattle(args, responseData);
+						break;
+
+					// Guild War
+					case 'clanWarGetInfo':
+					case 'clanWarUserGetInfo':
+						await this.trackGuildWarInfo(responseData);
+						break;
+					case 'clanWarAttack':
+						await this.trackGuildWarBattle(args, responseData);
+						break;
+
+					// Guild Raid
+					case 'bossRaidGetInfo':
+						await this.trackRaidBossInfo(responseData);
+						break;
+					case 'bossRaidAttack':
+						await this.trackRaidBossAttack(args, responseData);
+						break;
+
+					// Loot and rewards
+					case 'chestOpen':
+						await this.trackChestOpening(args, responseData);
+						break;
+					case 'shopBuy':
+						await this.trackShopPurchase(args, responseData);
+						break;
+					case 'questComplete':
+						await this.trackQuestComplete(args, responseData);
+						break;
+
+					// Other data
 					case 'questGetAll':
 						await this.trackQuestsData(responseData);
 						break;
 					case 'clanGetInfo':
 						await this.trackGuildData(responseData);
+						break;
+					case 'expeditionGetState':
+						await this.trackExpeditionState(responseData);
+						break;
+					case 'expeditionBattle':
+						await this.trackExpeditionBattle(args, responseData);
+						break;
+					case 'titanGetAll':
+						await this.trackTitansData(responseData);
+						break;
+					case 'petGetAll':
+						await this.trackPetsData(responseData);
 						break;
 				}
 			} catch (error) {
@@ -306,26 +387,588 @@ class GameTracker {
 	 * Track battle results from various battle end API calls
 	 *
 	 * @param {string} battleType - Type of battle (missionEnd, towerEnd, etc)
+	 * @param {Object} args - Battle request arguments
 	 * @param {Object} data - Battle result data
 	 * @private
 	 */
-	async trackBattleResult(battleType, data) {
+	async trackBattleResult(battleType, args, data) {
 		const battleRecord = {
 			type: battleType.replace('End', ''),
 			result: data.result?.win ? 'victory' : 'defeat',
 			reward: data.reward || {},
 			timestamp: Date.now(),
+			mission: args.mission || args.id || 'unknown',
 		};
 
 		const battleHistory = await storageManager.get('battleHistory', []);
 		battleHistory.push(battleRecord);
 
-		// Keep last 100 battles
-		if (battleHistory.length > 100) {
+		// Keep last 1000 battles
+		if (battleHistory.length > 1000) {
 			battleHistory.shift();
 		}
 
 		await storageManager.set('battleHistory', battleHistory);
+	}
+
+	/**
+	 * Track arena enemies for matchmaking analysis
+	 *
+	 * @param {Object} data - Arena enemies data
+	 * @private
+	 */
+	async trackArenaEnemies(data) {
+		if (!data.enemies) return;
+
+		const timestamp = Date.now();
+		const enemies = data.enemies.map((enemy) => ({
+			userId: enemy.userId,
+			name: enemy.name,
+			level: enemy.level,
+			power: this.calculateTeamPower(enemy.heroes),
+			heroes: this.compressHeroTeam(enemy.heroes),
+			timestamp,
+		}));
+
+		// Store current arena enemies
+		await storageManager.set('arenaEnemies', enemies);
+
+		// Track historical arena encounters
+		const encounterHistory = (await storageManager.get('arenaEncounterHistory', [])).concat(
+			enemies.map((e) => ({ ...e, encounter: 'available' }))
+		);
+
+		// Keep last 500 encounters
+		if (encounterHistory.length > 500) {
+			encounterHistory.splice(0, encounterHistory.length - 500);
+		}
+
+		await storageManager.set('arenaEncounterHistory', encounterHistory);
+	}
+
+	/**
+	 * Track arena battle results with opponent and team composition
+	 *
+	 * @param {Object} args - Battle request arguments
+	 * @param {Object} data - Battle result data
+	 * @private
+	 */
+	async trackArenaBattle(args, data) {
+		const battleRecord = {
+			type: 'arena',
+			enemyUserId: args.enemyUserId,
+			result: data.result?.win ? 'victory' : 'defeat',
+			replay: data.replay ? this.compressReplay(data.replay) : null,
+			myTeam: data.attackers ? this.compressHeroTeam(data.attackers) : null,
+			enemyTeam: data.defenders ? this.compressHeroTeam(data.defenders) : null,
+			reward: data.reward || {},
+			timestamp: Date.now(),
+		};
+
+		// Store arena battle history
+		const arenaHistory = await storageManager.get('arenaBattleHistory', []);
+		arenaHistory.push(battleRecord);
+
+		// Keep last 500 arena battles
+		if (arenaHistory.length > 500) {
+			arenaHistory.shift();
+		}
+
+		await storageManager.set('arenaBattleHistory', arenaHistory);
+
+		// Track win/loss against specific opponents
+		await this.updateOpponentRecord('arena', args.enemyUserId, battleRecord.result);
+	}
+
+	/**
+	 * Track Titan Arena enemies
+	 *
+	 * @param {Object} data - Titan arena enemies data
+	 * @private
+	 */
+	async trackTitanArenaEnemies(data) {
+		if (!data.enemies) return;
+
+		const timestamp = Date.now();
+		const enemies = data.enemies.map((enemy) => ({
+			userId: enemy.userId,
+			name: enemy.name,
+			level: enemy.level,
+			power: this.calculateTeamPower(enemy.titans),
+			titans: this.compressHeroTeam(enemy.titans),
+			timestamp,
+		}));
+
+		await storageManager.set('titanArenaEnemies', enemies);
+	}
+
+	/**
+	 * Track Titan Arena battle results
+	 *
+	 * @param {Object} args - Battle request arguments
+	 * @param {Object} data - Battle result data
+	 * @private
+	 */
+	async trackTitanArenaBattle(args, data) {
+		const battleRecord = {
+			type: 'titanArena',
+			enemyUserId: args.enemyUserId,
+			result: data.result?.win ? 'victory' : 'defeat',
+			myTitans: data.attackers ? this.compressHeroTeam(data.attackers) : null,
+			enemyTitans: data.defenders ? this.compressHeroTeam(data.defenders) : null,
+			reward: data.reward || {},
+			timestamp: Date.now(),
+		};
+
+		const titanArenaHistory = await storageManager.get('titanArenaBattleHistory', []);
+		titanArenaHistory.push(battleRecord);
+
+		if (titanArenaHistory.length > 500) {
+			titanArenaHistory.shift();
+		}
+
+		await storageManager.set('titanArenaBattleHistory', titanArenaHistory);
+		await this.updateOpponentRecord('titanArena', args.enemyUserId, battleRecord.result);
+	}
+
+	/**
+	 * Track Grand Arena enemies
+	 *
+	 * @param {Object} data - Grand arena enemies data
+	 * @private
+	 */
+	async trackGrandArenaEnemies(data) {
+		if (!data.enemies) return;
+
+		const timestamp = Date.now();
+		const enemies = data.enemies.map((enemy) => ({
+			userId: enemy.userId,
+			name: enemy.name,
+			level: enemy.level,
+			teams: enemy.teams
+				? enemy.teams.map((team) => ({
+						power: this.calculateTeamPower(team.heroes),
+						heroes: this.compressHeroTeam(team.heroes),
+					}))
+				: [],
+			timestamp,
+		}));
+
+		await storageManager.set('grandArenaEnemies', enemies);
+	}
+
+	/**
+	 * Track Grand Arena battle results (3 teams vs 3 teams)
+	 *
+	 * @param {Object} args - Battle request arguments
+	 * @param {Object} data - Battle result data
+	 * @private
+	 */
+	async trackGrandArenaBattle(args, data) {
+		const battleRecord = {
+			type: 'grandArena',
+			enemyUserId: args.enemyUserId,
+			result: data.result?.win ? 'victory' : 'defeat',
+			battles: data.battles
+				? data.battles.map((battle) => ({
+						result: battle.result?.win ? 'victory' : 'defeat',
+						myTeam: this.compressHeroTeam(battle.attackers),
+						enemyTeam: this.compressHeroTeam(battle.defenders),
+					}))
+				: [],
+			reward: data.reward || {},
+			timestamp: Date.now(),
+		};
+
+		const grandArenaHistory = await storageManager.get('grandArenaBattleHistory', []);
+		grandArenaHistory.push(battleRecord);
+
+		if (grandArenaHistory.length > 500) {
+			grandArenaHistory.shift();
+		}
+
+		await storageManager.set('grandArenaBattleHistory', grandArenaHistory);
+		await this.updateOpponentRecord('grandArena', args.enemyUserId, battleRecord.result);
+	}
+
+	/**
+	 * Track Guild War information
+	 *
+	 * @param {Object} data - Guild war data
+	 * @private
+	 */
+	async trackGuildWarInfo(data) {
+		const warData = {
+			warId: data.warId || data.war?.id,
+			enemyGuildId: data.enemyClanId || data.enemyClan?.id,
+			enemyGuildName: data.enemyClanName || data.enemyClan?.name,
+			myGuildScore: data.myScore || 0,
+			enemyScore: data.enemyScore || 0,
+			defenders: data.defenders || {},
+			attackers: data.attackers || {},
+			timestamp: Date.now(),
+		};
+
+		await storageManager.set('currentGuildWar', warData);
+	}
+
+	/**
+	 * Track Guild War battle results
+	 *
+	 * @param {Object} args - Battle request arguments
+	 * @param {Object} data - Battle result data
+	 * @private
+	 */
+	async trackGuildWarBattle(args, data) {
+		const battleRecord = {
+			type: 'guildWar',
+			defenderId: args.defenderId,
+			fortId: args.fortId,
+			result: data.result?.win ? 'victory' : 'defeat',
+			myTeam: data.attackers ? this.compressHeroTeam(data.attackers) : null,
+			enemyTeam: data.defenders ? this.compressHeroTeam(data.defenders) : null,
+			reward: data.reward || {},
+			timestamp: Date.now(),
+		};
+
+		const guildWarHistory = await storageManager.get('guildWarBattleHistory', []);
+		guildWarHistory.push(battleRecord);
+
+		if (guildWarHistory.length > 500) {
+			guildWarHistory.shift();
+		}
+
+		await storageManager.set('guildWarBattleHistory', guildWarHistory);
+	}
+
+	/**
+	 * Track Raid Boss information
+	 *
+	 * @param {Object} data - Raid boss data
+	 * @private
+	 */
+	async trackRaidBossInfo(data) {
+		const bossData = {
+			bossId: data.bossId || data.boss?.id,
+			bossLevel: data.bossLevel || data.boss?.level,
+			bossHealth: data.bossHealth || data.boss?.health,
+			maxHealth: data.maxHealth || data.boss?.maxHealth,
+			myDamage: data.myDamage || 0,
+			totalDamage: data.totalDamage || 0,
+			timestamp: Date.now(),
+		};
+
+		await storageManager.set('currentRaidBoss', bossData);
+	}
+
+	/**
+	 * Track Raid Boss attacks for damage analysis
+	 *
+	 * @param {Object} args - Attack request arguments
+	 * @param {Object} data - Attack result data
+	 * @private
+	 */
+	async trackRaidBossAttack(args, data) {
+		const attackRecord = {
+			bossId: args.bossId,
+			damage: data.damage || 0,
+			myTeam: data.attackers ? this.compressHeroTeam(data.attackers) : null,
+			reward: data.reward || {},
+			timestamp: Date.now(),
+		};
+
+		const raidHistory = await storageManager.get('raidBossAttackHistory', []);
+		raidHistory.push(attackRecord);
+
+		if (raidHistory.length > 500) {
+			raidHistory.shift();
+		}
+
+		await storageManager.set('raidBossAttackHistory', raidHistory);
+	}
+
+	/**
+	 * Track chest openings for drop rate analysis
+	 * THIS IS KEY FOR UNDERSTANDING LOOT PROBABILITIES
+	 *
+	 * @param {Object} args - Chest opening arguments
+	 * @param {Object} data - Chest rewards data
+	 * @private
+	 */
+	async trackChestOpening(args, data) {
+		const chestRecord = {
+			chestId: args.chestId || args.id,
+			chestType: args.chestType || 'unknown',
+			quantity: args.amount || 1,
+			rewards: data.reward || data.rewards || [],
+			timestamp: Date.now(),
+		};
+
+		// Store individual chest opening
+		const chestHistory = await storageManager.get('chestOpeningHistory', []);
+		chestHistory.push(chestRecord);
+
+		if (chestHistory.length > 1000) {
+			chestHistory.shift();
+		}
+
+		await storageManager.set('chestOpeningHistory', chestHistory);
+
+		// Update drop rate statistics
+		await this.updateChestDropRates(chestRecord);
+	}
+
+	/**
+	 * Update chest drop rate statistics
+	 *
+	 * @param {Object} chestRecord - Record of chest opening
+	 * @private
+	 */
+	async updateChestDropRates(chestRecord) {
+		const dropRates = await storageManager.get('chestDropRates', {});
+		const chestKey = `${chestRecord.chestType}_${chestRecord.chestId}`;
+
+		if (!dropRates[chestKey]) {
+			dropRates[chestKey] = {
+				chestType: chestRecord.chestType,
+				chestId: chestRecord.chestId,
+				openCount: 0,
+				itemDrops: {},
+			};
+		}
+
+		dropRates[chestKey].openCount += chestRecord.quantity;
+
+		// Count each item dropped
+		if (Array.isArray(chestRecord.rewards)) {
+			chestRecord.rewards.forEach((reward) => {
+				const itemKey = `${reward.type}_${reward.id}`;
+				if (!dropRates[chestKey].itemDrops[itemKey]) {
+					dropRates[chestKey].itemDrops[itemKey] = {
+						type: reward.type,
+						id: reward.id,
+						name: reward.name || itemKey,
+						dropCount: 0,
+						totalAmount: 0,
+					};
+				}
+				dropRates[chestKey].itemDrops[itemKey].dropCount += 1;
+				dropRates[chestKey].itemDrops[itemKey].totalAmount += reward.amount || 1;
+			});
+		}
+
+		await storageManager.set('chestDropRates', dropRates);
+	}
+
+	/**
+	 * Track shop purchases for spending analysis
+	 *
+	 * @param {Object} args - Purchase arguments
+	 * @param {Object} data - Purchase result data
+	 * @private
+	 */
+	async trackShopPurchase(args, data) {
+		const purchaseRecord = {
+			shopId: args.shopId,
+			slotId: args.slotId,
+			itemId: args.itemId,
+			cost: args.cost || {},
+			reward: data.reward || {},
+			timestamp: Date.now(),
+		};
+
+		const purchaseHistory = await storageManager.get('shopPurchaseHistory', []);
+		purchaseHistory.push(purchaseRecord);
+
+		if (purchaseHistory.length > 500) {
+			purchaseHistory.shift();
+		}
+
+		await storageManager.set('shopPurchaseHistory', purchaseHistory);
+	}
+
+	/**
+	 * Track quest completions
+	 *
+	 * @param {Object} args - Quest completion arguments
+	 * @param {Object} data - Quest reward data
+	 * @private
+	 */
+	async trackQuestComplete(args, data) {
+		const questRecord = {
+			questId: args.questId,
+			reward: data.reward || {},
+			timestamp: Date.now(),
+		};
+
+		const questHistory = await storageManager.get('questCompletionHistory', []);
+		questHistory.push(questRecord);
+
+		if (questHistory.length > 500) {
+			questHistory.shift();
+		}
+
+		await storageManager.set('questCompletionHistory', questHistory);
+	}
+
+	/**
+	 * Track expedition state
+	 *
+	 * @param {Object} data - Expedition data
+	 * @private
+	 */
+	async trackExpeditionState(data) {
+		const expeditionData = {
+			currentNode: data.currentNode || 0,
+			progress: data.progress || 0,
+			rewards: data.rewards || [],
+			timestamp: Date.now(),
+		};
+
+		await storageManager.set('expeditionState', expeditionData);
+	}
+
+	/**
+	 * Track expedition battles
+	 *
+	 * @param {Object} args - Battle arguments
+	 * @param {Object} data - Battle result data
+	 * @private
+	 */
+	async trackExpeditionBattle(args, data) {
+		const battleRecord = {
+			nodeId: args.nodeId,
+			result: data.result?.win ? 'victory' : 'defeat',
+			myTeam: data.attackers ? this.compressHeroTeam(data.attackers) : null,
+			enemyTeam: data.defenders ? this.compressHeroTeam(data.defenders) : null,
+			reward: data.reward || {},
+			timestamp: Date.now(),
+		};
+
+		const expeditionHistory = await storageManager.get('expeditionBattleHistory', []);
+		expeditionHistory.push(battleRecord);
+
+		if (expeditionHistory.length > 200) {
+			expeditionHistory.shift();
+		}
+
+		await storageManager.set('expeditionBattleHistory', expeditionHistory);
+	}
+
+	/**
+	 * Track titans data
+	 *
+	 * @param {Object} data - Titans data
+	 * @private
+	 */
+	async trackTitansData(data) {
+		const titans = Object.values(data).map((titan) => ({
+			id: titan.id,
+			level: titan.level || 0,
+			stars: titan.star || 0,
+			power: titan.power || 0,
+			skills: titan.skills || {},
+			artifacts: titan.artifacts || [],
+		}));
+
+		await storageManager.set('titansData', titans);
+	}
+
+	/**
+	 * Track pets data
+	 *
+	 * @param {Object} data - Pets data
+	 * @private
+	 */
+	async trackPetsData(data) {
+		const pets = Object.values(data).map((pet) => ({
+			id: pet.id,
+			level: pet.level || 0,
+			stars: pet.star || 0,
+			power: pet.power || 0,
+		}));
+
+		await storageManager.set('petsData', pets);
+	}
+
+	/**
+	 * Update win/loss record against specific opponents
+	 *
+	 * @param {string} battleType - Type of battle (arena, titanArena, etc)
+	 * @param {string} opponentId - Opponent user ID
+	 * @param {string} result - 'victory' or 'defeat'
+	 * @private
+	 */
+	async updateOpponentRecord(battleType, opponentId, result) {
+		const opponentRecords = await storageManager.get('opponentRecords', {});
+		const key = `${battleType}_${opponentId}`;
+
+		if (!opponentRecords[key]) {
+			opponentRecords[key] = {
+				battleType,
+				opponentId,
+				wins: 0,
+				losses: 0,
+				lastBattle: Date.now(),
+			};
+		}
+
+		if (result === 'victory') {
+			opponentRecords[key].wins++;
+		} else {
+			opponentRecords[key].losses++;
+		}
+
+		opponentRecords[key].lastBattle = Date.now();
+
+		await storageManager.set('opponentRecords', opponentRecords);
+	}
+
+	/**
+	 * Calculate total team power
+	 *
+	 * @param {Object} team - Team object with heroes
+	 * @returns {number} Total power
+	 * @private
+	 */
+	calculateTeamPower(team) {
+		if (!team) return 0;
+		return Object.values(team).reduce((sum, hero) => sum + (hero.power || 0), 0);
+	}
+
+	/**
+	 * Compress hero team data for storage efficiency
+	 * Based on Hero Wars Assistant's compression algorithm
+	 *
+	 * @param {Object} team - Team object with heroes
+	 * @returns {Array} Compressed team data
+	 * @private
+	 */
+	compressHeroTeam(team) {
+		if (!team) return [];
+		return Object.values(team).map((hero) => [
+			hero.id,
+			hero.level || 0,
+			hero.star || 0,
+			hero.color || 0,
+			hero.power || 0,
+		]);
+	}
+
+	/**
+	 * Compress battle replay data
+	 *
+	 * @param {Object} replay - Full replay data
+	 * @returns {Object} Compressed replay
+	 * @private
+	 */
+	compressReplay(replay) {
+		return {
+			result: replay.result,
+			attackers: this.compressHeroTeam(replay.attackers),
+			defenders: this.compressHeroTeam(replay.defenders),
+			// Omit full battle progress to save space
+		};
 	}
 
 	/**
@@ -453,6 +1096,285 @@ class GameTracker {
 	 */
 	async getBattleHistory() {
 		return await storageManager.get('battleHistory', []);
+	}
+
+	/**
+	 * Get arena battle history with win/loss statistics
+	 * @returns {Object} Arena data with history and stats
+	 */
+	async getArenaData() {
+		const history = await storageManager.get('arenaBattleHistory', []);
+		const currentEnemies = await storageManager.get('arenaEnemies', []);
+		const encounters = await storageManager.get('arenaEncounterHistory', []);
+
+		const stats = this.calculateBattleStats(history);
+
+		return {
+			currentEnemies,
+			history,
+			encounters,
+			stats,
+		};
+	}
+
+	/**
+	 * Get titan arena data
+	 * @returns {Object} Titan arena data
+	 */
+	async getTitanArenaData() {
+		const history = await storageManager.get('titanArenaBattleHistory', []);
+		const currentEnemies = await storageManager.get('titanArenaEnemies', []);
+		const stats = this.calculateBattleStats(history);
+
+		return {
+			currentEnemies,
+			history,
+			stats,
+		};
+	}
+
+	/**
+	 * Get grand arena data
+	 * @returns {Object} Grand arena data
+	 */
+	async getGrandArenaData() {
+		const history = await storageManager.get('grandArenaBattleHistory', []);
+		const currentEnemies = await storageManager.get('grandArenaEnemies', []);
+		const stats = this.calculateBattleStats(history);
+
+		return {
+			currentEnemies,
+			history,
+			stats,
+		};
+	}
+
+	/**
+	 * Get guild war data
+	 * @returns {Object} Guild war data with current war and history
+	 */
+	async getGuildWarData() {
+		const currentWar = await storageManager.get('currentGuildWar', null);
+		const history = await storageManager.get('guildWarBattleHistory', []);
+		const stats = this.calculateBattleStats(history);
+
+		return {
+			currentWar,
+			history,
+			stats,
+		};
+	}
+
+	/**
+	 * Get raid boss data
+	 * @returns {Object} Raid boss data with current boss and attack history
+	 */
+	async getRaidBossData() {
+		const currentBoss = await storageManager.get('currentRaidBoss', null);
+		const history = await storageManager.get('raidBossAttackHistory', []);
+
+		const totalDamage = history.reduce((sum, attack) => sum + attack.damage, 0);
+		const averageDamage = history.length > 0 ? totalDamage / history.length : 0;
+
+		return {
+			currentBoss,
+			history,
+			totalDamage,
+			averageDamage,
+		};
+	}
+
+	/**
+	 * Get chest opening statistics with drop rates
+	 * @returns {Object} Chest opening data and calculated drop rates
+	 */
+	async getChestStatistics() {
+		const history = await storageManager.get('chestOpeningHistory', []);
+		const dropRates = await storageManager.get('chestDropRates', {});
+
+		// Calculate drop probabilities
+		const probabilityData = {};
+		for (const [chestKey, data] of Object.entries(dropRates)) {
+			probabilityData[chestKey] = {
+				...data,
+				itemProbabilities: {},
+			};
+
+			for (const [itemKey, itemData] of Object.entries(data.itemDrops)) {
+				probabilityData[chestKey].itemProbabilities[itemKey] = {
+					...itemData,
+					dropRate: ((itemData.dropCount / data.openCount) * 100).toFixed(2) + '%',
+					averageAmount: (itemData.totalAmount / itemData.dropCount).toFixed(2),
+				};
+			}
+		}
+
+		return {
+			history,
+			dropRates: probabilityData,
+		};
+	}
+
+	/**
+	 * Get opponent records (win/loss against specific players)
+	 * @returns {Object} Opponent records by battle type
+	 */
+	async getOpponentRecords() {
+		return await storageManager.get('opponentRecords', {});
+	}
+
+	/**
+	 * Get expedition data
+	 * @returns {Object} Expedition state and battle history
+	 */
+	async getExpeditionData() {
+		const state = await storageManager.get('expeditionState', null);
+		const history = await storageManager.get('expeditionBattleHistory', []);
+		const stats = this.calculateBattleStats(history);
+
+		return {
+			state,
+			history,
+			stats,
+		};
+	}
+
+	/**
+	 * Get titans roster
+	 * @returns {Array} Array of titan objects
+	 */
+	async getTitansRoster() {
+		return await storageManager.get('titansData', []);
+	}
+
+	/**
+	 * Get pets roster
+	 * @returns {Array} Array of pet objects
+	 */
+	async getPetsRoster() {
+		return await storageManager.get('petsData', []);
+	}
+
+	/**
+	 * Get shop purchase history
+	 * @returns {Array} Purchase history
+	 */
+	async getShopPurchaseHistory() {
+		return await storageManager.get('shopPurchaseHistory', []);
+	}
+
+	/**
+	 * Get quest completion history
+	 * @returns {Array} Quest completion history
+	 */
+	async getQuestHistory() {
+		return await storageManager.get('questCompletionHistory', []);
+	}
+
+	/**
+	 * Get comprehensive historical data comparison
+	 * Shows current vs historical state with trends
+	 *
+	 * @returns {Object} Historical comparison data
+	 */
+	async getHistoricalComparison() {
+		const history = await storageManager.get('gameHistory', []);
+		const current = await this.captureCurrentState();
+
+		if (history.length === 0) {
+			return {
+				current,
+				trends: null,
+				message: 'Not enough historical data yet',
+			};
+		}
+
+		// Get data from 1 day, 7 days, and 30 days ago
+		const now = Date.now();
+		const oneDayAgo = history.find((h) => now - h.timestamp >= 86400000); // 24 hours
+		const sevenDaysAgo = history.find((h) => now - h.timestamp >= 604800000); // 7 days
+		const thirtyDaysAgo = history.find((h) => now - h.timestamp >= 2592000000); // 30 days
+
+		const trends = {
+			level: {
+				current: current.player?.level || 0,
+				oneDayAgo: oneDayAgo?.level || 0,
+				sevenDaysAgo: sevenDaysAgo?.level || 0,
+				thirtyDaysAgo: thirtyDaysAgo?.level || 0,
+			},
+			power: {
+				current: current.heroes?.reduce((sum, h) => sum + h.power, 0) || 0,
+				oneDayAgo: oneDayAgo?.power || 0,
+				sevenDaysAgo: sevenDaysAgo?.power || 0,
+				thirtyDaysAgo: thirtyDaysAgo?.power || 0,
+			},
+			gold: {
+				current: current.player?.gold || 0,
+				oneDayAgo: oneDayAgo?.gold || 0,
+				sevenDaysAgo: sevenDaysAgo?.gold || 0,
+				thirtyDaysAgo: thirtyDaysAgo?.gold || 0,
+			},
+			emeralds: {
+				current: current.player?.starmoney || 0,
+				oneDayAgo: oneDayAgo?.emeralds || 0,
+				sevenDaysAgo: sevenDaysAgo?.emeralds || 0,
+				thirtyDaysAgo: thirtyDaysAgo?.emeralds || 0,
+			},
+		};
+
+		return {
+			current,
+			trends,
+			history,
+		};
+	}
+
+	/**
+	 * Calculate battle statistics from history
+	 *
+	 * @param {Array} history - Battle history array
+	 * @returns {Object} Battle statistics
+	 * @private
+	 */
+	calculateBattleStats(history) {
+		const wins = history.filter((b) => b.result === 'victory').length;
+		const losses = history.filter((b) => b.result === 'defeat').length;
+		const total = history.length;
+		const winRate = total > 0 ? ((wins / total) * 100).toFixed(1) : '0.0';
+
+		return {
+			total,
+			wins,
+			losses,
+			winRate: winRate + '%',
+		};
+	}
+
+	/**
+	 * Export all tracked data for analysis or backup
+	 * @returns {Object} All tracked game data
+	 */
+	async exportAllData() {
+		return {
+			player: await this.getPlayerStats(),
+			heroes: await this.getHeroRoster(),
+			titans: await this.getTitansRoster(),
+			pets: await this.getPetsRoster(),
+			resources: await this.getResources(),
+			battleHistory: await this.getBattleHistory(),
+			arena: await this.getArenaData(),
+			titanArena: await this.getTitanArenaData(),
+			grandArena: await this.getGrandArenaData(),
+			guildWar: await this.getGuildWarData(),
+			raidBoss: await this.getRaidBossData(),
+			chests: await this.getChestStatistics(),
+			opponents: await this.getOpponentRecords(),
+			expedition: await this.getExpeditionData(),
+			shopPurchases: await this.getShopPurchaseHistory(),
+			quests: await this.getQuestHistory(),
+			historical: await this.getHistoricalComparison(),
+			exportedAt: new Date().toISOString(),
+		};
 	}
 
 	/**
