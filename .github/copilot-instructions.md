@@ -33,7 +33,7 @@ OrganizedJihad/
 ├── src/
 │   ├── index.js                    # Main entry point with TamperMonkey metadata
 │   ├── modules/
-│   │   ├── gameTracker.js          # Game data tracking via DOM observation
+│   │   ├── gameTracker.js          # Game data tracking via API request interception
 │   │   ├── goalsManager.js         # Short/long-term goals management
 │   │   ├── calendarManager.js      # Events and reminders system
 │   │   ├── suggestionsEngine.js    # AI-driven gameplay suggestions
@@ -60,8 +60,8 @@ OrganizedJihad/
 1. **Build the userscript**: Run `yarn build` to create `dist/organized-jihad.user.js`
 2. **Install in TamperMonkey**: Open the dist file in browser to install
 3. **Test on Hero Wars**: Visit https://www.hero-wars.com to see the overlay
-4. **Create GitHub Repository**: Push to GitHub for version control
-5. **Customize DOM Selectors**: Update `gameTracker.js` with actual Hero Wars element selectors
+4. **Monitor API Interception**: Check browser console for "[OrganizedJihad]" messages to verify data capture
+5. **Verify Data Storage**: Use browser DevTools to check GM storage or localStorage for tracked data
 
 ## Development Guidelines
 
