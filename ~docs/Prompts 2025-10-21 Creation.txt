@@ -44,6 +44,48 @@ no, you removed the indentation instead of using tabs, revert and fix it
 $files = Get-ChildItem -Path src -Recurse -Include *.js,*.css; foreach ($file in $files) { $content = Get-Content $file.FullName -Raw; $lines = $content -split "`r`n"; $newLines = @(); foreach ($line in $lines) { if ($line -match '^( +)') { $spaces = $matches[1].Length; $tabs = [math]::Floor($spaces / 4); $remainder = $spaces % 4; $line = ("`t" * $tabs) + (' ' * $remainder) + $line.Substring($spaces); }; $newLines += $line; }; $newContent = $newLines -join "`r`n"; Set-Content -Path $file.FullName -Value $newContent -NoNewline }
 *************************
 
+Move this project, not `~docs`, into a subfolder so we can add other related projects to the workspace, also make sure to keep the chat history up to date
+
+Use the API research to go ahead and hook into all the api calls to HW (`Hero Wars`) and track all of that data. What is the current state, what was the historical state, what are the chances of getting items from each chest, etc, what users are you winning against, losing against, with what teams, etc.
+
+******************************
+Next Steps
+Install the userscript and it will automatically:
+
+Intercept all Hero Wars API calls
+Build historical database as you play
+Calculate drop rates from chest openings
+Track W/L against every opponent
+Record team compositions and battle results
+Create trend analysis over time
+***********************************
+where is the tracking and other data stored? We want to store them long time, do we need a C#dotnet10 back project running at a publicly available URL for long term and collective storage? And a local SQL db to store everything for shorter term storage that we can then upload to the remote c# API.
+make a fully complete TODO list for Tier 1 to 3 and also the `Next Steps` listed above, implementing all of the reccomendations and missing parts, and everything. Make sure to plan everything. After that, start implementing todo lists
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 

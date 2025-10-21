@@ -5,3 +5,4 @@ dist/
 .vscode/
 *.tmp
 ~reference-code/
+.vs/
