@@ -18,14 +18,13 @@ Push to GitHub: Create repo and push
 ----------------------
 
 save all of the past and future copilot chats to a folder so I know what's happening
------------------------------------
-Check `~docs/copilot-chats/` for past decisions, Review `.github/copilot-instructions.md` for coding standards
------------------------------------
-
-
-
-
-
+^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Check `~docs/copilot-chats/` for past decisions, Review `.github/copilot-instructions.md` for coding standards, save all of the past and future copilot chats to a folder so I know what's happening
+^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Push to GitHub: Create repo and push
+The `OrganizedJihad` repos already exists, use that
+install `GitHub CLI` for future use
+install prettier and use the editorconfig for styling and use crlf, tabs (4), and utf-8, etc
 
 
 

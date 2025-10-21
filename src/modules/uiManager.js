@@ -4,41 +4,41 @@
  */
 
 class UIManager {
-    constructor(storage, gameTracker, goalsManager, calendarManager, suggestionsEngine) {
-        this.storage = storage;
-        this.gameTracker = gameTracker;
-        this.goalsManager = goalsManager;
-        this.calendarManager = calendarManager;
-        this.suggestionsEngine = suggestionsEngine;
-        
-        this.isVisible = this.storage.get('uiVisible', true);
-        this.currentView = 'dashboard';
-        this.overlay = null;
-    }
+	constructor(storage, gameTracker, goalsManager, calendarManager, suggestionsEngine) {
+		this.storage = storage;
+		this.gameTracker = gameTracker;
+		this.goalsManager = goalsManager;
+		this.calendarManager = calendarManager;
+		this.suggestionsEngine = suggestionsEngine;
 
-    init() {
-        this.createOverlay();
-        this.attachEventListeners();
-        
-        if (this.isVisible) {
-            this.show();
-        }
-        
-        // Add keyboard shortcut to toggle UI (Ctrl+Shift+H)
-        document.addEventListener('keydown', (e) => {
-            if (e.ctrlKey && e.shiftKey && e.key === 'H') {
-                this.toggle();
-            }
-        });
-    }
+		this.isVisible = this.storage.get('uiVisible', true);
+		this.currentView = 'dashboard';
+		this.overlay = null;
+	}
 
-    createOverlay() {
-        // Create main overlay container
-        this.overlay = document.createElement('div');
-        this.overlay.id = 'organizedJihad-overlay';
-        this.overlay.className = 'oj-overlay';
-        
-        this.overlay.innerHTML = `
+	init() {
+		this.createOverlay();
+		this.attachEventListeners();
+
+		if (this.isVisible) {
+			this.show();
+		}
+
+		// Add keyboard shortcut to toggle UI (Ctrl+Shift+H)
+		document.addEventListener('keydown', (e) => {
+			if (e.ctrlKey && e.shiftKey && e.key === 'H') {
+				this.toggle();
+			}
+		});
+	}
+
+	createOverlay() {
+		// Create main overlay container
+		this.overlay = document.createElement('div');
+		this.overlay.id = 'organizedJihad-overlay';
+		this.overlay.className = 'oj-overlay';
+
+		this.overlay.innerHTML = `
             <div class="oj-container">
                 <div class="oj-header">
                     <h2 class="oj-title">OrganizedJihad Tracker</h2>
@@ -63,120 +63,120 @@ class UIManager {
                 </div>
             </div>
         `;
-        
-        document.body.appendChild(this.overlay);
-        
-        // Render initial view
-        this.renderView('dashboard');
-    }
 
-    attachEventListeners() {
-        // Navigation buttons
-        const navButtons = this.overlay.querySelectorAll('.oj-nav-btn');
-        navButtons.forEach(btn => {
-            btn.addEventListener('click', (e) => {
-                const view = e.target.dataset.view;
-                this.switchView(view);
-            });
-        });
-        
-        // Close button
-        document.getElementById('oj-close').addEventListener('click', () => {
-            this.hide();
-        });
-        
-        // Minimize button
-        document.getElementById('oj-minimize').addEventListener('click', () => {
-            this.overlay.classList.toggle('minimized');
-        });
-        
-        // Make draggable
-        this.makeDraggable();
-    }
+		document.body.appendChild(this.overlay);
 
-    makeDraggable() {
-        const header = this.overlay.querySelector('.oj-header');
-        let isDragging = false;
-        let currentX, currentY, initialX, initialY;
-        
-        header.addEventListener('mousedown', (e) => {
-            if (e.target.tagName === 'BUTTON') return;
-            
-            isDragging = true;
-            initialX = e.clientX - this.overlay.offsetLeft;
-            initialY = e.clientY - this.overlay.offsetTop;
-            header.style.cursor = 'grabbing';
-        });
-        
-        document.addEventListener('mousemove', (e) => {
-            if (!isDragging) return;
-            
-            e.preventDefault();
-            currentX = e.clientX - initialX;
-            currentY = e.clientY - initialY;
-            
-            this.overlay.style.left = currentX + 'px';
-            this.overlay.style.top = currentY + 'px';
-        });
-        
-        document.addEventListener('mouseup', () => {
-            isDragging = false;
-            header.style.cursor = 'grab';
-        });
-    }
+		// Render initial view
+		this.renderView('dashboard');
+	}
 
-    switchView(view) {
-        this.currentView = view;
-        
-        // Update nav buttons
-        const navButtons = this.overlay.querySelectorAll('.oj-nav-btn');
-        navButtons.forEach(btn => {
-            btn.classList.toggle('active', btn.dataset.view === view);
-        });
-        
-        this.renderView(view);
-    }
+	attachEventListeners() {
+		// Navigation buttons
+		const navButtons = this.overlay.querySelectorAll('.oj-nav-btn');
+		navButtons.forEach((btn) => {
+			btn.addEventListener('click', (e) => {
+				const view = e.target.dataset.view;
+				this.switchView(view);
+			});
+		});
 
-    renderView(view) {
-        const content = document.getElementById('oj-content');
-        
-        switch(view) {
-            case 'dashboard':
-                content.innerHTML = this.renderDashboard();
-                break;
-            case 'goals':
-                content.innerHTML = this.renderGoals();
-                this.attachGoalEventListeners();
-                break;
-            case 'calendar':
-                content.innerHTML = this.renderCalendar();
-                this.attachCalendarEventListeners();
-                break;
-            case 'heroes':
-                content.innerHTML = this.renderHeroes();
-                break;
-            case 'resources':
-                content.innerHTML = this.renderResources();
-                break;
-            case 'reports':
-                content.innerHTML = this.renderReports();
-                break;
-            case 'settings':
-                content.innerHTML = this.renderSettings();
-                this.attachSettingsEventListeners();
-                break;
-            default:
-                content.innerHTML = '<p>View not found</p>';
-        }
-    }
+		// Close button
+		document.getElementById('oj-close').addEventListener('click', () => {
+			this.hide();
+		});
 
-    renderDashboard() {
-        const gameData = this.gameTracker.getGameData();
-        const activeGoals = this.goalsManager.getActiveGoals();
-        const suggestions = this.suggestionsEngine.getSuggestions();
-        const upcomingEvents = this.calendarManager.getUpcomingEvents(3);
-        
-        return `
+		// Minimize button
+		document.getElementById('oj-minimize').addEventListener('click', () => {
+			this.overlay.classList.toggle('minimized');
+		});
+
+		// Make draggable
+		this.makeDraggable();
+	}
+
+	makeDraggable() {
+		const header = this.overlay.querySelector('.oj-header');
+		let isDragging = false;
+		let currentX, currentY, initialX, initialY;
+
+		header.addEventListener('mousedown', (e) => {
+			if (e.target.tagName === 'BUTTON') return;
+
+			isDragging = true;
+			initialX = e.clientX - this.overlay.offsetLeft;
+			initialY = e.clientY - this.overlay.offsetTop;
+			header.style.cursor = 'grabbing';
+		});
+
+		document.addEventListener('mousemove', (e) => {
+			if (!isDragging) return;
+
+			e.preventDefault();
+			currentX = e.clientX - initialX;
+			currentY = e.clientY - initialY;
+
+			this.overlay.style.left = currentX + 'px';
+			this.overlay.style.top = currentY + 'px';
+		});
+
+		document.addEventListener('mouseup', () => {
+			isDragging = false;
+			header.style.cursor = 'grab';
+		});
+	}
+
+	switchView(view) {
+		this.currentView = view;
+
+		// Update nav buttons
+		const navButtons = this.overlay.querySelectorAll('.oj-nav-btn');
+		navButtons.forEach((btn) => {
+			btn.classList.toggle('active', btn.dataset.view === view);
+		});
+
+		this.renderView(view);
+	}
+
+	renderView(view) {
+		const content = document.getElementById('oj-content');
+
+		switch (view) {
+			case 'dashboard':
+				content.innerHTML = this.renderDashboard();
+				break;
+			case 'goals':
+				content.innerHTML = this.renderGoals();
+				this.attachGoalEventListeners();
+				break;
+			case 'calendar':
+				content.innerHTML = this.renderCalendar();
+				this.attachCalendarEventListeners();
+				break;
+			case 'heroes':
+				content.innerHTML = this.renderHeroes();
+				break;
+			case 'resources':
+				content.innerHTML = this.renderResources();
+				break;
+			case 'reports':
+				content.innerHTML = this.renderReports();
+				break;
+			case 'settings':
+				content.innerHTML = this.renderSettings();
+				this.attachSettingsEventListeners();
+				break;
+			default:
+				content.innerHTML = '<p>View not found</p>';
+		}
+	}
+
+	renderDashboard() {
+		const gameData = this.gameTracker.getGameData();
+		const activeGoals = this.goalsManager.getActiveGoals();
+		const suggestions = this.suggestionsEngine.getSuggestions();
+		const upcomingEvents = this.calendarManager.getUpcomingEvents(3);
+
+		return `
             <div class="oj-dashboard">
                 <div class="oj-section">
                     <h3>Quick Stats</h3>
@@ -203,7 +203,11 @@ class UIManager {
                 <div class="oj-section">
                     <h3>Suggestions</h3>
                     <div class="oj-suggestions-list">
-                        ${suggestions.slice(0, 5).map(s => `
+                        ${
+							suggestions
+								.slice(0, 5)
+								.map(
+									(s) => `
                             <div class="oj-suggestion ${s.priority}">
                                 <div class="oj-suggestion-header">
                                     <span class="oj-suggestion-title">${s.title}</span>
@@ -212,29 +216,38 @@ class UIManager {
                                 <p class="oj-suggestion-desc">${s.description}</p>
                                 <button class="oj-btn oj-btn-sm" onclick="dismissSuggestion(${s.id})">Dismiss</button>
                             </div>
-                        `).join('') || '<p class="oj-empty">No suggestions at the moment!</p>'}
+                        `
+								)
+								.join('') || '<p class="oj-empty">No suggestions at the moment!</p>'
+						}
                     </div>
                 </div>
                 
                 <div class="oj-section">
                     <h3>Upcoming Events (Next 3 Days)</h3>
                     <div class="oj-events-list">
-                        ${upcomingEvents.map(e => `
+                        ${
+							upcomingEvents
+								.map(
+									(e) => `
                             <div class="oj-event-item">
                                 <div class="oj-event-date">${new Date(e.startDate).toLocaleDateString()}</div>
                                 <div class="oj-event-title">${e.title}</div>
                             </div>
-                        `).join('') || '<p class="oj-empty">No upcoming events</p>'}
+                        `
+								)
+								.join('') || '<p class="oj-empty">No upcoming events</p>'
+						}
                     </div>
                 </div>
             </div>
         `;
-    }
+	}
 
-    renderGoals() {
-        const goals = this.goalsManager.getAllGoals();
-        
-        return `
+	renderGoals() {
+		const goals = this.goalsManager.getAllGoals();
+
+		return `
             <div class="oj-goals">
                 <div class="oj-section-header">
                     <h3>Goals Management</h3>
@@ -259,41 +272,47 @@ class UIManager {
                 </div>
             </div>
         `;
-    }
+	}
 
-    renderGoalsList(goals) {
-        if (goals.length === 0) {
-            return '<p class="oj-empty">No goals yet. Add one to get started!</p>';
-        }
-        
-        return goals.map(goal => {
-            const progress = goal.target ? (goal.current / goal.target * 100).toFixed(1) : 0;
-            return `
+	renderGoalsList(goals) {
+		if (goals.length === 0) {
+			return '<p class="oj-empty">No goals yet. Add one to get started!</p>';
+		}
+
+		return goals
+			.map((goal) => {
+				const progress = goal.target ? ((goal.current / goal.target) * 100).toFixed(1) : 0;
+				return `
                 <div class="oj-goal-card ${goal.status}">
                     <div class="oj-goal-header">
                         <h4>${goal.title}</h4>
                         <span class="oj-badge ${goal.priority}">${goal.priority}</span>
                     </div>
                     <p class="oj-goal-desc">${goal.description}</p>
-                    ${goal.target ? `
+                    ${
+						goal.target
+							? `
                         <div class="oj-progress-bar">
                             <div class="oj-progress-fill" style="width: ${progress}%"></div>
                             <span class="oj-progress-text">${goal.current} / ${goal.target}</span>
                         </div>
-                    ` : ''}
+                    `
+							: ''
+					}
                     <div class="oj-goal-footer">
                         <span class="oj-goal-category">${goal.category}</span>
                         ${goal.deadline ? `<span class="oj-goal-deadline">Due: ${new Date(goal.deadline).toLocaleDateString()}</span>` : ''}
                     </div>
                 </div>
             `;
-        }).join('');
-    }
+			})
+			.join('');
+	}
 
-    renderCalendar() {
-        const events = this.calendarManager.getUpcomingEvents(30);
-        
-        return `
+	renderCalendar() {
+		const events = this.calendarManager.getUpcomingEvents(30);
+
+		return `
             <div class="oj-calendar">
                 <div class="oj-section-header">
                     <h3>Calendar & Events</h3>
@@ -301,7 +320,10 @@ class UIManager {
                 </div>
                 
                 <div class="oj-events-list">
-                    ${events.map(e => `
+                    ${
+						events
+							.map(
+								(e) => `
                         <div class="oj-event-card ${e.type}">
                             <div class="oj-event-header">
                                 <h4>${e.title}</h4>
@@ -313,20 +335,26 @@ class UIManager {
                                 <span>End: ${new Date(e.endDate).toLocaleString()}</span>
                             </div>
                         </div>
-                    `).join('') || '<p class="oj-empty">No upcoming events</p>'}
+                    `
+							)
+							.join('') || '<p class="oj-empty">No upcoming events</p>'
+					}
                 </div>
             </div>
         `;
-    }
+	}
 
-    renderHeroes() {
-        const heroes = this.gameTracker.getHeroes();
-        
-        return `
+	renderHeroes() {
+		const heroes = this.gameTracker.getHeroes();
+
+		return `
             <div class="oj-heroes">
                 <h3>Heroes</h3>
                 <div class="oj-heroes-grid">
-                    ${heroes.map(hero => `
+                    ${
+						heroes
+							.map(
+								(hero) => `
                         <div class="oj-hero-card">
                             <h4>${hero.name}</h4>
                             <div class="oj-hero-stats">
@@ -334,37 +362,46 @@ class UIManager {
                                 <span>Power: ${hero.power}</span>
                             </div>
                         </div>
-                    `).join('') || '<p class="oj-empty">No hero data tracked yet</p>'}
+                    `
+							)
+							.join('') || '<p class="oj-empty">No hero data tracked yet</p>'
+					}
                 </div>
             </div>
         `;
-    }
+	}
 
-    renderResources() {
-        const resources = this.gameTracker.getResources();
-        
-        return `
+	renderResources() {
+		const resources = this.gameTracker.getResources();
+
+		return `
             <div class="oj-resources">
                 <h3>Resources</h3>
                 <div class="oj-resources-grid">
-                    ${Object.keys(resources).map(key => `
+                    ${
+						Object.keys(resources)
+							.map(
+								(key) => `
                         <div class="oj-resource-card">
                             <h4>${key}</h4>
                             <div class="oj-resource-amount">${resources[key].amount}</div>
                             <div class="oj-resource-time">Updated: ${new Date(resources[key].timestamp).toLocaleString()}</div>
                         </div>
-                    `).join('') || '<p class="oj-empty">No resource data tracked yet</p>'}
+                    `
+							)
+							.join('') || '<p class="oj-empty">No resource data tracked yet</p>'
+					}
                 </div>
             </div>
         `;
-    }
+	}
 
-    renderReports() {
-        const goalStats = this.goalsManager.getStats();
-        const calendarStats = this.calendarManager.getStats();
-        const suggestionStats = this.suggestionsEngine.getStats();
-        
-        return `
+	renderReports() {
+		const goalStats = this.goalsManager.getStats();
+		const calendarStats = this.calendarManager.getStats();
+		const suggestionStats = this.suggestionsEngine.getStats();
+
+		return `
             <div class="oj-reports">
                 <h3>Reports & Statistics</h3>
                 
@@ -431,10 +468,10 @@ class UIManager {
                 </div>
             </div>
         `;
-    }
+	}
 
-    renderSettings() {
-        return `
+	renderSettings() {
+		return `
             <div class="oj-settings">
                 <h3>Settings</h3>
                 
@@ -465,128 +502,128 @@ class UIManager {
                 </div>
             </div>
         `;
-    }
+	}
 
-    attachGoalEventListeners() {
-        // Tab switching
-        const tabBtns = this.overlay.querySelectorAll('.oj-tab-btn');
-        tabBtns.forEach(btn => {
-            btn.addEventListener('click', (e) => {
-                const tab = e.target.dataset.tab;
-                tabBtns.forEach(b => b.classList.remove('active'));
-                e.target.classList.add('active');
-                
-                const contents = this.overlay.querySelectorAll('.oj-tab-content');
-                contents.forEach(c => {
-                    c.classList.toggle('active', c.dataset.tab === tab);
-                });
-            });
-        });
-        
-        // Add goal button
-        const addBtn = document.getElementById('oj-add-goal');
-        if (addBtn) {
-            addBtn.addEventListener('click', () => {
-                this.showAddGoalDialog();
-            });
-        }
-    }
+	attachGoalEventListeners() {
+		// Tab switching
+		const tabBtns = this.overlay.querySelectorAll('.oj-tab-btn');
+		tabBtns.forEach((btn) => {
+			btn.addEventListener('click', (e) => {
+				const tab = e.target.dataset.tab;
+				tabBtns.forEach((b) => b.classList.remove('active'));
+				e.target.classList.add('active');
 
-    attachCalendarEventListeners() {
-        const addBtn = document.getElementById('oj-add-event');
-        if (addBtn) {
-            addBtn.addEventListener('click', () => {
-                this.showAddEventDialog();
-            });
-        }
-    }
+				const contents = this.overlay.querySelectorAll('.oj-tab-content');
+				contents.forEach((c) => {
+					c.classList.toggle('active', c.dataset.tab === tab);
+				});
+			});
+		});
 
-    attachSettingsEventListeners() {
-        // Export data
-        const exportBtn = document.getElementById('oj-export-data');
-        if (exportBtn) {
-            exportBtn.addEventListener('click', () => {
-                const data = this.storage.exportData();
-                const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-                const url = URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.href = url;
-                a.download = `organizedJihad-backup-${Date.now()}.json`;
-                a.click();
-            });
-        }
-        
-        // Clear data
-        const clearBtn = document.getElementById('oj-clear-data');
-        if (clearBtn) {
-            clearBtn.addEventListener('click', () => {
-                if (confirm('Are you sure you want to clear all data? This cannot be undone!')) {
-                    this.storage.clearAll();
-                    alert('All data cleared!');
-                    this.renderView(this.currentView);
-                }
-            });
-        }
-        
-        // Auto-show checkbox
-        const autoShowCheckbox = document.getElementById('oj-auto-show');
-        if (autoShowCheckbox) {
-            autoShowCheckbox.addEventListener('change', (e) => {
-                this.isVisible = e.target.checked;
-                this.storage.set('uiVisible', this.isVisible);
-            });
-        }
-    }
+		// Add goal button
+		const addBtn = document.getElementById('oj-add-goal');
+		if (addBtn) {
+			addBtn.addEventListener('click', () => {
+				this.showAddGoalDialog();
+			});
+		}
+	}
 
-    showAddGoalDialog() {
-        // This would show a modal dialog for adding goals
-        // For now, just a simple prompt
-        const title = prompt('Goal title:');
-        if (title) {
-            this.goalsManager.addGoal({
-                title,
-                type: 'shortTerm',
-                category: 'general'
-            });
-            this.renderView('goals');
-        }
-    }
+	attachCalendarEventListeners() {
+		const addBtn = document.getElementById('oj-add-event');
+		if (addBtn) {
+			addBtn.addEventListener('click', () => {
+				this.showAddEventDialog();
+			});
+		}
+	}
 
-    showAddEventDialog() {
-        const title = prompt('Event title:');
-        if (title) {
-            this.calendarManager.addEvent({
-                title,
-                startDate: Date.now(),
-                type: 'custom'
-            });
-            this.renderView('calendar');
-        }
-    }
+	attachSettingsEventListeners() {
+		// Export data
+		const exportBtn = document.getElementById('oj-export-data');
+		if (exportBtn) {
+			exportBtn.addEventListener('click', () => {
+				const data = this.storage.exportData();
+				const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+				const url = URL.createObjectURL(blob);
+				const a = document.createElement('a');
+				a.href = url;
+				a.download = `organizedJihad-backup-${Date.now()}.json`;
+				a.click();
+			});
+		}
 
-    show() {
-        if (this.overlay) {
-            this.overlay.style.display = 'block';
-            this.isVisible = true;
-            this.storage.set('uiVisible', true);
-        }
-    }
+		// Clear data
+		const clearBtn = document.getElementById('oj-clear-data');
+		if (clearBtn) {
+			clearBtn.addEventListener('click', () => {
+				if (confirm('Are you sure you want to clear all data? This cannot be undone!')) {
+					this.storage.clearAll();
+					alert('All data cleared!');
+					this.renderView(this.currentView);
+				}
+			});
+		}
 
-    hide() {
-        if (this.overlay) {
-            this.overlay.style.display = 'none';
-            this.isVisible = false;
-            this.storage.set('uiVisible', false);
-        }
-    }
+		// Auto-show checkbox
+		const autoShowCheckbox = document.getElementById('oj-auto-show');
+		if (autoShowCheckbox) {
+			autoShowCheckbox.addEventListener('change', (e) => {
+				this.isVisible = e.target.checked;
+				this.storage.set('uiVisible', this.isVisible);
+			});
+		}
+	}
 
-    toggle() {
-        if (this.isVisible) {
-            this.hide();
-        } else {
-            this.show();
-        }
-    }
+	showAddGoalDialog() {
+		// This would show a modal dialog for adding goals
+		// For now, just a simple prompt
+		const title = prompt('Goal title:');
+		if (title) {
+			this.goalsManager.addGoal({
+				title,
+				type: 'shortTerm',
+				category: 'general',
+			});
+			this.renderView('goals');
+		}
+	}
+
+	showAddEventDialog() {
+		const title = prompt('Event title:');
+		if (title) {
+			this.calendarManager.addEvent({
+				title,
+				startDate: Date.now(),
+				type: 'custom',
+			});
+			this.renderView('calendar');
+		}
+	}
+
+	show() {
+		if (this.overlay) {
+			this.overlay.style.display = 'block';
+			this.isVisible = true;
+			this.storage.set('uiVisible', true);
+		}
+	}
+
+	hide() {
+		if (this.overlay) {
+			this.overlay.style.display = 'none';
+			this.isVisible = false;
+			this.storage.set('uiVisible', false);
+		}
+	}
+
+	toggle() {
+		if (this.isVisible) {
+			this.hide();
+		} else {
+			this.show();
+		}
+	}
 }
 
 export default UIManager;
