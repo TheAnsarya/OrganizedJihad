@@ -1,4 +1,4 @@
-using OrganizedJihad.Api.Data.Models;
+using OrganizedJihad.Data.Models;
 
 namespace OrganizedJihad.Api.Models;
 

@@ -1,70 +1,85 @@
 using Microsoft.EntityFrameworkCore;
-using OrganizedJihad.Api.Data.Models;
+using OrganizedJihad.Data.Models;
 
-namespace OrganizedJihad.Api.Data;
+namespace OrganizedJihad.Data;
 
 /// <summary>
 /// Entity Framework Core database context for Hero Wars game data.
 /// Manages all game-related tables and provides access to tracked data.
+///
+/// Design Pattern: Repository pattern with EF Core
+/// https://learn.microsoft.com/en-us/ef/core/dbcontext-configuration/
 /// </summary>
 public class GameDatabaseContext : DbContext {
 	/// <summary>
 	/// Player snapshot records showing account state at specific times
+	/// Immutable historical data captured from game API
 	/// </summary>
 	public DbSet<PlayerSnapshot> PlayerSnapshots { get; set; }
 
 	/// <summary>
 	/// Arena battle records (regular arena)
+	/// Immutable historical data captured from battle results
 	/// </summary>
 	public DbSet<ArenaBattle> ArenaBattles { get; set; }
 
 	/// <summary>
 	/// Grand Arena battle records
+	/// Immutable historical data with 3v3 team format
 	/// </summary>
 	public DbSet<GrandArenaBattle> GrandArenaBattles { get; set; }
 
 	/// <summary>
 	/// Titan Arena battle records
+	/// Immutable historical data for titan battles
 	/// </summary>
 	public DbSet<TitanArenaBattle> TitanArenaBattles { get; set; }
 
 	/// <summary>
 	/// Guild War battle records
+	/// Immutable historical data for guild war attacks
 	/// </summary>
 	public DbSet<GuildWarBattle> GuildWarBattles { get; set; }
 
 	/// <summary>
 	/// Raid Boss attack records
+	/// Immutable historical data for raid boss damage
 	/// </summary>
 	public DbSet<RaidBossAttack> RaidBossAttacks { get; set; }
 
 	/// <summary>
 	/// Chest opening records with drop information
+	/// Immutable historical data for chest analytics
 	/// </summary>
 	public DbSet<ChestOpening> ChestOpenings { get; set; }
 
 	/// <summary>
 	/// Individual items dropped from chests
+	/// Immutable historical data linked to ChestOpening
 	/// </summary>
 	public DbSet<ChestDrop> ChestDrops { get; set; }
 
 	/// <summary>
 	/// Tracked opponents with win/loss records
+	/// Mutable reference data updated with each battle
 	/// </summary>
 	public DbSet<Opponent> Opponents { get; set; }
 
 	/// <summary>
 	/// User goals (short-term and long-term)
+	/// Mutable user-managed data with soft delete support
 	/// </summary>
 	public DbSet<Goal> Goals { get; set; }
 
 	/// <summary>
 	/// Calendar events and reminders
+	/// Mutable user-managed data with recurring event support
 	/// </summary>
 	public DbSet<CalendarEvent> CalendarEvents { get; set; }
 
 	/// <summary>
 	/// Sync metadata to track last sync with browser
+	/// Mutable metadata for sync coordination
 	/// </summary>
 	public DbSet<SyncMetadata> SyncMetadata { get; set; }
 
@@ -72,10 +87,17 @@ public class GameDatabaseContext : DbContext {
 		: base(options) {
 	}
 
+	/// <summary>
+	/// Configure entity relationships, indexes, and constraints
+	/// https://learn.microsoft.com/en-us/ef/core/modeling/
+	/// </summary>
+	/// <param name="modelBuilder">EF Core model builder</param>
 	protected override void OnModelCreating(ModelBuilder modelBuilder) {
 		base.OnModelCreating(modelBuilder);
 
 		// Configure PlayerSnapshot
+		// Index on timestamp for historical queries
+		// Composite index on PlayerId + Timestamp for player-specific history
 		modelBuilder.Entity<PlayerSnapshot>(entity => {
 			entity.HasKey(e => e.Id);
 			entity.HasIndex(e => e.Timestamp);
@@ -83,6 +105,9 @@ public class GameDatabaseContext : DbContext {
 		});
 
 		// Configure ArenaBattle
+		// Index on timestamp for recent battles
+		// Index on OpponentId for opponent analytics
+		// Composite index on IsWin + Timestamp for win/loss trends
 		modelBuilder.Entity<ArenaBattle>(entity => {
 			entity.HasKey(e => e.Id);
 			entity.HasIndex(e => e.Timestamp);
@@ -91,6 +116,8 @@ public class GameDatabaseContext : DbContext {
 		});
 
 		// Configure GrandArenaBattle
+		// Index on timestamp for recent battles
+		// Index on OpponentId for matchup analysis
 		modelBuilder.Entity<GrandArenaBattle>(entity => {
 			entity.HasKey(e => e.Id);
 			entity.HasIndex(e => e.Timestamp);
@@ -98,6 +125,8 @@ public class GameDatabaseContext : DbContext {
 		});
 
 		// Configure TitanArenaBattle
+		// Index on timestamp for recent battles
+		// Index on OpponentId for titan matchup analysis
 		modelBuilder.Entity<TitanArenaBattle>(entity => {
 			entity.HasKey(e => e.Id);
 			entity.HasIndex(e => e.Timestamp);
@@ -105,6 +134,8 @@ public class GameDatabaseContext : DbContext {
 		});
 
 		// Configure GuildWarBattle
+		// Index on timestamp for recent wars
+		// Index on WarId for war-specific queries
 		modelBuilder.Entity<GuildWarBattle>(entity => {
 			entity.HasKey(e => e.Id);
 			entity.HasIndex(e => e.Timestamp);
@@ -112,6 +143,8 @@ public class GameDatabaseContext : DbContext {
 		});
 
 		// Configure RaidBossAttack
+		// Index on timestamp for recent attacks
+		// Index on BossName for boss-specific analytics
 		modelBuilder.Entity<RaidBossAttack>(entity => {
 			entity.HasKey(e => e.Id);
 			entity.HasIndex(e => e.Timestamp);
@@ -119,6 +152,9 @@ public class GameDatabaseContext : DbContext {
 		});
 
 		// Configure ChestOpening
+		// Index on timestamp for recent openings
+		// Index on ChestType for chest-specific drop rate analytics
+		// One-to-many relationship with ChestDrops
 		modelBuilder.Entity<ChestOpening>(entity => {
 			entity.HasKey(e => e.Id);
 			entity.HasIndex(e => e.Timestamp);
@@ -130,12 +166,15 @@ public class GameDatabaseContext : DbContext {
 		});
 
 		// Configure ChestDrop
+		// Index on ItemId for item drop rate queries
 		modelBuilder.Entity<ChestDrop>(entity => {
 			entity.HasKey(e => e.Id);
 			entity.HasIndex(e => e.ItemId);
 		});
 
 		// Configure Opponent
+		// Unique index on OpponentId for fast lookups
+		// Index on OpponentName for search functionality
 		modelBuilder.Entity<Opponent>(entity => {
 			entity.HasKey(e => e.Id);
 			entity.HasIndex(e => e.OpponentId).IsUnique();
@@ -143,6 +182,9 @@ public class GameDatabaseContext : DbContext {
 		});
 
 		// Configure Goal
+		// Index on IsCompleted for active goals queries
+		// Index on Type for goal categorization
+		// Index on CreatedAt for chronological ordering
 		modelBuilder.Entity<Goal>(entity => {
 			entity.HasKey(e => e.Id);
 			entity.HasIndex(e => e.IsCompleted);
@@ -151,6 +193,8 @@ public class GameDatabaseContext : DbContext {
 		});
 
 		// Configure CalendarEvent
+		// Index on EventDate for upcoming events queries
+		// Index on IsCompleted for active events
 		modelBuilder.Entity<CalendarEvent>(entity => {
 			entity.HasKey(e => e.Id);
 			entity.HasIndex(e => e.EventDate);
@@ -158,6 +202,7 @@ public class GameDatabaseContext : DbContext {
 		});
 
 		// Configure SyncMetadata
+		// Unique index on Key for fast metadata lookups
 		modelBuilder.Entity<SyncMetadata>(entity => {
 			entity.HasKey(e => e.Id);
 			entity.HasIndex(e => e.Key).IsUnique();

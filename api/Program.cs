@@ -1,6 +1,6 @@
 using Microsoft.EntityFrameworkCore;
-using OrganizedJihad.Api.Data;
 using OrganizedJihad.Api.Services;
+using OrganizedJihad.Data;
 
 var builder = WebApplication.CreateBuilder(args);
 

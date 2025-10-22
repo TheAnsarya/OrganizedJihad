@@ -1,8 +1,8 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
-using OrganizedJihad.Api.Data;
 using OrganizedJihad.Api.Models;
 using OrganizedJihad.Api.Services;
+using OrganizedJihad.Data;
 
 namespace OrganizedJihad.Api.Controllers;
 

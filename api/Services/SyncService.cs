@@ -1,8 +1,8 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
-using OrganizedJihad.Api.Data;
-using OrganizedJihad.Api.Data.Models;
 using OrganizedJihad.Api.Models;
+using OrganizedJihad.Data;
+using OrganizedJihad.Data.Models;
 using System;
 using System.Text.Json;
 using System.Threading.Tasks;

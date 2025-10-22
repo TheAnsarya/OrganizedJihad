@@ -10,7 +10,10 @@ Step Two: Install the HWH Script https://greasyfork.org/en/scripts/450693-herowa
 
 &&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&
 directives:
-use my editorconfig for formatting, use crlf, use tabs for all documents, use UTF-8, and always use the most modern code and practices, use yarn instead of npm when appropriate, comment everything including the code inside methods, add links in the comments to explanitory articles, always format the code using editorconfig and other formatting directives (never spaces, always tabs), if a file grows too large move pieces into their own logical components or classes separating concerns, for this session and all sessions
+for all:
+use my editorconfig for formatting, use crlf, use tabs for all documents, use UTF-8, and always use the most modern code and practices, leave blank line between the stages, keep opening braces on the previous line, use yarn instead of npm when appropriate, comment everything including the code inside methods, add links in the comments to explanitory articles, always format the code using editorconfig and other formatting directives (never spaces, always tabs), if a file grows too large move pieces into their own logical components or classes separating concerns, update the chat log files, create a git commit including description, for this session and all sessions
+for `c#/dotnet`:
+use file-scoped namespace with a single blank line after, use [] instead of array.empty, use collection expressions, leave blank line between the stages, keep opening braces on the previous line, always use span when you can and it is right to do so
 &&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&
 
 ----------------
@@ -105,12 +108,17 @@ find the next TODO ensuring proper build order and implement it
 &&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&
 directives:
 for all:
-use my editorconfig for formatting, use crlf, use tabs for all documents, use UTF-8, and always use the most modern code and practices, leave blank line between the stages, keep opening braces on the previous line, use yarn instead of npm when appropriate, comment everything including the code inside methods, add links in the comments to explanitory articles, always format the code using editorconfig and other formatting directives (never spaces, always tabs), if a file grows too large move pieces into their own logical components or classes separating concerns, for this session and all sessions
+use my editorconfig for formatting, use crlf, use tabs for all documents, use UTF-8, and always use the most modern code and practices, leave blank line between the stages, keep opening braces on the previous line, use yarn instead of npm when appropriate, comment everything including the code inside methods, add links in the comments to explanitory articles, always format the code using editorconfig and other formatting directives (never spaces, always tabs), if a file grows too large move pieces into their own logical components or classes separating concerns, update the chat log files, create a git commit including description, for this session and all sessions
 for `c#/dotnet`:
 use file-scoped namespace with a single blank line after, use [] instead of array.empty, use collection expressions, leave blank line between the stages, keep opening braces on the previous line, always use span when you can and it is right to do so
 &&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&
 
 dotnet format
+
+update the chat log files, find the next TODO ensuring proper build order and implement it, create a git commit including description, and then update the chat log files
+if a file grows too large move pieces/refactor into their own logical components or classes separating concerns
+find the next TODO for the data layer, ensuring proper build order and implement it, make sure to follow the formatting, modern practices and other rules, and then update the chat log files, create a git commit including description
+
 
 
 

@@ -1,7 +1,7 @@
 using System;
 using System.ComponentModel.DataAnnotations;
 
-namespace OrganizedJihad.Api.Data.Models;
+namespace OrganizedJihad.Data.Models;
 
 /// <summary>
 /// Represents a regular Arena battle
