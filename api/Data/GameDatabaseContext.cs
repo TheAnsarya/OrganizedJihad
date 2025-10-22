@@ -1,7 +1,7 @@
 using Microsoft.EntityFrameworkCore;
-using OrganizedJihad.Desktop.Data.Models;
+using OrganizedJihad.Api.Data.Models;
 
-namespace OrganizedJihad.Desktop.Data;
+namespace OrganizedJihad.Api.Data;
 
 /// <summary>
 /// Entity Framework Core database context for Hero Wars game data.

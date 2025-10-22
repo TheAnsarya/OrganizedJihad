@@ -1,7 +1,7 @@
 using System;
 using System.ComponentModel.DataAnnotations;
 
-namespace OrganizedJihad.Desktop.Data.Models;
+namespace OrganizedJihad.Api.Data.Models;
 
 /// <summary>
 /// Stores sync metadata for browser-to-desktop synchronization

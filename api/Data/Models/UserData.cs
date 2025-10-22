@@ -1,7 +1,7 @@
 using System;
 using System.ComponentModel.DataAnnotations;
 
-namespace OrganizedJihad.Desktop.Data.Models;
+namespace OrganizedJihad.Api.Data.Models;
 
 /// <summary>
 /// Represents a user goal (short-term or long-term)

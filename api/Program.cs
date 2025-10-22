@@ -1,41 +1,69 @@
+using Microsoft.EntityFrameworkCore;
+using OrganizedJihad.Api.Data;
+using OrganizedJihad.Api.Services;
+
 var builder = WebApplication.CreateBuilder(args);
 
-// Add services to the container.
-// Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
-builder.Services.AddOpenApi();
+// Add services to the container
+builder.Services.AddControllers();
+builder.Services.AddEndpointsApiExplorer();
+
+// Configure CORS for browser userscript access
+builder.Services.AddCors(options =>
+{
+	options.AddDefaultPolicy(policy =>
+	{
+		policy.AllowAnyOrigin()
+			  .AllowAnyMethod()
+			  .AllowAnyHeader();
+	});
+});
+
+// Configure SQLite database
+var dbPath = Path.Combine(AppContext.BaseDirectory, "herowars.db");
+builder.Services.AddDbContextFactory<GameDatabaseContext>(options =>
+	options.UseSqlite($"Data Source={dbPath}"));
+
+// Register services
+builder.Services.AddScoped<SyncService>();
 
 var app = builder.Build();
 
-// Configure the HTTP request pipeline.
-if (app.Environment.IsDevelopment())
+// Initialize database
+using (var scope = app.Services.CreateScope())
 {
-    app.MapOpenApi();
+	var contextFactory = scope.ServiceProvider.GetRequiredService<IDbContextFactory<GameDatabaseContext>>();
+	await using var context = await contextFactory.CreateDbContextAsync();
+	await context.Database.EnsureCreatedAsync();
+	app.Logger.LogInformation("Database initialized at: {DbPath}", dbPath);
 }
 
-app.UseHttpsRedirection();
-
-var summaries = new[]
+// Configure the HTTP request pipeline
+if (app.Environment.IsDevelopment())
 {
-    "Freezing", "Bracing", "Chilly", "Cool", "Mild", "Warm", "Balmy", "Hot", "Sweltering", "Scorching"
-};
+	// Swagger removed for simplicity
+}
 
-app.MapGet("/weatherforecast", () =>
+app.UseCors();
+app.MapControllers();
+
+// Welcome endpoint
+app.MapGet("/", () => new
 {
-    var forecast =  Enumerable.Range(1, 5).Select(index =>
-        new WeatherForecast
-        (
-            DateOnly.FromDateTime(DateTime.Now.AddDays(index)),
-            Random.Shared.Next(-20, 55),
-            summaries[Random.Shared.Next(summaries.Length)]
-        ))
-        .ToArray();
-    return forecast;
-})
-.WithName("GetWeatherForecast");
+	status = "running",
+	version = "1.0.0",
+	database = dbPath,
+	endpoints = new[]
+	{
+		"GET  /api/sync/health - Health check",
+		"POST /api/sync/import - Import data from browser",
+		"GET  /api/sync/last-sync - Get last sync timestamp",
+		"GET  /api/sync/stats - Get database statistics",
+		"GET  /api/sync/snapshots?limit=10 - Get recent snapshots",
+		"GET  /api/sync/battles?limit=20 - Get recent battles",
+		"GET  /api/sync/opponents - Get all opponents"
+	}
+});
 
 app.Run();
 
-record WeatherForecast(DateOnly Date, int TemperatureC, string? Summary)
-{
-    public int TemperatureF => 32 + (int)(TemperatureC / 0.5556);
-}

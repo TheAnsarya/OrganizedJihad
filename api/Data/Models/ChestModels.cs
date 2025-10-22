@@ -2,7 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 
-namespace OrganizedJihad.Desktop.Data.Models;
+namespace OrganizedJihad.Api.Data.Models;
 
 /// <summary>
 /// Represents a chest opening event

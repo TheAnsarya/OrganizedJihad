@@ -1,7 +1,7 @@
 using System;
 using System.ComponentModel.DataAnnotations;
 
-namespace OrganizedJihad.Desktop.Data.Models;
+namespace OrganizedJihad.Api.Data.Models;
 
 /// <summary>
 /// Tracks opponents and win/loss records against them
