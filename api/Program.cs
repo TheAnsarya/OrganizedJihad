@@ -9,15 +9,9 @@ builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 
 // Configure CORS for browser userscript access
-builder.Services.AddCors(options =>
-{
-	options.AddDefaultPolicy(policy =>
-	{
-		policy.AllowAnyOrigin()
+builder.Services.AddCors(options => options.AddDefaultPolicy(policy => policy.AllowAnyOrigin()
 			  .AllowAnyMethod()
-			  .AllowAnyHeader();
-	});
-});
+			  .AllowAnyHeader()));
 
 // Configure SQLite database
 var dbPath = Path.Combine(AppContext.BaseDirectory, "herowars.db");
@@ -30,8 +24,7 @@ builder.Services.AddScoped<SyncService>();
 var app = builder.Build();
 
 // Initialize database
-using (var scope = app.Services.CreateScope())
-{
+using (var scope = app.Services.CreateScope()) {
 	var contextFactory = scope.ServiceProvider.GetRequiredService<IDbContextFactory<GameDatabaseContext>>();
 	await using var context = await contextFactory.CreateDbContextAsync();
 	await context.Database.EnsureCreatedAsync();
@@ -39,8 +32,7 @@ using (var scope = app.Services.CreateScope())
 }
 
 // Configure the HTTP request pipeline
-if (app.Environment.IsDevelopment())
-{
+if (app.Environment.IsDevelopment()) {
 	// Swagger removed for simplicity
 }
 
@@ -48,8 +40,7 @@ app.UseCors();
 app.MapControllers();
 
 // Welcome endpoint
-app.MapGet("/", () => new
-{
+app.MapGet("/", () => new {
 	status = "running",
 	version = "1.0.0",
 	database = dbPath,

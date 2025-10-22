@@ -6,8 +6,7 @@ namespace OrganizedJihad.Api.Models;
 /// Data transfer object for receiving sync data from the browser userscript.
 /// Contains all tracked game data to be imported into the database.
 /// </summary>
-public class BrowserSyncData
-{
+public class BrowserSyncData {
 	public PlayerSnapshot? CurrentSnapshot { get; set; }
 	public List<ArenaBattle>? ArenaBattles { get; set; }
 	public List<GrandArenaBattle>? GrandArenaBattles { get; set; }
@@ -23,8 +22,7 @@ public class BrowserSyncData
 /// <summary>
 /// Response from the sync import operation.
 /// </summary>
-public class SyncResponse
-{
+public class SyncResponse {
 	public bool Success { get; set; }
 	public string? Message { get; set; }
 	public DateTime SyncTimestamp { get; set; }
@@ -34,8 +32,7 @@ public class SyncResponse
 /// <summary>
 /// Count of records imported during sync.
 /// </summary>
-public class ImportCounts
-{
+public class ImportCounts {
 	public int PlayerSnapshots { get; set; }
 	public int ArenaBattles { get; set; }
 	public int GrandArenaBattles { get; set; }
@@ -51,8 +48,7 @@ public class ImportCounts
 /// <summary>
 /// Database statistics for the API.
 /// </summary>
-public class DatabaseStats
-{
+public class DatabaseStats {
 	public int TotalSnapshots { get; set; }
 	public int TotalArenaBattles { get; set; }
 	public int TotalGrandArenaBattles { get; set; }

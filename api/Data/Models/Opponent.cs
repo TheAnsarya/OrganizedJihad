@@ -6,8 +6,7 @@ namespace OrganizedJihad.Api.Data.Models;
 /// <summary>
 /// Tracks opponents and win/loss records against them
 /// </summary>
-public class Opponent
-{
+public class Opponent {
 	[Key]
 	public int Id { get; set; }
 

@@ -7,8 +7,7 @@ namespace OrganizedJihad.Api.Data.Models;
 /// Represents a snapshot of player state at a specific time.
 /// Tracks resources, progression, and team composition.
 /// </summary>
-public class PlayerSnapshot
-{
+public class PlayerSnapshot {
 	[Key]
 	public int Id { get; set; }
 

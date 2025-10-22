@@ -6,8 +6,7 @@ namespace OrganizedJihad.Api.Data.Models;
 /// <summary>
 /// Represents a regular Arena battle
 /// </summary>
-public class ArenaBattle
-{
+public class ArenaBattle {
 	[Key]
 	public int Id { get; set; }
 

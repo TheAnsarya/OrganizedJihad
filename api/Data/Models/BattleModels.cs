@@ -6,8 +6,7 @@ namespace OrganizedJihad.Api.Data.Models;
 /// <summary>
 /// Represents a Guild War battle
 /// </summary>
-public class GuildWarBattle
-{
+public class GuildWarBattle {
 	[Key]
 	public int Id { get; set; }
 
@@ -53,8 +52,7 @@ public class GuildWarBattle
 /// <summary>
 /// Represents a Raid Boss attack
 /// </summary>
-public class RaidBossAttack
-{
+public class RaidBossAttack {
 	[Key]
 	public int Id { get; set; }
 

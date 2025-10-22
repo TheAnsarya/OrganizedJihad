@@ -7,8 +7,7 @@ namespace OrganizedJihad.Api.Data;
 /// Entity Framework Core database context for Hero Wars game data.
 /// Manages all game-related tables and provides access to tracked data.
 /// </summary>
-public class GameDatabaseContext : DbContext
-{
+public class GameDatabaseContext : DbContext {
 	/// <summary>
 	/// Player snapshot records showing account state at specific times
 	/// </summary>
@@ -70,25 +69,21 @@ public class GameDatabaseContext : DbContext
 	public DbSet<SyncMetadata> SyncMetadata { get; set; }
 
 	public GameDatabaseContext(DbContextOptions<GameDatabaseContext> options)
-		: base(options)
-	{
+		: base(options) {
 	}
 
-	protected override void OnModelCreating(ModelBuilder modelBuilder)
-	{
+	protected override void OnModelCreating(ModelBuilder modelBuilder) {
 		base.OnModelCreating(modelBuilder);
 
 		// Configure PlayerSnapshot
-		modelBuilder.Entity<PlayerSnapshot>(entity =>
-		{
+		modelBuilder.Entity<PlayerSnapshot>(entity => {
 			entity.HasKey(e => e.Id);
 			entity.HasIndex(e => e.Timestamp);
 			entity.HasIndex(e => new { e.PlayerId, e.Timestamp });
 		});
 
 		// Configure ArenaBattle
-		modelBuilder.Entity<ArenaBattle>(entity =>
-		{
+		modelBuilder.Entity<ArenaBattle>(entity => {
 			entity.HasKey(e => e.Id);
 			entity.HasIndex(e => e.Timestamp);
 			entity.HasIndex(e => e.OpponentId);
@@ -96,40 +91,35 @@ public class GameDatabaseContext : DbContext
 		});
 
 		// Configure GrandArenaBattle
-		modelBuilder.Entity<GrandArenaBattle>(entity =>
-		{
+		modelBuilder.Entity<GrandArenaBattle>(entity => {
 			entity.HasKey(e => e.Id);
 			entity.HasIndex(e => e.Timestamp);
 			entity.HasIndex(e => e.OpponentId);
 		});
 
 		// Configure TitanArenaBattle
-		modelBuilder.Entity<TitanArenaBattle>(entity =>
-		{
+		modelBuilder.Entity<TitanArenaBattle>(entity => {
 			entity.HasKey(e => e.Id);
 			entity.HasIndex(e => e.Timestamp);
 			entity.HasIndex(e => e.OpponentId);
 		});
 
 		// Configure GuildWarBattle
-		modelBuilder.Entity<GuildWarBattle>(entity =>
-		{
+		modelBuilder.Entity<GuildWarBattle>(entity => {
 			entity.HasKey(e => e.Id);
 			entity.HasIndex(e => e.Timestamp);
 			entity.HasIndex(e => e.WarId);
 		});
 
 		// Configure RaidBossAttack
-		modelBuilder.Entity<RaidBossAttack>(entity =>
-		{
+		modelBuilder.Entity<RaidBossAttack>(entity => {
 			entity.HasKey(e => e.Id);
 			entity.HasIndex(e => e.Timestamp);
 			entity.HasIndex(e => e.BossName);
 		});
 
 		// Configure ChestOpening
-		modelBuilder.Entity<ChestOpening>(entity =>
-		{
+		modelBuilder.Entity<ChestOpening>(entity => {
 			entity.HasKey(e => e.Id);
 			entity.HasIndex(e => e.Timestamp);
 			entity.HasIndex(e => e.ChestType);
@@ -140,23 +130,20 @@ public class GameDatabaseContext : DbContext
 		});
 
 		// Configure ChestDrop
-		modelBuilder.Entity<ChestDrop>(entity =>
-		{
+		modelBuilder.Entity<ChestDrop>(entity => {
 			entity.HasKey(e => e.Id);
 			entity.HasIndex(e => e.ItemId);
 		});
 
 		// Configure Opponent
-		modelBuilder.Entity<Opponent>(entity =>
-		{
+		modelBuilder.Entity<Opponent>(entity => {
 			entity.HasKey(e => e.Id);
 			entity.HasIndex(e => e.OpponentId).IsUnique();
 			entity.HasIndex(e => e.OpponentName);
 		});
 
 		// Configure Goal
-		modelBuilder.Entity<Goal>(entity =>
-		{
+		modelBuilder.Entity<Goal>(entity => {
 			entity.HasKey(e => e.Id);
 			entity.HasIndex(e => e.IsCompleted);
 			entity.HasIndex(e => e.Type);
@@ -164,16 +151,14 @@ public class GameDatabaseContext : DbContext
 		});
 
 		// Configure CalendarEvent
-		modelBuilder.Entity<CalendarEvent>(entity =>
-		{
+		modelBuilder.Entity<CalendarEvent>(entity => {
 			entity.HasKey(e => e.Id);
 			entity.HasIndex(e => e.EventDate);
 			entity.HasIndex(e => e.IsCompleted);
 		});
 
 		// Configure SyncMetadata
-		modelBuilder.Entity<SyncMetadata>(entity =>
-		{
+		modelBuilder.Entity<SyncMetadata>(entity => {
 			entity.HasKey(e => e.Id);
 			entity.HasIndex(e => e.Key).IsUnique();
 		});

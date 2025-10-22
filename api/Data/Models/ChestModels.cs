@@ -7,8 +7,7 @@ namespace OrganizedJihad.Api.Data.Models;
 /// <summary>
 /// Represents a chest opening event
 /// </summary>
-public class ChestOpening
-{
+public class ChestOpening {
 	[Key]
 	public int Id { get; set; }
 
@@ -45,8 +44,7 @@ public class ChestOpening
 /// <summary>
 /// Represents a single item dropped from a chest
 /// </summary>
-public class ChestDrop
-{
+public class ChestDrop {
 	[Key]
 	public int Id { get; set; }
 

@@ -6,8 +6,7 @@ namespace OrganizedJihad.Api.Data.Models;
 /// <summary>
 /// Stores sync metadata for browser-to-desktop synchronization
 /// </summary>
-public class SyncMetadata
-{
+public class SyncMetadata {
 	[Key]
 	public int Id { get; set; }
 

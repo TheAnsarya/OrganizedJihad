@@ -12,8 +12,7 @@ namespace OrganizedJihad.Api.Controllers;
 /// </summary>
 [ApiController]
 [Route("api/[controller]")]
-public class SyncController : ControllerBase
-{
+public class SyncController : ControllerBase {
 	private readonly SyncService _syncService;
 	private readonly IDbContextFactory<GameDatabaseContext> _contextFactory;
 	private readonly ILogger<SyncController> _logger;
@@ -21,8 +20,7 @@ public class SyncController : ControllerBase
 	public SyncController(
 		SyncService syncService,
 		IDbContextFactory<GameDatabaseContext> contextFactory,
-		ILogger<SyncController> logger)
-	{
+		ILogger<SyncController> logger) {
 		_syncService = syncService;
 		_contextFactory = contextFactory;
 		_logger = logger;
@@ -33,10 +31,8 @@ public class SyncController : ControllerBase
 	/// GET: api/sync/health
 	/// </summary>
 	[HttpGet("health")]
-	public IActionResult HealthCheck()
-	{
-		return Ok(new
-		{
+	public IActionResult HealthCheck() {
+		return Ok(new {
 			status = "healthy",
 			timestamp = DateTime.UtcNow,
 			version = "1.0.0"
@@ -48,16 +44,13 @@ public class SyncController : ControllerBase
 	/// POST: api/sync/import
 	/// </summary>
 	[HttpPost("import")]
-	public async Task<ActionResult<SyncResponse>> ImportData([FromBody] BrowserSyncData data)
-	{
-		try
-		{
+	public async Task<ActionResult<SyncResponse>> ImportData([FromBody] BrowserSyncData data) {
+		try {
 			_logger.LogInformation("Receiving sync data from browser at {Time}", DateTime.UtcNow);
 
 			var counts = await _syncService.ImportBrowserDataAsync(data);
 
-			var response = new SyncResponse
-			{
+			var response = new SyncResponse {
 				Success = true,
 				Message = "Data imported successfully",
 				SyncTimestamp = DateTime.UtcNow,
@@ -70,12 +63,9 @@ public class SyncController : ControllerBase
 				counts.ChestOpenings + counts.Opponents + counts.Goals + counts.CalendarEvents);
 
 			return Ok(response);
-		}
-		catch (Exception ex)
-		{
+		} catch (Exception ex) {
 			_logger.LogError(ex, "Error during data import");
-			return StatusCode(500, new SyncResponse
-			{
+			return StatusCode(500, new SyncResponse {
 				Success = false,
 				Message = $"Import failed: {ex.Message}",
 				SyncTimestamp = DateTime.UtcNow
@@ -88,15 +78,11 @@ public class SyncController : ControllerBase
 	/// GET: api/sync/last-sync
 	/// </summary>
 	[HttpGet("last-sync")]
-	public async Task<ActionResult<DateTime?>> GetLastSync()
-	{
-		try
-		{
+	public async Task<ActionResult<DateTime?>> GetLastSync() {
+		try {
 			var lastSync = await _syncService.GetLastSyncTimestampAsync();
 			return Ok(new { lastSync });
-		}
-		catch (Exception ex)
-		{
+		} catch (Exception ex) {
 			_logger.LogError(ex, "Error retrieving last sync timestamp");
 			return StatusCode(500, new { error = ex.Message });
 		}
@@ -107,15 +93,11 @@ public class SyncController : ControllerBase
 	/// GET: api/sync/stats
 	/// </summary>
 	[HttpGet("stats")]
-	public async Task<ActionResult<DatabaseStats>> GetStats()
-	{
-		try
-		{
+	public async Task<ActionResult<DatabaseStats>> GetStats() {
+		try {
 			var stats = await _syncService.GetDatabaseStatsAsync();
 			return Ok(stats);
-		}
-		catch (Exception ex)
-		{
+		} catch (Exception ex) {
 			_logger.LogError(ex, "Error retrieving database stats");
 			return StatusCode(500, new { error = ex.Message });
 		}
@@ -126,10 +108,8 @@ public class SyncController : ControllerBase
 	/// GET: api/sync/snapshots?limit=10
 	/// </summary>
 	[HttpGet("snapshots")]
-	public async Task<IActionResult> GetSnapshots([FromQuery] int limit = 10)
-	{
-		try
-		{
+	public async Task<IActionResult> GetSnapshots([FromQuery] int limit = 10) {
+		try {
 			await using var context = await _contextFactory.CreateDbContextAsync();
 			var snapshots = await context.PlayerSnapshots
 				.OrderByDescending(s => s.Timestamp)
@@ -137,9 +117,7 @@ public class SyncController : ControllerBase
 				.ToListAsync();
 
 			return Ok(snapshots);
-		}
-		catch (Exception ex)
-		{
+		} catch (Exception ex) {
 			_logger.LogError(ex, "Error retrieving snapshots");
 			return StatusCode(500, new { error = ex.Message });
 		}
@@ -150,10 +128,8 @@ public class SyncController : ControllerBase
 	/// GET: api/sync/battles?limit=20
 	/// </summary>
 	[HttpGet("battles")]
-	public async Task<IActionResult> GetBattles([FromQuery] int limit = 20)
-	{
-		try
-		{
+	public async Task<IActionResult> GetBattles([FromQuery] int limit = 20) {
+		try {
 			await using var context = await _contextFactory.CreateDbContextAsync();
 
 			var arenaBattles = await context.ArenaBattles
@@ -171,15 +147,12 @@ public class SyncController : ControllerBase
 				.Take(limit)
 				.ToListAsync();
 
-			return Ok(new
-			{
+			return Ok(new {
 				arena = arenaBattles,
 				grandArena = grandBattles,
 				titanArena = titanBattles
 			});
-		}
-		catch (Exception ex)
-		{
+		} catch (Exception ex) {
 			_logger.LogError(ex, "Error retrieving battles");
 			return StatusCode(500, new { error = ex.Message });
 		}
@@ -190,19 +163,15 @@ public class SyncController : ControllerBase
 	/// GET: api/sync/opponents
 	/// </summary>
 	[HttpGet("opponents")]
-	public async Task<IActionResult> GetOpponents()
-	{
-		try
-		{
+	public async Task<IActionResult> GetOpponents() {
+		try {
 			await using var context = await _contextFactory.CreateDbContextAsync();
 			var opponents = await context.Opponents
 				.OrderByDescending(o => o.LastSeen)
 				.ToListAsync();
 
 			return Ok(opponents);
-		}
-		catch (Exception ex)
-		{
+		} catch (Exception ex) {
 			_logger.LogError(ex, "Error retrieving opponents");
 			return StatusCode(500, new { error = ex.Message });
 		}

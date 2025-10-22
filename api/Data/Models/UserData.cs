@@ -6,8 +6,7 @@ namespace OrganizedJihad.Api.Data.Models;
 /// <summary>
 /// Represents a user goal (short-term or long-term)
 /// </summary>
-public class Goal
-{
+public class Goal {
 	[Key]
 	public int Id { get; set; }
 
@@ -84,8 +83,7 @@ public class Goal
 /// <summary>
 /// Represents a calendar event or reminder
 /// </summary>
-public class CalendarEvent
-{
+public class CalendarEvent {
 	[Key]
 	public int Id { get; set; }
 
