@@ -68,6 +68,11 @@
         <PackageReference Include="Microsoft.Extensions.Logging.Debug" Version="10.0.0-rc.2.25502.107" />
     </ItemGroup>
 
+    <!-- Reference to shared Data layer -->
+    <ItemGroup>
+        <ProjectReference Include="..\data\OrganizedJihad.Data.csproj" />
+    </ItemGroup>
+
     <!-- Temporarily exclude API files until ASP.NET Core hosting is properly configured -->
     <ItemGroup>
         <Compile Remove="Controllers\**" />

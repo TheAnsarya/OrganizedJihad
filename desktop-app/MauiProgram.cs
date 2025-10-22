@@ -1,6 +1,6 @@
 ﻿using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
-using OrganizedJihad.Desktop.Data;
+using OrganizedJihad.Data;
 using OrganizedJihad.Desktop.Services;
 
 namespace OrganizedJihad.Desktop;
@@ -56,7 +56,7 @@ public static class MauiProgram
 		using var context = contextFactory.CreateDbContext();
 
 		// Create database and apply migrations
-		context.Database.EnsureCreated();
+		context.Database.Migrate();  // Use migrations instead of EnsureCreated
 
 		// Log database location
 		var logger = scope.ServiceProvider.GetRequiredService<ILogger<GameDatabaseContext>>();

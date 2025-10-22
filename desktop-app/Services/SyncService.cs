@@ -3,8 +3,8 @@ using System.Text.Json;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
-using OrganizedJihad.Desktop.Data;
-using OrganizedJihad.Desktop.Data.Models;
+using OrganizedJihad.Data;
+using OrganizedJihad.Data.Models;
 
 namespace OrganizedJihad.Desktop.Services;
 
