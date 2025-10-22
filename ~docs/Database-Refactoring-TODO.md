@@ -1,9 +1,9 @@
 # Database Layer Refactoring - TODO List
 
-## Phase 1: Create Separate Data Library Project
+## Phase 1: Create Separate Data Library Project ✅ COMPLETE
 
-### 1.1 Project Setup
-- [ ] Create new .NET class library project: `OrganizedJihad.Data`
+### 1.1 Project Setup ✅
+- [x] Create new .NET class library project: `OrganizedJihad.Data`
   - Target: .NET 10.0
   - Location: `data/OrganizedJihad.Data.csproj`
   - Add NuGet packages:
@@ -11,31 +11,56 @@
     - `Microsoft.EntityFrameworkCore.Sqlite` (9.0.10)
     - `Microsoft.EntityFrameworkCore.Design` (9.0.10)
 
-### 1.2 Move Database Context
-- [ ] Move `GameDatabaseContext.cs` from `api/Data/` to `data/`
+### 1.2 Move Database Context ✅
+- [x] Move `GameDatabaseContext.cs` from `api/Data/` to `data/`
   - Update namespace to `OrganizedJihad.Data`
   - Keep all DbSet properties and OnModelCreating configuration
   - Ensure all entity configurations move with it
 
-### 1.3 Move Entity Models
-- [ ] Create `data/Models/` directory
-- [ ] Move all model files from `api/Data/Models/`:
-  - [ ] `PlayerSnapshot.cs`
-  - [ ] `ArenaBattle.cs`
-  - [ ] `ArenaModels.cs` (GrandArenaBattle, TitanArenaBattle)
-  - [ ] `BattleModels.cs` (GuildWarBattle, RaidBossAttack)
-  - [ ] `ChestModels.cs` (ChestOpening, ChestDrop)
-  - [ ] `Opponent.cs`
-  - [ ] `UserData.cs` (Goal, CalendarEvent)
-  - [ ] `SyncMetadata.cs`
-- [ ] Update all namespaces to `OrganizedJihad.Data.Models`
+### 1.3 Move Entity Models ✅
+- [x] Create `data/Models/` directory
+- [x] Move all model files from `api/Data/Models/`:
+  - [x] `PlayerSnapshot.cs`
+  - [x] `ArenaBattle.cs`
+  - [x] `ArenaModels.cs` (GrandArenaBattle, TitanArenaBattle)
+  - [x] `BattleModels.cs` (GuildWarBattle, RaidBossAttack)
+  - [x] `ChestModels.cs` (ChestOpening, ChestDrop)
+  - [x] `Opponent.cs`
+  - [x] `UserData.cs` (Goal, CalendarEvent)
+  - [x] `SyncMetadata.cs`
+- [x] Update all namespaces to `OrganizedJihad.Data.Models`
 
 ---
 
-## Phase 2: Add Audit Infrastructure
+## Phase 2: Add Audit Infrastructure ✅ COMPLETE
 
-### 2.1 Create Audit Interfaces
-- [ ] Create `data/Interfaces/IAuditableEntity.cs`:
+### 2.1 Create Audit Interfaces ✅
+- [x] Create `data/Interfaces/ICreationAuditableEntity.cs`:
+  - For records that are created but never modified (most game data)
+  - Properties: `DateCreated`, `CreatedBy`
+
+- [x] Create `data/Interfaces/IAuditableEntity.cs`:
+  - For mutable data with full audit trail
+  - Properties: `DateCreated`, `DateModified`, `CreatedBy`, `ModifiedBy`
+
+- [x] Create `data/Interfaces/ISoftDelete.cs`:
+  - For user-managed data that should be soft-deleted
+  - Properties: `IsDeleted`, `DateDeleted`, `DeletedBy`
+
+### 2.2 Create Base Entity Classes ✅
+- [x] Create `data/Entities/CreationAuditableEntity.cs`:
+  - Abstract base implementing `ICreationAuditableEntity`
+  - Used by immutable historical records
+
+- [x] Create `data/Entities/AuditableEntity.cs`:
+  - Abstract base implementing `IAuditableEntity`
+  - Used by mutable reference data
+
+- [x] Create `data/Entities/SoftDeletableEntity.cs`:
+  - Extends `AuditableEntity` and implements `ISoftDelete`
+  - Used by user-managed data (Goals, CalendarEvents)
+
+### 2.3 Update Entity Models with Audit Fields ✅
   ```csharp
   public interface IAuditableEntity
   {
@@ -97,143 +122,67 @@
   }
   ```
 
-### 2.3 Update Entity Models with Audit Fields
+### 2.3 Update Entity Models with Audit Fields ✅
 
-#### Immutable Game Data (Creation Audit Only)
+#### Immutable Game Data (Creation Audit Only) ✅
 These records are captured from game and never modified:
-- [ ] **PlayerSnapshot** - inherit from `CreationAuditableEntity`
-  - Already has `Timestamp` - keep it for domain logic
-  - Add `DateCreated` for audit trail
-  - Remove: None needed (snapshots are immutable)
+- [x] **PlayerSnapshot** - inherit from `CreationAuditableEntity`
+- [x] **ArenaBattle** - inherit from `CreationAuditableEntity`
+- [x] **GrandArenaBattle** - inherit from `CreationAuditableEntity`
+- [x] **TitanArenaBattle** - inherit from `CreationAuditableEntity`
+- [x] **GuildWarBattle** - inherit from `CreationAuditableEntity`
+- [x] **RaidBossAttack** - inherit from `CreationAuditableEntity`
+- [x] **ChestOpening** - inherit from `CreationAuditableEntity`
+- [x] **ChestDrop** - inherit from `CreationAuditableEntity`
 
-- [ ] **ArenaBattle** - inherit from `CreationAuditableEntity`
-  - Already has `Timestamp` - keep it
-  - Add `DateCreated`
+#### Reference Data (Full Audit Trail) ✅
+- [x] **Opponent** - inherit from `AuditableEntity`
+  - Mutable: Updated with each battle encounter
 
-- [ ] **GrandArenaBattle** - inherit from `CreationAuditableEntity`
-  - Already has `Timestamp`
-  - Add `DateCreated`
+#### User-Managed Data (Soft Delete + Full Audit) ✅
+- [x] **Goal** - inherit from `SoftDeletableEntity`
+- [x] **CalendarEvent** - inherit from `SoftDeletableEntity`
 
-- [ ] **TitanArenaBattle** - inherit from `CreationAuditableEntity`
-  - Already has `Timestamp`
-  - Add `DateCreated`
+### 2.4 Implement EF Core Audit Interceptor ✅
+- [x] Create `data/Interceptors/AuditInterceptor.cs`
+  - Extends `SaveChangesInterceptor`
+  - Auto-populate `DateCreated`, `CreatedBy` on insert
+  - Auto-populate `DateModified`, `ModifiedBy` on update
+  - Convert physical delete to soft delete for `ISoftDelete` entities
+  - Protect creation audit fields from modification
+  - Configurable user context (default: "System")
 
-- [ ] **GuildWarBattle** - inherit from `CreationAuditableEntity`
-  - Already has `Timestamp`
-  - Add `DateCreated`
+- [x] Register interceptor in `GameDatabaseContext.OnConfiguring`
+  - Add `optionsBuilder.AddInterceptors(new AuditInterceptor("System"))`
 
-- [ ] **RaidBossAttack** - inherit from `CreationAuditableEntity`
-  - Already has `Timestamp`
-  - Add `DateCreated`
+- [x] Configure global query filters in `OnModelCreating`
+  - `Goal`: Filter `!e.IsDeleted`
+  - `CalendarEvent`: Filter `!e.IsDeleted`
 
-- [ ] **ChestOpening** - inherit from `CreationAuditableEntity`
-  - Already has `Timestamp`
-  - Add `DateCreated`
+**Implementation Note**: Used modern EF Core Interceptor pattern instead of SaveChangesAsync override for better separation of concerns.
 
-- [ ] **ChestDrop** - inherit from `CreationAuditableEntity`
-  - Parent: ChestOpening
-  - Add `DateCreated`
-
-#### Mutable User Data (Full Audit Trail)
-These records can be updated by the user:
-- [ ] **Goal** - inherit from `SoftDeletableEntity`
-  - Already has `CreatedAt` - rename to `DateCreated` for consistency
-  - Add `DateModified`
-  - Already has `CompletedAt` - keep it (domain-specific)
-  - Add `IsDeleted`, `DateDeleted`, `DeletedBy`
-
-- [ ] **CalendarEvent** - inherit from `SoftDeletableEntity`
-  - Already has `CreatedAt` - rename to `DateCreated`
-  - Add `DateModified`
-  - Add `IsDeleted`, `DateDeleted`, `DeletedBy`
-
-#### Reference Data (Full Audit Trail)
-- [ ] **Opponent** - inherit from `AuditableEntity`
-  - Already has `LastSeen` - keep it (domain logic)
-  - Add `DateCreated`
-  - Add `DateModified`
-  - Note: Opponent records are merged/updated with new encounters
-
-- [ ] **SyncMetadata** - inherit from `AuditableEntity`
-  - Already has `LastSync` - keep it
-  - Add `DateCreated`
-  - Add `DateModified`
-
----
-
-## Phase 3: Update Database Context for Audit
-
-### 3.1 Override SaveChangesAsync
-- [ ] Add `SaveChangesAsync` override in `GameDatabaseContext`:
-  ```csharp
-  public override async Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
-  {
-      var entries = ChangeTracker.Entries()
-          .Where(e => e.Entity is IAuditableEntity || e.Entity is ICreationAuditableEntity);
-
-      foreach (var entry in entries)
-      {
-          if (entry.Entity is ICreationAuditableEntity creationAuditable)
-          {
-              if (entry.State == EntityState.Added)
-              {
-                  creationAuditable.DateCreated = DateTime.UtcNow;
-                  creationAuditable.CreatedBy = "system"; // TODO: Get from context
-              }
-          }
-
-          if (entry.Entity is IAuditableEntity auditable)
-          {
-              if (entry.State == EntityState.Added)
-              {
-                  auditable.DateCreated = DateTime.UtcNow;
-                  auditable.CreatedBy = "system";
-              }
-
-              if (entry.State == EntityState.Modified)
-              {
-                  auditable.DateModified = DateTime.UtcNow;
-                  auditable.ModifiedBy = "system";
-              }
-          }
-
-          if (entry.Entity is ISoftDelete softDelete && entry.State == EntityState.Deleted)
-          {
-              entry.State = EntityState.Modified;
-              softDelete.IsDeleted = true;
-              softDelete.DateDeleted = DateTime.UtcNow;
-              softDelete.DeletedBy = "system";
-          }
-      }
-
-      return await base.SaveChangesAsync(cancellationToken);
-  }
+### 2.5 Create EF Core Migration ⏸️ NEXT
+- [ ] Generate migration for audit fields:
+  ```bash
+  dotnet ef migrations add AddAuditFields --project data --startup-project api
   ```
 
-### 3.2 Add Global Query Filters
-- [ ] Add query filters for soft delete in `OnModelCreating`:
-  ```csharp
-  // For all entities implementing ISoftDelete
-  modelBuilder.Entity<Goal>().HasQueryFilter(g => !g.IsDeleted);
-  modelBuilder.Entity<CalendarEvent>().HasQueryFilter(e => !e.IsDeleted);
-  ```
+- [ ] Review migration to ensure:
+  - All audit columns added with correct types
+  - Nullable columns for optional fields (`CreatedBy`, `ModifiedBy`, etc.)
+  - `IsDeleted` defaults to `false`
+  - Indexes on audit fields if needed
 
-### 3.3 Add Audit Field Indexes
-- [ ] Add indexes for audit fields in `OnModelCreating`:
-  ```csharp
-  // For each entity with DateCreated
-  entity.HasIndex(e => e.DateCreated);
-  
-  // For soft-deletable entities
-  entity.HasIndex(e => e.IsDeleted);
-  entity.HasIndex(e => new { e.IsDeleted, e.DateCreated });
+- [ ] Apply migration:
+  ```bash
+  dotnet ef database update --project data --startup-project api
   ```
 
 ---
 
-## Phase 4: Review API Data Collection
+## Phase 3: Review API Data Collection
 
-### 4.1 Verify Current Data Capture
+### 3.1 Verify Current Data Capture ✅
 Review what's currently being captured from the browser:
 
 #### ✅ Currently Captured:
@@ -263,9 +212,9 @@ Review what's currently being captured from the browser:
 - [x] **Goals & Calendar**:
   - User-defined goals and events
 
-### 4.2 Missing Data to Consider Adding
+### 3.2 Missing Data to Consider Adding
 
-#### 4.2.1 Hero Roster Details
+#### 3.2.1 Hero Roster Details
 - [ ] Create `Hero` model:
   ```csharp
   public class Hero : CreationAuditableEntity
@@ -297,7 +246,7 @@ Review what's currently being captured from the browser:
   }
   ```
 
-#### 4.2.2 Titan Roster Details
+#### 3.2.2 Titan Roster Details
 - [ ] Create `Titan` model (similar to Hero):
   ```csharp
   public class Titan : CreationAuditableEntity
@@ -318,7 +267,7 @@ Review what's currently being captured from the browser:
   }
   ```
 
-#### 4.2.3 Pet Details
+#### 3.2.3 Pet Details
 - [ ] Create `Pet` model:
   ```csharp
   public class Pet : CreationAuditableEntity
@@ -333,7 +282,7 @@ Review what's currently being captured from the browser:
   }
   ```
 
-#### 4.2.4 Daily Quest/Mission Completion
+#### 3.2.4 Daily Quest/Mission Completion
 - [ ] Create `DailyQuest` model:
   ```csharp
   public class DailyQuest : CreationAuditableEntity
@@ -348,7 +297,7 @@ Review what's currently being captured from the browser:
   }
   ```
 
-#### 4.2.5 Campaign/Mission Progress
+#### 3.2.5 Campaign/Mission Progress
 - [ ] Create `MissionProgress` model:
   ```csharp
   public class MissionProgress : AuditableEntity
@@ -364,7 +313,7 @@ Review what's currently being captured from the browser:
   }
   ```
 
-#### 4.2.6 Shop Purchases
+#### 3.2.6 Shop Purchases
 - [ ] Create `ShopPurchase` model:
   ```csharp
   public class ShopPurchase : CreationAuditableEntity
@@ -381,7 +330,7 @@ Review what's currently being captured from the browser:
   }
   ```
 
-#### 4.2.7 Tower/Dungeon Progress
+#### 3.2.7 Tower/Dungeon Progress
 - [ ] Create `TowerProgress` model:
   ```csharp
   public class TowerProgress : AuditableEntity
@@ -395,7 +344,7 @@ Review what's currently being captured from the browser:
   }
   ```
 
-#### 4.2.8 Expedition Battles
+#### 3.2.8 Expedition Battles
 - [ ] Create `ExpeditionBattle` model:
   ```csharp
   public class ExpeditionBattle : CreationAuditableEntity
@@ -412,7 +361,7 @@ Review what's currently being captured from the browser:
   }
   ```
 
-#### 4.2.9 Resource Gain/Loss Tracking
+#### 3.2.9 Resource Gain/Loss Tracking
 - [ ] Create `ResourceTransaction` model:
   ```csharp
   public class ResourceTransaction : CreationAuditableEntity
@@ -427,7 +376,7 @@ Review what's currently being captured from the browser:
   }
   ```
 
-#### 4.2.10 Guild Activity Tracking
+#### 3.2.10 Guild Activity Tracking
 - [ ] Create `GuildActivity` model:
   ```csharp
   public class GuildActivity : CreationAuditableEntity
@@ -493,7 +442,7 @@ Review what's currently being captured from the browser:
 
 ---
 
-## Phase 5: Update API and Services
+## Phase 4: Update API and Services
 
 ### 5.1 Update API Project References
 - [ ] Add project reference in `api/OrganizedJihad.Api.csproj`:
@@ -527,7 +476,7 @@ Review what's currently being captured from the browser:
 
 ---
 
-## Phase 6: Update Desktop App
+## Phase 5: Update Desktop App
 
 ### 6.1 Update Desktop Project References
 - [ ] Add project reference in `desktop-app/OrganizedJihad.Desktop.csproj`:
@@ -547,7 +496,7 @@ Review what's currently being captured from the browser:
 
 ---
 
-## Phase 7: Update Userscript
+## Phase 6: Update Userscript
 
 ### 7.1 Enhance gameTracker.js
 - [ ] Add tracking for new entities (Heroes, Titans, Pets, etc.)
@@ -563,7 +512,7 @@ Review what's currently being captured from the browser:
 
 ---
 
-## Phase 8: Database Migration
+## Phase 7: Database Migration
 
 ### 8.1 Create EF Core Migration
 - [ ] Generate migration for audit fields:
@@ -589,7 +538,7 @@ Review what's currently being captured from the browser:
 
 ---
 
-## Phase 9: Testing
+## Phase 8: Testing
 
 ### 9.1 Unit Tests
 - [ ] Test audit field population on entity creation
