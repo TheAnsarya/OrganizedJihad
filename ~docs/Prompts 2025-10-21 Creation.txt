@@ -93,6 +93,26 @@ Do 1 and then 2
 
 ---- git branch api-backend-creation
 ---- git reset --hard HEAD~4
+---- git branch api-backend-creation-with-desktop
+---- then back to the not `with-desktop` branch, delete the desktop app folder (we can merge it back in later, but no errors in build for now)
+
+Make a big TODO list for moving the DB layer from the `api` project to its own project, add audit fields, with audit interfaces/abracts. especially `DateCreated` since most of these records will be unwritable in the data recording tables. explore the api to make sure we are recording everything useful in the database.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
