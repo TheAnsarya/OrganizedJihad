@@ -121,10 +121,19 @@ find the next TODO for the data layer, ensuring proper build order and implement
 continue with `Phase 2: Add audit infrastructure`
 update the chat log files, and then continue with `Phase 2.4: Implement EF Core SaveChanges interceptors`
 
+****************************
+Next Step: The TODO file shows Phase 3 (Update Database Context) but we've essentially completed those tasks using the interceptor pattern. We can either:
+1. Continue with Phase 4 (Review API Data Collection)
+2. Create an EF Core migration to add audit columns to the database schema
+3. Review and update the TODO file to reflect the interceptor implementation
+What would you like to do next?
+*****************************
+3, then 2, then 1
 
-
-
-
+*************************
+Would you like to continue with Phase 4 (Update API and Services), or would you prefer to work on something else?
+****************************
+continue with Phase 4 (Update API and Services)
 
 
 

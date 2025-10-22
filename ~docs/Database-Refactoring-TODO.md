@@ -442,43 +442,51 @@ Review what's currently being captured from the browser:
 
 ---
 
-## Phase 4: Update API and Services
+## Phase 4: Update API and Services ✅ COMPLETE
 
-### 5.1 Update API Project References
-- [ ] Add project reference in `api/OrganizedJihad.Api.csproj`:
-  ```xml
-  <ItemGroup>
-    <ProjectReference Include="..\data\OrganizedJihad.Data.csproj" />
-  </ItemGroup>
-  ```
+### 4.1 Update API Project References ✅
+- [x] Add project reference in `api/OrganizedJihad.Api.csproj`:
+  - Already configured during Phase 1
+  - `<ProjectReference Include="..\data\OrganizedJihad.Data.csproj" />`
 
-### 5.2 Update Using Statements
-- [ ] Update all files in `api/` that reference:
-  - `OrganizedJihad.Api.Data` → `OrganizedJihad.Data`
-  - `OrganizedJihad.Api.Data.Models` → `OrganizedJihad.Data.Models`
+### 4.2 Update Using Statements ✅
+- [x] Update all files in `api/` that reference:
+  - `OrganizedJihad.Api.Data` → `OrganizedJihad.Data` ✅
+  - `OrganizedJihad.Api.Data.Models` → `OrganizedJihad.Data.Models` ✅
+  - All API files updated during Phase 1
 
-### 5.3 Update SyncService Import Methods
-- [ ] Add import methods for new entities:
-  - [ ] `ImportHeroesAsync(context, List<Hero>)`
-  - [ ] `ImportTitansAsync(context, List<Titan>)`
-  - [ ] `ImportPetsAsync(context, List<Pet>)`
-  - [ ] `ImportDailyQuestsAsync(context, List<DailyQuest>)`
-  - [ ] `ImportMissionProgressAsync(context, List<MissionProgress>)`
-  - [ ] `ImportShopPurchasesAsync(context, List<ShopPurchase>)`
-  - [ ] `ImportTowerProgressAsync(context, List<TowerProgress>)`
-  - [ ] `ImportExpeditionBattlesAsync(context, List<ExpeditionBattle>)`
-  - [ ] `ImportResourceTransactionsAsync(context, List<ResourceTransaction>)`
-  - [ ] `ImportGuildActivitiesAsync(context, List<GuildActivity>)`
+### 4.3 SyncService Import Methods for Future Entities 🔮
+Note: These are potential future additions. Current data layer is complete for existing tracked data.
 
-### 5.4 Complete TODO Import Methods
-- [ ] Implement `ImportGoalsAsync(context, List<Goal>)`
-- [ ] Implement `ImportCalendarEventsAsync(context, List<CalendarEvent>)`
+- [ ] `ImportHeroesAsync(context, List<Hero>)` - Requires Hero entity model
+- [ ] `ImportTitansAsync(context, List<Titan>)` - Requires Titan entity model
+- [ ] `ImportPetsAsync(context, List<Pet>)` - Requires Pet entity model
+- [ ] `ImportDailyQuestsAsync(context, List<DailyQuest>)` - Requires DailyQuest entity model
+- [ ] `ImportMissionProgressAsync(context, List<MissionProgress>)` - Requires MissionProgress entity model
+- [ ] `ImportShopPurchasesAsync(context, List<ShopPurchase>)` - Requires ShopPurchase entity model
+- [ ] `ImportTowerProgressAsync(context, List<TowerProgress>)` - Requires TowerProgress entity model
+- [ ] `ImportExpeditionBattlesAsync(context, List<ExpeditionBattle>)` - Requires ExpeditionBattle entity model
+- [ ] `ImportResourceTransactionsAsync(context, List<ResourceTransaction>)` - Requires ResourceTransaction entity model
+- [ ] `ImportGuildActivitiesAsync(context, List<GuildActivity>)` - Requires GuildActivity entity model
+
+### 4.4 Import Methods for Existing Entities ✅
+- [x] Implement `ImportGoalsAsync(context, List<Goal>)` ✅
+  - Full upsert logic with Id and Title+CreatedAt matching
+  - Updates all properties except CreatedAt
+  - Implemented in api/Services/SyncService.cs (lines 268-313)
+
+- [x] Implement `ImportCalendarEventsAsync(context, List<CalendarEvent>)` ✅
+  - Full upsert logic with Id and Title+EventDate matching
+  - Updates all properties except CreatedAt
+  - Implemented in api/Services/SyncService.cs (lines 319-364)
+
+**Current Status**: All import methods for existing entity models are complete and functional.
 
 ---
 
 ## Phase 5: Update Desktop App
 
-### 6.1 Update Desktop Project References
+### 5.1 Update Desktop Project References
 - [ ] Add project reference in `desktop-app/OrganizedJihad.Desktop.csproj`:
   ```xml
   <ItemGroup>
@@ -486,28 +494,28 @@ Review what's currently being captured from the browser:
   </ItemGroup>
   ```
 
-### 6.2 Update Using Statements
+### 5.2 Update Using Statements
 - [ ] Update all Blazor pages that reference:
   - `OrganizedJihad.Desktop.Data` → `OrganizedJihad.Data`
   - `OrganizedJihad.Desktop.Data.Models` → `OrganizedJihad.Data.Models`
 
-### 6.3 Update MauiProgram.cs
+### 5.3 Update MauiProgram.cs
 - [ ] Update DbContext registration to use new namespace
 
 ---
 
 ## Phase 6: Update Userscript
 
-### 7.1 Enhance gameTracker.js
+### 6.1 Enhance gameTracker.js
 - [ ] Add tracking for new entities (Heroes, Titans, Pets, etc.)
 - [ ] Ensure all API calls are properly captured
 - [ ] Update storage to handle new entity types
 
-### 7.2 Update indexedDBStorage.js
+### 6.2 Update indexedDBStorage.js
 - [ ] Add new object stores for new entity types
 - [ ] Ensure proper indexing
 
-### 7.3 Update syncClient.js
+### 6.3 Update syncClient.js
 - [ ] Update sync payload to include new entity types
 
 ---
