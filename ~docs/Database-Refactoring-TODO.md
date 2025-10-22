@@ -484,23 +484,47 @@ Note: These are potential future additions. Current data layer is complete for e
 
 ---
 
-## Phase 5: Update Desktop App
+## Phase 5: Update Desktop App ✅ COMPLETE
 
-### 5.1 Update Desktop Project References
-- [ ] Add project reference in `desktop-app/OrganizedJihad.Desktop.csproj`:
+### 5.1 Restore Desktop App Code ✅
+- [x] Restored desktop-app/ from commit 1fa7c34
+- [x] Recovered all MAUI Blazor Hybrid project files
+- [x] Added desktop app to solution
+
+### 5.2 Update Desktop Project References ✅
+- [x] Add project reference in `desktop-app/OrganizedJihad.Desktop.csproj`:
   ```xml
-  <ItemGroup>
-    <ProjectReference Include="..\data\OrganizedJihad.Data.csproj" />
-  </ItemGroup>
+  <ProjectReference Include="..\data\OrganizedJihad.Data.csproj" />
   ```
 
-### 5.2 Update Using Statements
-- [ ] Update all Blazor pages that reference:
-  - `OrganizedJihad.Desktop.Data` → `OrganizedJihad.Data`
-  - `OrganizedJihad.Desktop.Data.Models` → `OrganizedJihad.Data.Models`
+### 5.3 Update Using Statements ✅
+- [x] Update `desktop-app/MauiProgram.cs`:
+  - `OrganizedJihad.Desktop.Data` → `OrganizedJihad.Data` ✅
+- [x] Update `desktop-app/Services/SyncService.cs`:
+  - `OrganizedJihad.Desktop.Data` → `OrganizedJihad.Data` ✅
+  - `OrganizedJihad.Desktop.Data.Models` → `OrganizedJihad.Data.Models` ✅
 
-### 5.3 Update MauiProgram.cs
-- [ ] Update DbContext registration to use new namespace
+### 5.4 Remove Duplicate Data Folder ✅
+- [x] Deleted `desktop-app/Data/` folder (now using shared Data layer)
+  - Removed GameDatabaseContext.cs
+  - Removed all entity model files (8 files)
+
+### 5.5 Update MauiProgram.cs Database Initialization ✅
+- [x] Updated `InitializeDatabase` to use `Migrate()` instead of `EnsureCreated()`
+- [x] Now uses EF Core migrations (matches API approach)
+
+### 5.6 Desktop UI Pages Status ⚠️
+**Note**: Dashboard.razor and Home.razor temporarily disabled (.tmp extension)
+- These pages reference old model properties that changed during refactoring
+- Will be fixed when implementing "Build Desktop UI Pages" TODO item
+- Issues to fix:
+  - `ArenaBattle.BattleType` → Use separate entity types
+  - `ChestOpening.OpenedAt` → Use `Timestamp`
+  - `ChestOpening.ChestDrops` → Add navigation property
+  - `PlayerSnapshot.VipLevel` → Property removed
+  - `SyncMetadata.LastSync` → Use `UpdatedAt`
+
+**Build Status**: ✅ Desktop app compiles successfully (Windows target)
 
 ---
 

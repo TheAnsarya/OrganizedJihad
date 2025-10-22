@@ -135,8 +135,9 @@ Would you like to continue with Phase 4 (Update API and Services), or would you 
 ****************************
 continue with Phase 4 (Update API and Services)
 
+Phase 5: Update Desktop App 
 
-
+bring back the desktop app code from previous git commits, commit to current branch, and then proceed with phase 5
 
 
 

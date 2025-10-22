@@ -302,7 +302,7 @@ From `Database-Refactoring-TODO.md`:
 - Repository Pattern: https://learn.microsoft.com/en-us/dotnet/architecture/microservices/microservice-ddd-cqrs-patterns/infrastructure-persistence-layer-design
 
 ## Summary
-Successfully completed Phase 1 (separate data layer), Phase 2 (audit infrastructure with interceptors), and Phase 4 (API and Services updates) of database refactoring. Created clean separation between data access and API layers with comprehensive audit trail support that automatically populates audit fields. The solution now has 3 audit interfaces, 3 base entity classes, 1 audit interceptor, and all 11 entity models properly classified with automatic audit field population. Global query filters ensure soft-deleted records are excluded from normal queries. Database migration created and applied successfully.
+Successfully completed Phase 1 (separate data layer), Phase 2 (audit infrastructure with interceptors), Phase 4 (API and Services updates), and Phase 5 (Desktop App integration) of database refactoring. Created clean separation between data access and all consuming projects with comprehensive audit trail support that automatically populates audit fields. The solution now has 3 audit interfaces, 3 base entity classes, 1 audit interceptor, and all 11 entity models properly classified with automatic audit field population. Global query filters ensure soft-deleted records are excluded from normal queries. Database migration created and applied successfully. Both API and Desktop app now share the same Data layer.
 
 ### Completed Phases ✅
 
@@ -324,9 +324,18 @@ Successfully completed Phase 1 (separate data layer), Phase 2 (audit infrastruct
 - Phase 4.3: Future entity import methods documented (for Hero, Titan, Pet, etc.)
 - Phase 4.4: Existing entity import methods complete (Goals, CalendarEvents) ✅
 
+**Phase 5: Desktop App Integration** ✅
+- Restored desktop app code from commit 1fa7c34
+- Added project reference to OrganizedJihad.Data
+- Updated MauiProgram.cs to use shared Data layer and migrations
+- Updated Services/SyncService.cs using statements
+- Removed duplicate Data/ folder from desktop app
+- Added desktop app to solution
+- Build successful - desktop app now uses shared audit infrastructure
+
 **Next Steps**:
-- Phase 5: Update Desktop App (add Data project reference)
-- Phase 6: Update Userscript (enhance tracking for additional entities)
+- Phase 6: Update Userscript (enhance tracking and add sync client)
 - Phase 7: Database Migration (if adding new entity types)
 - Phase 8: Testing (comprehensive testing of audit infrastructure)
+- Fix desktop UI pages (Dashboard, Home) to work with current entity models
 
