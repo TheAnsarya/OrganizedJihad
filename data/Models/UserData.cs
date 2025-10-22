@@ -1,12 +1,17 @@
+using OrganizedJihad.Data.Entities;
 using System;
 using System.ComponentModel.DataAnnotations;
 
 namespace OrganizedJihad.Data.Models;
 
 /// <summary>
-/// Represents a user goal (short-term or long-term)
+/// Represents a user goal (short-term or long-term).
+///
+/// Mutable User Data: Can be created, edited, marked complete, or soft-deleted by user.
+/// Inherits from SoftDeletableEntity for full audit trail + soft delete support.
+/// Supports undelete/restore functionality.
 /// </summary>
-public class Goal {
+public class Goal : SoftDeletableEntity {
 	[Key]
 	public int Id { get; set; }
 
@@ -81,9 +86,13 @@ public class Goal {
 }
 
 /// <summary>
-/// Represents a calendar event or reminder
+/// Represents a calendar event or reminder.
+///
+/// Mutable User Data: Can be created, edited, marked complete, or soft-deleted by user.
+/// Inherits from SoftDeletableEntity for full audit trail + soft delete support.
+/// Supports recurring events and undelete/restore functionality.
 /// </summary>
-public class CalendarEvent {
+public class CalendarEvent : SoftDeletableEntity {
 	[Key]
 	public int Id { get; set; }
 

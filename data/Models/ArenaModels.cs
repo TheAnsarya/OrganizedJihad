@@ -1,12 +1,16 @@
+using OrganizedJihad.Data.Entities;
 using System;
 using System.ComponentModel.DataAnnotations;
 
 namespace OrganizedJihad.Data.Models;
 
 /// <summary>
-/// Represents a Grand Arena battle
+/// Represents a Grand Arena battle (3v3 team format).
+///
+/// Immutable Record: Battle results captured from game API, never modified.
+/// Inherits from CreationAuditableEntity for audit trail (DateCreated, CreatedBy).
 /// </summary>
-public class GrandArenaBattle {
+public class GrandArenaBattle : CreationAuditableEntity {
 	[Key]
 	public int Id { get; set; }
 
@@ -51,9 +55,12 @@ public class GrandArenaBattle {
 }
 
 /// <summary>
-/// Represents a Titan Arena battle
+/// Represents a Titan Arena battle (titan vs titan format).
+///
+/// Immutable Record: Battle results captured from game API, never modified.
+/// Inherits from CreationAuditableEntity for audit trail (DateCreated, CreatedBy).
 /// </summary>
-public class TitanArenaBattle {
+public class TitanArenaBattle : CreationAuditableEntity {
 	[Key]
 	public int Id { get; set; }
 

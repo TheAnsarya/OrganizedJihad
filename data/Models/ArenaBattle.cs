@@ -1,12 +1,16 @@
+using OrganizedJihad.Data.Entities;
 using System;
 using System.ComponentModel.DataAnnotations;
 
 namespace OrganizedJihad.Data.Models;
 
 /// <summary>
-/// Represents a regular Arena battle
+/// Represents a regular Arena battle.
+///
+/// Immutable Record: Battle results captured from game API, never modified.
+/// Inherits from CreationAuditableEntity for audit trail (DateCreated, CreatedBy).
 /// </summary>
-public class ArenaBattle {
+public class ArenaBattle : CreationAuditableEntity {
 	[Key]
 	public int Id { get; set; }
 

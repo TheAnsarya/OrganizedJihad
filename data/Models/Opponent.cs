@@ -1,12 +1,16 @@
+using OrganizedJihad.Data.Entities;
 using System;
 using System.ComponentModel.DataAnnotations;
 
 namespace OrganizedJihad.Data.Models;
 
 /// <summary>
-/// Tracks opponents and win/loss records against them
+/// Tracks opponents and win/loss records against them.
+///
+/// Mutable Reference Data: Updated with each battle to track cumulative win/loss.
+/// Inherits from AuditableEntity for full audit trail (DateCreated, DateModified, CreatedBy, ModifiedBy).
 /// </summary>
-public class Opponent {
+public class Opponent : AuditableEntity {
 	[Key]
 	public int Id { get; set; }
 

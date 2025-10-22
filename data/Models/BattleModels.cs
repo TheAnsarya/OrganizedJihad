@@ -1,12 +1,16 @@
+using OrganizedJihad.Data.Entities;
 using System;
 using System.ComponentModel.DataAnnotations;
 
 namespace OrganizedJihad.Data.Models;
 
 /// <summary>
-/// Represents a Guild War battle
+/// Represents a Guild War battle (attacking enemy guild fortifications).
+///
+/// Immutable Record: Battle results captured from game API, never modified.
+/// Inherits from CreationAuditableEntity for audit trail (DateCreated, CreatedBy).
 /// </summary>
-public class GuildWarBattle {
+public class GuildWarBattle : CreationAuditableEntity {
 	[Key]
 	public int Id { get; set; }
 
@@ -50,9 +54,12 @@ public class GuildWarBattle {
 }
 
 /// <summary>
-/// Represents a Raid Boss attack
+/// Represents a Raid Boss attack (damage dealt to guild raid boss).
+///
+/// Immutable Record: Attack results captured from game API, never modified.
+/// Inherits from CreationAuditableEntity for audit trail (DateCreated, CreatedBy).
 /// </summary>
-public class RaidBossAttack {
+public class RaidBossAttack : CreationAuditableEntity {
 	[Key]
 	public int Id { get; set; }
 

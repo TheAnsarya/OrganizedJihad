@@ -1,3 +1,4 @@
+using OrganizedJihad.Data.Entities;
 using System;
 using System.ComponentModel.DataAnnotations;
 
@@ -6,8 +7,11 @@ namespace OrganizedJihad.Data.Models;
 /// <summary>
 /// Represents a snapshot of player state at a specific time.
 /// Tracks resources, progression, and team composition.
+///
+/// Immutable Record: Once captured from game API, never modified.
+/// Inherits from CreationAuditableEntity for audit trail (DateCreated, CreatedBy).
 /// </summary>
-public class PlayerSnapshot {
+public class PlayerSnapshot : CreationAuditableEntity {
 	[Key]
 	public int Id { get; set; }
 

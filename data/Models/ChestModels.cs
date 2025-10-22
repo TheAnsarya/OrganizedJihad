@@ -1,3 +1,4 @@
+using OrganizedJihad.Data.Entities;
 using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
@@ -5,9 +6,12 @@ using System.ComponentModel.DataAnnotations;
 namespace OrganizedJihad.Data.Models;
 
 /// <summary>
-/// Represents a chest opening event
+/// Represents a chest opening event for drop rate analytics.
+///
+/// Immutable Record: Chest opening captured from game API, never modified.
+/// Inherits from CreationAuditableEntity for audit trail (DateCreated, CreatedBy).
 /// </summary>
-public class ChestOpening {
+public class ChestOpening : CreationAuditableEntity {
 	[Key]
 	public int Id { get; set; }
 
@@ -42,9 +46,12 @@ public class ChestOpening {
 }
 
 /// <summary>
-/// Represents a single item dropped from a chest
+/// Represents a single item dropped from a chest.
+///
+/// Immutable Record: Drop captured from game API, never modified.
+/// Inherits from CreationAuditableEntity for audit trail (DateCreated, CreatedBy).
 /// </summary>
-public class ChestDrop {
+public class ChestDrop : CreationAuditableEntity {
 	[Key]
 	public int Id { get; set; }
 

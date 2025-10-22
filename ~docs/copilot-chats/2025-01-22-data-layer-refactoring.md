@@ -139,28 +139,92 @@ Implement Phase 1.1-1.3 of Database-Refactoring-TODO.md:
 - Goal (can be updated, marked complete)
 - CalendarEvent (can be edited, marked complete)
 
-## Next Steps (Phase 2)
+## Phase 2: Add Audit Infrastructure ✅
+
+### Phase 2.1: Create Audit Interfaces ✅
+**Created**: `data/Interfaces/` directory
+
+**Files Created**:
+1. ✅ `ICreationAuditableEntity.cs` - For immutable historical data
+   - `DateTime DateCreated` - UTC timestamp of creation
+   - `string? CreatedBy` - User/system that created the record
+   - Used by: PlayerSnapshot, all battle types, ChestOpening, ChestDrop
+
+2. ✅ `IAuditableEntity.cs` - For mutable reference data
+   - `DateTime DateCreated` - UTC timestamp of creation
+   - `DateTime DateModified` - UTC timestamp of last modification
+   - `string? CreatedBy` - User/system that created the record
+   - `string? ModifiedBy` - User/system that last modified the record
+   - Used by: Opponent (win/loss tracking updates)
+
+3. ✅ `ISoftDelete.cs` - For soft delete support
+   - `bool IsDeleted` - Soft delete flag
+   - `DateTime? DateDeleted` - When record was soft-deleted
+   - `string? DeletedBy` - Who soft-deleted the record
+   - Used by: Goal, CalendarEvent (user-managed data)
+
+### Phase 2.2: Create Base Entity Classes ✅
+**Created**: `data/Entities/` directory
+
+**Files Created**:
+1. ✅ `CreationAuditableEntity.cs` - Abstract base for immutable records
+   - Implements `ICreationAuditableEntity`
+   - Auto-populated by EF Core SaveChanges interceptor (future)
+   - Inherited by: 8 immutable entity types
+
+2. ✅ `AuditableEntity.cs` - Abstract base for mutable records
+   - Implements `IAuditableEntity`
+   - Tracks both creation and modification
+   - Auto-populated by EF Core SaveChanges interceptor (future)
+   - Inherited by: Opponent
+
+3. ✅ `SoftDeletableEntity.cs` - Abstract base with soft delete
+   - Extends `AuditableEntity` + implements `ISoftDelete`
+   - Full audit trail + soft delete support
+   - Global query filter (future) excludes IsDeleted=true
+   - Inherited by: Goal, CalendarEvent
+
+### Phase 2.3: Update Entity Models with Audit Fields ✅
+
+**Immutable Historical Data** (inherit from `CreationAuditableEntity`):
+- ✅ `PlayerSnapshot` - Game state snapshots
+- ✅ `ArenaBattle` - Regular arena battles
+- ✅ `GrandArenaBattle` - 3v3 grand arena battles
+- ✅ `TitanArenaBattle` - Titan vs titan battles
+- ✅ `GuildWarBattle` - Guild war fortification attacks
+- ✅ `RaidBossAttack` - Raid boss damage records
+- ✅ `ChestOpening` - Chest opening events
+- ✅ `ChestDrop` - Individual item drops from chests
+
+**Mutable Reference Data** (inherit from `AuditableEntity`):
+- ✅ `Opponent` - Opponent tracking with cumulative win/loss
+
+**Mutable User Data** (inherit from `SoftDeletableEntity`):
+- ✅ `Goal` - User-created goals with soft delete support
+- ✅ `CalendarEvent` - User calendar events with soft delete support
+
+### Build Status
+✅ **Solution compiles successfully**: 6.7s
+- OrganizedJihad.Data: 3.2s (with all audit infrastructure)
+- OrganizedJihad.Api: 2.1s
+- Zero errors, zero warnings
+
+✅ **Code formatted**: `dotnet format` applied successfully
+
+### Next Steps (Phase 2.4)
 
 From `Database-Refactoring-TODO.md`:
 
-### Phase 2.1: Create Audit Interfaces
-- [ ] `ICreationAuditableEntity` - For immutable data (DateCreated, CreatedBy)
-- [ ] `IAuditableEntity` - For mutable data (DateCreated, DateModified, CreatedBy, ModifiedBy)
-- [ ] `ISoftDelete` - For soft delete support (IsDeleted, DateDeleted, DeletedBy)
-
-### Phase 2.2: Create Base Entity Classes
-- [ ] `CreationAuditableEntity` (abstract base for immutable records)
-- [ ] `AuditableEntity` (abstract base for mutable records)
-- [ ] `SoftDeletableEntity` (abstract base with soft delete)
-
-### Phase 2.3: Update Entity Models with Audit Fields
-- [ ] Immutable models inherit from `CreationAuditableEntity`
-- [ ] Mutable models inherit from `AuditableEntity`
-- [ ] User-managed models inherit from `SoftDeletableEntity`
-
 ### Phase 2.4: Implement EF Core Interceptors
 - [ ] `AuditInterceptor` to auto-populate audit fields on SaveChanges
-- [ ] Global query filter for soft-deleted entities
+  - Detect entity state (Added, Modified, Deleted)
+  - Set DateCreated on insert for ICreationAuditableEntity
+  - Set DateModified on update for IAuditableEntity
+  - Handle soft delete: set IsDeleted, DateDeleted, DeletedBy
+  - Determine current user context (Browser, DesktopApp, System)
+- [ ] Configure global query filter for soft-deleted entities
+  - Automatically exclude IsDeleted=true from queries
+  - Allow explicit IgnoreQueryFilters() when needed
 
 ## Coding Standards Applied
 
