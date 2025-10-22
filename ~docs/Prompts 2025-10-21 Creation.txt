@@ -10,7 +10,7 @@ Step Two: Install the HWH Script https://greasyfork.org/en/scripts/450693-herowa
 
 &&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&
 directives:
-use my editorconfig for formatting, use crlf, use tabs for all documents, use UTF-8, and always use the most modern code and practices, use yarn instead of npm when appropriate, comment everything including the code inside methods, add links in the comments to explanitory articles, always format, for this session and all sessions
+use my editorconfig for formatting, use crlf, use tabs for all documents, use UTF-8, and always use the most modern code and practices, use yarn instead of npm when appropriate, comment everything including the code inside methods, add links in the comments to explanitory articles, always format, if a file grows too large move pieces into their own logical components or classes separating concerns, for this session and all sessions
 &&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&
 
 ----------------
@@ -75,10 +75,32 @@ save all of the past and future copilot chats to a folder so I know what's happe
 
 the API should be separate from the desktop app, webapi project, ignore the desktop app for now, make a database and web api to recieve data updates and retrieve them for the userscript. but keep a local version in the userscript -- can you use sqlite from an extension?
 
+**********************
+Would you like me to:
+A) Quickly fix these remaining compile errors
+B) Create a simplified working version without all the helper methods
+C) Document what you need to fix and move on
+***********************
+A
+************************
+Next Steps:
+1. Update the browser userscript to use IndexedDB for local storage (not SQLite)
+2. Add HTTP client to POST data to the API /api/sync/import endpoint
+3. Test the full sync workflow
+4. Build the desktop UI pages
+************************
+Do 1 and then 2
+
+---- git branch api-backend-creation
+---- git reset --hard HEAD~4
 
 
 
 
+
+
+
+Setup testing for the userscript, database, and api
 
 
 
