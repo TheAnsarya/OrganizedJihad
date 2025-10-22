@@ -68,4 +68,10 @@
         <PackageReference Include="Microsoft.Extensions.Logging.Debug" Version="10.0.0-rc.2.25502.107" />
     </ItemGroup>
 
+    <!-- Temporarily exclude API files until ASP.NET Core hosting is properly configured -->
+    <ItemGroup>
+        <Compile Remove="Controllers\**" />
+        <Compile Remove="Services\ApiHostService.cs" />
+    </ItemGroup>
+
 </Project>

@@ -329,6 +329,70 @@ public class SyncService
 		}
 		return null;
 	}
+
+	/// <summary>
+	/// Gets statistics about the database contents.
+	/// </summary>
+	public async Task<DatabaseStats> GetDatabaseStatsAsync()
+	{
+		await using var context = await _contextFactory.CreateDbContextAsync();
+
+		var stats = new DatabaseStats
+		{
+			TotalSnapshots = await context.PlayerSnapshots.CountAsync(),
+			TotalArenaBattles = await context.ArenaBattles.CountAsync(),
+			TotalGrandArenaBattles = await context.GrandArenaBattles.CountAsync(),
+			TotalTitanArenaBattles = await context.TitanArenaBattles.CountAsync(),
+			TotalGuildWarBattles = await context.GuildWarBattles.CountAsync(),
+			TotalRaidBossAttacks = await context.RaidBossAttacks.CountAsync(),
+			TotalChestOpenings = await context.ChestOpenings.CountAsync(),
+			TotalOpponents = await context.Opponents.CountAsync(),
+			TotalGoals = await context.Goals.CountAsync(),
+			TotalCalendarEvents = await context.CalendarEvents.CountAsync(),
+			LastSync = await GetLastSyncTimestampAsync()
+		};
+
+		// Calculate oldest and newest records
+		if (stats.TotalSnapshots > 0)
+		{
+			stats.OldestSnapshot = await context.PlayerSnapshots
+				.OrderBy(s => s.Timestamp)
+				.Select(s => s.Timestamp)
+				.FirstOrDefaultAsync();
+
+			stats.NewestSnapshot = await context.PlayerSnapshots
+				.OrderByDescending(s => s.Timestamp)
+				.Select(s => s.Timestamp)
+				.FirstOrDefaultAsync();
+		}
+
+		return stats;
+	}
+}
+
+/// <summary>
+/// Database statistics
+/// </summary>
+public class DatabaseStats
+{
+	public int TotalSnapshots { get; set; }
+	public int TotalArenaBattles { get; set; }
+	public int TotalGrandArenaBattles { get; set; }
+	public int TotalTitanArenaBattles { get; set; }
+	public int TotalGuildWarBattles { get; set; }
+	public int TotalRaidBossAttacks { get; set; }
+	public int TotalChestOpenings { get; set; }
+	public int TotalOpponents { get; set; }
+	public int TotalGoals { get; set; }
+	public int TotalCalendarEvents { get; set; }
+	public DateTime? OldestSnapshot { get; set; }
+	public DateTime? NewestSnapshot { get; set; }
+	public DateTime? LastSync { get; set; }
+
+	public int TotalRecords =>
+		TotalSnapshots + TotalArenaBattles + TotalGrandArenaBattles +
+		TotalTitanArenaBattles + TotalGuildWarBattles + TotalRaidBossAttacks +
+		TotalChestOpenings + TotalOpponents + TotalGoals + TotalCalendarEvents;
 }
 
 /// <summary>

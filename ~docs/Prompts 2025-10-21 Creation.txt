@@ -69,10 +69,11 @@ All three for complete architecture
 &&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&
 make a fully complete TODO list for Tier 1 to 3 and also the `Next Steps` listed above, implementing all of the reccomendations and missing parts, and everything. Make sure to plan everything. After that, start implementing todo lists
 sure!     yes!
+gitignore bin and obj and the rest of them
+continue
+save all of the past and future copilot chats to a folder so I know what's happening
 
-
-
-
+the API should be separate from the desktop app, webapi project, ignore the desktop app for now, make a database and web api to recieve data updates and retrieve them for the userscript. but keep a local version in the userscript -- can you use sqlite from an extension?
 
 
 

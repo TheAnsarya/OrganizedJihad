@@ -1,0 +1,5 @@
+<!-- Temporarily disable API hosting until we implement proper sync -->
+<ItemGroup>
+  <Compile Remove='Controllers\**' />
+  <Compile Remove='Services\ApiHostService.cs' />
+</ItemGroup>
