@@ -5,17 +5,21 @@ using OrganizedJihad.Desktop.Services;
 
 namespace OrganizedJihad.Desktop;
 
-public static class MauiProgram
-{
-	public static MauiApp CreateMauiApp()
-	{
+public static class MauiProgram {
+	public static MauiApp CreateMauiApp() {
 		var builder = MauiApp.CreateBuilder();
 		builder
 			.UseMauiApp<App>()
+
+<<<<<<< TODO: Unmerged change from project 'OrganizedJihad.Desktop(net10.0-ios)', Before:
 			.ConfigureFonts(fonts =>
 			{
 				fonts.AddFont("OpenSans-Regular.ttf", "OpenSansRegular");
 			});
+=======
+			.ConfigureFonts(fonts => fonts.AddFont("OpenSans-Regular.ttf", "OpenSansRegular"));
+>>>>>>> After
+			.ConfigureFonts(fonts => fonts.AddFont("OpenSans-Regular.ttf", "OpenSansRegular"));
 
 		builder.Services.AddMauiBlazorWebView();
 
@@ -49,8 +53,7 @@ public static class MauiProgram
 	/// <summary>
 	/// Initializes the database, creating it if it doesn't exist and applying migrations.
 	/// </summary>
-	private static void InitializeDatabase(IServiceProvider services)
-	{
+	private static void InitializeDatabase(IServiceProvider services) {
 		using var scope = services.CreateScope();
 		var contextFactory = scope.ServiceProvider.GetRequiredService<IDbContextFactory<GameDatabaseContext>>();
 		using var context = contextFactory.CreateDbContext();
