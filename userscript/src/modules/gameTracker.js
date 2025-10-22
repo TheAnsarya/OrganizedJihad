@@ -39,6 +39,12 @@ class GameTracker {
 		this.originalFetch = null;
 		this.apiUrl = '';
 		this.requestHistory = {};
+
+		// Cache current rank values to use when player data lacks specific rank info
+		// These get updated whenever we see rank data in any API response
+		this.lastKnownArenaRank = 0;
+		this.lastKnownGrandArenaRank = 0;
+		this.lastKnownTitanArenaRank = 0;
 	}
 
 	/**
@@ -329,6 +335,13 @@ class GameTracker {
 	 * @private
 	 */
 	async trackPlayerData(data) {
+		// Extract rank data from cached values or current response
+		// Hero Wars API includes rank in various places depending on the call
+		// See: https://community.hero-wars.com/discussion/arena-ranking-system
+		const arenaRank = data.arenaRank || this.lastKnownArenaRank || 0;
+		const grandArenaRank = data.grandArenaRank || this.lastKnownGrandArenaRank || 0;
+		const titanArenaRank = data.titanArenaRank || this.lastKnownTitanArenaRank || 0;
+
 		const snapshot = {
 			playerId: data.userId,
 			playerName: data.name || 'Unknown',
@@ -339,10 +352,10 @@ class GameTracker {
 			emeralds: data.starmoney || 0,
 			guildName: data.clanTitle || null,
 			guildId: data.clanId || null,
-			arenaRank: 0, // TODO: Extract from arena data
-			grandArenaRank: 0, // TODO: Extract from grand arena data
-			titanArenaRank: 0, // TODO: Extract from titan arena data
-			titaniteDungeon: null, // TODO: Extract from dungeon data
+			arenaRank: arenaRank,
+			grandArenaRank: grandArenaRank,
+			titanArenaRank: titanArenaRank,
+			titaniteDungeon: null, // Dungeon data comes from separate API call
 			timestamp: new Date().toISOString(),
 			rawData: JSON.stringify(data), // Store full data for future reference
 		};
@@ -430,6 +443,12 @@ class GameTracker {
 	async trackArenaEnemies(data) {
 		if (!data.enemies) return;
 
+		// Extract and cache player's current arena rank if present
+		// Arena API calls include user rank: https://community.hero-wars.com/discussion/arena-api
+		if (data.user?.arenaRank) {
+			this.lastKnownArenaRank = data.user.arenaRank;
+		}
+
 		const timestamp = Date.now();
 		const enemies = data.enemies.map((enemy) => ({
 			userId: enemy.userId,
@@ -493,6 +512,12 @@ class GameTracker {
 	async trackTitanArenaEnemies(data) {
 		if (!data.enemies) return;
 
+		// Extract and cache player's current Titan Arena rank if present
+		// Titan Arena structure includes user.titanArenaRank
+		if (data.user?.titanArenaRank) {
+			this.lastKnownTitanArenaRank = data.user.titanArenaRank;
+		}
+
 		const timestamp = Date.now();
 		const enemies = data.enemies.map((enemy) => ({
 			userId: enemy.userId,
@@ -540,6 +565,12 @@ class GameTracker {
 	 */
 	async trackGrandArenaEnemies(data) {
 		if (!data.enemies) return;
+
+		// Extract and cache player's current Grand Arena rank if present
+		// Grand Arena uses similar API structure with user.grandArenaRank
+		if (data.user?.grandArenaRank) {
+			this.lastKnownGrandArenaRank = data.user.grandArenaRank;
+		}
 
 		const timestamp = Date.now();
 		const enemies = data.enemies.map((enemy) => ({
