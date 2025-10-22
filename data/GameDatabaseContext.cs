@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using OrganizedJihad.Data.Interceptors;
 using OrganizedJihad.Data.Models;
 
 namespace OrganizedJihad.Data;
@@ -85,6 +86,20 @@ public class GameDatabaseContext : DbContext {
 
 	public GameDatabaseContext(DbContextOptions<GameDatabaseContext> options)
 		: base(options) {
+	}
+
+	/// <summary>
+	/// Configure DbContext options including audit interceptor.
+	/// Called for each context instance created.
+	/// https://learn.microsoft.com/en-us/ef/core/dbcontext-configuration/
+	/// </summary>
+	/// <param name="optionsBuilder">Options builder for DbContext</param>
+	protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder) {
+		base.OnConfiguring(optionsBuilder);
+
+		// Add audit interceptor to automatically populate audit fields
+		// User context defaults to "System" - can be customized via dependency injection
+		optionsBuilder.AddInterceptors(new AuditInterceptor("System"));
 	}
 
 	/// <summary>
@@ -185,20 +200,24 @@ public class GameDatabaseContext : DbContext {
 		// Index on IsCompleted for active goals queries
 		// Index on Type for goal categorization
 		// Index on CreatedAt for chronological ordering
+		// Global query filter: Exclude soft-deleted goals by default
 		modelBuilder.Entity<Goal>(entity => {
 			entity.HasKey(e => e.Id);
 			entity.HasIndex(e => e.IsCompleted);
 			entity.HasIndex(e => e.Type);
 			entity.HasIndex(e => e.CreatedAt);
+			entity.HasQueryFilter(e => !e.IsDeleted);
 		});
 
 		// Configure CalendarEvent
 		// Index on EventDate for upcoming events queries
 		// Index on IsCompleted for active events
+		// Global query filter: Exclude soft-deleted events by default
 		modelBuilder.Entity<CalendarEvent>(entity => {
 			entity.HasKey(e => e.Id);
 			entity.HasIndex(e => e.EventDate);
 			entity.HasIndex(e => e.IsCompleted);
+			entity.HasQueryFilter(e => !e.IsDeleted);
 		});
 
 		// Configure SyncMetadata

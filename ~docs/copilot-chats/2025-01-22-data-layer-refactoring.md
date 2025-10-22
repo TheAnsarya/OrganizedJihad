@@ -211,20 +211,75 @@ Implement Phase 1.1-1.3 of Database-Refactoring-TODO.md:
 
 ✅ **Code formatted**: `dotnet format` applied successfully
 
-### Next Steps (Phase 2.4)
+## Phase 2.4: Implement EF Core Interceptors ✅
+
+### Files Created
+✅ **`data/Interceptors/AuditInterceptor.cs`** (147 lines)
+- Purpose: Automatically populate audit fields on SaveChanges
+- Pattern: SaveChanges Interceptor
+- Implements: `SaveChangesInterceptor` base class
+- Features:
+  - Auto-populate `DateCreated`, `CreatedBy` on insert (ICreationAuditableEntity)
+  - Auto-populate `DateModified`, `ModifiedBy` on update (IAuditableEntity)
+  - Convert physical delete to soft delete (ISoftDelete)
+  - Set `IsDeleted`, `DateDeleted`, `DeletedBy` on delete
+  - Protect creation audit fields from modification
+- User context: Configurable via constructor (default: "System")
+- Reference: https://learn.microsoft.com/en-us/ef/core/logging-events-diagnostics/interceptors#savechanges-interception
+
+### Files Modified
+✅ **`data/GameDatabaseContext.cs`** (229 lines)
+- Added: `using OrganizedJihad.Data.Interceptors`
+- Added: `OnConfiguring` method to register AuditInterceptor
+- Updated: `Goal` entity with global query filter (`!e.IsDeleted`)
+- Updated: `CalendarEvent` entity with global query filter (`!e.IsDeleted`)
+- Pattern: Global Query Filters
+- Reference: https://learn.microsoft.com/en-us/ef/core/querying/filters
+
+### Implementation Details
+
+**Audit Interceptor Behavior**:
+1. **On Insert** (EntityState.Added):
+   - Set `DateCreated = DateTime.UtcNow`
+   - Set `CreatedBy = currentUser`
+   - For IAuditableEntity, also set `DateModified` and `ModifiedBy`
+
+2. **On Update** (EntityState.Modified):
+   - Set `DateModified = DateTime.UtcNow`
+   - Set `ModifiedBy = currentUser`
+   - Prevent modification of `DateCreated` and `CreatedBy` (mark as unmodified)
+
+3. **On Delete** (EntityState.Deleted + ISoftDelete):
+   - Convert delete to update (change state to Modified)
+   - Set `IsDeleted = true`
+   - Set `DateDeleted = DateTime.UtcNow`
+   - Set `DeletedBy = currentUser`
+   - Physical deletion prevented, data preserved
+
+**Global Query Filters**:
+- Applied to `Goal` and `CalendarEvent` entities
+- Filter: `e => !e.IsDeleted`
+- Behavior: Automatically excludes soft-deleted records from all queries
+- Override: Use `.IgnoreQueryFilters()` to include soft-deleted records
+- Pattern: https://learn.microsoft.com/en-us/ef/core/querying/filters
+
+**User Context Strategy**:
+- Current implementation: Default "System" user
+- Future enhancement: Inject IHttpContextAccessor for API requests
+- Desktop app: Can pass "DesktopApp" or specific user identifier
+- Browser sync: Will use "Browser" identifier
+
+### Build Status
+✅ **Solution compiles successfully**: 6.1s
+- OrganizedJihad.Data: 3.1s (with audit interceptor)
+- OrganizedJihad.Api: 2.1s
+- Zero errors, zero warnings
+
+✅ **Code formatted**: `dotnet format` applied successfully
+
+### Next Steps (Phase 2.5)
 
 From `Database-Refactoring-TODO.md`:
-
-### Phase 2.4: Implement EF Core Interceptors
-- [ ] `AuditInterceptor` to auto-populate audit fields on SaveChanges
-  - Detect entity state (Added, Modified, Deleted)
-  - Set DateCreated on insert for ICreationAuditableEntity
-  - Set DateModified on update for IAuditableEntity
-  - Handle soft delete: set IsDeleted, DateDeleted, DeletedBy
-  - Determine current user context (Browser, DesktopApp, System)
-- [ ] Configure global query filter for soft-deleted entities
-  - Automatically exclude IsDeleted=true from queries
-  - Allow explicit IgnoreQueryFilters() when needed
 
 ## Coding Standards Applied
 
@@ -247,4 +302,15 @@ From `Database-Refactoring-TODO.md`:
 - Repository Pattern: https://learn.microsoft.com/en-us/dotnet/architecture/microservices/microservice-ddd-cqrs-patterns/infrastructure-persistence-layer-design
 
 ## Summary
-Successfully completed Phase 1 of database refactoring by creating a separate data layer project, moving all entity models and database context, and updating all project references. The solution now has a clean separation between data access and API layers, setting the foundation for Phase 2 audit infrastructure.
+Successfully completed Phase 1 (separate data layer) and Phase 2 (audit infrastructure with interceptors) of database refactoring. Created clean separation between data access and API layers with comprehensive audit trail support that automatically populates audit fields. The solution now has 3 audit interfaces, 3 base entity classes, 1 audit interceptor, and all 11 entity models properly classified with automatic audit field population. Global query filters ensure soft-deleted records are excluded from normal queries.
+
+### Phase 2 Status: Complete ✅
+
+**Completed**:
+- ✅ Phase 2.1: Created 3 audit interfaces (ICreationAuditableEntity, IAuditableEntity, ISoftDelete)
+- ✅ Phase 2.2: Created 3 base entity classes (CreationAuditableEntity, AuditableEntity, SoftDeletableEntity)
+- ✅ Phase 2.3: Updated all 11 entity models to inherit from appropriate base classes
+- ✅ Phase 2.4: Implemented EF Core SaveChanges interceptor with global query filters
+
+**Next**: Phase 2.5 - Create EF Core migration to add audit columns to existing database schema
+

@@ -119,6 +119,8 @@ update the chat log files, find the next TODO ensuring proper build order and im
 if a file grows too large move pieces/refactor into their own logical components or classes separating concerns
 find the next TODO for the data layer, ensuring proper build order and implement it, make sure to follow the formatting, modern practices and other rules, and then update the chat log files, create a git commit including description
 continue with `Phase 2: Add audit infrastructure`
+update the chat log files, and then continue with `Phase 2.4: Implement EF Core SaveChanges interceptors`
+
 
 
 
