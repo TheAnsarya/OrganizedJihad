@@ -22,7 +22,7 @@
  * @module gameTracker
  */
 
-import storageManager from './storageManager.js';
+import IndexedDBStorage from './indexedDBStorage.js';
 
 /**
  * Game data tracking via API interception
@@ -31,7 +31,8 @@ import storageManager from './storageManager.js';
  * @class GameTracker
  */
 class GameTracker {
-	constructor() {
+	constructor(storage) {
+		this.storage = storage || new IndexedDBStorage();
 		this.isTracking = false;
 		this.lastUpdate = Date.now();
 		this.originalXHR = null;
@@ -55,6 +56,7 @@ class GameTracker {
 	 */
 	async init() {
 		try {
+			await this.storage.init();
 			this.proxyAPIRequests();
 			this.isTracking = true;
 			console.log('[OrganizedJihad] GameTracker initialized - monitoring Hero Wars API');
@@ -321,30 +323,37 @@ class GameTracker {
 
 	/**
 	 * Track player data from userGetInfo API call
+	 * Now saves as a snapshot in IndexedDB
 	 *
 	 * @param {Object} data - Response from userGetInfo
 	 * @private
 	 */
 	async trackPlayerData(data) {
-		const playerData = {
-			userId: data.userId,
-			name: data.name || 'Unknown',
+		const snapshot = {
+			playerId: data.userId,
+			playerName: data.name || 'Unknown',
 			level: data.level || 0,
 			vipLevel: data.vipLevel || 0,
+			teamPower: data.power || 0,
 			gold: data.gold || 0,
-			starmoney: data.starmoney || 0, // Emeralds
-			clanId: data.clanId || null,
-			clanTitle: data.clanTitle || 'No Guild',
-			stamina: data.refillable?.find((r) => r.id === 1)?.amount || 0,
-			lastUpdate: Date.now(),
+			emeralds: data.starmoney || 0,
+			guildName: data.clanTitle || null,
+			guildId: data.clanId || null,
+			arenaRank: 0, // TODO: Extract from arena data
+			grandArenaRank: 0, // TODO: Extract from grand arena data
+			titanArenaRank: 0, // TODO: Extract from titan arena data
+			titaniteDungeon: null, // TODO: Extract from dungeon data
+			timestamp: new Date().toISOString(),
+			rawData: JSON.stringify(data), // Store full data for future reference
 		};
 
-		await storageManager.set('playerData', playerData);
-		console.log('[OrganizedJihad] Player data updated:', playerData.name, 'Level', playerData.level);
+		await this.storage.add('snapshots', snapshot);
+		console.log('[OrganizedJihad] Player snapshot saved:', snapshot.playerName, 'Level', snapshot.level);
 	}
 
 	/**
 	 * Track heroes from heroGetAll API call
+	 * Store in metadata for reference
 	 *
 	 * @param {Object} data - Response from heroGetAll (object with hero IDs as keys)
 	 * @private
@@ -361,12 +370,13 @@ class GameTracker {
 			artifacts: hero.artifacts || [],
 		}));
 
-		await storageManager.set('heroesData', heroes);
+		await this.storage.setMetadata('heroesData', heroes);
 		console.log(`[OrganizedJihad] Heroes updated: ${heroes.length} heroes tracked`);
 	}
 
 	/**
 	 * Track inventory from inventoryGet API call
+	 * Store in metadata for reference
 	 *
 	 * @param {Object} data - Response from inventoryGet
 	 * @private
@@ -377,10 +387,10 @@ class GameTracker {
 			gear: data.gear || {}, // Equipment
 			fragmentHero: data.fragmentHero || {}, // Soul stones
 			coin: data.coin || {}, // Various currency types
-			lastUpdate: Date.now(),
+			lastUpdate: new Date().toISOString(),
 		};
 
-		await storageManager.set('inventoryData', inventory);
+		await this.storage.setMetadata('inventoryData', inventory);
 	}
 
 	/**
@@ -448,36 +458,30 @@ class GameTracker {
 
 	/**
 	 * Track arena battle results with opponent and team composition
+	 * Stores in battles IndexedDB store with battleType='Arena'
 	 *
 	 * @param {Object} args - Battle request arguments
 	 * @param {Object} data - Battle result data
 	 * @private
 	 */
 	async trackArenaBattle(args, data) {
-		const battleRecord = {
-			type: 'arena',
-			enemyUserId: args.enemyUserId,
-			result: data.result?.win ? 'victory' : 'defeat',
-			replay: data.replay ? this.compressReplay(data.replay) : null,
-			myTeam: data.attackers ? this.compressHeroTeam(data.attackers) : null,
-			enemyTeam: data.defenders ? this.compressHeroTeam(data.defenders) : null,
-			reward: data.reward || {},
-			timestamp: Date.now(),
+		const battle = {
+			battleType: 'Arena',
+			opponentId: args.enemyUserId,
+			opponentName: null, // Will be filled from opponents tracking
+			isWin: data.result?.win || false,
+			playerPower: data.attackers ? this.calculateTeamPower(data.attackers) : 0,
+			opponentPower: data.defenders ? this.calculateTeamPower(data.defenders) : 0,
+			playerHeroes: data.attackers ? JSON.stringify(this.compressHeroTeam(data.attackers)) : null,
+			opponentHeroes: data.defenders ? JSON.stringify(this.compressHeroTeam(data.defenders)) : null,
+			rewards: data.reward ? JSON.stringify(data.reward) : null,
+			timestamp: new Date().toISOString(),
 		};
 
-		// Store arena battle history
-		const arenaHistory = await storageManager.get('arenaBattleHistory', []);
-		arenaHistory.push(battleRecord);
+		await this.storage.add('battles', battle);
 
-		// Keep last 500 arena battles
-		if (arenaHistory.length > 500) {
-			arenaHistory.shift();
-		}
-
-		await storageManager.set('arenaBattleHistory', arenaHistory);
-
-		// Track win/loss against specific opponents
-		await this.updateOpponentRecord('arena', args.enemyUserId, battleRecord.result);
+		// Update opponent record
+		await this.updateOpponentRecord(args.enemyUserId, 'Arena', battle.isWin);
 	}
 
 	/**
@@ -504,31 +508,28 @@ class GameTracker {
 
 	/**
 	 * Track Titan Arena battle results
+	 * Stores in battles IndexedDB store with battleType='TitanArena'
 	 *
 	 * @param {Object} args - Battle request arguments
 	 * @param {Object} data - Battle result data
 	 * @private
 	 */
 	async trackTitanArenaBattle(args, data) {
-		const battleRecord = {
-			type: 'titanArena',
-			enemyUserId: args.enemyUserId,
-			result: data.result?.win ? 'victory' : 'defeat',
-			myTitans: data.attackers ? this.compressHeroTeam(data.attackers) : null,
-			enemyTitans: data.defenders ? this.compressHeroTeam(data.defenders) : null,
-			reward: data.reward || {},
-			timestamp: Date.now(),
+		const battle = {
+			battleType: 'TitanArena',
+			opponentId: args.enemyUserId,
+			opponentName: null,
+			isWin: data.result?.win || false,
+			playerPower: data.attackers ? this.calculateTeamPower(data.attackers) : 0,
+			opponentPower: data.defenders ? this.calculateTeamPower(data.defenders) : 0,
+			playerHeroes: data.attackers ? JSON.stringify(this.compressHeroTeam(data.attackers)) : null,
+			opponentHeroes: data.defenders ? JSON.stringify(this.compressHeroTeam(data.defenders)) : null,
+			rewards: data.reward ? JSON.stringify(data.reward) : null,
+			timestamp: new Date().toISOString(),
 		};
 
-		const titanArenaHistory = await storageManager.get('titanArenaBattleHistory', []);
-		titanArenaHistory.push(battleRecord);
-
-		if (titanArenaHistory.length > 500) {
-			titanArenaHistory.shift();
-		}
-
-		await storageManager.set('titanArenaBattleHistory', titanArenaHistory);
-		await this.updateOpponentRecord('titanArena', args.enemyUserId, battleRecord.result);
+		await this.storage.add('battles', battle);
+		await this.updateOpponentRecord(args.enemyUserId, 'TitanArena', battle.isWin);
 	}
 
 	/**
@@ -559,36 +560,28 @@ class GameTracker {
 
 	/**
 	 * Track Grand Arena battle results (3 teams vs 3 teams)
+	 * Stores in battles IndexedDB store with battleType='GrandArena'
 	 *
 	 * @param {Object} args - Battle request arguments
 	 * @param {Object} data - Battle result data
 	 * @private
 	 */
 	async trackGrandArenaBattle(args, data) {
-		const battleRecord = {
-			type: 'grandArena',
-			enemyUserId: args.enemyUserId,
-			result: data.result?.win ? 'victory' : 'defeat',
-			battles: data.battles
-				? data.battles.map((battle) => ({
-						result: battle.result?.win ? 'victory' : 'defeat',
-						myTeam: this.compressHeroTeam(battle.attackers),
-						enemyTeam: this.compressHeroTeam(battle.defenders),
-					}))
-				: [],
-			reward: data.reward || {},
-			timestamp: Date.now(),
+		const battle = {
+			battleType: 'GrandArena',
+			opponentId: args.enemyUserId,
+			opponentName: null,
+			isWin: data.result?.win || false,
+			playerPower: 0, // Grand arena has multiple teams
+			opponentPower: 0,
+			playerHeroes: data.battles ? JSON.stringify(data.battles.map((b) => this.compressHeroTeam(b.attackers))) : null,
+			opponentHeroes: data.battles ? JSON.stringify(data.battles.map((b) => this.compressHeroTeam(b.defenders))) : null,
+			rewards: data.reward ? JSON.stringify(data.reward) : null,
+			timestamp: new Date().toISOString(),
 		};
 
-		const grandArenaHistory = await storageManager.get('grandArenaBattleHistory', []);
-		grandArenaHistory.push(battleRecord);
-
-		if (grandArenaHistory.length > 500) {
-			grandArenaHistory.shift();
-		}
-
-		await storageManager.set('grandArenaBattleHistory', grandArenaHistory);
-		await this.updateOpponentRecord('grandArena', args.enemyUserId, battleRecord.result);
+		await this.storage.add('battles', battle);
+		await this.updateOpponentRecord(args.enemyUserId, 'GrandArena', battle.isWin);
 	}
 
 	/**
