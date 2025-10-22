@@ -27,7 +27,7 @@ var app = builder.Build();
 using (var scope = app.Services.CreateScope()) {
 	var contextFactory = scope.ServiceProvider.GetRequiredService<IDbContextFactory<GameDatabaseContext>>();
 	await using var context = await contextFactory.CreateDbContextAsync();
-	await context.Database.EnsureCreatedAsync();
+	await context.Database.MigrateAsync();  // Use migrations instead of EnsureCreated
 	app.Logger.LogInformation("Database initialized at: {DbPath}", dbPath);
 }
 
