@@ -90,19 +90,17 @@ public class SyncService
 					counts.Opponents = await ImportOpponentsAsync(context, data.Opponents);
 				}
 
-				// Import goals
-				if (data.Goals != null)
-				{
-					counts.Goals = await ImportGoalsAsync(context, data.Goals);
-				}
+			// TODO: Import goals (implement ImportGoalsAsync method)
+			// if (data.Goals != null)
+			// {
+			// 	counts.Goals = await ImportGoalsAsync(context, data.Goals);
+			// }
 
-				// Import calendar events
-				if (data.CalendarEvents != null)
-				{
-					counts.CalendarEvents = await ImportCalendarEventsAsync(context, data.CalendarEvents);
-				}
-
-				// Update sync metadata
+			// TODO: Import calendar events (implement ImportCalendarEventsAsync method)
+			// if (data.CalendarEvents != null)
+			// {
+			// 	counts.CalendarEvents = await ImportCalendarEventsAsync(context, data.CalendarEvents);
+			// }				// Update sync metadata
 				await UpdateSyncMetadataAsync(context, "last_sync_timestamp", DateTime.UtcNow.ToString("O"));
 
 				await transaction.CommitAsync();
@@ -149,7 +147,7 @@ public class SyncService
 		return imported;
 	}
 
-	private async Task<int> ImportArenaBattlesAsync(GameDatabaseContext context, ArenaBattle[] battles)
+	private async Task<int> ImportArenaBattlesAsync(GameDatabaseContext context, List<ArenaBattle> battles)
 	{
 		int imported = 0;
 		foreach (var battle in battles)
@@ -168,7 +166,7 @@ public class SyncService
 		return imported;
 	}
 
-	private async Task<int> ImportGrandArenaBattlesAsync(GameDatabaseContext context, GrandArenaBattle[] battles)
+	private async Task<int> ImportGrandArenaBattlesAsync(GameDatabaseContext context, List<GrandArenaBattle> battles)
 	{
 		int imported = 0;
 		foreach (var battle in battles)
@@ -186,7 +184,7 @@ public class SyncService
 		return imported;
 	}
 
-	private async Task<int> ImportTitanArenaBattlesAsync(GameDatabaseContext context, TitanArenaBattle[] battles)
+	private async Task<int> ImportTitanArenaBattlesAsync(GameDatabaseContext context, List<TitanArenaBattle> battles)
 	{
 		int imported = 0;
 		foreach (var battle in battles)
@@ -204,7 +202,7 @@ public class SyncService
 		return imported;
 	}
 
-	private async Task<int> ImportGuildWarBattlesAsync(GameDatabaseContext context, GuildWarBattle[] battles)
+	private async Task<int> ImportGuildWarBattlesAsync(GameDatabaseContext context, List<GuildWarBattle> battles)
 	{
 		int imported = 0;
 		foreach (var battle in battles)
@@ -222,7 +220,7 @@ public class SyncService
 		return imported;
 	}
 
-	private async Task<int> ImportRaidBossAttacksAsync(GameDatabaseContext context, RaidBossAttack[] attacks)
+	private async Task<int> ImportRaidBossAttacksAsync(GameDatabaseContext context, List<RaidBossAttack> attacks)
 	{
 		int imported = 0;
 		foreach (var attack in attacks)
@@ -240,7 +238,7 @@ public class SyncService
 		return imported;
 	}
 
-	private async Task<int> ImportChestOpeningsAsync(GameDatabaseContext context, ChestOpening[] openings)
+	private async Task<int> ImportChestOpeningsAsync(GameDatabaseContext context, List<ChestOpening> openings)
 	{
 		int imported = 0;
 		foreach (var opening in openings)
@@ -258,7 +256,7 @@ public class SyncService
 		return imported;
 	}
 
-	private async Task<int> ImportOpponentsAsync(GameDatabaseContext context, Opponent[] opponents)
+	private async Task<int> ImportOpponentsAsync(GameDatabaseContext context, List<Opponent> opponents)
 	{
 		int imported = 0;
 		foreach (var opponent in opponents)

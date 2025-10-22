@@ -196,7 +196,7 @@ public class SyncController : ControllerBase
 		{
 			await using var context = await _contextFactory.CreateDbContextAsync();
 			var opponents = await context.Opponents
-				.OrderByDescending(o => o.LastEncountered)
+				.OrderByDescending(o => o.LastSeen)
 				.ToListAsync();
 
 			return Ok(opponents);
