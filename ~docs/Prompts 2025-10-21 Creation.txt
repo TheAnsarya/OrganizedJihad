@@ -150,19 +150,26 @@ Activity Tracking Completion - Add more resource/guild tracking hooks
  uninstall the powershell extension `ohmyposh` and return the powershell terminal to normal text colors because currently the text is showing as black on black and is unreadable
 do it
 ----
-fix the build errors and warnings, etc, for all the projects, especially `desktopapp` keeping the aplications platform agnostic
+fix the build errors and warnings, etc, for all the projects, especially `desktopapp` keeping the applications platform agnostic
+---- dotnet format
+cd .\desktop-app\; dotnet format
 
-
-
-
-
-
-
-
-
-
-
+^^^^^^^^^^^^^
+make sure the editor config for `razor` and other file types from `desktop` includes end_of_line = crlf
+trim_trailing_whitespace = true
+insert_final_newline = true
+max_line_length = 120
+and keep opening braces on the previous line and , comment everything including the code inside methods, add links in the comments to explanitory articles, always format the code using editorconfig and other formatting directives (never spaces, always tabs),
+^^^^^^^^^^^
+the desktop app is using spaces, fix the formatting rules and format the whole project and the other projects to use utf-8, crlf, and tabs (4)
 log guild chat and private chats and adventure chats and AoC chats
+track fellow guild members and their statistics, guild war, dungeon, guild raid minions and boss, login/logout, participation, guild activity, titanite, prestige, etc
+
+
+
+
+
+
 
 
 
