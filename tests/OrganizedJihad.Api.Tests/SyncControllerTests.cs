@@ -1,5 +1,6 @@
 using FluentAssertions;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.AspNetCore.TestHost;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using OrganizedJihad.Api;
@@ -22,24 +23,30 @@ public class SyncControllerTests : IClassFixture<WebApplicationFactory<Program>>
 
 	public SyncControllerTests(WebApplicationFactory<Program> factory)
 	{
+		// Set environment variable to skip database initialization in Program.cs
+		Environment.SetEnvironmentVariable("ASPNETCORE_TEST_ENV", "true");
+		
 		_factory = factory.WithWebHostBuilder(builder =>
 		{
-			builder.ConfigureServices(services =>
+			builder.ConfigureTestServices(services =>
 			{
-				// Remove existing DbContext registration
-				var descriptor = services.SingleOrDefault(
-					d => d.ServiceType == typeof(DbContextOptions<GameDatabaseContext>));
+				// Remove ALL Entity Framework service registrations to avoid provider conflicts
+				var dbDescriptors = services
+					.Where(d => d.ServiceType.Namespace != null &&
+								(d.ServiceType.Namespace.StartsWith("Microsoft.EntityFrameworkCore") ||
+								 d.ServiceType.FullName?.Contains("GameDatabaseContext") == true))
+					.ToList();
 				
-				if (descriptor != null)
+				foreach (var descriptor in dbDescriptors)
 				{
 					services.Remove(descriptor);
 				}
 
-				// Add in-memory database for testing
-				services.AddDbContext<GameDatabaseContext>(options =>
-				{
-					options.UseInMemoryDatabase("TestDatabase");
-				});
+				// Add in-memory database factory for testing
+				// InMemory database doesn't support transactions, so we configure warnings
+				services.AddDbContextFactory<GameDatabaseContext>(options =>
+					options.UseInMemoryDatabase("TestDatabase")
+						.ConfigureWarnings(w => w.Ignore(Microsoft.EntityFrameworkCore.Diagnostics.InMemoryEventId.TransactionIgnoredWarning)));
 			});
 		});
 
@@ -65,7 +72,7 @@ public class SyncControllerTests : IClassFixture<WebApplicationFactory<Program>>
 		};
 
 		// Act
-		var response = await _client.PostAsJsonAsync("/api/sync", syncData);
+		var response = await _client.PostAsJsonAsync("/api/sync/import", syncData);
 
 		// Assert
 		response.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -86,7 +93,7 @@ public class SyncControllerTests : IClassFixture<WebApplicationFactory<Program>>
 		};
 
 		// Act
-		var response = await _client.PostAsJsonAsync("/api/sync", syncData);
+		var response = await _client.PostAsJsonAsync("/api/sync/import", syncData);
 
 		// Assert
 		response.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -100,7 +107,7 @@ public class SyncControllerTests : IClassFixture<WebApplicationFactory<Program>>
 	public async Task Health_Check_Should_Return_Ok()
 	{
 		// Act
-		var response = await _client.GetAsync("/health");
+		var response = await _client.GetAsync("/api/sync/health");
 
 		// Assert
 		response.StatusCode.Should().Be(HttpStatusCode.OK);

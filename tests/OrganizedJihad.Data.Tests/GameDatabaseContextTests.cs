@@ -109,7 +109,7 @@ public class GameDatabaseContextTests : IDisposable
 		await _context.SaveChangesAsync();
 
 		// Assert
-		var saved = await _context.GuildMembers.FindAsync(99999);
+		var saved = await _context.GuildMembers.FirstOrDefaultAsync(m => m.PlayerId == 99999);
 		saved.Should().NotBeNull();
 		saved!.PlayerName.Should().Be("GuildMate");
 		saved.GuildName.Should().Be("Test Guild");
@@ -139,7 +139,7 @@ public class GameDatabaseContextTests : IDisposable
 		await _context.SaveChangesAsync();
 
 		// Assert
-		var updated = await _context.GuildMembers.FindAsync(88888);
+		var updated = await _context.GuildMembers.FirstOrDefaultAsync(m => m.PlayerId == 88888);
 		updated.Should().NotBeNull();
 		updated!.Level.Should().Be(110);
 		updated.TeamPower.Should().Be(600000);

@@ -23,12 +23,14 @@ builder.Services.AddScoped<SyncService>();
 
 var app = builder.Build();
 
-// Initialize database
-using (var scope = app.Services.CreateScope()) {
-	var contextFactory = scope.ServiceProvider.GetRequiredService<IDbContextFactory<GameDatabaseContext>>();
-	await using var context = await contextFactory.CreateDbContextAsync();
-	await context.Database.MigrateAsync();  // Use migrations instead of EnsureCreated
-	app.Logger.LogInformation("Database initialized at: {DbPath}", dbPath);
+// Initialize database (skip in test environment to avoid conflicts with InMemory provider)
+if (string.IsNullOrEmpty(Environment.GetEnvironmentVariable("ASPNETCORE_TEST_ENV"))) {
+	using (var scope = app.Services.CreateScope()) {
+		var contextFactory = scope.ServiceProvider.GetRequiredService<IDbContextFactory<GameDatabaseContext>>();
+		await using var context = await contextFactory.CreateDbContextAsync();
+		await context.Database.MigrateAsync();
+		app.Logger.LogInformation("Database initialized at: {DbPath}", dbPath);
+	}
 }
 
 // Configure the HTTP request pipeline
