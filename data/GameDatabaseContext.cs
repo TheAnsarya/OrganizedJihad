@@ -84,6 +84,76 @@ public class GameDatabaseContext : DbContext {
 	/// </summary>
 	public DbSet<SyncMetadata> SyncMetadata { get; set; }
 
+	// === Hero, Titan, and Pet Rosters ===
+
+	/// <summary>
+	/// Hero roster snapshots with full progression details
+	/// Immutable historical data capturing hero state at sync time
+	/// </summary>
+	public DbSet<Hero> Heroes { get; set; }
+
+	/// <summary>
+	/// Titan roster snapshots with full progression details
+	/// Immutable historical data capturing titan state at sync time
+	/// </summary>
+	public DbSet<Titan> Titans { get; set; }
+
+	/// <summary>
+	/// Pet roster snapshots
+	/// Immutable historical data capturing pet state at sync time
+	/// </summary>
+	public DbSet<Pet> Pets { get; set; }
+
+	/// <summary>
+	/// Inventory snapshots showing all items and resources
+	/// Immutable historical data for tracking resource accumulation
+	/// </summary>
+	public DbSet<InventorySnapshot> InventorySnapshots { get; set; }
+
+	// === Activity and Progress Tracking ===
+
+	/// <summary>
+	/// Quest completions (daily, weekly, event quests)
+	/// Immutable historical data for tracking quest completion patterns
+	/// </summary>
+	public DbSet<QuestCompletion> QuestCompletions { get; set; }
+
+	/// <summary>
+	/// Campaign and mission progress
+	/// Mutable data tracking highest completion and star ratings
+	/// </summary>
+	public DbSet<MissionProgress> MissionProgress { get; set; }
+
+	/// <summary>
+	/// Shop purchases from all in-game shops
+	/// Immutable historical data for spending analytics
+	/// </summary>
+	public DbSet<ShopPurchase> ShopPurchases { get; set; }
+
+	/// <summary>
+	/// Tower and dungeon progress
+	/// Mutable data tracking highest floors reached
+	/// </summary>
+	public DbSet<TowerProgress> TowerProgress { get; set; }
+
+	/// <summary>
+	/// Expedition and campaign boss battles
+	/// Immutable historical data for PvE battle tracking
+	/// </summary>
+	public DbSet<ExpeditionBattle> ExpeditionBattles { get; set; }
+
+	/// <summary>
+	/// Resource transactions (gains and losses)
+	/// Immutable historical data for economic analytics
+	/// </summary>
+	public DbSet<ResourceTransaction> ResourceTransactions { get; set; }
+
+	/// <summary>
+	/// Guild activities and contributions
+	/// Immutable historical data for guild participation tracking
+	/// </summary>
+	public DbSet<GuildActivity> GuildActivities { get; set; }
+
 	public GameDatabaseContext(DbContextOptions<GameDatabaseContext> options)
 		: base(options) {
 	}
@@ -225,6 +295,130 @@ public class GameDatabaseContext : DbContext {
 		modelBuilder.Entity<SyncMetadata>(entity => {
 			entity.HasKey(e => e.Id);
 			entity.HasIndex(e => e.Key).IsUnique();
+		});
+
+		// === Hero, Titan, and Pet Configurations ===
+
+		// Configure Hero
+		// Composite index on PlayerId + Timestamp for player roster history
+		// Index on HeroId for specific hero tracking across players
+		// Index on HeroName for search functionality
+		modelBuilder.Entity<Hero>(entity => {
+			entity.HasKey(e => e.Id);
+			entity.HasIndex(e => new { e.PlayerId, e.Timestamp });
+			entity.HasIndex(e => e.HeroId);
+			entity.HasIndex(e => e.HeroName);
+			entity.HasIndex(e => e.Timestamp);
+		});
+
+		// Configure Titan
+		// Composite index on PlayerId + Timestamp for player titan roster history
+		// Index on TitanId for specific titan tracking
+		modelBuilder.Entity<Titan>(entity => {
+			entity.HasKey(e => e.Id);
+			entity.HasIndex(e => new { e.PlayerId, e.Timestamp });
+			entity.HasIndex(e => e.TitanId);
+			entity.HasIndex(e => e.TitanName);
+			entity.HasIndex(e => e.Timestamp);
+		});
+
+		// Configure Pet
+		// Composite index on PlayerId + Timestamp for player pet roster history
+		// Index on PetId for specific pet tracking
+		modelBuilder.Entity<Pet>(entity => {
+			entity.HasKey(e => e.Id);
+			entity.HasIndex(e => new { e.PlayerId, e.Timestamp });
+			entity.HasIndex(e => e.PetId);
+			entity.HasIndex(e => e.PetName);
+			entity.HasIndex(e => e.Timestamp);
+		});
+
+		// Configure InventorySnapshot
+		// Composite index on PlayerId + Timestamp for inventory history
+		modelBuilder.Entity<InventorySnapshot>(entity => {
+			entity.HasKey(e => e.Id);
+			entity.HasIndex(e => new { e.PlayerId, e.Timestamp });
+			entity.HasIndex(e => e.Timestamp);
+		});
+
+		// === Activity and Progress Configurations ===
+
+		// Configure QuestCompletion
+		// Index on CompletedAt for recent quest queries
+		// Index on QuestType for quest type analytics
+		// Composite index on PlayerId + CompletedAt for player quest history
+		modelBuilder.Entity<QuestCompletion>(entity => {
+			entity.HasKey(e => e.Id);
+			entity.HasIndex(e => e.CompletedAt);
+			entity.HasIndex(e => e.QuestType);
+			entity.HasIndex(e => new { e.PlayerId, e.CompletedAt });
+		});
+
+		// Configure MissionProgress
+		// Composite index on PlayerId + MissionId for player mission lookup
+		// Index on MissionId for mission-specific queries
+		modelBuilder.Entity<MissionProgress>(entity => {
+			entity.HasKey(e => e.Id);
+			entity.HasIndex(e => new { e.PlayerId, e.MissionId });
+			entity.HasIndex(e => e.MissionId);
+			entity.HasIndex(e => e.IsHeroic);
+		});
+
+		// Configure ShopPurchase
+		// Index on PurchasedAt for recent purchase queries
+		// Index on ShopType for shop-specific analytics
+		// Composite index on PlayerId + PurchasedAt for player purchase history
+		modelBuilder.Entity<ShopPurchase>(entity => {
+			entity.HasKey(e => e.Id);
+			entity.HasIndex(e => e.PurchasedAt);
+			entity.HasIndex(e => e.ShopType);
+			entity.HasIndex(e => new { e.PlayerId, e.PurchasedAt });
+		});
+
+		// Configure TowerProgress
+		// Composite index on PlayerId + TowerType for player tower progress
+		// Index on TowerType for tower-specific queries
+		modelBuilder.Entity<TowerProgress>(entity => {
+			entity.HasKey(e => e.Id);
+			entity.HasIndex(e => new { e.PlayerId, e.TowerType });
+			entity.HasIndex(e => e.TowerType);
+		});
+
+		// Configure ExpeditionBattle
+		// Index on Timestamp for recent expedition battles
+		// Index on ExpeditionId for expedition-specific queries
+		// Composite index on PlayerId + Timestamp for player expedition history
+		modelBuilder.Entity<ExpeditionBattle>(entity => {
+			entity.HasKey(e => e.Id);
+			entity.HasIndex(e => e.Timestamp);
+			entity.HasIndex(e => e.ExpeditionId);
+			entity.HasIndex(e => new { e.PlayerId, e.Timestamp });
+		});
+
+		// Configure ResourceTransaction
+		// Index on Timestamp for recent transaction queries
+		// Index on ResourceType for resource-specific analytics
+		// Composite index on PlayerId + Timestamp for player transaction history
+		// Composite index on ResourceType + Source for income/expense analysis
+		modelBuilder.Entity<ResourceTransaction>(entity => {
+			entity.HasKey(e => e.Id);
+			entity.HasIndex(e => e.Timestamp);
+			entity.HasIndex(e => e.ResourceType);
+			entity.HasIndex(e => new { e.PlayerId, e.Timestamp });
+			entity.HasIndex(e => new { e.ResourceType, e.Source });
+		});
+
+		// Configure GuildActivity
+		// Index on Timestamp for recent guild activity queries
+		// Index on ActivityType for activity-specific analytics
+		// Composite index on PlayerId + Timestamp for player guild history
+		// Composite index on GuildId + Timestamp for guild-wide activity
+		modelBuilder.Entity<GuildActivity>(entity => {
+			entity.HasKey(e => e.Id);
+			entity.HasIndex(e => e.Timestamp);
+			entity.HasIndex(e => e.ActivityType);
+			entity.HasIndex(e => new { e.PlayerId, e.Timestamp });
+			entity.HasIndex(e => new { e.GuildId, e.Timestamp });
 		});
 	}
 }

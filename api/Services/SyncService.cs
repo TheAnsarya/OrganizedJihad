@@ -87,6 +87,66 @@ public class SyncService {
 					counts.CalendarEvents = await ImportCalendarEventsAsync(context, data.CalendarEvents);
 				}
 
+				// === Import Hero, Titan, and Pet Rosters ===
+
+				// Import heroes
+				if (data.Heroes != null) {
+					counts.Heroes = await ImportHeroesAsync(context, data.Heroes);
+				}
+
+				// Import titans
+				if (data.Titans != null) {
+					counts.Titans = await ImportTitansAsync(context, data.Titans);
+				}
+
+				// Import pets
+				if (data.Pets != null) {
+					counts.Pets = await ImportPetsAsync(context, data.Pets);
+				}
+
+				// Import current inventory snapshot
+				if (data.CurrentInventory != null) {
+					context.InventorySnapshots.Add(data.CurrentInventory);
+					counts.InventorySnapshots = 1;
+				}
+
+				// === Import Activity and Progress Tracking ===
+
+				// Import quest completions
+				if (data.QuestCompletions != null) {
+					counts.QuestCompletions = await ImportQuestCompletionsAsync(context, data.QuestCompletions);
+				}
+
+				// Import/update mission progress
+				if (data.MissionProgress != null) {
+					counts.MissionProgress = await ImportMissionProgressAsync(context, data.MissionProgress);
+				}
+
+				// Import shop purchases
+				if (data.ShopPurchases != null) {
+					counts.ShopPurchases = await ImportShopPurchasesAsync(context, data.ShopPurchases);
+				}
+
+				// Import/update tower progress
+				if (data.TowerProgress != null) {
+					counts.TowerProgress = await ImportTowerProgressAsync(context, data.TowerProgress);
+				}
+
+				// Import expedition battles
+				if (data.ExpeditionBattles != null) {
+					counts.ExpeditionBattles = await ImportExpeditionBattlesAsync(context, data.ExpeditionBattles);
+				}
+
+				// Import resource transactions
+				if (data.ResourceTransactions != null) {
+					counts.ResourceTransactions = await ImportResourceTransactionsAsync(context, data.ResourceTransactions);
+				}
+
+				// Import guild activities
+				if (data.GuildActivities != null) {
+					counts.GuildActivities = await ImportGuildActivitiesAsync(context, data.GuildActivities);
+				}
+
 				// Update sync metadata
 				await UpdateSyncMetadataAsync(context, "last_sync_timestamp", DateTime.UtcNow.ToString("O"));
 
@@ -388,6 +448,162 @@ public class SyncService {
 		return null;
 	}
 
+	// === Hero, Titan, and Pet Import Methods ===
+
+	private async Task<int> ImportHeroesAsync(GameDatabaseContext context, List<Hero> heroes) {
+		// Heroes are immutable snapshots - always insert new records
+		context.Heroes.AddRange(heroes);
+		await context.SaveChangesAsync();
+		return heroes.Count;
+	}
+
+	private async Task<int> ImportTitansAsync(GameDatabaseContext context, List<Titan> titans) {
+		// Titans are immutable snapshots - always insert new records
+		context.Titans.AddRange(titans);
+		await context.SaveChangesAsync();
+		return titans.Count;
+	}
+
+	private async Task<int> ImportPetsAsync(GameDatabaseContext context, List<Pet> pets) {
+		// Pets are immutable snapshots - always insert new records
+		context.Pets.AddRange(pets);
+		await context.SaveChangesAsync();
+		return pets.Count;
+	}
+
+	// === Activity and Progress Import Methods ===
+
+	private async Task<int> ImportQuestCompletionsAsync(GameDatabaseContext context, List<QuestCompletion> quests) {
+		int imported = 0;
+		foreach (var quest in quests) {
+			// Check for duplicate (by PlayerId + QuestId + CompletedAt)
+			var exists = await context.QuestCompletions
+				.AnyAsync(q => q.PlayerId == quest.PlayerId && 
+							   q.QuestId == quest.QuestId && 
+							   q.CompletedAt == quest.CompletedAt);
+
+			if (!exists) {
+				context.QuestCompletions.Add(quest);
+				imported++;
+			}
+		}
+
+		await context.SaveChangesAsync();
+		return imported;
+	}
+
+	private async Task<int> ImportMissionProgressAsync(GameDatabaseContext context, List<MissionProgress> missions) {
+		int imported = 0;
+
+		foreach (var mission in missions) {
+			// Mission progress is mutable - upsert by PlayerId + MissionId
+			var existing = await context.MissionProgress
+				.FirstOrDefaultAsync(m => m.PlayerId == mission.PlayerId && m.MissionId == mission.MissionId);
+
+			if (existing == null) {
+				context.MissionProgress.Add(mission);
+				imported++;
+			} else {
+				// Update with latest progress
+				existing.Stars = mission.Stars;
+				existing.HighestLevel = mission.HighestLevel;
+				existing.LastCompleted = mission.LastCompleted;
+				existing.CompletionCount = mission.CompletionCount;
+			}
+		}
+
+		await context.SaveChangesAsync();
+		return imported;
+	}
+
+	private async Task<int> ImportShopPurchasesAsync(GameDatabaseContext context, List<ShopPurchase> purchases) {
+		int imported = 0;
+		foreach (var purchase in purchases) {
+			// Check for duplicate (by PlayerId + PurchasedAt + ItemId)
+			var exists = await context.ShopPurchases
+				.AnyAsync(p => p.PlayerId == purchase.PlayerId && 
+							   p.PurchasedAt == purchase.PurchasedAt && 
+							   p.ItemId == purchase.ItemId);
+
+			if (!exists) {
+				context.ShopPurchases.Add(purchase);
+				imported++;
+			}
+		}
+
+		await context.SaveChangesAsync();
+		return imported;
+	}
+
+	private async Task<int> ImportTowerProgressAsync(GameDatabaseContext context, List<TowerProgress> towers) {
+		int imported = 0;
+
+		foreach (var tower in towers) {
+			// Tower progress is mutable - upsert by PlayerId + TowerType
+			var existing = await context.TowerProgress
+				.FirstOrDefaultAsync(t => t.PlayerId == tower.PlayerId && t.TowerType == tower.TowerType);
+
+			if (existing == null) {
+				context.TowerProgress.Add(tower);
+				imported++;
+			} else {
+				// Update with latest progress
+				existing.HighestFloor = tower.HighestFloor;
+				existing.LastUpdate = tower.LastUpdate;
+				existing.FloorData = tower.FloorData;
+			}
+		}
+
+		await context.SaveChangesAsync();
+		return imported;
+	}
+
+	private async Task<int> ImportExpeditionBattlesAsync(GameDatabaseContext context, List<ExpeditionBattle> battles) {
+		int imported = 0;
+		foreach (var battle in battles) {
+			// Check for duplicate (by PlayerId + Timestamp + ExpeditionId)
+			var exists = await context.ExpeditionBattles
+				.AnyAsync(b => b.PlayerId == battle.PlayerId && 
+							   b.Timestamp == battle.Timestamp && 
+							   b.ExpeditionId == battle.ExpeditionId);
+
+			if (!exists) {
+				context.ExpeditionBattles.Add(battle);
+				imported++;
+			}
+		}
+
+		await context.SaveChangesAsync();
+		return imported;
+	}
+
+	private async Task<int> ImportResourceTransactionsAsync(GameDatabaseContext context, List<ResourceTransaction> transactions) {
+		// Resource transactions are immutable - always insert new records
+		// They represent economic events that happened
+		context.ResourceTransactions.AddRange(transactions);
+		await context.SaveChangesAsync();
+		return transactions.Count;
+	}
+
+	private async Task<int> ImportGuildActivitiesAsync(GameDatabaseContext context, List<GuildActivity> activities) {
+		int imported = 0;
+		foreach (var activity in activities) {
+			// Check for duplicate (by PlayerId + Timestamp + ActivityType)
+			var exists = await context.GuildActivities
+				.AnyAsync(a => a.PlayerId == activity.PlayerId && 
+							   a.Timestamp == activity.Timestamp && 
+							   a.ActivityType == activity.ActivityType);
+
+			if (!exists) {
+				context.GuildActivities.Add(activity);
+				imported++;
+			}
+		}
+
+		await context.SaveChangesAsync();
+		return imported;
+	}
+
 	/// <summary>
 	/// Gets statistics about the database contents.
 	/// </summary>
@@ -395,6 +611,7 @@ public class SyncService {
 		await using var context = await _contextFactory.CreateDbContextAsync();
 
 		var stats = new DatabaseStats {
+			// Player and Battle Data
 			TotalSnapshots = await context.PlayerSnapshots.CountAsync(),
 			TotalArenaBattles = await context.ArenaBattles.CountAsync(),
 			TotalGrandArenaBattles = await context.GrandArenaBattles.CountAsync(),
@@ -405,6 +622,22 @@ public class SyncService {
 			TotalOpponents = await context.Opponents.CountAsync(),
 			TotalGoals = await context.Goals.CountAsync(),
 			TotalCalendarEvents = await context.CalendarEvents.CountAsync(),
+
+			// Hero, Titan, and Pet Rosters
+			TotalHeroes = await context.Heroes.CountAsync(),
+			TotalTitans = await context.Titans.CountAsync(),
+			TotalPets = await context.Pets.CountAsync(),
+			TotalInventorySnapshots = await context.InventorySnapshots.CountAsync(),
+
+			// Activity and Progress Tracking
+			TotalQuestCompletions = await context.QuestCompletions.CountAsync(),
+			TotalMissionProgress = await context.MissionProgress.CountAsync(),
+			TotalShopPurchases = await context.ShopPurchases.CountAsync(),
+			TotalTowerProgress = await context.TowerProgress.CountAsync(),
+			TotalExpeditionBattles = await context.ExpeditionBattles.CountAsync(),
+			TotalResourceTransactions = await context.ResourceTransactions.CountAsync(),
+			TotalGuildActivities = await context.GuildActivities.CountAsync(),
+
 			LastSync = await GetLastSyncTimestampAsync()
 		};
 

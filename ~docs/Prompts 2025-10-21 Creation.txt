@@ -134,12 +134,11 @@ What would you like to do next?
 Would you like to continue with Phase 4 (Update API and Services), or would you prefer to work on something else?
 ****************************
 continue with Phase 4 (Update API and Services)
-
 Phase 5: Update Desktop App 
-
 bring back the desktop app code from previous git commits, commit to current branch, and then proceed with phase 5
-
 proceed with Phase 6 now
+make sure the chat log files are up to date
+continue with `Phase 3: Review API Data Collection` and definitely track everything about pets and titans and heros and inventory and everything else we can track
 
 
 
