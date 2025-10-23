@@ -166,13 +166,11 @@ log guild chat and private chats and adventure chats and AoC chats
 track fellow guild members and their statistics, guild war, dungeon, guild raid minions and boss, login/logout, participation, guild activity, titanite, prestige, etc
 Setup testing for the userscript, database, and api
 fix those bugs and tests
-
-
-
-
-
-
+commit changes with description
 add the XML documentation comments everywhere they are needed, and update where appropriate, and add comments inside methods, and make sure to include links to external resources
+
+
+
 
 
 

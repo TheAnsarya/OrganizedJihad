@@ -10,13 +10,33 @@ using System.Threading.Tasks;
 namespace OrganizedJihad.Api.Services;
 
 /// <summary>
-/// Service for synchronizing data from the browser userscript to the local database.
-/// Handles importing battle records, snapshots, chest openings, and other tracked data.
+/// Service for synchronizing game data from the browser userscript to the local database.
+/// Handles all business logic for data import, validation, and persistence.
+/// 
+/// Responsibilities:
+/// - Import and process battle records from all arena types
+/// - Track player snapshots and progression over time
+/// - Record chest openings, guild activities, and raid boss attacks
+/// - Manage goals and calendar events
+/// - Generate database statistics
+/// 
+/// Design Pattern: Service Layer
+/// Uses DbContextFactory for thread-safe database access in a web API.
+/// 
+/// References:
+/// - Service Layer Pattern: https://learn.microsoft.com/en-us/dotnet/architecture/microservices/microservice-ddd-cqrs-patterns/microservice-application-layer-implementation-web-api
+/// - EF Core DbContextFactory: https://learn.microsoft.com/en-us/ef/core/dbcontext-configuration/#using-a-dbcontext-factory
+/// - Transactions in EF Core: https://learn.microsoft.com/en-us/ef/core/saving/transactions
 /// </summary>
 public class SyncService {
 	private readonly IDbContextFactory<GameDatabaseContext> _contextFactory;
 	private readonly ILogger<SyncService> _logger;
 
+	/// <summary>
+	/// Initializes a new instance of the SyncService.
+	/// </summary>
+	/// <param name="contextFactory">Factory for creating database contexts</param>
+	/// <param name="logger">Logger for diagnostic information</param>
 	public SyncService(
 		IDbContextFactory<GameDatabaseContext> contextFactory,
 		ILogger<SyncService> logger) {
@@ -25,29 +45,52 @@ public class SyncService {
 	}
 
 	/// <summary>
-	/// Imports a batch of data from the browser.
+	/// Imports a complete batch of game data from the browser userscript.
 	/// </summary>
+	/// <param name="data">Complete game data snapshot including all entity types</param>
+	/// <returns>Counts of imported records for each entity type</returns>
+	/// <remarks>
+	/// This method orchestrates the entire import process:
+	/// 1. Creates a database transaction for atomicity
+	/// 2. Imports player snapshot (current state)
+	/// 3. Imports battle records from all arena types
+	/// 4. Imports heroes and titans data
+	/// 5. Imports guild-related data
+	/// 6. Imports events, goals, and other tracking data
+	/// 7. Commits transaction or rolls back on error
+	/// 
+	/// Uses transaction to ensure data consistency - if any import fails,
+	/// all changes are rolled back to prevent partial data corruption.
+	/// 
+	/// https://learn.microsoft.com/en-us/ef/core/saving/transactions
+	/// </remarks>
+	/// <exception cref="DbUpdateException">Thrown when database update fails</exception>
+	/// <exception cref="InvalidOperationException">Thrown when data validation fails</exception>
 	public async Task<ImportCounts> ImportBrowserDataAsync(BrowserSyncData data) {
 		_logger.LogInformation("Starting browser data import");
 		var counts = new ImportCounts();
 
 		try {
+			// Create database context for this operation
 			await using var context = await _contextFactory.CreateDbContextAsync();
+			
+			// Begin transaction to ensure all-or-nothing import
+			// https://learn.microsoft.com/en-us/ef/core/saving/transactions
 			await using var transaction = await context.Database.BeginTransactionAsync();
 
 			try {
-				// Import current snapshot
+				// Import current player snapshot (state at time of sync)
 				if (data.CurrentSnapshot != null) {
 					context.PlayerSnapshots.Add(data.CurrentSnapshot);
 					counts.PlayerSnapshots = 1;
 				}
 
-				// Import arena battles
+				// Import arena battles (standard PvP)
 				if (data.ArenaBattles != null) {
 					counts.ArenaBattles = await ImportArenaBattlesAsync(context, data.ArenaBattles);
 				}
 
-				// Import grand arena battles
+				// Import grand arena battles (tournament PvP)
 				if (data.GrandArenaBattles != null) {
 					counts.GrandArenaBattles = await ImportGrandArenaBattlesAsync(context, data.GrandArenaBattles);
 				}

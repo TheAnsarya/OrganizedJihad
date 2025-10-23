@@ -8,7 +8,20 @@ namespace OrganizedJihad.Api.Controllers;
 
 /// <summary>
 /// API controller for synchronizing game data from the browser userscript.
-/// Provides endpoints for data import and retrieval.
+/// Provides endpoints for data import and retrieval of Hero Wars game statistics.
+/// 
+/// Endpoints:
+/// - POST /api/sync/import - Main sync endpoint for browser data
+/// - GET /api/sync/health - Health check
+/// - GET /api/sync/last-sync - Get last sync timestamp
+/// - GET /api/sync/stats - Get database statistics
+/// - GET /api/sync/snapshots - Get recent player snapshots
+/// - GET /api/sync/battles - Get recent battle history
+/// - GET /api/sync/opponents - Get all tracked opponents
+/// 
+/// References:
+/// - ASP.NET Core Controllers: https://learn.microsoft.com/en-us/aspnet/core/web-api/
+/// - Model Binding: https://learn.microsoft.com/en-us/aspnet/core/mvc/models/model-binding
 /// </summary>
 [ApiController]
 [Route("api/[controller]")]
@@ -17,6 +30,16 @@ public class SyncController : ControllerBase {
 	private readonly IDbContextFactory<GameDatabaseContext> _contextFactory;
 	private readonly ILogger<SyncController> _logger;
 
+	/// <summary>
+	/// Initializes a new instance of the SyncController.
+	/// </summary>
+	/// <param name="syncService">Service for importing and processing browser data</param>
+	/// <param name="contextFactory">Factory for creating database contexts (thread-safe pattern)</param>
+	/// <param name="logger">Logger for diagnostic information</param>
+	/// <remarks>
+	/// Uses dependency injection to receive required services.
+	/// https://learn.microsoft.com/en-us/aspnet/core/fundamentals/dependency-injection
+	/// </remarks>
 	public SyncController(
 		SyncService syncService,
 		IDbContextFactory<GameDatabaseContext> contextFactory,
@@ -27,10 +50,27 @@ public class SyncController : ControllerBase {
 	}
 
 	/// <summary>
-	/// Health check endpoint to verify API is running.
-	/// GET: api/sync/health
+	/// Health check endpoint to verify API is running and responsive.
 	/// </summary>
+	/// <returns>JSON object with status, timestamp, and version information</returns>
+	/// <response code="200">API is healthy and running</response>
+	/// <remarks>
+	/// GET: api/sync/health
+	/// 
+	/// This endpoint can be used by monitoring tools or the browser userscript
+	/// to verify the API is available before attempting data synchronization.
+	/// 
+	/// Example response:
+	/// <code>
+	/// {
+	///   "status": "healthy",
+	///   "timestamp": "2025-10-22T12:34:56Z",
+	///   "version": "1.0.0"
+	/// }
+	/// </code>
+	/// </remarks>
 	[HttpGet("health")]
+	[ProducesResponseType(StatusCodes.Status200OK)]
 	public IActionResult HealthCheck() {
 		return Ok(new {
 			status = "healthy",
@@ -40,16 +80,40 @@ public class SyncController : ControllerBase {
 	}
 
 	/// <summary>
-	/// Main sync endpoint - receives data from browser userscript.
-	/// POST: api/sync/import
+	/// Main sync endpoint - receives and imports game data from browser userscript.
 	/// </summary>
+	/// <param name="data">Complete game data snapshot from the browser</param>
+	/// <returns>Sync response with import statistics</returns>
+	/// <response code="200">Data imported successfully</response>
+	/// <response code="500">Import failed due to server error</response>
+	/// <remarks>
+	/// POST: api/sync/import
+	/// 
+	/// This is the primary endpoint used by the TamperMonkey userscript to sync
+	/// game data from the browser to the local database. It processes all game
+	/// entities including player stats, battles, heroes, titans, and events.
+	/// 
+	/// The import process:
+	/// 1. Validates incoming data structure
+	/// 2. Creates database transaction for consistency
+	/// 3. Processes each entity type sequentially
+	/// 4. Returns counts of imported records
+	/// 
+	/// Content-Type: application/json
+	/// 
+	/// https://learn.microsoft.com/en-us/aspnet/core/web-api/action-return-types
+	/// </remarks>
 	[HttpPost("import")]
+	[ProducesResponseType(typeof(SyncResponse), StatusCodes.Status200OK)]
+	[ProducesResponseType(typeof(SyncResponse), StatusCodes.Status500InternalServerError)]
 	public async Task<ActionResult<SyncResponse>> ImportData([FromBody] BrowserSyncData data) {
 		try {
 			_logger.LogInformation("Receiving sync data from browser at {Time}", DateTime.UtcNow);
 
+			// Import data using the sync service (handles all business logic)
 			var counts = await _syncService.ImportBrowserDataAsync(data);
 
+			// Build success response with import statistics
 			var response = new SyncResponse {
 				Success = true,
 				Message = "Data imported successfully",
@@ -57,14 +121,19 @@ public class SyncController : ControllerBase {
 				ImportedCounts = counts
 			};
 
-			_logger.LogInformation("Sync completed: {TotalRecords} total records imported",
-				counts.PlayerSnapshots + counts.ArenaBattles + counts.GrandArenaBattles +
+			// Calculate total records for logging
+			var totalRecords = counts.PlayerSnapshots + counts.ArenaBattles + counts.GrandArenaBattles +
 				counts.TitanArenaBattles + counts.GuildWarBattles + counts.RaidBossAttacks +
-				counts.ChestOpenings + counts.Opponents + counts.Goals + counts.CalendarEvents);
+				counts.ChestOpenings + counts.Opponents + counts.Goals + counts.CalendarEvents;
+
+			_logger.LogInformation("Sync completed: {TotalRecords} total records imported", totalRecords);
 
 			return Ok(response);
 		} catch (Exception ex) {
+			// Log the full exception for debugging
 			_logger.LogError(ex, "Error during data import");
+			
+			// Return user-friendly error response
 			return StatusCode(500, new SyncResponse {
 				Success = false,
 				Message = $"Import failed: {ex.Message}",
@@ -74,12 +143,21 @@ public class SyncController : ControllerBase {
 	}
 
 	/// <summary>
-	/// Get the timestamp of the last successful sync.
-	/// GET: api/sync/last-sync
+	/// Get the timestamp of the last successful sync operation.
 	/// </summary>
+	/// <returns>Timestamp of most recent player snapshot, or null if no syncs have occurred</returns>
+	/// <response code="200">Returns last sync timestamp or null</response>
+	/// <remarks>
+	/// GET: api/sync/last-sync
+	/// 
+	/// Queries the PlayerSnapshots table to find the most recent data point.
+	/// This helps the userscript determine if data is stale or needs refresh.
+	/// </remarks>
 	[HttpGet("last-sync")]
+	[ProducesResponseType(typeof(object), StatusCodes.Status200OK)]
 	public async Task<ActionResult<DateTime?>> GetLastSync() {
 		try {
+			// Query the most recent player snapshot timestamp
 			var lastSync = await _syncService.GetLastSyncTimestampAsync();
 			return Ok(new { lastSync });
 		} catch (Exception ex) {
@@ -89,12 +167,27 @@ public class SyncController : ControllerBase {
 	}
 
 	/// <summary>
-	/// Get database statistics (record counts, date ranges, etc.).
-	/// GET: api/sync/stats
+	/// Get comprehensive database statistics including record counts and date ranges.
 	/// </summary>
+	/// <returns>Statistics object with counts for all major entity types</returns>
+	/// <response code="200">Returns database statistics</response>
+	/// <response code="500">Error occurred while querying database</response>
+	/// <remarks>
+	/// GET: api/sync/stats
+	/// 
+	/// Provides a quick overview of the database contents including:
+	/// - Total counts for each entity type (snapshots, battles, heroes, etc.)
+	/// - Date ranges for time-series data
+	/// - Latest sync information
+	/// 
+	/// Useful for dashboard displays or debugging data import issues.
+	/// </remarks>
 	[HttpGet("stats")]
+	[ProducesResponseType(typeof(DatabaseStats), StatusCodes.Status200OK)]
+	[ProducesResponseType(typeof(object), StatusCodes.Status500InternalServerError)]
 	public async Task<ActionResult<DatabaseStats>> GetStats() {
 		try {
+			// Aggregate statistics across all tables
 			var stats = await _syncService.GetDatabaseStatsAsync();
 			return Ok(stats);
 		} catch (Exception ex) {
@@ -104,13 +197,31 @@ public class SyncController : ControllerBase {
 	}
 
 	/// <summary>
-	/// Get recent player snapshots.
-	/// GET: api/sync/snapshots?limit=10
+	/// Get recent player snapshots with optional limit.
 	/// </summary>
+	/// <param name="limit">Maximum number of snapshots to return (default: 10)</param>
+	/// <returns>List of player snapshots ordered by most recent first</returns>
+	/// <response code="200">Returns list of snapshots</response>
+	/// <response code="500">Error occurred while querying database</response>
+	/// <remarks>
+	/// GET: api/sync/snapshots?limit=10
+	/// 
+	/// Player snapshots represent the player's state at a specific point in time,
+	/// including level, team power, and other key statistics.
+	/// 
+	/// Ordered by timestamp descending (newest first).
+	/// 
+	/// https://learn.microsoft.com/en-us/ef/core/querying/
+	/// </remarks>
 	[HttpGet("snapshots")]
+	[ProducesResponseType(StatusCodes.Status200OK)]
+	[ProducesResponseType(typeof(object), StatusCodes.Status500InternalServerError)]
 	public async Task<IActionResult> GetSnapshots([FromQuery] int limit = 10) {
 		try {
+			// Create a new database context for this request
 			await using var context = await _contextFactory.CreateDbContextAsync();
+			
+			// Query snapshots with ordering and limit
 			var snapshots = await context.PlayerSnapshots
 				.OrderByDescending(s => s.Timestamp)
 				.Take(limit)
@@ -124,14 +235,39 @@ public class SyncController : ControllerBase {
 	}
 
 	/// <summary>
-	/// Get recent battles across all arena types.
-	/// GET: api/sync/battles?limit=20
+	/// Get recent battles across all arena types (Arena, Grand Arena, Titan Arena).
 	/// </summary>
+	/// <param name="limit">Maximum number of battles per arena type (default: 20)</param>
+	/// <returns>Object containing battle arrays for each arena type</returns>
+	/// <response code="200">Returns battles grouped by arena type</response>
+	/// <response code="500">Error occurred while querying database</response>
+	/// <remarks>
+	/// GET: api/sync/battles?limit=20
+	/// 
+	/// Retrieves recent battle history from multiple arena types:
+	/// - Arena: Standard PvP battles
+	/// - Grand Arena: Special tournament battles
+	/// - Titan Arena: Titan-based PvP battles
+	/// 
+	/// Each arena type returns up to 'limit' battles, ordered by most recent.
+	/// 
+	/// Example response:
+	/// <code>
+	/// {
+	///   "arena": [...],
+	///   "grandArena": [...],
+	///   "titanArena": [...]
+	/// }
+	/// </code>
+	/// </remarks>
 	[HttpGet("battles")]
+	[ProducesResponseType(StatusCodes.Status200OK)]
+	[ProducesResponseType(typeof(object), StatusCodes.Status500InternalServerError)]
 	public async Task<IActionResult> GetBattles([FromQuery] int limit = 20) {
 		try {
 			await using var context = await _contextFactory.CreateDbContextAsync();
 
+			// Query each arena type separately (parallel execution would be possible but adds complexity)
 			var arenaBattles = await context.ArenaBattles
 				.OrderByDescending(b => b.Timestamp)
 				.Take(limit)
@@ -147,6 +283,7 @@ public class SyncController : ControllerBase {
 				.Take(limit)
 				.ToListAsync();
 
+			// Return grouped results
 			return Ok(new {
 				arena = arenaBattles,
 				grandArena = grandBattles,
@@ -159,10 +296,22 @@ public class SyncController : ControllerBase {
 	}
 
 	/// <summary>
-	/// Get all tracked opponents.
-	/// GET: api/sync/opponents
+	/// Get all tracked opponents from all arena types.
 	/// </summary>
+	/// <returns>List of all unique opponents encountered</returns>
+	/// <response code="200">Returns list of opponents</response>
+	/// <response code="500">Error occurred while querying database</response>
+	/// <remarks>
+	/// GET: api/sync/opponents
+	/// 
+	/// Returns all opponents that have been encountered in any arena type.
+	/// Useful for tracking rival players and analyzing matchup history.
+	/// 
+	/// Opponents are unique by OpponentId across all arena types.
+	/// </remarks>
 	[HttpGet("opponents")]
+	[ProducesResponseType(StatusCodes.Status200OK)]
+	[ProducesResponseType(typeof(object), StatusCodes.Status500InternalServerError)]
 	public async Task<IActionResult> GetOpponents() {
 		try {
 			await using var context = await _contextFactory.CreateDbContextAsync();
