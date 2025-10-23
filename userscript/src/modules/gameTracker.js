@@ -277,18 +277,11 @@ class GameTracker {
 						break;
 
 					// Guild War
-					case 'clanWarGetInfo':
-					case 'clanWarUserGetInfo':
-						await this.trackGuildWarInfo(responseData);
-						break;
 					case 'clanWarAttack':
 						await this.trackGuildWarBattle(args, responseData);
 						break;
 
 					// Guild Raid
-					case 'bossRaidGetInfo':
-						await this.trackRaidBossInfo(responseData);
-						break;
 					case 'bossRaidAttack':
 						await this.trackRaidBossAttack(args, responseData);
 						break;
@@ -310,6 +303,20 @@ class GameTracker {
 						break;
 					case 'clanGetInfo':
 						await this.trackGuildData(responseData);
+						await this.trackGuildMembers(responseData); // Track fellow guild members
+						break;
+					case 'clanWarGetInfo':
+					case 'clanWarUserGetInfo':
+						await this.trackGuildWarInfo(responseData);
+						await this.trackGuildWarParticipation(responseData); // Track member participation
+						break;
+					case 'bossRaidGetInfo':
+						await this.trackRaidBossInfo(responseData);
+						await this.trackGuildRaidParticipation(responseData); // Track member raid stats
+						break;
+					case 'dungeonGetState':
+					case 'titanDungeonGetInfo':
+						await this.trackGuildDungeonParticipation(responseData); // Track dungeon progress
 						break;
 					case 'expeditionGetState':
 						await this.trackExpeditionState(responseData);
@@ -1800,6 +1807,320 @@ class GameTracker {
 		} catch (error) {
 			console.error('[OrganizedJihad] Error updating chat activity summary:', error);
 		}
+	}
+
+	/**
+	 * Track guild members roster and statistics
+	 * Captures member list, levels, power, contribution, activity status
+	 *
+	 * Hero Wars clanGetInfo API returns full guild roster with member details:
+	 * - Member list with IDs, names, levels, team power
+	 * - Guild ranks (leader, officer, member)
+	 * - Contribution points (titanite donations, activity)
+	 * - Last online timestamps
+	 * - Arena/Grand Arena/Titan Arena ranks
+	 * - Prestige points
+	 *
+	 * Reference: https://hw-mobile.fandom.com/wiki/Guild
+	 *
+	 * @param {Object} data - Response from clanGetInfo API
+	 * @private
+	 */
+	async trackGuildMembers(data) {
+		try {
+			if (!data.clan || !data.clan.members) {
+				console.warn('[OrganizedJihad] No guild member data found in clanGetInfo');
+				return;
+			}
+
+			const guildId = data.clan.id || 0;
+			const guildName = data.clan.name || 'Unknown Guild';
+			const members = data.clan.members || {};
+
+			// Get current player ID to identify self
+			const playerData = await storageManager.get('playerData', {});
+			const currentPlayerId = playerData.player?.id || 0;
+
+			// Track each guild member
+			for (const [memberId, memberInfo] of Object.entries(members)) {
+				// Skip tracking self (already tracked in playerData)
+				if (parseInt(memberId) === currentPlayerId) continue;
+
+				// Build guild member record
+				// Matches GuildMember entity model in database
+				const guildMember = {
+					guildId: guildId,
+					guildName: guildName,
+					playerId: parseInt(memberId),
+					playerName: memberInfo.name || 'Unknown',
+					level: memberInfo.level || 0,
+					teamPower: memberInfo.power || memberInfo.teamPower || 0,
+					guildRank: memberInfo.rank || memberInfo.role || 'member',
+					vipLevel: memberInfo.vipLevel || null,
+					lastOnline: new Date(memberInfo.lastOnlineTime || Date.now()),
+					isOnline: memberInfo.isOnline || false,
+					joinedAt: memberInfo.joinedAt ? new Date(memberInfo.joinedAt) : null,
+					currentContribution: memberInfo.contribution || memberInfo.weeklyContribution || 0,
+					totalContribution: memberInfo.totalContribution || memberInfo.lifetimeContribution || 0,
+					arenaRank: memberInfo.arenaRank || null,
+					grandArenaRank: memberInfo.grandArenaRank || null,
+					titanArenaRank: memberInfo.titanArenaRank || null,
+					prestige: memberInfo.prestige || 0,
+					isActive: true,
+					heroRoster: memberInfo.heroes ? JSON.stringify(memberInfo.heroes) : null,
+					titanRoster: memberInfo.titans ? JSON.stringify(memberInfo.titans) : null,
+				};
+
+				// Store/update in IndexedDB
+				// Use 'guildMembers' store (upsert by playerId)
+				await this.storage.put('guildMembers', guildMember);
+
+				// Create historical snapshot for trend tracking
+				const snapshot = {
+					timestamp: new Date(),
+					playerId: guildMember.playerId,
+					playerName: guildMember.playerName,
+					guildId: guildId,
+					level: guildMember.level,
+					teamPower: guildMember.teamPower,
+					guildRank: guildMember.guildRank,
+					contribution: guildMember.currentContribution,
+					totalContribution: guildMember.totalContribution,
+					prestige: guildMember.prestige,
+					isOnline: guildMember.isOnline,
+					lastOnline: guildMember.lastOnline,
+				};
+
+				await this.storage.add('guildMemberSnapshots', snapshot);
+			}
+
+			console.log(`[OrganizedJihad] Tracked ${Object.keys(members).length} guild members from ${guildName}`);
+		} catch (error) {
+			console.error('[OrganizedJihad] Error tracking guild members:', error);
+		}
+	}
+
+	/**
+	 * Track Guild War participation for all members
+	 * Captures attack counts, damage dealt, fort defense stats
+	 *
+	 * @param {Object} data - Response from clanWarGetInfo/clanWarUserGetInfo API
+	 * @private
+	 */
+	async trackGuildWarParticipation(data) {
+		try {
+			if (!data.war || !data.war.participants) {
+				console.warn('[OrganizedJihad] No guild war participation data found');
+				return;
+			}
+
+			const warId = data.war.id || data.war.warId || String(Date.now());
+			const warDate = new Date(data.war.startTime || data.war.date || Date.now());
+			const guildId = data.clan?.id || await this.getStoredGuildId();
+			const participants = data.war.participants || {};
+
+			// Track each member's participation
+			for (const [memberId, participantInfo] of Object.entries(participants)) {
+				const participation = {
+					warId: warId,
+					warDate: warDate,
+					playerId: parseInt(memberId),
+					playerName: participantInfo.name || 'Unknown',
+					guildId: guildId,
+					attacksMade: participantInfo.attacks || participantInfo.attackCount || 0,
+					maxAttacks: participantInfo.maxAttacks || data.war.maxAttacks || 3,
+					totalDamage: participantInfo.damage || participantInfo.totalDamage || 0,
+					fortsDefended: participantInfo.fortsDefended || 0,
+					defensePoints: participantInfo.defensePoints || 0,
+					participated: (participantInfo.attacks || 0) > 0,
+					warResult: data.war.result || null,
+					attackDetails: participantInfo.attackLog ? JSON.stringify(participantInfo.attackLog) : null,
+				};
+
+				await this.storage.add('guildWarParticipations', participation);
+			}
+
+			console.log(`[OrganizedJihad] Tracked Guild War participation for ${Object.keys(participants).length} members`);
+		} catch (error) {
+			console.error('[OrganizedJihad] Error tracking guild war participation:', error);
+		}
+	}
+
+	/**
+	 * Track Guild Raid (Boss Raid) participation for all members
+	 * Captures boss/minion damage, titanite earned, attack counts
+	 *
+	 * Reference: https://hw-mobile.fandom.com/wiki/Guild_Raid
+	 *
+	 * @param {Object} data - Response from bossRaidGetInfo API
+	 * @private
+	 */
+	async trackGuildRaidParticipation(data) {
+		try {
+			if (!data.raid || !data.raid.participants) {
+				console.warn('[OrganizedJihad] No guild raid participation data found');
+				return;
+			}
+
+			const raidId = data.raid.id || data.raid.raidId || String(Date.now());
+			const raidDate = new Date(data.raid.startTime || data.raid.date || Date.now());
+			const guildId = data.clan?.id || await this.getStoredGuildId();
+			const bossName = data.raid.bossName || data.raid.bossType || 'unknown';
+			const bossLevel = data.raid.bossLevel || data.raid.difficulty || 0;
+			const participants = data.raid.participants || {};
+
+			// Track each member's raid performance
+			for (const [memberId, participantInfo] of Object.entries(participants)) {
+				// Calculate total damage (boss + minions)
+				const bossDamage = participantInfo.bossDamage || 0;
+				const minionDamage = participantInfo.minionDamage || participantInfo.supportDamage || 0;
+				const totalDamage = bossDamage + minionDamage;
+
+				const participation = {
+					raidId: raidId,
+					raidDate: raidDate,
+					playerId: parseInt(memberId),
+					playerName: participantInfo.name || 'Unknown',
+					guildId: guildId,
+					bossName: bossName,
+					bossLevel: bossLevel,
+					bossDamage: bossDamage,
+					minionDamage: minionDamage,
+					totalDamage: totalDamage,
+					attacksMade: participantInfo.attacks || participantInfo.attackCount || 0,
+					maxAttacks: participantInfo.maxAttacks || data.raid.maxAttacks || 3,
+					participated: totalDamage > 0,
+					titaniteEarned: participantInfo.titaniteEarned || participantInfo.reward?.titanite || 0,
+					guildRank: data.raid.guildRank || null,
+					attackDetails: participantInfo.attackLog ? JSON.stringify(participantInfo.attackLog) : null,
+				};
+
+				await this.storage.add('guildRaidParticipations', participation);
+
+				// Track titanite earnings as transaction
+				if (participation.titaniteEarned > 0) {
+					await this.trackTitaniteTransaction(
+						participation.playerId,
+						participation.playerName,
+						guildId,
+						'earned',
+						participation.titaniteEarned,
+						'raid',
+						`${bossName} Level ${bossLevel}`
+					);
+				}
+			}
+
+			console.log(`[OrganizedJihad] Tracked Guild Raid participation for ${Object.keys(participants).length} members`);
+		} catch (error) {
+			console.error('[OrganizedJihad] Error tracking guild raid participation:', error);
+		}
+	}
+
+	/**
+	 * Track Guild Dungeon (Titan Dungeon) participation
+	 * Captures titan charges used, damage dealt, stages completed
+	 *
+	 * @param {Object} data - Response from dungeonGetState/titanDungeonGetInfo API
+	 * @private
+	 */
+	async trackGuildDungeonParticipation(data) {
+		try {
+			if (!data.dungeon || !data.dungeon.participants) {
+				console.warn('[OrganizedJihad] No guild dungeon participation data found');
+				return;
+			}
+
+			const dungeonId = data.dungeon.id || data.dungeon.dungeonId || String(Date.now());
+			const dungeonDate = new Date(data.dungeon.startTime || data.dungeon.date || Date.now());
+			const guildId = data.clan?.id || await this.getStoredGuildId();
+			const dungeonType = data.dungeon.type || data.dungeon.dungeonType || 'unknown';
+			const participants = data.dungeon.participants || {};
+
+			// Track each member's dungeon progress
+			for (const [memberId, participantInfo] of Object.entries(participants)) {
+				const participation = {
+					dungeonId: dungeonId,
+					dungeonDate: dungeonDate,
+					playerId: parseInt(memberId),
+					playerName: participantInfo.name || 'Unknown',
+					guildId: guildId,
+					dungeonType: dungeonType,
+					titanChargesUsed: participantInfo.chargesUsed || participantInfo.titanCharges || 0,
+					maxTitanCharges: participantInfo.maxCharges || data.dungeon.maxCharges || 6,
+					battlesFought: participantInfo.battles || participantInfo.battleCount || 0,
+					totalDamage: participantInfo.damage || participantInfo.totalDamage || 0,
+					highestStage: participantInfo.stage || participantInfo.maxStage || 0,
+					participated: (participantInfo.chargesUsed || 0) > 0,
+					titaniteEarned: participantInfo.titaniteEarned || participantInfo.reward?.titanite || 0,
+					titanTeam: participantInfo.titanTeam ? JSON.stringify(participantInfo.titanTeam) : null,
+				};
+
+				await this.storage.add('guildDungeonParticipations', participation);
+
+				// Track titanite earnings as transaction
+				if (participation.titaniteEarned > 0) {
+					await this.trackTitaniteTransaction(
+						participation.playerId,
+						participation.playerName,
+						guildId,
+						'earned',
+						participation.titaniteEarned,
+						'dungeon',
+						`${dungeonType} Stage ${participation.highestStage}`
+					);
+				}
+			}
+
+			console.log(`[OrganizedJihad] Tracked Guild Dungeon participation for ${Object.keys(participants).length} members`);
+		} catch (error) {
+			console.error('[OrganizedJihad] Error tracking guild dungeon participation:', error);
+		}
+	}
+
+	/**
+	 * Track titanite transaction (donation, earning, spending)
+	 * Monitors guild currency flow for economic analysis
+	 *
+	 * @param {number} playerId - Player ID
+	 * @param {string} playerName - Player name
+	 * @param {number} guildId - Guild ID
+	 * @param {string} transactionType - "donation", "earned", "spent"
+	 * @param {number} amount - Amount (positive for gain, negative for spending)
+	 * @param {string} source - Source/reason for transaction
+	 * @param {string} description - Optional purchase/activity description
+	 * @private
+	 */
+	async trackTitaniteTransaction(playerId, playerName, guildId, transactionType, amount, source, description = null) {
+		try {
+			const transaction = {
+				timestamp: new Date(),
+				playerId: playerId,
+				playerName: playerName,
+				guildId: guildId,
+				transactionType: transactionType,
+				amount: amount,
+				source: source,
+				purchaseDescription: description,
+				balanceAfter: null, // Could be calculated if we track running balance
+			};
+
+			await this.storage.add('titaniteTransactions', transaction);
+
+			console.log(`[OrganizedJihad] Tracked titanite ${transactionType}: ${amount} from ${source}`);
+		} catch (error) {
+			console.error('[OrganizedJihad] Error tracking titanite transaction:', error);
+		}
+	}
+
+	/**
+	 * Helper: Get stored guild ID from storage
+	 * @returns {Promise<number>} Guild ID
+	 * @private
+	 */
+	async getStoredGuildId() {
+		const guildData = await storageManager.get('guildData', {});
+		return guildData.id || 0;
 	}
 
 	/**

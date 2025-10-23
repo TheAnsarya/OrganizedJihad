@@ -29,7 +29,7 @@
 class IndexedDBStorage {
 	constructor() {
 		this.dbName = 'OrganizedJihad';
-		this.version = 3; // Incremented for new store: chatMessages
+		this.version = 4; // Incremented for new stores: guild member tracking
 		this.db = null;
 		this.initPromise = this.init();
 	}
@@ -199,6 +199,66 @@ class IndexedDBStorage {
 					chatStore.createIndex('senderId', 'senderId', { unique: false });
 					chatStore.createIndex('isOutgoing', 'isOutgoing', { unique: false });
 					chatStore.createIndex('serverMessageId', 'serverMessageId', { unique: false });
+				}
+
+				// Guild member roster tracking
+				// Reference: https://hw-mobile.fandom.com/wiki/Guild
+				if (!db.objectStoreNames.contains('guildMembers')) {
+					const memberStore = db.createObjectStore('guildMembers', { keyPath: 'playerId' });
+					memberStore.createIndex('guildId', 'guildId', { unique: false });
+					memberStore.createIndex('playerName', 'playerName', { unique: false });
+					memberStore.createIndex('isActive', 'isActive', { unique: false });
+					memberStore.createIndex('lastOnline', 'lastOnline', { unique: false });
+					memberStore.createIndex('guildRank', 'guildRank', { unique: false });
+				}
+
+				// Guild member historical snapshots
+				if (!db.objectStoreNames.contains('guildMemberSnapshots')) {
+					const snapshotStore = db.createObjectStore('guildMemberSnapshots', { keyPath: 'id', autoIncrement: true });
+					snapshotStore.createIndex('timestamp', 'timestamp', { unique: false });
+					snapshotStore.createIndex('playerId', 'playerId', { unique: false });
+					snapshotStore.createIndex('guildId', 'guildId', { unique: false });
+				}
+
+				// Guild War participation per member
+				if (!db.objectStoreNames.contains('guildWarParticipations')) {
+					const warStore = db.createObjectStore('guildWarParticipations', { keyPath: 'id', autoIncrement: true });
+					warStore.createIndex('warId', 'warId', { unique: false });
+					warStore.createIndex('warDate', 'warDate', { unique: false });
+					warStore.createIndex('playerId', 'playerId', { unique: false });
+					warStore.createIndex('guildId', 'guildId', { unique: false });
+					warStore.createIndex('participated', 'participated', { unique: false });
+				}
+
+				// Guild Raid participation per member
+				if (!db.objectStoreNames.contains('guildRaidParticipations')) {
+					const raidStore = db.createObjectStore('guildRaidParticipations', { keyPath: 'id', autoIncrement: true });
+					raidStore.createIndex('raidId', 'raidId', { unique: false });
+					raidStore.createIndex('raidDate', 'raidDate', { unique: false });
+					raidStore.createIndex('playerId', 'playerId', { unique: false });
+					raidStore.createIndex('guildId', 'guildId', { unique: false });
+					raidStore.createIndex('bossName', 'bossName', { unique: false });
+					raidStore.createIndex('participated', 'participated', { unique: false });
+				}
+
+				// Guild Dungeon participation per member
+				if (!db.objectStoreNames.contains('guildDungeonParticipations')) {
+					const dungeonStore = db.createObjectStore('guildDungeonParticipations', { keyPath: 'id', autoIncrement: true });
+					dungeonStore.createIndex('dungeonId', 'dungeonId', { unique: false });
+					dungeonStore.createIndex('dungeonDate', 'dungeonDate', { unique: false });
+					dungeonStore.createIndex('playerId', 'playerId', { unique: false });
+					dungeonStore.createIndex('guildId', 'guildId', { unique: false });
+					dungeonStore.createIndex('participated', 'participated', { unique: false });
+				}
+
+				// Titanite transactions (donations, earnings, spending)
+				if (!db.objectStoreNames.contains('titaniteTransactions')) {
+					const titaniteStore = db.createObjectStore('titaniteTransactions', { keyPath: 'id', autoIncrement: true });
+					titaniteStore.createIndex('timestamp', 'timestamp', { unique: false });
+					titaniteStore.createIndex('playerId', 'playerId', { unique: false });
+					titaniteStore.createIndex('guildId', 'guildId', { unique: false });
+					titaniteStore.createIndex('transactionType', 'transactionType', { unique: false });
+					titaniteStore.createIndex('source', 'source', { unique: false });
 				}
 			};
 		});

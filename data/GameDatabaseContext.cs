@@ -169,6 +169,46 @@ public class GameDatabaseContext : DbContext {
 	/// </summary>
 	public DbSet<ChatActivitySummary> ChatActivitySummaries { get; set; }
 
+	// === Guild Member Tracking ===
+
+	/// <summary>
+	/// Guild member roster with current statistics
+	/// Mutable data tracking fellow guild members
+	/// Reference: https://hw-mobile.fandom.com/wiki/Guild
+	/// </summary>
+	public DbSet<GuildMember> GuildMembers { get; set; }
+
+	/// <summary>
+	/// Historical snapshots of guild member statistics
+	/// Immutable data for tracking member progression over time
+	/// </summary>
+	public DbSet<GuildMemberSnapshot> GuildMemberSnapshots { get; set; }
+
+	/// <summary>
+	/// Guild War participation records per member
+	/// Immutable data tracking attacks, damage, and participation
+	/// </summary>
+	public DbSet<GuildWarParticipation> GuildWarParticipations { get; set; }
+
+	/// <summary>
+	/// Guild Raid (Boss Raid) participation per member
+	/// Immutable data tracking boss/minion damage and titanite earned
+	/// Reference: https://hw-mobile.fandom.com/wiki/Guild_Raid
+	/// </summary>
+	public DbSet<GuildRaidParticipation> GuildRaidParticipations { get; set; }
+
+	/// <summary>
+	/// Guild Dungeon participation per member
+	/// Immutable data tracking titan charges used and stage progression
+	/// </summary>
+	public DbSet<GuildDungeonParticipation> GuildDungeonParticipations { get; set; }
+
+	/// <summary>
+	/// Titanite transaction history (donations, earnings, spending)
+	/// Immutable data for guild currency flow analysis
+	/// </summary>
+	public DbSet<TitaniteTransaction> TitaniteTransactions { get; set; }
+
 	public GameDatabaseContext(DbContextOptions<GameDatabaseContext> options)
 		: base(options) {
 	}
