@@ -590,6 +590,148 @@ scss_space_before_important = true
 # Require space after @debug
 # scss_space_after_debug = true
 
+#### .NET MAUI / Blazor Hybrid Specific Files ####
+
+# Razor files (.razor, .cshtml)
+# https://docs.microsoft.com/en-us/aspnet/core/blazor/
+# https://docs.microsoft.com/en-us/aspnet/core/mvc/views/razor
+[*.{razor,cshtml}]
+charset = utf-8
+indent_size = 4
+indent_style = tab
+tab_width = 4
+end_of_line = crlf
+trim_trailing_whitespace = true
+insert_final_newline = true
+max_line_length = 120
+
+# XAML files (MAUI/WPF/UWP)
+# https://docs.microsoft.com/en-us/dotnet/desktop/wpf/xaml/
+# https://docs.microsoft.com/en-us/dotnet/maui/xaml/
+[*.xaml]
+charset = utf-8
+indent_size = 4
+indent_style = tab
+tab_width = 4
+end_of_line = crlf
+trim_trailing_whitespace = true
+insert_final_newline = true
+max_line_length = 120
+
+# .NET MAUI Project files
+# https://docs.microsoft.com/en-us/dotnet/maui/
+[*.csproj]
+charset = utf-8
+indent_size = 2
+indent_style = space
+end_of_line = crlf
+trim_trailing_whitespace = true
+insert_final_newline = true
+
+# .NET Solution files
+[*.sln]
+charset = utf-8
+indent_style = tab
+tab_width = 4
+end_of_line = crlf
+trim_trailing_whitespace = true
+insert_final_newline = true
+
+# .NET Configuration files (appsettings.json, launchSettings.json)
+# https://docs.microsoft.com/en-us/aspnet/core/fundamentals/configuration/
+[appsettings*.json]
+charset = utf-8
+indent_size = 2
+indent_style = tab
+tab_width = 4
+end_of_line = crlf
+trim_trailing_whitespace = true
+insert_final_newline = true
+
+[launchSettings.json]
+charset = utf-8
+indent_size = 2
+indent_style = tab
+tab_width = 4
+end_of_line = crlf
+trim_trailing_whitespace = true
+insert_final_newline = true
+
+# .NET Manifest files
+[*.manifest]
+charset = utf-8
+indent_size = 4
+indent_style = tab
+tab_width = 4
+end_of_line = crlf
+trim_trailing_whitespace = true
+insert_final_newline = true
+
+# Android-specific files (for MAUI)
+# https://docs.microsoft.com/en-us/dotnet/maui/android/
+[*.{axml,xml}]
+charset = utf-8
+indent_size = 4
+indent_style = tab
+tab_width = 4
+end_of_line = crlf
+trim_trailing_whitespace = true
+insert_final_newline = true
+
+# iOS-specific files (for MAUI)
+# https://docs.microsoft.com/en-us/dotnet/maui/ios/
+[*.{plist,storyboard,xib}]
+charset = utf-8
+indent_size = 4
+indent_style = tab
+tab_width = 4
+end_of_line = crlf
+trim_trailing_whitespace = true
+insert_final_newline = true
+
+# Resource files
+# https://docs.microsoft.com/en-us/dotnet/core/extensions/resources
+[*.{resx,resw}]
+charset = utf-8
+indent_size = 2
+indent_style = space
+end_of_line = crlf
+trim_trailing_whitespace = true
+insert_final_newline = true
+
+# PowerShell files
+# https://docs.microsoft.com/en-us/powershell/scripting/overview
+[*.{ps1,psm1,psd1}]
+charset = utf-8
+indent_size = 4
+indent_style = tab
+tab_width = 4
+end_of_line = crlf
+trim_trailing_whitespace = true
+insert_final_newline = true
+max_line_length = 120
+
+# Shell scripts
+[*.sh]
+charset = utf-8
+indent_size = 4
+indent_style = tab
+tab_width = 4
+end_of_line = lf
+trim_trailing_whitespace = true
+insert_final_newline = true
+max_line_length = 120
+
+# Batch files
+[*.{bat,cmd}]
+charset = utf-8
+indent_size = 4
+indent_style = tab
+tab_width = 4
+end_of_line = crlf
+trim_trailing_whitespace = true
+insert_final_newline = true
+
 [BaseDatabase/Migrations/**]
 generated_code = true
 dotnet_diagnostic.IDE0000.severity = none
