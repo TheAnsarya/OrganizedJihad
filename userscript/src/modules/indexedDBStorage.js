@@ -11,12 +11,25 @@
  * - goals: User-defined goals
  * - events: Calendar events
  * - metadata: Sync timestamps and other metadata
+ * 
+ * NEW in v2 (Phase 7 - Comprehensive Tracking):
+ * - heroes: Historical snapshots of hero roster (19 properties per hero)
+ * - titans: Historical snapshots of titan roster (12 properties per titan)
+ * - pets: Historical snapshots of pet collection (8 properties per pet)
+ * - inventory: Complete inventory snapshots with denormalized counts
+ * - questCompletions: Daily/weekly/event quest tracking
+ * - missionProgress: Campaign progression (mutable)
+ * - shopPurchases: Shop transaction history
+ * - towerProgress: Tower climbing progress (mutable)
+ * - expeditionBattles: PvE boss fight records
+ * - resourceTransactions: Economic activity tracking
+ * - guildActivities: Guild participation records
  */
 
 class IndexedDBStorage {
 	constructor() {
 		this.dbName = 'OrganizedJihad';
-		this.version = 1;
+		this.version = 2; // Incremented for new stores: heroes, titans, pets, inventory, activities
 		this.db = null;
 		this.initPromise = this.init();
 	}
@@ -79,6 +92,95 @@ class IndexedDBStorage {
 
 				if (!db.objectStoreNames.contains('metadata')) {
 					db.createObjectStore('metadata', { keyPath: 'key' });
+				}
+
+				// Heroes: Historical snapshots of hero roster
+				if (!db.objectStoreNames.contains('heroes')) {
+					const heroStore = db.createObjectStore('heroes', { keyPath: 'id', autoIncrement: true });
+					heroStore.createIndex('heroId', 'heroId', { unique: false });
+					heroStore.createIndex('playerId', 'playerId', { unique: false });
+					heroStore.createIndex('timestamp', 'timestamp', { unique: false });
+					heroStore.createIndex('heroName', 'heroName', { unique: false });
+				}
+
+				// Titans: Historical snapshots of titan roster
+				if (!db.objectStoreNames.contains('titans')) {
+					const titanStore = db.createObjectStore('titans', { keyPath: 'id', autoIncrement: true });
+					titanStore.createIndex('titanId', 'titanId', { unique: false });
+					titanStore.createIndex('playerId', 'playerId', { unique: false });
+					titanStore.createIndex('timestamp', 'timestamp', { unique: false });
+					titanStore.createIndex('titanName', 'titanName', { unique: false });
+				}
+
+				// Pets: Historical snapshots of pet collection
+				if (!db.objectStoreNames.contains('pets')) {
+					const petStore = db.createObjectStore('pets', { keyPath: 'id', autoIncrement: true });
+					petStore.createIndex('petId', 'petId', { unique: false });
+					petStore.createIndex('playerId', 'playerId', { unique: false });
+					petStore.createIndex('timestamp', 'timestamp', { unique: false });
+					petStore.createIndex('petName', 'petName', { unique: false });
+				}
+
+				// Inventory: Historical snapshots of complete inventory
+				if (!db.objectStoreNames.contains('inventory')) {
+					const inventoryStore = db.createObjectStore('inventory', { keyPath: 'id', autoIncrement: true });
+					inventoryStore.createIndex('playerId', 'playerId', { unique: false });
+					inventoryStore.createIndex('timestamp', 'timestamp', { unique: false });
+				}
+
+				// Quest Completions: Daily/weekly quest tracking
+				if (!db.objectStoreNames.contains('questCompletions')) {
+					const questStore = db.createObjectStore('questCompletions', { keyPath: 'id', autoIncrement: true });
+					questStore.createIndex('playerId', 'playerId', { unique: false });
+					questStore.createIndex('completedAt', 'completedAt', { unique: false });
+					questStore.createIndex('questType', 'questType', { unique: false });
+				}
+
+				// Mission Progress: Campaign progression (mutable - updated in place)
+				if (!db.objectStoreNames.contains('missionProgress')) {
+					const missionStore = db.createObjectStore('missionProgress', { keyPath: 'missionId' });
+					missionStore.createIndex('playerId', 'playerId', { unique: false });
+					missionStore.createIndex('isHeroic', 'isHeroic', { unique: false });
+				}
+
+				// Shop Purchases: Shop transaction tracking
+				if (!db.objectStoreNames.contains('shopPurchases')) {
+					const shopStore = db.createObjectStore('shopPurchases', { keyPath: 'id', autoIncrement: true });
+					shopStore.createIndex('playerId', 'playerId', { unique: false });
+					shopStore.createIndex('purchasedAt', 'purchasedAt', { unique: false });
+					shopStore.createIndex('shopType', 'shopType', { unique: false });
+				}
+
+				// Tower Progress: Tower climbing (mutable - updated in place)
+				if (!db.objectStoreNames.contains('towerProgress')) {
+					const towerStore = db.createObjectStore('towerProgress', { keyPath: 'towerType' });
+					towerStore.createIndex('playerId', 'playerId', { unique: false });
+					towerStore.createIndex('lastUpdate', 'lastUpdate', { unique: false });
+				}
+
+				// Expedition Battles: PvE boss fights
+				if (!db.objectStoreNames.contains('expeditionBattles')) {
+					const expeditionStore = db.createObjectStore('expeditionBattles', { keyPath: 'id', autoIncrement: true });
+					expeditionStore.createIndex('playerId', 'playerId', { unique: false });
+					expeditionStore.createIndex('timestamp', 'timestamp', { unique: false });
+					expeditionStore.createIndex('expeditionId', 'expeditionId', { unique: false });
+				}
+
+				// Resource Transactions: Economic tracking
+				if (!db.objectStoreNames.contains('resourceTransactions')) {
+					const resourceStore = db.createObjectStore('resourceTransactions', { keyPath: 'id', autoIncrement: true });
+					resourceStore.createIndex('playerId', 'playerId', { unique: false });
+					resourceStore.createIndex('timestamp', 'timestamp', { unique: false });
+					resourceStore.createIndex('resourceType', 'resourceType', { unique: false });
+				}
+
+				// Guild Activities: Guild participation tracking
+				if (!db.objectStoreNames.contains('guildActivities')) {
+					const guildStore = db.createObjectStore('guildActivities', { keyPath: 'id', autoIncrement: true });
+					guildStore.createIndex('playerId', 'playerId', { unique: false });
+					guildStore.createIndex('timestamp', 'timestamp', { unique: false });
+					guildStore.createIndex('activityType', 'activityType', { unique: false });
+					guildStore.createIndex('guildId', 'guildId', { unique: false });
 				}
 			};
 		});

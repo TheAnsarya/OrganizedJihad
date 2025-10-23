@@ -240,7 +240,13 @@ class GameTracker {
 
 					// Battle systems
 					case 'missionEnd':
+						await this.trackMissionProgress(args, responseData);
+						await this.trackBattleResult(callName, args, responseData); // Still track as battle
+						break;
 					case 'towerEnd':
+						await this.trackTowerProgress(args, responseData);
+						await this.trackBattleResult(callName, args, responseData); // Still track as battle
+						break;
 					case 'bossEnd':
 						await this.trackBattleResult(callName, args, responseData);
 						break;
@@ -366,44 +372,184 @@ class GameTracker {
 
 	/**
 	 * Track heroes from heroGetAll API call
-	 * Store in metadata for reference
+	 * Stores complete hero snapshots in IndexedDB (matches C# Hero entity)
+	 * 
+	 * Entity Structure (19 properties):
+	 * - Identity: HeroId, HeroName
+	 * - Stats: Level, Stars, Color (rank), Power, Skins
+	 * - Skills: SkillLevel1-4 (individual levels)
+	 * - Artifacts: ArtifactWeapon, ArtifactBook, ArtifactRing (individual star levels)
+	 * - Advanced: GlyphData (JSON)
+	 * - Tracking: PlayerId, Timestamp
 	 *
 	 * @param {Object} data - Response from heroGetAll (object with hero IDs as keys)
 	 * @private
 	 */
 	async trackHeroesData(data) {
+		const playerId = await this.storage.getMetadata('currentPlayerId') || 'unknown';
+		const timestamp = new Date().toISOString();
+
 		const heroes = Object.values(data).map((hero) => ({
-			id: hero.id,
+			heroId: hero.id,
+			heroName: hero.name || `Hero_${hero.id}`,
 			level: hero.level || 0,
 			stars: hero.star || 0,
-			color: hero.color || 0, // Rank/promotion
+			color: hero.color || 0, // Rank/promotion (0=gray, 1=green, 2=blue, 3=blue+1, 4=blue+2, 5=violet, 6=violet+1, etc.)
 			power: hero.power || 0,
-			xp: hero.xp || 0,
-			skills: hero.skills || {},
-			artifacts: hero.artifacts || [],
+			skins: hero.skins || 0, // Total skins unlocked
+			// Individual skill levels (Hero Wars has 4 skills per hero)
+			skillLevel1: hero.skills?.skill1?.level || hero.skills?.[0]?.level || 0,
+			skillLevel2: hero.skills?.skill2?.level || hero.skills?.[1]?.level || 0,
+			skillLevel3: hero.skills?.skill3?.level || hero.skills?.[2]?.level || 0,
+			skillLevel4: hero.skills?.skill4?.level || hero.skills?.[3]?.level || 0,
+			// Individual artifact star levels (0-6 stars each)
+			artifactWeapon: hero.artifacts?.[0]?.star || hero.artifacts?.[0]?.level || 0,
+			artifactBook: hero.artifacts?.[1]?.star || hero.artifacts?.[1]?.level || 0,
+			artifactRing: hero.artifacts?.[2]?.star || hero.artifacts?.[2]?.level || 0,
+			// Glyph data (complex nested structure - store as JSON)
+			glyphData: JSON.stringify(hero.glyphs || {}),
+			playerId: playerId,
+			timestamp: timestamp,
 		}));
 
-		await this.storage.setMetadata('heroesData', heroes);
-		console.log(`[OrganizedJihad] Heroes updated: ${heroes.length} heroes tracked`);
+		// Store each hero snapshot in IndexedDB heroes store
+		for (const hero of heroes) {
+			await this.storage.add('heroes', hero);
+		}
+
+		console.log(`[OrganizedJihad] Heroes tracked: ${heroes.length} heroes stored as snapshots`);
 	}
 
 	/**
 	 * Track inventory from inventoryGet API call
-	 * Store in metadata for reference
+	 * Stores complete inventory snapshot in IndexedDB (matches C# InventorySnapshot entity)
+	 * 
+	 * Entity Structure (9 properties):
+	 * - InventoryData: Complete JSON structure
+	 * - Denormalized counts: TotalHeroSoulStones, TotalTitanSoulStones, TotalPetSoulStones,
+	 *   TotalEvolutionItems, TotalConsumables, TotalChests
+	 * - Tracking: PlayerId, Timestamp
 	 *
 	 * @param {Object} data - Response from inventoryGet
 	 * @private
 	 */
 	async trackInventoryData(data) {
-		const inventory = {
-			consumable: data.consumable || {}, // Items like potions, chests
-			gear: data.gear || {}, // Equipment
-			fragmentHero: data.fragmentHero || {}, // Soul stones
-			coin: data.coin || {}, // Various currency types
-			lastUpdate: new Date().toISOString(),
+		const playerId = await this.storage.getMetadata('currentPlayerId') || 'unknown';
+		const timestamp = new Date().toISOString();
+
+		// Calculate denormalized totals for performance
+		const fragmentHero = data.fragmentHero || {};
+		const fragmentTitan = data.fragmentTitan || {};
+		const fragmentPet = data.fragmentPet || {};
+		const consumable = data.consumable || {};
+		const gear = data.gear || {};
+
+		const totalHeroSoulStones = Object.values(fragmentHero).reduce((sum, count) => sum + (count || 0), 0);
+		const totalTitanSoulStones = Object.values(fragmentTitan).reduce((sum, count) => sum + (count || 0), 0);
+		const totalPetSoulStones = Object.values(fragmentPet).reduce((sum, count) => sum + (count || 0), 0);
+		const totalEvolutionItems = Object.values(gear).reduce((sum, count) => sum + (count || 0), 0);
+		const totalConsumables = Object.values(consumable).reduce((sum, count) => sum + (count || 0), 0);
+
+		// Count chests (usually in consumable with specific IDs)
+		const chestIds = Object.keys(consumable).filter((key) => key.includes('chest') || key.includes('box'));
+		const totalChests = chestIds.reduce((sum, id) => sum + (consumable[id] || 0), 0);
+
+		const inventorySnapshot = {
+			inventoryData: JSON.stringify(data), // Store complete raw data
+			totalHeroSoulStones,
+			totalTitanSoulStones,
+			totalPetSoulStones,
+			totalEvolutionItems,
+			totalConsumables,
+			totalChests,
+			playerId: playerId,
+			timestamp: timestamp,
 		};
 
-		await this.storage.setMetadata('inventoryData', inventory);
+		// Store snapshot in IndexedDB inventory store
+		await this.storage.add('inventory', inventorySnapshot);
+
+		console.log(
+			`[OrganizedJihad] Inventory tracked: ${totalHeroSoulStones} hero souls, ${totalTitanSoulStones} titan souls, ${totalPetSoulStones} pet souls, ${totalConsumables} consumables`
+		);
+	}
+
+	/**
+	 * Track titans from titanGetAll API call
+	 * Stores complete titan snapshots in IndexedDB (matches C# Titan entity)
+	 * 
+	 * Entity Structure (12 properties):
+	 * - Identity: TitanId, TitanName
+	 * - Stats: Level, Stars, Power, Element (fire/water/earth), SkinLevel
+	 * - Skills: SkillLevel (single main skill)
+	 * - Artifacts: ArtifactData (JSON - titans have different artifact system)
+	 * - Special: SummonStars
+	 * - Tracking: PlayerId, Timestamp
+	 *
+	 * @param {Object} data - Response from titanGetAll (object with titan IDs as keys)
+	 * @private
+	 */
+	async trackTitansData(data) {
+		const playerId = await this.storage.getMetadata('currentPlayerId') || 'unknown';
+		const timestamp = new Date().toISOString();
+
+		const titans = Object.values(data).map((titan) => ({
+			titanId: titan.id,
+			titanName: titan.name || `Titan_${titan.id}`,
+			level: titan.level || 0,
+			stars: titan.star || 0,
+			power: titan.power || 0,
+			skillLevel: titan.skill?.level || titan.skillLevel || 0, // Titans have one main skill
+			artifactData: JSON.stringify(titan.artifacts || {}), // Titan artifacts are different from heroes
+			summonStars: titan.summonStars || 0, // Special titan mechanic
+			element: titan.element || titan.type || 'unknown', // fire, water, earth
+			skinLevel: titan.skinLevel || 0,
+			playerId: playerId,
+			timestamp: timestamp,
+		}));
+
+		// Store each titan snapshot in IndexedDB titans store
+		for (const titan of titans) {
+			await this.storage.add('titans', titan);
+		}
+
+		console.log(`[OrganizedJihad] Titans tracked: ${titans.length} titans stored as snapshots`);
+	}
+
+	/**
+	 * Track pets from petGetAll API call
+	 * Stores complete pet snapshots in IndexedDB (matches C# Pet entity)
+	 * 
+	 * Entity Structure (8 properties):
+	 * - Identity: PetId, PetName
+	 * - Stats: Stars, Power, Level
+	 * - Special: PatronageData (JSON - which heroes the pet supports)
+	 * - Tracking: PlayerId, Timestamp
+	 *
+	 * @param {Object} data - Response from petGetAll (object with pet IDs as keys)
+	 * @private
+	 */
+	async trackPetsData(data) {
+		const playerId = await this.storage.getMetadata('currentPlayerId') || 'unknown';
+		const timestamp = new Date().toISOString();
+
+		const pets = Object.values(data).map((pet) => ({
+			petId: pet.id,
+			petName: pet.name || `Pet_${pet.id}`,
+			stars: pet.star || 0,
+			power: pet.power || 0,
+			level: pet.level || 0,
+			patronageData: JSON.stringify(pet.patronage || {}), // Which heroes this pet supports
+			playerId: playerId,
+			timestamp: timestamp,
+		}));
+
+		// Store each pet snapshot in IndexedDB pets store
+		for (const pet of pets) {
+			await this.storage.add('pets', pet);
+		}
+
+		console.log(`[OrganizedJihad] Pets tracked: ${pets.length} pets stored as snapshots`);
 	}
 
 	/**
@@ -792,47 +938,50 @@ class GameTracker {
 	 * @private
 	 */
 	async trackShopPurchase(args, data) {
-		const purchaseRecord = {
-			shopId: args.shopId,
-			slotId: args.slotId,
-			itemId: args.itemId,
-			cost: args.cost || {},
-			reward: data.reward || {},
-			timestamp: Date.now(),
+		const playerId = await this.storage.getMetadata('currentPlayerId') || 'unknown';
+		const purchasedAt = new Date().toISOString();
+
+		const purchase = {
+			purchasedAt: purchasedAt,
+			shopType: args.shopType || args.shopId || 'unknown', // arena, guild, tower, merchant, etc.
+			itemId: args.itemId || 'unknown',
+			itemName: data.itemName || args.itemName || `Item_${args.itemId}`,
+			quantity: args.quantity || args.count || 1,
+			costType: args.costType || Object.keys(args.cost || {})[0] || 'unknown', // gold, emeralds, trophies, etc.
+			costAmount: args.costAmount || Object.values(args.cost || {})[0] || 0,
+			playerId: playerId,
 		};
 
-		const purchaseHistory = await storageManager.get('shopPurchaseHistory', []);
-		purchaseHistory.push(purchaseRecord);
-
-		if (purchaseHistory.length > 500) {
-			purchaseHistory.shift();
-		}
-
-		await storageManager.set('shopPurchaseHistory', purchaseHistory);
+		await this.storage.add('shopPurchases', purchase);
+		console.log(`[OrganizedJihad] Shop purchase tracked: ${purchase.itemName} from ${purchase.shopType}`);
 	}
 
 	/**
 	 * Track quest completions
+	 * Stores quest completion records in IndexedDB (matches C# QuestCompletion entity)
+	 * 
+	 * Entity Structure (7 properties):
+	 * - CompletedAt, QuestType (daily/weekly/event), QuestId, QuestName, RewardData (JSON), PlayerId
 	 *
 	 * @param {Object} args - Quest completion arguments
 	 * @param {Object} data - Quest reward data
 	 * @private
 	 */
 	async trackQuestComplete(args, data) {
-		const questRecord = {
-			questId: args.questId,
-			reward: data.reward || {},
-			timestamp: Date.now(),
+		const playerId = await this.storage.getMetadata('currentPlayerId') || 'unknown';
+		const completedAt = new Date().toISOString();
+
+		const quest = {
+			completedAt: completedAt,
+			questType: args.questType || 'daily', // daily, weekly, event
+			questId: args.questId || 'unknown',
+			questName: args.questName || data.questName || `Quest_${args.questId}`,
+			rewardData: JSON.stringify(data.reward || data.rewards || {}),
+			playerId: playerId,
 		};
 
-		const questHistory = await storageManager.get('questCompletionHistory', []);
-		questHistory.push(questRecord);
-
-		if (questHistory.length > 500) {
-			questHistory.shift();
-		}
-
-		await storageManager.set('questCompletionHistory', questHistory);
+		await this.storage.add('questCompletions', quest);
+		console.log(`[OrganizedJihad] Quest completed: ${quest.questName} (${quest.questType})`);
 	}
 
 	/**
@@ -853,30 +1002,177 @@ class GameTracker {
 	}
 
 	/**
-	 * Track expedition battles
+	 * Track expedition battles (PvE boss fights)
+	 * Stores expedition battle records in IndexedDB (matches C# ExpeditionBattle entity)
+	 * 
+	 * Entity Structure (10 properties):
+	 * - Timestamp, ExpeditionId, BossId, BossName, IsWin, TeamComposition (JSON),
+	 *   DamageDealt, RewardData (JSON), PlayerId
 	 *
 	 * @param {Object} args - Battle arguments
 	 * @param {Object} data - Battle result data
 	 * @private
 	 */
 	async trackExpeditionBattle(args, data) {
-		const battleRecord = {
-			nodeId: args.nodeId,
-			result: data.result?.win ? 'victory' : 'defeat',
-			myTeam: data.attackers ? this.compressHeroTeam(data.attackers) : null,
-			enemyTeam: data.defenders ? this.compressHeroTeam(data.defenders) : null,
-			reward: data.reward || {},
-			timestamp: Date.now(),
+		const playerId = await this.storage.getMetadata('currentPlayerId') || 'unknown';
+		const timestamp = new Date().toISOString();
+
+		const battle = {
+			timestamp: timestamp,
+			expeditionId: args.expeditionId || args.nodeId || 'unknown',
+			bossId: args.bossId || data.bossId || 'unknown',
+			bossName: data.bossName || `Boss_${args.bossId}`,
+			isWin: data.result?.win || data.win || false,
+			teamComposition: JSON.stringify(data.attackers || data.myTeam || {}),
+			damageDealt: data.damageDealt || data.damage || 0,
+			rewardData: JSON.stringify(data.reward || data.rewards || {}),
+			playerId: playerId,
 		};
 
-		const expeditionHistory = await storageManager.get('expeditionBattleHistory', []);
-		expeditionHistory.push(battleRecord);
+		await this.storage.add('expeditionBattles', battle);
+		console.log(`[OrganizedJihad] Expedition battle tracked: ${battle.bossName} - ${battle.isWin ? 'Win' : 'Loss'}`);
+	}
 
-		if (expeditionHistory.length > 200) {
-			expeditionHistory.shift();
+	/**
+	 * Track mission progress from missionEnd API call
+	 * Stores/updates mission progress in IndexedDB (matches C# MissionProgress entity - MUTABLE)
+	 * 
+	 * Entity Structure (9 properties):
+	 * - MissionId (key), MissionName, Stars (0-3), HighestLevel, IsHeroic,
+	 *   LastCompleted, CompletionCount, PlayerId
+	 *
+	 * @param {Object} args - Mission arguments
+	 * @param {Object} data - Mission result data
+	 * @private
+	 */
+	async trackMissionProgress(args, data) {
+		const playerId = await this.storage.getMetadata('currentPlayerId') || 'unknown';
+		const missionId = `${args.missionId || args.id}_${args.isHeroic ? 'heroic' : 'normal'}`;
+
+		// Try to get existing progress
+		let existing = null;
+		try {
+			existing = await this.storage.get('missionProgress', missionId);
+		} catch (e) {
+			// Doesn't exist yet
 		}
 
-		await storageManager.set('expeditionBattleHistory', expeditionHistory);
+		const newStars = data.stars || 0;
+		const currentStars = existing?.stars || 0;
+
+		const progress = {
+			missionId: missionId,
+			missionName: args.missionName || data.missionName || `Mission_${args.missionId}`,
+			stars: Math.max(newStars, currentStars), // Keep highest stars
+			highestLevel: args.level || existing?.highestLevel || 1,
+			isHeroic: args.isHeroic || false,
+			lastCompleted: new Date().toISOString(),
+			completionCount: (existing?.completionCount || 0) + 1,
+			playerId: playerId,
+		};
+
+		await this.storage.put('missionProgress', progress);
+		console.log(`[OrganizedJihad] Mission progress updated: ${progress.missionName} - ${progress.stars} stars`);
+	}
+
+	/**
+	 * Track tower progress from towerEnd or tower state API calls
+	 * Stores/updates tower progress in IndexedDB (matches C# TowerProgress entity - MUTABLE)
+	 * 
+	 * Entity Structure (6 properties):
+	 * - TowerType (key), HighestFloor, LastUpdate, FloorData (JSON), PlayerId
+	 *
+	 * @param {Object} args - Tower arguments
+	 * @param {Object} data - Tower result data
+	 * @private
+	 */
+	async trackTowerProgress(args, data) {
+		const playerId = await this.storage.getMetadata('currentPlayerId') || 'unknown';
+		const towerType = args.towerType || args.type || 'regular'; // regular, outland, guild
+
+		// Try to get existing progress
+		let existing = null;
+		try {
+			existing = await this.storage.get('towerProgress', towerType);
+		} catch (e) {
+			// Doesn't exist yet
+		}
+
+		const newFloor = data.floor || args.floor || 1;
+		const currentFloor = existing?.highestFloor || 0;
+
+		const progress = {
+			towerType: towerType,
+			highestFloor: Math.max(newFloor, currentFloor), // Keep highest floor reached
+			lastUpdate: new Date().toISOString(),
+			floorData: JSON.stringify(data.floorDetails || {}),
+			playerId: playerId,
+		};
+
+		await this.storage.put('towerProgress', progress);
+		console.log(`[OrganizedJihad] Tower progress updated: ${progress.towerType} - floor ${progress.highestFloor}`);
+	}
+
+	/**
+	 * Track resource transactions (gold, emeralds, tokens, etc.)
+	 * Stores resource change events in IndexedDB (matches C# ResourceTransaction entity)
+	 * 
+	 * Entity Structure (7 properties):
+	 * - Timestamp, ResourceType (gold/emeralds/tokens), Amount (+ gain, - loss),
+	 *   Source (battle/shop/quest/chest), SourceDetail, PlayerId
+	 *
+	 * @param {string} resourceType - Type of resource changed
+	 * @param {number} amount - Amount changed (positive = gain, negative = loss)
+	 * @param {string} source - Source of change (battle/shop/quest/chest)
+	 * @param {string} sourceDetail - Detailed source info
+	 * @private
+	 */
+	async trackResourceTransaction(resourceType, amount, source, sourceDetail = '') {
+		const playerId = await this.storage.getMetadata('currentPlayerId') || 'unknown';
+		const timestamp = new Date().toISOString();
+
+		const transaction = {
+			timestamp: timestamp,
+			resourceType: resourceType, // gold, emeralds, arena_coins, guild_war_coins, titan_potion, etc.
+			amount: amount, // Positive for gains, negative for spending
+			source: source, // battle, shop, quest, chest, levelup, etc.
+			sourceDetail: sourceDetail, // Additional context
+			playerId: playerId,
+		};
+
+		await this.storage.add('resourceTransactions', transaction);
+		console.log(
+			`[OrganizedJihad] Resource transaction: ${amount > 0 ? '+' : ''}${amount} ${resourceType} from ${source}`
+		);
+	}
+
+	/**
+	 * Track guild activities (donations, raids, wars, etc.)
+	 * Stores guild activity records in IndexedDB (matches C# GuildActivity entity)
+	 * 
+	 * Entity Structure (7 properties):
+	 * - Timestamp, GuildId, GuildName, ActivityType (join/leave/donation/raid/war),
+	 *   ActivityData (JSON), PlayerId
+	 *
+	 * @param {string} activityType - Type of guild activity
+	 * @param {Object} data - Activity data
+	 * @private
+	 */
+	async trackGuildActivity(activityType, data) {
+		const playerId = await this.storage.getMetadata('currentPlayerId') || 'unknown';
+		const timestamp = new Date().toISOString();
+
+		const activity = {
+			timestamp: timestamp,
+			guildId: data.guildId || 'unknown',
+			guildName: data.guildName || `Guild_${data.guildId}`,
+			activityType: activityType, // join, leave, donation, raid, war, chat, etc.
+			activityData: JSON.stringify(data),
+			playerId: playerId,
+		};
+
+		await this.storage.add('guildActivities', activity);
+		console.log(`[OrganizedJihad] Guild activity tracked: ${activity.activityType} in ${activity.guildName}`);
 	}
 
 	/**

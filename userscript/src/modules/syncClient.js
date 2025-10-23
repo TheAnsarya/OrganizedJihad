@@ -127,8 +127,27 @@ class SyncClient {
 				)
 				: null;
 
+			// Get all new entity types added in Phase 7
+			const heroes = await storage.getAll('heroes');
+			const titans = await storage.getAll('titans');
+			const pets = await storage.getAll('pets');
+			const inventorySnapshots = await storage.getAll('inventory');
+			const currentInventory = inventorySnapshots.length > 0
+				? inventorySnapshots.reduce((latest, current) =>
+					new Date(current.timestamp) > new Date(latest.timestamp) ? current : latest
+				)
+				: null;
+			const questCompletions = await storage.getAll('questCompletions');
+			const missionProgress = await storage.getAll('missionProgress');
+			const shopPurchases = await storage.getAll('shopPurchases');
+			const towerProgress = await storage.getAll('towerProgress');
+			const expeditionBattles = await storage.getAll('expeditionBattles');
+			const resourceTransactions = await storage.getAll('resourceTransactions');
+			const guildActivities = await storage.getAll('guildActivities');
+
 			// Build sync payload matching API's BrowserSyncData DTO
 			const syncData = {
+				// Existing entities (Phase 1-6)
 				currentSnapshot,
 				arenaBattles,
 				grandArenaBattles,
@@ -138,7 +157,19 @@ class SyncClient {
 				chestOpenings: chests,
 				opponents,
 				goals,
-				calendarEvents: events
+				calendarEvents: events,
+				// NEW entities (Phase 7 - Comprehensive Tracking)
+				heroes,
+				titans,
+				pets,
+				currentInventory,
+				questCompletions,
+				missionProgress,
+				shopPurchases,
+				towerProgress,
+				expeditionBattles,
+				resourceTransactions,
+				guildActivities
 			};
 
 			console.log('[OrganizedJihad] Sync payload:', {
@@ -151,7 +182,19 @@ class SyncClient {
 				chestOpenings: chests.length,
 				opponents: opponents.length,
 				goals: goals.length,
-				calendarEvents: events.length
+				calendarEvents: events.length,
+				// NEW counts
+				heroes: heroes.length,
+				titans: titans.length,
+				pets: pets.length,
+				inventory: currentInventory ? 1 : 0,
+				questCompletions: questCompletions.length,
+				missionProgress: missionProgress.length,
+				shopPurchases: shopPurchases.length,
+				towerProgress: towerProgress.length,
+				expeditionBattles: expeditionBattles.length,
+				resourceTransactions: resourceTransactions.length,
+				guildActivities: guildActivities.length
 			});
 
 			// Send to API

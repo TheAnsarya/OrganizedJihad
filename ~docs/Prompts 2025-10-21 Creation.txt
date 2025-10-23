@@ -139,6 +139,8 @@ bring back the desktop app code from previous git commits, commit to current bra
 proceed with Phase 6 now
 make sure the chat log files are up to date
 continue with `Phase 3: Review API Data Collection` and definitely track everything about pets and titans and heros and inventory and everything else we can track
+Phase 7: Update Userscript
+
 
 
 
