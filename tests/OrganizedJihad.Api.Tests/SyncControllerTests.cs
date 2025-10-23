@@ -33,8 +33,7 @@ namespace OrganizedJihad.Api.Tests;
 /// - xUnit: https://xunit.net/
 /// - FluentAssertions: https://fluentassertions.com/
 /// </summary>
-public class SyncControllerTests : IClassFixture<WebApplicationFactory<Program>>
-{
+public class SyncControllerTests : IClassFixture<WebApplicationFactory<Program>> {
 	private readonly WebApplicationFactory<Program> _factory;
 	private readonly HttpClient _client;
 
@@ -53,19 +52,15 @@ public class SyncControllerTests : IClassFixture<WebApplicationFactory<Program>>
 	/// 
 	/// https://learn.microsoft.com/en-us/aspnet/core/test/integration-tests#customize-webapplicationfactory
 	/// </remarks>
-	public SyncControllerTests(WebApplicationFactory<Program> factory)
-	{
+	public SyncControllerTests(WebApplicationFactory<Program> factory) {
 		// Set environment variable to skip database initialization in Program.cs
 		// This prevents the production SQLite configuration from interfering with test setup
 		Environment.SetEnvironmentVariable("ASPNETCORE_TEST_ENV", "true");
-		
-		_factory = factory.WithWebHostBuilder(builder =>
-		{
-			// ConfigureTestServices runs AFTER normal service registration
-			// This allows us to override production services with test doubles
-			// https://learn.microsoft.com/en-us/aspnet/core/test/integration-tests#inject-mock-services
-			builder.ConfigureTestServices(services =>
-			{
+
+		_factory = factory.WithWebHostBuilder(builder =>            // ConfigureTestServices runs AFTER normal service registration
+																	// This allows us to override production services with test doubles
+																	// https://learn.microsoft.com/en-us/aspnet/core/test/integration-tests#inject-mock-services
+			builder.ConfigureTestServices(services => {
 				// Remove ALL Entity Framework service registrations to avoid provider conflicts
 				// EF Core only allows one database provider per service provider
 				// https://learn.microsoft.com/en-us/ef/core/miscellaneous/testing/choosing-a-testing-strategy
@@ -74,9 +69,8 @@ public class SyncControllerTests : IClassFixture<WebApplicationFactory<Program>>
 								(d.ServiceType.Namespace.StartsWith("Microsoft.EntityFrameworkCore") ||
 								 d.ServiceType.FullName?.Contains("GameDatabaseContext") == true))
 					.ToList();
-				
-				foreach (var descriptor in dbDescriptors)
-				{
+
+				foreach (var descriptor in dbDescriptors) {
 					services.Remove(descriptor);
 				}
 
@@ -86,8 +80,7 @@ public class SyncControllerTests : IClassFixture<WebApplicationFactory<Program>>
 				services.AddDbContextFactory<GameDatabaseContext>(options =>
 					options.UseInMemoryDatabase("TestDatabase")
 						.ConfigureWarnings(w => w.Ignore(Microsoft.EntityFrameworkCore.Diagnostics.InMemoryEventId.TransactionIgnoredWarning)));
-			});
-		});
+			}));
 
 		// Create HTTP client for making requests to the test server
 		_client = _factory.CreateClient();
@@ -112,13 +105,10 @@ public class SyncControllerTests : IClassFixture<WebApplicationFactory<Program>>
 	/// - Response serialization
 	/// </remarks>
 	[Fact]
-	public async Task Sync_Should_Return_Ok_With_Valid_Data()
-	{
+	public async Task Sync_Should_Return_Ok_With_Valid_Data() {
 		// Arrange - Create test data with a player snapshot
-		var syncData = new BrowserSyncData
-		{
-			CurrentSnapshot = new PlayerSnapshot
-			{
+		var syncData = new BrowserSyncData {
+			CurrentSnapshot = new PlayerSnapshot {
 				PlayerId = 12345,
 				PlayerName = "TestPlayer",
 				Timestamp = DateTime.UtcNow,
@@ -134,7 +124,7 @@ public class SyncControllerTests : IClassFixture<WebApplicationFactory<Program>>
 
 		// Assert - Verify successful response
 		response.StatusCode.Should().Be(HttpStatusCode.OK);
-		
+
 		var result = await response.Content.ReadFromJsonAsync<SyncResponse>();
 		result.Should().NotBeNull();
 		result!.Success.Should().BeTrue();
@@ -150,11 +140,9 @@ public class SyncControllerTests : IClassFixture<WebApplicationFactory<Program>>
 	/// This ensures the API doesn't fail when there's no new data to import.
 	/// </remarks>
 	[Fact]
-	public async Task Sync_Should_Handle_Empty_Data()
-	{
+	public async Task Sync_Should_Handle_Empty_Data() {
 		// Arrange - Create minimal sync data with empty collections
-		var syncData = new BrowserSyncData
-		{
+		var syncData = new BrowserSyncData {
 			Heroes = new List<Hero>(),
 			Titans = new List<Titan>()
 		};
@@ -164,7 +152,7 @@ public class SyncControllerTests : IClassFixture<WebApplicationFactory<Program>>
 
 		// Assert - Should still succeed with zero counts
 		response.StatusCode.Should().Be(HttpStatusCode.OK);
-		
+
 		var result = await response.Content.ReadFromJsonAsync<SyncResponse>();
 		result.Should().NotBeNull();
 		result!.Success.Should().BeTrue();
@@ -180,8 +168,7 @@ public class SyncControllerTests : IClassFixture<WebApplicationFactory<Program>>
 	/// Should always return 200 OK if the application is running.
 	/// </remarks>
 	[Fact]
-	public async Task Health_Check_Should_Return_Ok()
-	{
+	public async Task Health_Check_Should_Return_Ok() {
 		// Act - Call health check endpoint
 		var response = await _client.GetAsync("/api/sync/health");
 

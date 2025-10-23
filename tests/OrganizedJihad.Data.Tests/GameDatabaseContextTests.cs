@@ -9,12 +9,10 @@ namespace OrganizedJihad.Data.Tests;
 /// Tests for GameDatabaseContext
 /// Verifies database context configuration, entity relationships, and CRUD operations
 /// </summary>
-public class GameDatabaseContextTests : IDisposable
-{
+public class GameDatabaseContextTests : IDisposable {
 	private readonly GameDatabaseContext _context;
 
-	public GameDatabaseContextTests()
-	{
+	public GameDatabaseContextTests() {
 		// Create in-memory database for testing
 		var options = new DbContextOptionsBuilder<GameDatabaseContext>()
 			.UseInMemoryDatabase(databaseName: Guid.NewGuid().ToString())
@@ -23,14 +21,12 @@ public class GameDatabaseContextTests : IDisposable
 		_context = new GameDatabaseContext(options);
 	}
 
-	public void Dispose()
-	{
+	public void Dispose() {
 		_context.Dispose();
 	}
 
 	[Fact]
-	public void Context_Should_Have_All_DbSets()
-	{
+	public void Context_Should_Have_All_DbSets() {
 		// Arrange & Act
 		var properties = _context.GetType().GetProperties()
 			.Where(p => p.PropertyType.IsGenericType &&
@@ -43,11 +39,9 @@ public class GameDatabaseContextTests : IDisposable
 	}
 
 	[Fact]
-	public async Task Should_Add_PlayerSnapshot()
-	{
+	public async Task Should_Add_PlayerSnapshot() {
 		// Arrange
-		var playerSnapshot = new PlayerSnapshot
-		{
+		var playerSnapshot = new PlayerSnapshot {
 			PlayerId = 12345,
 			PlayerName = "TestPlayer",
 			Timestamp = DateTime.UtcNow,
@@ -67,11 +61,9 @@ public class GameDatabaseContextTests : IDisposable
 	}
 
 	[Fact]
-	public async Task Should_Track_Creation_Audit_Fields()
-	{
+	public async Task Should_Track_Creation_Audit_Fields() {
 		// Arrange
-		var hero = new Hero
-		{
+		var hero = new Hero {
 			HeroId = 1,
 			HeroName = "Galahad",
 			Level = 120,
@@ -89,11 +81,9 @@ public class GameDatabaseContextTests : IDisposable
 	}
 
 	[Fact]
-	public async Task Should_Add_Guild_Member()
-	{
+	public async Task Should_Add_Guild_Member() {
 		// Arrange
-		var member = new GuildMember
-		{
+		var member = new GuildMember {
 			PlayerId = 99999,
 			PlayerName = "GuildMate",
 			GuildId = 1,
@@ -116,11 +106,9 @@ public class GameDatabaseContextTests : IDisposable
 	}
 
 	[Fact]
-	public async Task Should_Update_Guild_Member()
-	{
+	public async Task Should_Update_Guild_Member() {
 		// Arrange
-		var member = new GuildMember
-		{
+		var member = new GuildMember {
 			PlayerId = 88888,
 			PlayerName = "UpdateTest",
 			GuildId = 1,
@@ -147,11 +135,9 @@ public class GameDatabaseContextTests : IDisposable
 	}
 
 	[Fact]
-	public async Task Should_Add_Chat_Message()
-	{
+	public async Task Should_Add_Chat_Message() {
 		// Arrange
-		var message = new ChatMessage
-		{
+		var message = new ChatMessage {
 			Timestamp = DateTime.UtcNow,
 			ChatType = "guild",
 			SenderId = 12345,
@@ -172,11 +158,9 @@ public class GameDatabaseContextTests : IDisposable
 	}
 
 	[Fact]
-	public async Task Should_Add_Guild_War_Participation()
-	{
+	public async Task Should_Add_Guild_War_Participation() {
 		// Arrange
-		var participation = new GuildWarParticipation
-		{
+		var participation = new GuildWarParticipation {
 			WarId = "war123",
 			WarDate = DateTime.UtcNow,
 			PlayerId = 12345,
@@ -200,11 +184,9 @@ public class GameDatabaseContextTests : IDisposable
 	}
 
 	[Fact]
-	public async Task Should_Add_Titanite_Transaction()
-	{
+	public async Task Should_Add_Titanite_Transaction() {
 		// Arrange
-		var transaction = new TitaniteTransaction
-		{
+		var transaction = new TitaniteTransaction {
 			Timestamp = DateTime.UtcNow,
 			PlayerId = 12345,
 			PlayerName = "TestPlayer",
@@ -227,8 +209,7 @@ public class GameDatabaseContextTests : IDisposable
 	}
 
 	[Fact]
-	public async Task Should_Query_Guild_Members_By_Guild()
-	{
+	public async Task Should_Query_Guild_Members_By_Guild() {
 		// Arrange
 		var member1 = new GuildMember { PlayerId = 1, PlayerName = "M1", GuildId = 1, IsActive = true };
 		var member2 = new GuildMember { PlayerId = 2, PlayerName = "M2", GuildId = 1, IsActive = true };
@@ -249,8 +230,7 @@ public class GameDatabaseContextTests : IDisposable
 	}
 
 	[Fact]
-	public async Task Should_Track_Multiple_Hero_Levels()
-	{
+	public async Task Should_Track_Multiple_Hero_Levels() {
 		// Arrange
 		var hero1 = new Hero { HeroId = 1, HeroName = "Galahad", Level = 120, Power = 50000 };
 		var hero2 = new Hero { HeroId = 2, HeroName = "Astaroth", Level = 115, Power = 48000 };

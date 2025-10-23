@@ -73,7 +73,7 @@ public class SyncService {
 		try {
 			// Create database context for this operation
 			await using var context = await _contextFactory.CreateDbContextAsync();
-			
+
 			// Begin transaction to ensure all-or-nothing import
 			// https://learn.microsoft.com/en-us/ef/core/saving/transactions
 			await using var transaction = await context.Database.BeginTransactionAsync();

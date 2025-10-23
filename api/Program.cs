@@ -54,14 +54,13 @@ var app = builder.Build();
 // Tests set ASPNETCORE_TEST_ENV environment variable to bypass this
 // https://learn.microsoft.com/en-us/ef/core/managing-schemas/migrations/
 if (string.IsNullOrEmpty(Environment.GetEnvironmentVariable("ASPNETCORE_TEST_ENV"))) {
-	using (var scope = app.Services.CreateScope()) {
-		var contextFactory = scope.ServiceProvider.GetRequiredService<IDbContextFactory<GameDatabaseContext>>();
-		await using var context = await contextFactory.CreateDbContextAsync();
-		
-		// Apply pending migrations to bring database schema up to date
-		await context.Database.MigrateAsync();
-		app.Logger.LogInformation("Database initialized at: {DbPath}", dbPath);
-	}
+	using var scope = app.Services.CreateScope();
+	var contextFactory = scope.ServiceProvider.GetRequiredService<IDbContextFactory<GameDatabaseContext>>();
+	await using var context = await contextFactory.CreateDbContextAsync();
+
+	// Apply pending migrations to bring database schema up to date
+	await context.Database.MigrateAsync();
+	app.Logger.LogInformation("Database initialized at: {DbPath}", dbPath);
 }
 
 // Configure the HTTP request pipeline

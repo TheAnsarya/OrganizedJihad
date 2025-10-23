@@ -132,7 +132,7 @@ public class SyncController : ControllerBase {
 		} catch (Exception ex) {
 			// Log the full exception for debugging
 			_logger.LogError(ex, "Error during data import");
-			
+
 			// Return user-friendly error response
 			return StatusCode(500, new SyncResponse {
 				Success = false,
@@ -220,7 +220,7 @@ public class SyncController : ControllerBase {
 		try {
 			// Create a new database context for this request
 			await using var context = await _contextFactory.CreateDbContextAsync();
-			
+
 			// Query snapshots with ordering and limit
 			var snapshots = await context.PlayerSnapshots
 				.OrderByDescending(s => s.Timestamp)
