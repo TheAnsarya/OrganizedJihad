@@ -3,7 +3,8 @@ using System;
 
 #nullable disable
 
-namespace OrganizedJihad.Data.Migrations; 
+namespace OrganizedJihad.Data.Migrations;
+
 /// <inheritdoc />
 public partial class AddHeroTitanPetAndActivityTracking : Migration {
 	/// <inheritdoc />
