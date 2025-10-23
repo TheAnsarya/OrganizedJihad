@@ -826,17 +826,17 @@ All 11 new tables exist and are queryable ✅
 ```
 ✓ Import Successful!
   Imported Counts (Phase 7):
-    Heroes: 2
-    Titans: 1
-    Pets: 1
-    Inventory: 1
-    Quest Completions: 1
-    Mission Progress: 1
-    Shop Purchases: 1
-    Tower Progress: 1
-    Expedition Battles: 1
-    Resource Transactions: 1
-    Guild Activities: 1
+	Heroes: 2
+	Titans: 1
+	Pets: 1
+	Inventory: 1
+	Quest Completions: 1
+	Mission Progress: 1
+	Shop Purchases: 1
+	Tower Progress: 1
+	Expedition Battles: 1
+	Resource Transactions: 1
+	Guild Activities: 1
 ```
 
 **After Import** - Database Stats:
@@ -872,8 +872,8 @@ All 11 new tables exist and are queryable ✅
 **Hero Data** (Astaroth):
 ```sql
 SELECT HeroId, HeroName, Level, Stars, Color, Power, 
-       SkillLevel1, SkillLevel2, SkillLevel3, SkillLevel4,
-       ArtifactWeapon, ArtifactBook, ArtifactRing
+	   SkillLevel1, SkillLevel2, SkillLevel3, SkillLevel4,
+	   ArtifactWeapon, ArtifactBook, ArtifactRing
 FROM Heroes WHERE HeroName = 'Astaroth';
 ```
 Expected: HeroId=1, Level=120, Stars=6, All skills=120/120/115/110, Artifacts=5/4/6 ✅
@@ -895,7 +895,7 @@ Expected: PetId=1, Stars=6, Power=15000, PatronageData contains heroIds array �
 **Inventory Snapshot**:
 ```sql
 SELECT TotalHeroSoulStones, TotalTitanSoulStones, TotalPetSoulStones,
-       TotalEvolutionItems, TotalConsumables, TotalChests
+	   TotalEvolutionItems, TotalConsumables, TotalChests
 FROM InventorySnapshots;
 ```
 Expected: 5000/3000/2000/500/300/20 ✅

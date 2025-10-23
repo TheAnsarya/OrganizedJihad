@@ -7,9 +7,9 @@
   - Target: .NET 10.0
   - Location: `data/OrganizedJihad.Data.csproj`
   - Add NuGet packages:
-    - `Microsoft.EntityFrameworkCore` (9.0.10)
-    - `Microsoft.EntityFrameworkCore.Sqlite` (9.0.10)
-    - `Microsoft.EntityFrameworkCore.Design` (9.0.10)
+	- `Microsoft.EntityFrameworkCore` (9.0.10)
+	- `Microsoft.EntityFrameworkCore.Sqlite` (9.0.10)
+	- `Microsoft.EntityFrameworkCore.Design` (9.0.10)
 
 ### 1.2 Move Database Context ✅
 - [x] Move `GameDatabaseContext.cs` from `api/Data/` to `data/`
@@ -64,10 +64,10 @@
   ```csharp
   public interface IAuditableEntity
   {
-      DateTime DateCreated { get; set; }
-      DateTime DateModified { get; set; }
-      string? CreatedBy { get; set; }
-      string? ModifiedBy { get; set; }
+	  DateTime DateCreated { get; set; }
+	  DateTime DateModified { get; set; }
+	  string? CreatedBy { get; set; }
+	  string? ModifiedBy { get; set; }
   }
   ```
 
@@ -76,8 +76,8 @@
   // For records that are created but never modified (most game data)
   public interface ICreationAuditableEntity
   {
-      DateTime DateCreated { get; set; }
-      string? CreatedBy { get; set; }
+	  DateTime DateCreated { get; set; }
+	  string? CreatedBy { get; set; }
   }
   ```
 
@@ -85,9 +85,9 @@
   ```csharp
   public interface ISoftDelete
   {
-      bool IsDeleted { get; set; }
-      DateTime? DateDeleted { get; set; }
-      string? DeletedBy { get; set; }
+	  bool IsDeleted { get; set; }
+	  DateTime? DateDeleted { get; set; }
+	  string? DeletedBy { get; set; }
   }
   ```
 
@@ -96,10 +96,10 @@
   ```csharp
   public abstract class AuditableEntity : IAuditableEntity
   {
-      public DateTime DateCreated { get; set; }
-      public DateTime DateModified { get; set; }
-      public string? CreatedBy { get; set; }
-      public string? ModifiedBy { get; set; }
+	  public DateTime DateCreated { get; set; }
+	  public DateTime DateModified { get; set; }
+	  public string? CreatedBy { get; set; }
+	  public string? ModifiedBy { get; set; }
   }
   ```
 
@@ -107,8 +107,8 @@
   ```csharp
   public abstract class CreationAuditableEntity : ICreationAuditableEntity
   {
-      public DateTime DateCreated { get; set; }
-      public string? CreatedBy { get; set; }
+	  public DateTime DateCreated { get; set; }
+	  public string? CreatedBy { get; set; }
   }
   ```
 
@@ -116,9 +116,9 @@
   ```csharp
   public abstract class SoftDeletableEntity : AuditableEntity, ISoftDelete
   {
-      public bool IsDeleted { get; set; }
-      public DateTime? DateDeleted { get; set; }
-      public string? DeletedBy { get; set; }
+	  public bool IsDeleted { get; set; }
+	  public DateTime? DateDeleted { get; set; }
+	  public string? DeletedBy { get; set; }
   }
   ```
 
@@ -219,30 +219,30 @@ Review what's currently being captured from the browser:
   ```csharp
   public class Hero : CreationAuditableEntity
   {
-      public int Id { get; set; }
-      public long HeroId { get; set; }  // Game's hero ID
-      public string HeroName { get; set; }
-      public int Level { get; set; }
-      public int Stars { get; set; }  // Absolute stars
-      public int Color { get; set; }  // Rank/promotion color
-      public int Power { get; set; }
-      public int Skins { get; set; }  // Skin level
-      public DateTime Timestamp { get; set; }
-      public long PlayerId { get; set; }  // Foreign key to player
-      
-      // Skills
-      public int SkillLevel1 { get; set; }
-      public int SkillLevel2 { get; set; }
-      public int SkillLevel3 { get; set; }
-      public int SkillLevel4 { get; set; }
-      
-      // Artifacts
-      public int ArtifactWeapon { get; set; }
-      public int ArtifactBook { get; set; }
-      public int ArtifactRing { get; set; }
-      
-      // Glyphs
-      public string? GlyphData { get; set; }  // JSON
+	  public int Id { get; set; }
+	  public long HeroId { get; set; }  // Game's hero ID
+	  public string HeroName { get; set; }
+	  public int Level { get; set; }
+	  public int Stars { get; set; }  // Absolute stars
+	  public int Color { get; set; }  // Rank/promotion color
+	  public int Power { get; set; }
+	  public int Skins { get; set; }  // Skin level
+	  public DateTime Timestamp { get; set; }
+	  public long PlayerId { get; set; }  // Foreign key to player
+	  
+	  // Skills
+	  public int SkillLevel1 { get; set; }
+	  public int SkillLevel2 { get; set; }
+	  public int SkillLevel3 { get; set; }
+	  public int SkillLevel4 { get; set; }
+	  
+	  // Artifacts
+	  public int ArtifactWeapon { get; set; }
+	  public int ArtifactBook { get; set; }
+	  public int ArtifactRing { get; set; }
+	  
+	  // Glyphs
+	  public string? GlyphData { get; set; }  // JSON
   }
   ```
 
@@ -251,19 +251,19 @@ Review what's currently being captured from the browser:
   ```csharp
   public class Titan : CreationAuditableEntity
   {
-      public int Id { get; set; }
-      public long TitanId { get; set; }
-      public string TitanName { get; set; }
-      public int Level { get; set; }
-      public int Stars { get; set; }
-      public int Power { get; set; }
-      public DateTime Timestamp { get; set; }
-      public long PlayerId { get; set; }
-      
-      // Titan-specific
-      public int SkillLevel { get; set; }
-      public string? ArtifactData { get; set; }  // JSON
-      public int SummonStars { get; set; }
+	  public int Id { get; set; }
+	  public long TitanId { get; set; }
+	  public string TitanName { get; set; }
+	  public int Level { get; set; }
+	  public int Stars { get; set; }
+	  public int Power { get; set; }
+	  public DateTime Timestamp { get; set; }
+	  public long PlayerId { get; set; }
+	  
+	  // Titan-specific
+	  public int SkillLevel { get; set; }
+	  public string? ArtifactData { get; set; }  // JSON
+	  public int SummonStars { get; set; }
   }
   ```
 
@@ -272,13 +272,13 @@ Review what's currently being captured from the browser:
   ```csharp
   public class Pet : CreationAuditableEntity
   {
-      public int Id { get; set; }
-      public long PetId { get; set; }
-      public string PetName { get; set; }
-      public int Stars { get; set; }
-      public int Power { get; set; }
-      public DateTime Timestamp { get; set; }
-      public long PlayerId { get; set; }
+	  public int Id { get; set; }
+	  public long PetId { get; set; }
+	  public string PetName { get; set; }
+	  public int Stars { get; set; }
+	  public int Power { get; set; }
+	  public DateTime Timestamp { get; set; }
+	  public long PlayerId { get; set; }
   }
   ```
 
@@ -287,13 +287,13 @@ Review what's currently being captured from the browser:
   ```csharp
   public class DailyQuest : CreationAuditableEntity
   {
-      public int Id { get; set; }
-      public DateTime CompletedAt { get; set; }
-      public string QuestType { get; set; }  // "daily", "weekly", "event"
-      public string QuestId { get; set; }
-      public string QuestName { get; set; }
-      public string? RewardData { get; set; }  // JSON
-      public long PlayerId { get; set; }
+	  public int Id { get; set; }
+	  public DateTime CompletedAt { get; set; }
+	  public string QuestType { get; set; }  // "daily", "weekly", "event"
+	  public string QuestId { get; set; }
+	  public string QuestName { get; set; }
+	  public string? RewardData { get; set; }  // JSON
+	  public long PlayerId { get; set; }
   }
   ```
 
@@ -302,14 +302,14 @@ Review what's currently being captured from the browser:
   ```csharp
   public class MissionProgress : AuditableEntity
   {
-      public int Id { get; set; }
-      public string MissionId { get; set; }
-      public string MissionName { get; set; }
-      public int Stars { get; set; }  // 0-3 stars
-      public int HighestLevel { get; set; }
-      public bool IsHeroic { get; set; }
-      public DateTime LastCompleted { get; set; }
-      public long PlayerId { get; set; }
+	  public int Id { get; set; }
+	  public string MissionId { get; set; }
+	  public string MissionName { get; set; }
+	  public int Stars { get; set; }  // 0-3 stars
+	  public int HighestLevel { get; set; }
+	  public bool IsHeroic { get; set; }
+	  public DateTime LastCompleted { get; set; }
+	  public long PlayerId { get; set; }
   }
   ```
 
@@ -318,15 +318,15 @@ Review what's currently being captured from the browser:
   ```csharp
   public class ShopPurchase : CreationAuditableEntity
   {
-      public int Id { get; set; }
-      public DateTime PurchasedAt { get; set; }
-      public string ShopType { get; set; }  // "arena", "guild", "tower", "merchant"
-      public string ItemId { get; set; }
-      public string ItemName { get; set; }
-      public int Quantity { get; set; }
-      public string CostType { get; set; }  // "gold", "emeralds", "arena_coins"
-      public int CostAmount { get; set; }
-      public long PlayerId { get; set; }
+	  public int Id { get; set; }
+	  public DateTime PurchasedAt { get; set; }
+	  public string ShopType { get; set; }  // "arena", "guild", "tower", "merchant"
+	  public string ItemId { get; set; }
+	  public string ItemName { get; set; }
+	  public int Quantity { get; set; }
+	  public string CostType { get; set; }  // "gold", "emeralds", "arena_coins"
+	  public int CostAmount { get; set; }
+	  public long PlayerId { get; set; }
   }
   ```
 
@@ -335,12 +335,12 @@ Review what's currently being captured from the browser:
   ```csharp
   public class TowerProgress : AuditableEntity
   {
-      public int Id { get; set; }
-      public string TowerType { get; set; }  // "regular", "outland"
-      public int HighestFloor { get; set; }
-      public DateTime LastUpdate { get; set; }
-      public string? FloorData { get; set; }  // JSON - detailed floor completion
-      public long PlayerId { get; set; }
+	  public int Id { get; set; }
+	  public string TowerType { get; set; }  // "regular", "outland"
+	  public int HighestFloor { get; set; }
+	  public DateTime LastUpdate { get; set; }
+	  public string? FloorData { get; set; }  // JSON - detailed floor completion
+	  public long PlayerId { get; set; }
   }
   ```
 
@@ -349,15 +349,15 @@ Review what's currently being captured from the browser:
   ```csharp
   public class ExpeditionBattle : CreationAuditableEntity
   {
-      public int Id { get; set; }
-      public DateTime Timestamp { get; set; }
-      public string ExpeditionId { get; set; }
-      public int BossId { get; set; }
-      public string BossName { get; set; }
-      public bool IsWin { get; set; }
-      public string? TeamComposition { get; set; }  // JSON
-      public string? RewardData { get; set; }  // JSON
-      public long PlayerId { get; set; }
+	  public int Id { get; set; }
+	  public DateTime Timestamp { get; set; }
+	  public string ExpeditionId { get; set; }
+	  public int BossId { get; set; }
+	  public string BossName { get; set; }
+	  public bool IsWin { get; set; }
+	  public string? TeamComposition { get; set; }  // JSON
+	  public string? RewardData { get; set; }  // JSON
+	  public long PlayerId { get; set; }
   }
   ```
 
@@ -366,13 +366,13 @@ Review what's currently being captured from the browser:
   ```csharp
   public class ResourceTransaction : CreationAuditableEntity
   {
-      public int Id { get; set; }
-      public DateTime Timestamp { get; set; }
-      public string ResourceType { get; set; }  // "gold", "emeralds", "arena_coins"
-      public int Amount { get; set; }  // Positive for gain, negative for loss
-      public string Source { get; set; }  // "battle", "shop", "quest", "chest"
-      public string? SourceDetail { get; set; }  // Specific details
-      public long PlayerId { get; set; }
+	  public int Id { get; set; }
+	  public DateTime Timestamp { get; set; }
+	  public string ResourceType { get; set; }  // "gold", "emeralds", "arena_coins"
+	  public int Amount { get; set; }  // Positive for gain, negative for loss
+	  public string Source { get; set; }  // "battle", "shop", "quest", "chest"
+	  public string? SourceDetail { get; set; }  // Specific details
+	  public long PlayerId { get; set; }
   }
   ```
 
@@ -381,13 +381,13 @@ Review what's currently being captured from the browser:
   ```csharp
   public class GuildActivity : CreationAuditableEntity
   {
-      public int Id { get; set; }
-      public DateTime Timestamp { get; set; }
-      public long GuildId { get; set; }
-      public string GuildName { get; set; }
-      public string ActivityType { get; set; }  // "join", "leave", "donation", "raid"
-      public string? ActivityData { get; set; }  // JSON - specific activity details
-      public long PlayerId { get; set; }
+	  public int Id { get; set; }
+	  public DateTime Timestamp { get; set; }
+	  public long GuildId { get; set; }
+	  public string GuildName { get; set; }
+	  public string ActivityType { get; set; }  // "join", "leave", "donation", "raid"
+	  public string? ActivityData { get; set; }  // JSON - specific activity details
+	  public long PlayerId { get; set; }
   }
   ```
 
@@ -575,14 +575,14 @@ Note: These are potential future additions. Current data layer is complete for e
 ### 6.3 Sync Data Flow ✅
 ```
 Browser (Hero Wars) 
-    → XMLHttpRequest Interception (gameTracker.js)
-    → IndexedDB Storage (indexedDBStorage.js)
-    → Sync Client (syncClient.js)
-    → HTTP POST to localhost:5124/api/sync/import
-    → API Controller (SyncController.cs)
-    → Sync Service (SyncService.cs)
-    → Database (GameDatabaseContext)
-    → SQLite (herowars.db)
+	→ XMLHttpRequest Interception (gameTracker.js)
+	→ IndexedDB Storage (indexedDBStorage.js)
+	→ Sync Client (syncClient.js)
+	→ HTTP POST to localhost:5124/api/sync/import
+	→ API Controller (SyncController.cs)
+	→ Sync Service (SyncService.cs)
+	→ Database (GameDatabaseContext)
+	→ SQLite (herowars.db)
 ```
 
 ### 6.4 Verified Features ✅

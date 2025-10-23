@@ -373,7 +373,7 @@ class GameTracker {
 	/**
 	 * Track heroes from heroGetAll API call
 	 * Stores complete hero snapshots in IndexedDB (matches C# Hero entity)
-	 * 
+	 *
 	 * Entity Structure (19 properties):
 	 * - Identity: HeroId, HeroName
 	 * - Stats: Level, Stars, Color (rank), Power, Skins
@@ -386,7 +386,7 @@ class GameTracker {
 	 * @private
 	 */
 	async trackHeroesData(data) {
-		const playerId = await this.storage.getMetadata('currentPlayerId') || 'unknown';
+		const playerId = (await this.storage.getMetadata('currentPlayerId')) || 'unknown';
 		const timestamp = new Date().toISOString();
 
 		const heroes = Object.values(data).map((hero) => ({
@@ -423,7 +423,7 @@ class GameTracker {
 	/**
 	 * Track inventory from inventoryGet API call
 	 * Stores complete inventory snapshot in IndexedDB (matches C# InventorySnapshot entity)
-	 * 
+	 *
 	 * Entity Structure (9 properties):
 	 * - InventoryData: Complete JSON structure
 	 * - Denormalized counts: TotalHeroSoulStones, TotalTitanSoulStones, TotalPetSoulStones,
@@ -434,7 +434,7 @@ class GameTracker {
 	 * @private
 	 */
 	async trackInventoryData(data) {
-		const playerId = await this.storage.getMetadata('currentPlayerId') || 'unknown';
+		const playerId = (await this.storage.getMetadata('currentPlayerId')) || 'unknown';
 		const timestamp = new Date().toISOString();
 
 		// Calculate denormalized totals for performance
@@ -477,7 +477,7 @@ class GameTracker {
 	/**
 	 * Track titans from titanGetAll API call
 	 * Stores complete titan snapshots in IndexedDB (matches C# Titan entity)
-	 * 
+	 *
 	 * Entity Structure (12 properties):
 	 * - Identity: TitanId, TitanName
 	 * - Stats: Level, Stars, Power, Element (fire/water/earth), SkinLevel
@@ -490,7 +490,7 @@ class GameTracker {
 	 * @private
 	 */
 	async trackTitansData(data) {
-		const playerId = await this.storage.getMetadata('currentPlayerId') || 'unknown';
+		const playerId = (await this.storage.getMetadata('currentPlayerId')) || 'unknown';
 		const timestamp = new Date().toISOString();
 
 		const titans = Object.values(data).map((titan) => ({
@@ -519,7 +519,7 @@ class GameTracker {
 	/**
 	 * Track pets from petGetAll API call
 	 * Stores complete pet snapshots in IndexedDB (matches C# Pet entity)
-	 * 
+	 *
 	 * Entity Structure (8 properties):
 	 * - Identity: PetId, PetName
 	 * - Stats: Stars, Power, Level
@@ -530,7 +530,7 @@ class GameTracker {
 	 * @private
 	 */
 	async trackPetsData(data) {
-		const playerId = await this.storage.getMetadata('currentPlayerId') || 'unknown';
+		const playerId = (await this.storage.getMetadata('currentPlayerId')) || 'unknown';
 		const timestamp = new Date().toISOString();
 
 		const pets = Object.values(data).map((pet) => ({
@@ -778,8 +778,12 @@ class GameTracker {
 			isWin: data.result?.win || false,
 			playerPower: 0, // Grand arena has multiple teams
 			opponentPower: 0,
-			playerHeroes: data.battles ? JSON.stringify(data.battles.map((b) => this.compressHeroTeam(b.attackers))) : null,
-			opponentHeroes: data.battles ? JSON.stringify(data.battles.map((b) => this.compressHeroTeam(b.defenders))) : null,
+			playerHeroes: data.battles
+				? JSON.stringify(data.battles.map((b) => this.compressHeroTeam(b.attackers)))
+				: null,
+			opponentHeroes: data.battles
+				? JSON.stringify(data.battles.map((b) => this.compressHeroTeam(b.defenders)))
+				: null,
 			rewards: data.reward ? JSON.stringify(data.reward) : null,
 			timestamp: new Date().toISOString(),
 		};
@@ -794,7 +798,12 @@ class GameTracker {
 			await this.trackResourceTransaction('gold', rewards.gold, 'battle', 'grand_arena');
 		}
 		if (rewards.grandArenaTrophy) {
-			await this.trackResourceTransaction('grand_arena_trophies', rewards.grandArenaTrophy, 'battle', 'grand_arena');
+			await this.trackResourceTransaction(
+				'grand_arena_trophies',
+				rewards.grandArenaTrophy,
+				'battle',
+				'grand_arena'
+			);
 		}
 		if (rewards.starmoney) {
 			await this.trackResourceTransaction('emeralds', rewards.starmoney, 'battle', 'grand_arena');
@@ -937,7 +946,12 @@ class GameTracker {
 			await this.trackResourceTransaction('gold', rewards.gold, 'battle', 'guild_raid');
 		}
 		if (rewards.guildToken || rewards.clanToken) {
-			await this.trackResourceTransaction('guild_coins', rewards.guildToken || rewards.clanToken, 'battle', 'guild_raid');
+			await this.trackResourceTransaction(
+				'guild_coins',
+				rewards.guildToken || rewards.clanToken,
+				'battle',
+				'guild_raid'
+			);
 		}
 		if (rewards.starmoney) {
 			await this.trackResourceTransaction('emeralds', rewards.starmoney, 'battle', 'guild_raid');
@@ -979,7 +993,7 @@ class GameTracker {
 		// See: https://community.hero-wars.com/discussion/chest-drop-rates
 		const rewards = data.reward || data.rewards || {};
 		const chestName = `${chestRecord.chestType}_${chestRecord.chestId}`;
-		
+
 		if (rewards.gold) {
 			await this.trackResourceTransaction('gold', rewards.gold, 'chest', chestName);
 		}
@@ -1047,7 +1061,7 @@ class GameTracker {
 	 * @private
 	 */
 	async trackShopPurchase(args, data) {
-		const playerId = await this.storage.getMetadata('currentPlayerId') || 'unknown';
+		const playerId = (await this.storage.getMetadata('currentPlayerId')) || 'unknown';
 		const purchasedAt = new Date().toISOString();
 
 		const purchase = {
@@ -1069,7 +1083,7 @@ class GameTracker {
 		// See: https://community.hero-wars.com/discussion/shop-currency-guide
 		const cost = args.cost || {};
 		const shopName = `${purchase.shopType}_shop`;
-		
+
 		if (cost.gold || (purchase.costType === 'gold' && purchase.costAmount > 0)) {
 			await this.trackResourceTransaction('gold', -(cost.gold || purchase.costAmount), 'shop', shopName);
 		}
@@ -1077,20 +1091,35 @@ class GameTracker {
 			await this.trackResourceTransaction('emeralds', -(cost.starmoney || purchase.costAmount), 'shop', shopName);
 		}
 		if (cost.arenaToken || (purchase.costType === 'arena_coins' && purchase.costAmount > 0)) {
-			await this.trackResourceTransaction('arena_coins', -(cost.arenaToken || purchase.costAmount), 'shop', shopName);
+			await this.trackResourceTransaction(
+				'arena_coins',
+				-(cost.arenaToken || purchase.costAmount),
+				'shop',
+				shopName
+			);
 		}
 		if (cost.guildWarToken || (purchase.costType === 'guild_war_coins' && purchase.costAmount > 0)) {
-			await this.trackResourceTransaction('guild_war_coins', -(cost.guildWarToken || purchase.costAmount), 'shop', shopName);
+			await this.trackResourceTransaction(
+				'guild_war_coins',
+				-(cost.guildWarToken || purchase.costAmount),
+				'shop',
+				shopName
+			);
 		}
 		if (cost.titanPotion || (purchase.costType === 'titan_potion' && purchase.costAmount > 0)) {
-			await this.trackResourceTransaction('titan_potion', -(cost.titanPotion || purchase.costAmount), 'shop', shopName);
+			await this.trackResourceTransaction(
+				'titan_potion',
+				-(cost.titanPotion || purchase.costAmount),
+				'shop',
+				shopName
+			);
 		}
 	}
 
 	/**
 	 * Track quest completions
 	 * Stores quest completion records in IndexedDB (matches C# QuestCompletion entity)
-	 * 
+	 *
 	 * Entity Structure (7 properties):
 	 * - CompletedAt, QuestType (daily/weekly/event), QuestId, QuestName, RewardData (JSON), PlayerId
 	 *
@@ -1099,7 +1128,7 @@ class GameTracker {
 	 * @private
 	 */
 	async trackQuestComplete(args, data) {
-		const playerId = await this.storage.getMetadata('currentPlayerId') || 'unknown';
+		const playerId = (await this.storage.getMetadata('currentPlayerId')) || 'unknown';
 		const completedAt = new Date().toISOString();
 
 		const quest = {
@@ -1155,7 +1184,7 @@ class GameTracker {
 	/**
 	 * Track expedition battles (PvE boss fights)
 	 * Stores expedition battle records in IndexedDB (matches C# ExpeditionBattle entity)
-	 * 
+	 *
 	 * Entity Structure (10 properties):
 	 * - Timestamp, ExpeditionId, BossId, BossName, IsWin, TeamComposition (JSON),
 	 *   DamageDealt, RewardData (JSON), PlayerId
@@ -1165,7 +1194,7 @@ class GameTracker {
 	 * @private
 	 */
 	async trackExpeditionBattle(args, data) {
-		const playerId = await this.storage.getMetadata('currentPlayerId') || 'unknown';
+		const playerId = (await this.storage.getMetadata('currentPlayerId')) || 'unknown';
 		const timestamp = new Date().toISOString();
 
 		const battle = {
@@ -1181,7 +1210,9 @@ class GameTracker {
 		};
 
 		await this.storage.add('expeditionBattles', battle);
-		console.log(`[OrganizedJihad] Expedition battle tracked: ${battle.bossName} - ${battle.isWin ? 'Win' : 'Loss'}`);
+		console.log(
+			`[OrganizedJihad] Expedition battle tracked: ${battle.bossName} - ${battle.isWin ? 'Win' : 'Loss'}`
+		);
 
 		// Track resource rewards from expedition battles
 		// Expeditions reward gold, items, and sometimes emeralds
@@ -1190,14 +1221,19 @@ class GameTracker {
 			await this.trackResourceTransaction('gold', rewards.gold, 'battle', `expedition_${battle.expeditionId}`);
 		}
 		if (rewards.starmoney) {
-			await this.trackResourceTransaction('emeralds', rewards.starmoney, 'battle', `expedition_${battle.expeditionId}`);
+			await this.trackResourceTransaction(
+				'emeralds',
+				rewards.starmoney,
+				'battle',
+				`expedition_${battle.expeditionId}`
+			);
 		}
 	}
 
 	/**
 	 * Track mission progress from missionEnd API call
 	 * Stores/updates mission progress in IndexedDB (matches C# MissionProgress entity - MUTABLE)
-	 * 
+	 *
 	 * Entity Structure (9 properties):
 	 * - MissionId (key), MissionName, Stars (0-3), HighestLevel, IsHeroic,
 	 *   LastCompleted, CompletionCount, PlayerId
@@ -1207,7 +1243,7 @@ class GameTracker {
 	 * @private
 	 */
 	async trackMissionProgress(args, data) {
-		const playerId = await this.storage.getMetadata('currentPlayerId') || 'unknown';
+		const playerId = (await this.storage.getMetadata('currentPlayerId')) || 'unknown';
 		const missionId = `${args.missionId || args.id}_${args.isHeroic ? 'heroic' : 'normal'}`;
 
 		// Try to get existing progress
@@ -1243,14 +1279,19 @@ class GameTracker {
 			await this.trackResourceTransaction('gold', rewards.gold, 'battle', `mission_${progress.missionName}`);
 		}
 		if (rewards.starmoney) {
-			await this.trackResourceTransaction('emeralds', rewards.starmoney, 'battle', `mission_${progress.missionName}`);
+			await this.trackResourceTransaction(
+				'emeralds',
+				rewards.starmoney,
+				'battle',
+				`mission_${progress.missionName}`
+			);
 		}
 	}
 
 	/**
 	 * Track tower progress from towerEnd or tower state API calls
 	 * Stores/updates tower progress in IndexedDB (matches C# TowerProgress entity - MUTABLE)
-	 * 
+	 *
 	 * Entity Structure (6 properties):
 	 * - TowerType (key), HighestFloor, LastUpdate, FloorData (JSON), PlayerId
 	 *
@@ -1259,7 +1300,7 @@ class GameTracker {
 	 * @private
 	 */
 	async trackTowerProgress(args, data) {
-		const playerId = await this.storage.getMetadata('currentPlayerId') || 'unknown';
+		const playerId = (await this.storage.getMetadata('currentPlayerId')) || 'unknown';
 		const towerType = args.towerType || args.type || 'regular'; // regular, outland, guild
 
 		// Try to get existing progress
@@ -1292,14 +1333,19 @@ class GameTracker {
 			await this.trackResourceTransaction('gold', rewards.gold, 'battle', `${towerType}_tower_floor_${newFloor}`);
 		}
 		if (rewards.starmoney) {
-			await this.trackResourceTransaction('emeralds', rewards.starmoney, 'battle', `${towerType}_tower_floor_${newFloor}`);
+			await this.trackResourceTransaction(
+				'emeralds',
+				rewards.starmoney,
+				'battle',
+				`${towerType}_tower_floor_${newFloor}`
+			);
 		}
 	}
 
 	/**
 	 * Track resource transactions (gold, emeralds, tokens, etc.)
 	 * Stores resource change events in IndexedDB (matches C# ResourceTransaction entity)
-	 * 
+	 *
 	 * Entity Structure (7 properties):
 	 * - Timestamp, ResourceType (gold/emeralds/tokens), Amount (+ gain, - loss),
 	 *   Source (battle/shop/quest/chest), SourceDetail, PlayerId
@@ -1311,7 +1357,7 @@ class GameTracker {
 	 * @private
 	 */
 	async trackResourceTransaction(resourceType, amount, source, sourceDetail = '') {
-		const playerId = await this.storage.getMetadata('currentPlayerId') || 'unknown';
+		const playerId = (await this.storage.getMetadata('currentPlayerId')) || 'unknown';
 		const timestamp = new Date().toISOString();
 
 		const transaction = {
@@ -1332,7 +1378,7 @@ class GameTracker {
 	/**
 	 * Track guild activities (donations, raids, wars, etc.)
 	 * Stores guild activity records in IndexedDB (matches C# GuildActivity entity)
-	 * 
+	 *
 	 * Entity Structure (7 properties):
 	 * - Timestamp, GuildId, GuildName, ActivityType (join/leave/donation/raid/war),
 	 *   ActivityData (JSON), PlayerId
@@ -1342,7 +1388,7 @@ class GameTracker {
 	 * @private
 	 */
 	async trackGuildActivity(activityType, data) {
-		const playerId = await this.storage.getMetadata('currentPlayerId') || 'unknown';
+		const playerId = (await this.storage.getMetadata('currentPlayerId')) || 'unknown';
 		const timestamp = new Date().toISOString();
 
 		const activity = {
@@ -1499,7 +1545,7 @@ class GameTracker {
 	 */
 	async trackGuildData(data) {
 		const oldGuildData = await storageManager.get('guildData', {});
-		
+
 		const guildData = {
 			id: data.clan?.id || null,
 			name: data.clan?.name || 'No Guild',

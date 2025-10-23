@@ -2,7 +2,7 @@
  * IndexedDBStorage Module
  * Handles data persistence using IndexedDB for browser extension compatibility
  * Much more scalable than GM_setValue or localStorage (can store gigabytes vs ~10MB)
- * 
+ *
  * Database Structure:
  * - snapshots: Player state snapshots
  * - battles: All battle records (arena, grand, titan, guild war, raid boss)
@@ -11,7 +11,7 @@
  * - goals: User-defined goals
  * - events: Calendar events
  * - metadata: Sync timestamps and other metadata
- * 
+ *
  * NEW in v2 (Phase 7 - Comprehensive Tracking):
  * - heroes: Historical snapshots of hero roster (19 properties per hero)
  * - titans: Historical snapshots of titan roster (12 properties per titan)
@@ -160,7 +160,10 @@ class IndexedDBStorage {
 
 				// Expedition Battles: PvE boss fights
 				if (!db.objectStoreNames.contains('expeditionBattles')) {
-					const expeditionStore = db.createObjectStore('expeditionBattles', { keyPath: 'id', autoIncrement: true });
+					const expeditionStore = db.createObjectStore('expeditionBattles', {
+						keyPath: 'id',
+						autoIncrement: true,
+					});
 					expeditionStore.createIndex('playerId', 'playerId', { unique: false });
 					expeditionStore.createIndex('timestamp', 'timestamp', { unique: false });
 					expeditionStore.createIndex('expeditionId', 'expeditionId', { unique: false });
@@ -168,7 +171,10 @@ class IndexedDBStorage {
 
 				// Resource Transactions: Economic tracking
 				if (!db.objectStoreNames.contains('resourceTransactions')) {
-					const resourceStore = db.createObjectStore('resourceTransactions', { keyPath: 'id', autoIncrement: true });
+					const resourceStore = db.createObjectStore('resourceTransactions', {
+						keyPath: 'id',
+						autoIncrement: true,
+					});
 					resourceStore.createIndex('playerId', 'playerId', { unique: false });
 					resourceStore.createIndex('timestamp', 'timestamp', { unique: false });
 					resourceStore.createIndex('resourceType', 'resourceType', { unique: false });
@@ -339,7 +345,7 @@ class IndexedDBStorage {
 		await this.put('metadata', {
 			key,
 			value,
-			updatedAt: new Date().toISOString()
+			updatedAt: new Date().toISOString(),
 		});
 	}
 
@@ -390,7 +396,7 @@ class IndexedDBStorage {
 			total: battles.length,
 			wins: battles.filter((b) => b.isWin).length,
 			losses: battles.filter((b) => !b.isWin).length,
-			byType: {}
+			byType: {},
 		};
 
 		for (const battle of battles) {

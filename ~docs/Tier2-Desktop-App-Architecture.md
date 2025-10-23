@@ -109,9 +109,9 @@ desktop-app/
 │   └── OrganizedJihad.Analytics.Tests/
 │
 └── docs/
-    ├── API.md                            # Local API documentation
-    ├── DATABASE.md                       # Schema documentation
-    └── DEVELOPMENT.md                    # Setup guide
+	├── API.md                            # Local API documentation
+	├── DATABASE.md                       # Schema documentation
+	└── DEVELOPMENT.md                    # Setup guide
 ```
 
 ## Database Schema (SQLite)
@@ -121,177 +121,177 @@ desktop-app/
 ```sql
 -- Players
 CREATE TABLE Players (
-    UserId TEXT PRIMARY KEY,
-    Name TEXT NOT NULL,
-    Level INTEGER DEFAULT 0,
-    VipLevel INTEGER DEFAULT 0,
-    GuildId TEXT,
-    GuildName TEXT,
-    Gold BIGINT DEFAULT 0,
-    Emeralds BIGINT DEFAULT 0,
-    Energy INTEGER DEFAULT 0,
-    LastUpdate TEXT NOT NULL,           -- ISO 8601 datetime
-    CreatedAt TEXT NOT NULL,
-    INDEX idx_players_name (Name)
+	UserId TEXT PRIMARY KEY,
+	Name TEXT NOT NULL,
+	Level INTEGER DEFAULT 0,
+	VipLevel INTEGER DEFAULT 0,
+	GuildId TEXT,
+	GuildName TEXT,
+	Gold BIGINT DEFAULT 0,
+	Emeralds BIGINT DEFAULT 0,
+	Energy INTEGER DEFAULT 0,
+	LastUpdate TEXT NOT NULL,           -- ISO 8601 datetime
+	CreatedAt TEXT NOT NULL,
+	INDEX idx_players_name (Name)
 );
 
 -- Heroes
 CREATE TABLE Heroes (
-    Id TEXT PRIMARY KEY,                 -- GUID
-    UserId TEXT NOT NULL,
-    HeroId TEXT NOT NULL,
-    Level INTEGER DEFAULT 0,
-    Stars INTEGER DEFAULT 0,
-    Color INTEGER DEFAULT 0,
-    Power BIGINT DEFAULT 0,
-    Experience BIGINT DEFAULT 0,
-    Skills TEXT,                         -- JSON
-    Artifacts TEXT,                      -- JSON
-    Timestamp TEXT NOT NULL,
-    FOREIGN KEY (UserId) REFERENCES Players(UserId) ON DELETE CASCADE,
-    INDEX idx_heroes_userid (UserId),
-    INDEX idx_heroes_heroid (HeroId),
-    INDEX idx_heroes_timestamp (Timestamp)
+	Id TEXT PRIMARY KEY,                 -- GUID
+	UserId TEXT NOT NULL,
+	HeroId TEXT NOT NULL,
+	Level INTEGER DEFAULT 0,
+	Stars INTEGER DEFAULT 0,
+	Color INTEGER DEFAULT 0,
+	Power BIGINT DEFAULT 0,
+	Experience BIGINT DEFAULT 0,
+	Skills TEXT,                         -- JSON
+	Artifacts TEXT,                      -- JSON
+	Timestamp TEXT NOT NULL,
+	FOREIGN KEY (UserId) REFERENCES Players(UserId) ON DELETE CASCADE,
+	INDEX idx_heroes_userid (UserId),
+	INDEX idx_heroes_heroid (HeroId),
+	INDEX idx_heroes_timestamp (Timestamp)
 );
 
 -- Titans
 CREATE TABLE Titans (
-    Id TEXT PRIMARY KEY,
-    UserId TEXT NOT NULL,
-    TitanId TEXT NOT NULL,
-    Level INTEGER DEFAULT 0,
-    Stars INTEGER DEFAULT 0,
-    Power BIGINT DEFAULT 0,
-    Skills TEXT,                         -- JSON
-    Artifacts TEXT,                      -- JSON
-    Timestamp TEXT NOT NULL,
-    FOREIGN KEY (UserId) REFERENCES Players(UserId) ON DELETE CASCADE,
-    INDEX idx_titans_userid (UserId)
+	Id TEXT PRIMARY KEY,
+	UserId TEXT NOT NULL,
+	TitanId TEXT NOT NULL,
+	Level INTEGER DEFAULT 0,
+	Stars INTEGER DEFAULT 0,
+	Power BIGINT DEFAULT 0,
+	Skills TEXT,                         -- JSON
+	Artifacts TEXT,                      -- JSON
+	Timestamp TEXT NOT NULL,
+	FOREIGN KEY (UserId) REFERENCES Players(UserId) ON DELETE CASCADE,
+	INDEX idx_titans_userid (UserId)
 );
 
 -- Pets
 CREATE TABLE Pets (
-    Id TEXT PRIMARY KEY,
-    UserId TEXT NOT NULL,
-    PetId TEXT NOT NULL,
-    Level INTEGER DEFAULT 0,
-    Stars INTEGER DEFAULT 0,
-    Power BIGINT DEFAULT 0,
-    Timestamp TEXT NOT NULL,
-    FOREIGN KEY (UserId) REFERENCES Players(UserId) ON DELETE CASCADE,
-    INDEX idx_pets_userid (UserId)
+	Id TEXT PRIMARY KEY,
+	UserId TEXT NOT NULL,
+	PetId TEXT NOT NULL,
+	Level INTEGER DEFAULT 0,
+	Stars INTEGER DEFAULT 0,
+	Power BIGINT DEFAULT 0,
+	Timestamp TEXT NOT NULL,
+	FOREIGN KEY (UserId) REFERENCES Players(UserId) ON DELETE CASCADE,
+	INDEX idx_pets_userid (UserId)
 );
 
 -- Battles (all types)
 CREATE TABLE Battles (
-    Id TEXT PRIMARY KEY,
-    UserId TEXT NOT NULL,
-    BattleType TEXT NOT NULL,            -- arena, titanArena, grandArena, guildWar, etc.
-    Result TEXT NOT NULL,                -- victory, defeat
-    OpponentId TEXT,
-    OpponentName TEXT,
-    MyTeam TEXT,                         -- JSON compressed
-    EnemyTeam TEXT,                      -- JSON compressed
-    MyPower BIGINT,
-    EnemyPower BIGINT,
-    Reward TEXT,                         -- JSON
-    Timestamp TEXT NOT NULL,
-    FOREIGN KEY (UserId) REFERENCES Players(UserId) ON DELETE CASCADE,
-    INDEX idx_battles_userid_type (UserId, BattleType),
-    INDEX idx_battles_timestamp (Timestamp),
-    INDEX idx_battles_opponent (OpponentId)
+	Id TEXT PRIMARY KEY,
+	UserId TEXT NOT NULL,
+	BattleType TEXT NOT NULL,            -- arena, titanArena, grandArena, guildWar, etc.
+	Result TEXT NOT NULL,                -- victory, defeat
+	OpponentId TEXT,
+	OpponentName TEXT,
+	MyTeam TEXT,                         -- JSON compressed
+	EnemyTeam TEXT,                      -- JSON compressed
+	MyPower BIGINT,
+	EnemyPower BIGINT,
+	Reward TEXT,                         -- JSON
+	Timestamp TEXT NOT NULL,
+	FOREIGN KEY (UserId) REFERENCES Players(UserId) ON DELETE CASCADE,
+	INDEX idx_battles_userid_type (UserId, BattleType),
+	INDEX idx_battles_timestamp (Timestamp),
+	INDEX idx_battles_opponent (OpponentId)
 );
 
 -- Chest Openings
 CREATE TABLE ChestOpenings (
-    Id TEXT PRIMARY KEY,
-    UserId TEXT NOT NULL,
-    ChestType TEXT NOT NULL,
-    ChestId TEXT NOT NULL,
-    Quantity INTEGER DEFAULT 1,
-    Rewards TEXT NOT NULL,               -- JSON array
-    Timestamp TEXT NOT NULL,
-    FOREIGN KEY (UserId) REFERENCES Players(UserId) ON DELETE CASCADE,
-    INDEX idx_chest_userid_type (UserId, ChestType, ChestId),
-    INDEX idx_chest_timestamp (Timestamp)
+	Id TEXT PRIMARY KEY,
+	UserId TEXT NOT NULL,
+	ChestType TEXT NOT NULL,
+	ChestId TEXT NOT NULL,
+	Quantity INTEGER DEFAULT 1,
+	Rewards TEXT NOT NULL,               -- JSON array
+	Timestamp TEXT NOT NULL,
+	FOREIGN KEY (UserId) REFERENCES Players(UserId) ON DELETE CASCADE,
+	INDEX idx_chest_userid_type (UserId, ChestType, ChestId),
+	INDEX idx_chest_timestamp (Timestamp)
 );
 
 -- Opponent Records
 CREATE TABLE OpponentRecords (
-    Id TEXT PRIMARY KEY,
-    UserId TEXT NOT NULL,
-    BattleType TEXT NOT NULL,
-    OpponentId TEXT NOT NULL,
-    OpponentName TEXT,
-    Wins INTEGER DEFAULT 0,
-    Losses INTEGER DEFAULT 0,
-    LastBattle TEXT,
-    FOREIGN KEY (UserId) REFERENCES Players(UserId) ON DELETE CASCADE,
-    UNIQUE (UserId, BattleType, OpponentId),
-    INDEX idx_opponent_userid_type (UserId, BattleType)
+	Id TEXT PRIMARY KEY,
+	UserId TEXT NOT NULL,
+	BattleType TEXT NOT NULL,
+	OpponentId TEXT NOT NULL,
+	OpponentName TEXT,
+	Wins INTEGER DEFAULT 0,
+	Losses INTEGER DEFAULT 0,
+	LastBattle TEXT,
+	FOREIGN KEY (UserId) REFERENCES Players(UserId) ON DELETE CASCADE,
+	UNIQUE (UserId, BattleType, OpponentId),
+	INDEX idx_opponent_userid_type (UserId, BattleType)
 );
 
 -- Game Snapshots (historical data)
 CREATE TABLE GameSnapshots (
-    Id TEXT PRIMARY KEY,
-    UserId TEXT NOT NULL,
-    Level INTEGER,
-    TotalPower BIGINT,
-    Gold BIGINT,
-    Emeralds BIGINT,
-    HeroCount INTEGER,
-    Timestamp TEXT NOT NULL,
-    FOREIGN KEY (UserId) REFERENCES Players(UserId) ON DELETE CASCADE,
-    INDEX idx_snapshots_userid_timestamp (UserId, Timestamp)
+	Id TEXT PRIMARY KEY,
+	UserId TEXT NOT NULL,
+	Level INTEGER,
+	TotalPower BIGINT,
+	Gold BIGINT,
+	Emeralds BIGINT,
+	HeroCount INTEGER,
+	Timestamp TEXT NOT NULL,
+	FOREIGN KEY (UserId) REFERENCES Players(UserId) ON DELETE CASCADE,
+	INDEX idx_snapshots_userid_timestamp (UserId, Timestamp)
 );
 
 -- Shop Purchases
 CREATE TABLE ShopPurchases (
-    Id TEXT PRIMARY KEY,
-    UserId TEXT NOT NULL,
-    ShopId TEXT,
-    SlotId TEXT,
-    ItemId TEXT,
-    Cost TEXT,                           -- JSON
-    Reward TEXT,                         -- JSON
-    Timestamp TEXT NOT NULL,
-    FOREIGN KEY (UserId) REFERENCES Players(UserId) ON DELETE CASCADE,
-    INDEX idx_purchases_userid (UserId),
-    INDEX idx_purchases_timestamp (Timestamp)
+	Id TEXT PRIMARY KEY,
+	UserId TEXT NOT NULL,
+	ShopId TEXT,
+	SlotId TEXT,
+	ItemId TEXT,
+	Cost TEXT,                           -- JSON
+	Reward TEXT,                         -- JSON
+	Timestamp TEXT NOT NULL,
+	FOREIGN KEY (UserId) REFERENCES Players(UserId) ON DELETE CASCADE,
+	INDEX idx_purchases_userid (UserId),
+	INDEX idx_purchases_timestamp (Timestamp)
 );
 
 -- Quest Completions
 CREATE TABLE QuestCompletions (
-    Id TEXT PRIMARY KEY,
-    UserId TEXT NOT NULL,
-    QuestId TEXT NOT NULL,
-    Reward TEXT,                         -- JSON
-    Timestamp TEXT NOT NULL,
-    FOREIGN KEY (UserId) REFERENCES Players(UserId) ON DELETE CASCADE,
-    INDEX idx_quests_userid (UserId),
-    INDEX idx_quests_timestamp (Timestamp)
+	Id TEXT PRIMARY KEY,
+	UserId TEXT NOT NULL,
+	QuestId TEXT NOT NULL,
+	Reward TEXT,                         -- JSON
+	Timestamp TEXT NOT NULL,
+	FOREIGN KEY (UserId) REFERENCES Players(UserId) ON DELETE CASCADE,
+	INDEX idx_quests_userid (UserId),
+	INDEX idx_quests_timestamp (Timestamp)
 );
 
 -- Expedition Battles
 CREATE TABLE ExpeditionBattles (
-    Id TEXT PRIMARY KEY,
-    UserId TEXT NOT NULL,
-    NodeId TEXT,
-    Result TEXT NOT NULL,
-    MyTeam TEXT,
-    EnemyTeam TEXT,
-    Reward TEXT,
-    Timestamp TEXT NOT NULL,
-    FOREIGN KEY (UserId) REFERENCES Players(UserId) ON DELETE CASCADE,
-    INDEX idx_expedition_userid (UserId),
-    INDEX idx_expedition_timestamp (Timestamp)
+	Id TEXT PRIMARY KEY,
+	UserId TEXT NOT NULL,
+	NodeId TEXT,
+	Result TEXT NOT NULL,
+	MyTeam TEXT,
+	EnemyTeam TEXT,
+	Reward TEXT,
+	Timestamp TEXT NOT NULL,
+	FOREIGN KEY (UserId) REFERENCES Players(UserId) ON DELETE CASCADE,
+	INDEX idx_expedition_userid (UserId),
+	INDEX idx_expedition_timestamp (Timestamp)
 );
 
 -- Sync Metadata
 CREATE TABLE SyncMetadata (
-    Key TEXT PRIMARY KEY,
-    Value TEXT NOT NULL,
-    UpdatedAt TEXT NOT NULL
+	Key TEXT PRIMARY KEY,
+	Value TEXT NOT NULL,
+	UpdatedAt TEXT NOT NULL
 );
 ```
 
@@ -326,11 +326,11 @@ Upload data batch from userscript.
   "userId": "user123",
   "timestamp": 1705852800000,
   "data": {
-    "player": {...},
-    "heroes": [...],
-    "battles": [...],
-    "chestOpenings": [...],
-    "gameSnapshots": [...]
+	"player": {...},
+	"heroes": [...],
+	"battles": [...],
+	"chestOpenings": [...],
+	"gameSnapshots": [...]
   }
 }
 ```
@@ -405,19 +405,19 @@ Get chest drop rate statistics.
 ```json
 {
   "chests": [
-    {
-      "chestType": "heroic",
-      "chestId": "001",
-      "openings": 250,
-      "items": [
-        {
-          "itemId": "soulstone_001",
-          "dropCount": 45,
-          "dropRate": 18.0,
-          "avgAmount": 4.0
-        }
-      ]
-    }
+	{
+	  "chestType": "heroic",
+	  "chestId": "001",
+	  "openings": 250,
+	  "items": [
+		{
+		  "itemId": "soulstone_001",
+		  "dropCount": 45,
+		  "dropRate": 18.0,
+		  "avgAmount": 4.0
+		}
+	  ]
+	}
   ]
 }
 ```

@@ -52,15 +52,15 @@ The userscript sync client was **already fully implemented** and working correct
 **Data Flow**:
 ```
 Browser Storage (IndexedDB)
-    ↓ syncToServer()
+	↓ syncToServer()
 HTTP POST to localhost:5124/api/sync/import
-    ↓
+	↓
 SyncController.ImportData()
-    ↓
+	↓
 SyncService.ImportBrowserDataAsync()
-    ↓
+	↓
 GameDatabaseContext (EF Core)
-    ↓
+	↓
 SQLite Database (herowars.db)
 ```
 
@@ -102,9 +102,9 @@ Created comprehensive test script: `test-sync.ps1`
 1. **Health Check** ✅
    ```json
    {
-     "status": "healthy",
-     "version": "1.0.0",
-     "timestamp": "2025-10-22T23:45:48Z"
+	 "status": "healthy",
+	 "version": "1.0.0",
+	 "timestamp": "2025-10-22T23:45:48Z"
    }
    ```
 
@@ -136,17 +136,17 @@ Created comprehensive test script: `test-sync.ps1`
 5. **Data Import Response** ✅
    ```json
    {
-     "success": true,
-     "message": "Data imported successfully",
-     "syncTimestamp": "2025-10-22T23:45:49Z",
-     "importedCounts": {
-       "playerSnapshots": 1,
-       "arenaBattles": 1,
-       "chestOpenings": 1,
-       "opponents": 1,
-       "goals": 1,
-       "calendarEvents": 1
-     }
+	 "success": true,
+	 "message": "Data imported successfully",
+	 "syncTimestamp": "2025-10-22T23:45:49Z",
+	 "importedCounts": {
+	   "playerSnapshots": 1,
+	   "arenaBattles": 1,
+	   "chestOpenings": 1,
+	   "opponents": 1,
+	   "goals": 1,
+	   "calendarEvents": 1
+	 }
    }
    ```
 
@@ -157,44 +157,44 @@ Created comprehensive test script: `test-sync.ps1`
 │          Browser (Hero Wars Game)                   │
 │  User plays game, battles, opens chests             │
 └───────────────────┬─────────────────────────────────┘
-                    │ API Interception
-                    ↓
+					│ API Interception
+					↓
 ┌─────────────────────────────────────────────────────┐
 │          Game Tracker (gameTracker.js)              │
 │  XMLHttpRequest proxying captures API calls         │
 └───────────────────┬─────────────────────────────────┘
-                    │ Extract & Parse
-                    ↓
+					│ Extract & Parse
+					↓
 ┌─────────────────────────────────────────────────────┐
 │       IndexedDB Storage (indexedDBStorage.js)       │
 │  Local browser database (7 object stores)           │
 └───────────────────┬─────────────────────────────────┘
-                    │ Every 15 minutes (auto-sync)
-                    ↓
+					│ Every 15 minutes (auto-sync)
+					↓
 ┌─────────────────────────────────────────────────────┐
 │           Sync Client (syncClient.js)               │
 │  POST to localhost:5124/api/sync/import             │
 └───────────────────┬─────────────────────────────────┘
-                    │ HTTP POST (JSON payload)
-                    ↓
+					│ HTTP POST (JSON payload)
+					↓
 ┌─────────────────────────────────────────────────────┐
 │        ASP.NET Core API (SyncController)            │
 │  Receives BrowserSyncData DTO                       │
 └───────────────────┬─────────────────────────────────┘
-                    │ ImportBrowserDataAsync()
-                    ↓
+					│ ImportBrowserDataAsync()
+					↓
 ┌─────────────────────────────────────────────────────┐
 │          Sync Service (SyncService.cs)              │
 │  Processes and imports data into database           │
 └───────────────────┬─────────────────────────────────┘
-                    │ EF Core SaveChangesAsync()
-                    ↓
+					│ EF Core SaveChangesAsync()
+					↓
 ┌─────────────────────────────────────────────────────┐
 │      Database Context (GameDatabaseContext)         │
 │  Audit interceptor populates audit fields           │
 └───────────────────┬─────────────────────────────────┘
-                    │ SQL commands
-                    ↓
+					│ SQL commands
+					↓
 ┌─────────────────────────────────────────────────────┐
 │            SQLite Database (herowars.db)            │
 │  Persistent storage with audit trail               │
@@ -223,32 +223,32 @@ Created comprehensive test script: `test-sync.ps1`
 ```javascript
 {
   currentSnapshot: {
-    playerId, playerName, level, teamLevel, power,
-    arenaRank, grandArenaRank, titanArenaRank,
-    gold, emeralds, timestamp
+	playerId, playerName, level, teamLevel, power,
+	arenaRank, grandArenaRank, titanArenaRank,
+	gold, emeralds, timestamp
   },
   arenaBattles: [
-    { opponentId, opponentName, isWin, playerPower, 
-      opponentPower, playerHeroes, opponentHeroes, 
-      rewards, timestamp }
+	{ opponentId, opponentName, isWin, playerPower, 
+	  opponentPower, playerHeroes, opponentHeroes, 
+	  rewards, timestamp }
   ],
   // ... other battle types
   chestOpenings: [
-    { chestType, quantity, openMethod, timestamp,
-      chestDrops: [{ itemType, itemId, quantity, rarity }] }
+	{ chestType, quantity, openMethod, timestamp,
+	  chestDrops: [{ itemType, itemId, quantity, rarity }] }
   ],
   opponents: [
-    { opponentId, opponentName, level, power, lastSeen,
-      lastBattleType, totalBattles, totalWins, totalLosses,
-      winRate, teamComposition }
+	{ opponentId, opponentName, level, power, lastSeen,
+	  lastBattleType, totalBattles, totalWins, totalLosses,
+	  winRate, teamComposition }
   ],
   goals: [
-    { title, description, isShortTerm, targetValue,
-      currentValue, isCompleted, createdAt }
+	{ title, description, isShortTerm, targetValue,
+	  currentValue, isCompleted, createdAt }
   ],
   calendarEvents: [
-    { title, description, eventDate, isRecurring,
-      isCompleted, createdAt }
+	{ title, description, eventDate, isRecurring,
+	  isCompleted, createdAt }
   ]
 }
 ```

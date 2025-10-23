@@ -436,21 +436,21 @@ OrganizedJihad/
 │       └── Home.razor.tmp                  # Needs model property updates
 │
 └── userscript/                             # TamperMonkey Browser Extension
-    ├── package.json                        # Webpack build config
-    ├── src/
-    │   ├── index.js                        # Main entry point
-    │   ├── modules/
-    │   │   ├── gameTracker.js              # API interception
-    │   │   ├── indexedDBStorage.js         # Local browser storage (7 stores)
-    │   │   ├── syncClient.js               # HTTP POST to localhost:5124
-    │   │   ├── goalsManager.js
-    │   │   ├── calendarManager.js
-    │   │   ├── suggestionsEngine.js
-    │   │   └── uiManager.js
-    │   └── trackers/
-    │       └── ArenaTracker.js
-    └── dist/
-        └── organized-jihad.user.js         # 465 KiB compiled bundle
+	├── package.json                        # Webpack build config
+	├── src/
+	│   ├── index.js                        # Main entry point
+	│   ├── modules/
+	│   │   ├── gameTracker.js              # API interception
+	│   │   ├── indexedDBStorage.js         # Local browser storage (7 stores)
+	│   │   ├── syncClient.js               # HTTP POST to localhost:5124
+	│   │   ├── goalsManager.js
+	│   │   ├── calendarManager.js
+	│   │   ├── suggestionsEngine.js
+	│   │   └── uiManager.js
+	│   └── trackers/
+	│       └── ArenaTracker.js
+	└── dist/
+		└── organized-jihad.user.js         # 465 KiB compiled bundle
 ```
 
 ## Testing Evidence

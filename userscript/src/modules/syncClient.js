@@ -1,7 +1,7 @@
 /**
  * SyncClient Module
  * Handles synchronization between browser storage and the ASP.NET Core Web API
- * 
+ *
  * API Documentation: http://localhost:5124/api/sync
  * Endpoints:
  * - POST /api/sync/import - Import data from browser
@@ -28,8 +28,8 @@ class SyncClient {
 			const response = await fetch(this.healthEndpoint, {
 				method: 'GET',
 				headers: {
-					'Content-Type': 'application/json'
-				}
+					'Content-Type': 'application/json',
+				},
 			});
 			return response.ok;
 		} catch (error) {
@@ -47,8 +47,8 @@ class SyncClient {
 			const response = await fetch(this.lastSyncEndpoint, {
 				method: 'GET',
 				headers: {
-					'Content-Type': 'application/json'
-				}
+					'Content-Type': 'application/json',
+				},
 			});
 
 			if (!response.ok) {
@@ -72,8 +72,8 @@ class SyncClient {
 			const response = await fetch(this.statsEndpoint, {
 				method: 'GET',
 				headers: {
-					'Content-Type': 'application/json'
-				}
+					'Content-Type': 'application/json',
+				},
 			});
 
 			if (!response.ok) {
@@ -97,20 +97,13 @@ class SyncClient {
 
 		try {
 			// Gather all data from IndexedDB
-			const [
-				snapshots,
-				battles,
-				chests,
-				opponents,
-				goals,
-				events
-			] = await Promise.all([
+			const [snapshots, battles, chests, opponents, goals, events] = await Promise.all([
 				storage.getAll('snapshots'),
 				storage.getAll('battles'),
 				storage.getAll('chests'),
 				storage.getAll('opponents'),
 				storage.getAll('goals'),
-				storage.getAll('events')
+				storage.getAll('events'),
 			]);
 
 			// Separate battles by type
@@ -121,22 +114,24 @@ class SyncClient {
 			const raidBossAttacks = battles.filter((b) => b.battleType === 'RaidBoss');
 
 			// Get the most recent snapshot
-			const currentSnapshot = snapshots.length > 0
-				? snapshots.reduce((latest, current) =>
-					new Date(current.timestamp) > new Date(latest.timestamp) ? current : latest
-				)
-				: null;
+			const currentSnapshot =
+				snapshots.length > 0
+					? snapshots.reduce((latest, current) =>
+							new Date(current.timestamp) > new Date(latest.timestamp) ? current : latest
+						)
+					: null;
 
 			// Get all new entity types added in Phase 7
 			const heroes = await storage.getAll('heroes');
 			const titans = await storage.getAll('titans');
 			const pets = await storage.getAll('pets');
 			const inventorySnapshots = await storage.getAll('inventory');
-			const currentInventory = inventorySnapshots.length > 0
-				? inventorySnapshots.reduce((latest, current) =>
-					new Date(current.timestamp) > new Date(latest.timestamp) ? current : latest
-				)
-				: null;
+			const currentInventory =
+				inventorySnapshots.length > 0
+					? inventorySnapshots.reduce((latest, current) =>
+							new Date(current.timestamp) > new Date(latest.timestamp) ? current : latest
+						)
+					: null;
 			const questCompletions = await storage.getAll('questCompletions');
 			const missionProgress = await storage.getAll('missionProgress');
 			const shopPurchases = await storage.getAll('shopPurchases');
@@ -169,7 +164,7 @@ class SyncClient {
 				towerProgress,
 				expeditionBattles,
 				resourceTransactions,
-				guildActivities
+				guildActivities,
 			};
 
 			console.log('[OrganizedJihad] Sync payload:', {
@@ -194,16 +189,16 @@ class SyncClient {
 				towerProgress: towerProgress.length,
 				expeditionBattles: expeditionBattles.length,
 				resourceTransactions: resourceTransactions.length,
-				guildActivities: guildActivities.length
+				guildActivities: guildActivities.length,
 			});
 
 			// Send to API
 			const response = await fetch(this.syncEndpoint, {
 				method: 'POST',
 				headers: {
-					'Content-Type': 'application/json'
+					'Content-Type': 'application/json',
 				},
-				body: JSON.stringify(syncData)
+				body: JSON.stringify(syncData),
 			});
 
 			if (!response.ok) {
@@ -268,13 +263,16 @@ class SyncClient {
 		});
 
 		// Then sync on interval
-		return setInterval(async () => {
-			try {
-				await this.syncWithRetry(storage);
-			} catch (error) {
-				console.error('[OrganizedJihad] Auto-sync failed:', error);
-			}
-		}, intervalMinutes * 60 * 1000);
+		return setInterval(
+			async () => {
+				try {
+					await this.syncWithRetry(storage);
+				} catch (error) {
+					console.error('[OrganizedJihad] Auto-sync failed:', error);
+				}
+			},
+			intervalMinutes * 60 * 1000
+		);
 	}
 }
 

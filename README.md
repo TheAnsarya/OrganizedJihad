@@ -40,7 +40,7 @@ OrganizedJihad/- **Goals Management**: Set and track short-term and long-term go
 
 └── .github/                # GitHub configuration   - [Firefox](https://addons.mozilla.org/en-US/firefox/addon/tampermonkey/)
 
-    └── copilot-instructions.md   - [Edge](https://microsoftedge.microsoft.com/addons/detail/tampermonkey/iikmkjmpaadaobahmlepeloendndfphd)
+	└── copilot-instructions.md   - [Edge](https://microsoftedge.microsoft.com/addons/detail/tampermonkey/iikmkjmpaadaobahmlepeloendndfphd)
 
 ```   - [Safari](https://apps.apple.com/us/app/tampermonkey/id1482490089)
 
@@ -207,7 +207,7 @@ Edit `src/modules/gameTracker.js` to add new data capture methods:
 
 ```javascript
 captureNewGameData(element) {
-    // Your custom tracking logic here
+	// Your custom tracking logic here
 }
 ```
 

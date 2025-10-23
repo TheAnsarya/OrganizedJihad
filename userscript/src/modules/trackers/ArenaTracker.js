@@ -221,8 +221,12 @@ class ArenaTracker {
 			// Grand Arena has multiple rounds, store all team data
 			playerPower: data.attackerTeams ? this.helpers.calculateMultiTeamPower(data.attackerTeams) : 0,
 			opponentPower: data.defenderTeams ? this.helpers.calculateMultiTeamPower(data.defenderTeams) : 0,
-			playerHeroes: data.attackerTeams ? JSON.stringify(data.attackerTeams.map((t) => this.helpers.compressHeroTeam(t.heroes))) : null,
-			opponentHeroes: data.defenderTeams ? JSON.stringify(data.defenderTeams.map((t) => this.helpers.compressHeroTeam(t.heroes))) : null,
+			playerHeroes: data.attackerTeams
+				? JSON.stringify(data.attackerTeams.map((t) => this.helpers.compressHeroTeam(t.heroes)))
+				: null,
+			opponentHeroes: data.defenderTeams
+				? JSON.stringify(data.defenderTeams.map((t) => this.helpers.compressHeroTeam(t.heroes)))
+				: null,
 			rewards: data.reward ? JSON.stringify(data.reward) : null,
 			timestamp: new Date().toISOString(),
 		};

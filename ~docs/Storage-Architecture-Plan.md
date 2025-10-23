@@ -41,10 +41,10 @@
 │  │  - Backup to file system                                 │  │
 │  └──────────────────────────────────────────────────────────┘  │
 └─────────────────────────────────────────────────────────────────┘
-                              ↓ ↑
-                      Upload every 30 min
-                  (or manual trigger)
-                              ↓ ↑
+							  ↓ ↑
+					  Upload every 30 min
+				  (or manual trigger)
+							  ↓ ↑
 ┌─────────────────────────────────────────────────────────────────┐
 │              CLOUD - C# .NET API (Tier 3 - Remote)             │
 │  ┌──────────────────────────────────────────────────────────┐  │
@@ -145,72 +145,72 @@ OrganizedJihad Desktop App
 ```sql
 -- Players table
 CREATE TABLE Players (
-    UserId VARCHAR(50) PRIMARY KEY,
-    Name VARCHAR(100),
-    Level INT,
-    VipLevel INT,
-    GuildId VARCHAR(50),
-    GuildName VARCHAR(100),
-    LastUpdate DATETIME
+	UserId VARCHAR(50) PRIMARY KEY,
+	Name VARCHAR(100),
+	Level INT,
+	VipLevel INT,
+	GuildId VARCHAR(50),
+	GuildName VARCHAR(100),
+	LastUpdate DATETIME
 );
 
 -- Heroes table
 CREATE TABLE Heroes (
-    Id UNIQUEIDENTIFIER PRIMARY KEY DEFAULT NEWID(),
-    UserId VARCHAR(50) FOREIGN KEY REFERENCES Players(UserId),
-    HeroId VARCHAR(50),
-    Level INT,
-    Stars INT,
-    Color INT,
-    Power INT,
-    Timestamp DATETIME DEFAULT GETDATE()
+	Id UNIQUEIDENTIFIER PRIMARY KEY DEFAULT NEWID(),
+	UserId VARCHAR(50) FOREIGN KEY REFERENCES Players(UserId),
+	HeroId VARCHAR(50),
+	Level INT,
+	Stars INT,
+	Color INT,
+	Power INT,
+	Timestamp DATETIME DEFAULT GETDATE()
 );
 
 -- Battles table
 CREATE TABLE Battles (
-    Id UNIQUEIDENTIFIER PRIMARY KEY DEFAULT NEWID(),
-    UserId VARCHAR(50) FOREIGN KEY REFERENCES Players(UserId),
-    BattleType VARCHAR(50), -- arena, titanArena, guildWar, etc
-    Result VARCHAR(20), -- victory, defeat
-    OpponentId VARCHAR(50),
-    MyTeam NVARCHAR(MAX), -- JSON compressed team
-    EnemyTeam NVARCHAR(MAX), -- JSON compressed team
-    Reward NVARCHAR(MAX), -- JSON rewards
-    Timestamp DATETIME DEFAULT GETDATE()
+	Id UNIQUEIDENTIFIER PRIMARY KEY DEFAULT NEWID(),
+	UserId VARCHAR(50) FOREIGN KEY REFERENCES Players(UserId),
+	BattleType VARCHAR(50), -- arena, titanArena, guildWar, etc
+	Result VARCHAR(20), -- victory, defeat
+	OpponentId VARCHAR(50),
+	MyTeam NVARCHAR(MAX), -- JSON compressed team
+	EnemyTeam NVARCHAR(MAX), -- JSON compressed team
+	Reward NVARCHAR(MAX), -- JSON rewards
+	Timestamp DATETIME DEFAULT GETDATE()
 );
 
 -- Chest Openings table
 CREATE TABLE ChestOpenings (
-    Id UNIQUEIDENTIFIER PRIMARY KEY DEFAULT NEWID(),
-    UserId VARCHAR(50) FOREIGN KEY REFERENCES Players(UserId),
-    ChestType VARCHAR(50),
-    ChestId VARCHAR(50),
-    Quantity INT,
-    Rewards NVARCHAR(MAX), -- JSON array of rewards
-    Timestamp DATETIME DEFAULT GETDATE()
+	Id UNIQUEIDENTIFIER PRIMARY KEY DEFAULT NEWID(),
+	UserId VARCHAR(50) FOREIGN KEY REFERENCES Players(UserId),
+	ChestType VARCHAR(50),
+	ChestId VARCHAR(50),
+	Quantity INT,
+	Rewards NVARCHAR(MAX), -- JSON array of rewards
+	Timestamp DATETIME DEFAULT GETDATE()
 );
 
 -- Historical Snapshots table
 CREATE TABLE GameSnapshots (
-    Id UNIQUEIDENTIFIER PRIMARY KEY DEFAULT NEWID(),
-    UserId VARCHAR(50) FOREIGN KEY REFERENCES Players(UserId),
-    Level INT,
-    TotalPower BIGINT,
-    Gold BIGINT,
-    Emeralds BIGINT,
-    Timestamp DATETIME DEFAULT GETDATE()
+	Id UNIQUEIDENTIFIER PRIMARY KEY DEFAULT NEWID(),
+	UserId VARCHAR(50) FOREIGN KEY REFERENCES Players(UserId),
+	Level INT,
+	TotalPower BIGINT,
+	Gold BIGINT,
+	Emeralds BIGINT,
+	Timestamp DATETIME DEFAULT GETDATE()
 );
 
 -- Opponent Records table
 CREATE TABLE OpponentRecords (
-    Id UNIQUEIDENTIFIER PRIMARY KEY DEFAULT NEWID(),
-    UserId VARCHAR(50) FOREIGN KEY REFERENCES Players(UserId),
-    BattleType VARCHAR(50),
-    OpponentId VARCHAR(50),
-    Wins INT DEFAULT 0,
-    Losses INT DEFAULT 0,
-    LastBattle DATETIME,
-    UNIQUE(UserId, BattleType, OpponentId)
+	Id UNIQUEIDENTIFIER PRIMARY KEY DEFAULT NEWID(),
+	UserId VARCHAR(50) FOREIGN KEY REFERENCES Players(UserId),
+	BattleType VARCHAR(50),
+	OpponentId VARCHAR(50),
+	Wins INT DEFAULT 0,
+	Losses INT DEFAULT 0,
+	LastBattle DATETIME,
+	UNIQUE(UserId, BattleType, OpponentId)
 );
 
 -- Indexes for performance
@@ -226,57 +226,57 @@ CREATE INDEX IX_GameSnapshots_UserId_Timestamp ON GameSnapshots(UserId, Timestam
 ```javascript
 // In userscript: Send data to local app via WebSocket or HTTP
 class LocalDBSync {
-    constructor() {
-        this.syncUrl = 'http://localhost:5000/api/sync';
-        this.syncInterval = 300000; // 5 minutes
-        this.lastSync = Date.now();
-    }
+	constructor() {
+		this.syncUrl = 'http://localhost:5000/api/sync';
+		this.syncInterval = 300000; // 5 minutes
+		this.lastSync = Date.now();
+	}
 
-    async syncData() {
-        try {
-            const data = await gameTracker.exportAllData();
-            
-            const response = await fetch(this.syncUrl, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-API-Key': localStorage.getItem('localApiKey')
-                },
-                body: JSON.stringify({
-                    userId: data.player.userId,
-                    timestamp: Date.now(),
-                    data: data
-                })
-            });
+	async syncData() {
+		try {
+			const data = await gameTracker.exportAllData();
+			
+			const response = await fetch(this.syncUrl, {
+				method: 'POST',
+				headers: {
+					'Content-Type': 'application/json',
+					'X-API-Key': localStorage.getItem('localApiKey')
+				},
+				body: JSON.stringify({
+					userId: data.player.userId,
+					timestamp: Date.now(),
+					data: data
+				})
+			});
 
-            if (response.ok) {
-                console.log('[OJ] Data synced to local database');
-                this.lastSync = Date.now();
-                
-                // Clear old browser data after successful sync
-                this.trimBrowserCache();
-            }
-        } catch (error) {
-            console.error('[OJ] Sync failed:', error);
-            // Keep data in browser cache until next sync attempt
-        }
-    }
+			if (response.ok) {
+				console.log('[OJ] Data synced to local database');
+				this.lastSync = Date.now();
+				
+				// Clear old browser data after successful sync
+				this.trimBrowserCache();
+			}
+		} catch (error) {
+			console.error('[OJ] Sync failed:', error);
+			// Keep data in browser cache until next sync attempt
+		}
+	}
 
-    trimBrowserCache() {
-        // Keep only last 100 records after successful sync
-        const limit = 100;
-        
-        ['battleHistory', 'arenaBattleHistory', 'chestOpeningHistory'].forEach(key => {
-            const history = storageManager.get(key, []);
-            if (history.length > limit) {
-                storageManager.set(key, history.slice(-limit));
-            }
-        });
-    }
+	trimBrowserCache() {
+		// Keep only last 100 records after successful sync
+		const limit = 100;
+		
+		['battleHistory', 'arenaBattleHistory', 'chestOpeningHistory'].forEach(key => {
+			const history = storageManager.get(key, []);
+			if (history.length > limit) {
+				storageManager.set(key, history.slice(-limit));
+			}
+		});
+	}
 
-    startAutoSync() {
-        setInterval(() => this.syncData(), this.syncInterval);
-    }
+	startAutoSync() {
+		setInterval(() => this.syncData(), this.syncInterval);
+	}
 }
 ```
 
@@ -345,54 +345,54 @@ POST   /api/export/backup          // Trigger backup
 [Authorize] // Require JWT token
 public class SyncController : ControllerBase
 {
-    private readonly AppDbContext _context;
-    private readonly IDataIngestionService _ingestionService;
+	private readonly AppDbContext _context;
+	private readonly IDataIngestionService _ingestionService;
 
-    [HttpPost("upload")]
-    [RequestSizeLimit(10_000_000)] // 10 MB limit
-    public async Task<IActionResult> Upload([FromBody] SyncRequest request)
-    {
-        // Validate user owns this data
-        var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-        if (request.UserId != userId)
-            return Forbid();
+	[HttpPost("upload")]
+	[RequestSizeLimit(10_000_000)] // 10 MB limit
+	public async Task<IActionResult> Upload([FromBody] SyncRequest request)
+	{
+		// Validate user owns this data
+		var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+		if (request.UserId != userId)
+			return Forbid();
 
-        // Validate and sanitize data
-        var validatedData = await _ingestionService.ValidateAsync(request.Data);
+		// Validate and sanitize data
+		var validatedData = await _ingestionService.ValidateAsync(request.Data);
 
-        // Store in database
-        await _context.Battles.AddRangeAsync(validatedData.Battles);
-        await _context.ChestOpenings.AddRangeAsync(validatedData.ChestOpenings);
-        await _context.SaveChangesAsync();
+		// Store in database
+		await _context.Battles.AddRangeAsync(validatedData.Battles);
+		await _context.ChestOpenings.AddRangeAsync(validatedData.ChestOpenings);
+		await _context.SaveChangesAsync();
 
-        return Ok(new { 
-            message = "Data synced successfully",
-            recordsStored = validatedData.TotalRecords 
-        });
-    }
+		return Ok(new { 
+			message = "Data synced successfully",
+			recordsStored = validatedData.TotalRecords 
+		});
+	}
 
-    [HttpGet("download")]
-    public async Task<IActionResult> Download()
-    {
-        var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+	[HttpGet("download")]
+	public async Task<IActionResult> Download()
+	{
+		var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
 
-        var data = new UserDataExport
-        {
-            Player = await _context.Players.FirstOrDefaultAsync(p => p.UserId == userId),
-            Battles = await _context.Battles
-                .Where(b => b.UserId == userId)
-                .OrderByDescending(b => b.Timestamp)
-                .Take(1000)
-                .ToListAsync(),
-            ChestOpenings = await _context.ChestOpenings
-                .Where(c => c.UserId == userId)
-                .OrderByDescending(c => c.Timestamp)
-                .Take(1000)
-                .ToListAsync()
-        };
+		var data = new UserDataExport
+		{
+			Player = await _context.Players.FirstOrDefaultAsync(p => p.UserId == userId),
+			Battles = await _context.Battles
+				.Where(b => b.UserId == userId)
+				.OrderByDescending(b => b.Timestamp)
+				.Take(1000)
+				.ToListAsync(),
+			ChestOpenings = await _context.ChestOpenings
+				.Where(c => c.UserId == userId)
+				.OrderByDescending(c => c.Timestamp)
+				.Take(1000)
+				.ToListAsync()
+		};
 
-        return Ok(data);
-    }
+		return Ok(data);
+	}
 }
 ```
 

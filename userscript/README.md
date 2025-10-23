@@ -141,7 +141,7 @@ Edit `src/modules/gameTracker.js` to add new data capture methods:
 
 ```javascript
 captureNewGameData(element) {
-    // Your custom tracking logic here
+	// Your custom tracking logic here
 }
 ```
 
