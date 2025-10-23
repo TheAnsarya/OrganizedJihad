@@ -141,8 +141,10 @@ make sure the chat log files are up to date
 continue with `Phase 3: Review API Data Collection` and definitely track everything about pets and titans and heros and inventory and everything else we can track
 Phase 7: Update Userscript
 
+create a comprehensive todo for testing the api, database, and userscript, and then begin implementing testing in stages. Remember: modern practices, comment everything, include links to external resources, update the chat log as you go.
 
-
+do 2, 3, and 4 in order. Remember: modern practices, comment everything, include links to external resources, update the chat log as you go.
+Activity Tracking Completion - Add more resource/guild tracking hooks
 
 
 
