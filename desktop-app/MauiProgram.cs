@@ -1,4 +1,4 @@
-﻿using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using OrganizedJihad.Data;
 using OrganizedJihad.Desktop.Services;
@@ -10,15 +10,6 @@ public static class MauiProgram {
 		var builder = MauiApp.CreateBuilder();
 		builder
 			.UseMauiApp<App>()
-
-<<<<<<< TODO: Unmerged change from project 'OrganizedJihad.Desktop(net10.0-ios)', Before:
-			.ConfigureFonts(fonts =>
-			{
-				fonts.AddFont("OpenSans-Regular.ttf", "OpenSansRegular");
-			});
-=======
-			.ConfigureFonts(fonts => fonts.AddFont("OpenSans-Regular.ttf", "OpenSansRegular"));
->>>>>>> After
 			.ConfigureFonts(fonts => fonts.AddFont("OpenSans-Regular.ttf", "OpenSansRegular"));
 
 		builder.Services.AddMauiBlazorWebView();

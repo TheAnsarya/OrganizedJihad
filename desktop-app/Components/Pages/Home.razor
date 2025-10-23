@@ -79,7 +79,7 @@ else
 							{
 								<div class="list-group-item d-flex justify-content-between align-items-center">
 									<div>
-										<strong>@battle.BattleType</strong>
+										<strong>Arena Battle</strong>
 										<br />
 										<small class="text-muted">vs @(battle.OpponentName ?? battle.OpponentId.ToString())</small>
 									</div>
@@ -122,10 +122,10 @@ else
 									<div>
 										<strong>@chest.ChestType</strong>
 										<br />
-										<small class="text-muted">@chest.OpenedAt.ToString("MMM dd, yyyy HH:mm")</small>
+										<small class="text-muted">@chest.Timestamp.ToString("MMM dd, yyyy HH:mm")</small>
 									</div>
 									<div>
-										<span class="badge bg-info">@chest.ChestDrops.Count items</span>
+										<span class="badge bg-info">@chest.Drops.Count items</span>
 									</div>
 								</div>
 							}
@@ -153,7 +153,6 @@ else
 						<div class="row">
 							<div class="col-md-4">
 								<p><strong>Level:</strong> @LatestSnapshot.Level</p>
-								<p><strong>VIP Level:</strong> @LatestSnapshot.VipLevel</p>
 								<p><strong>Team Power:</strong> @LatestSnapshot.TeamPower.ToString("N0")</p>
 							</div>
 							<div class="col-md-4">
@@ -253,17 +252,17 @@ else
 
 		// Get recent chests
 		RecentChests = await context.ChestOpenings
-			.Include(c => c.ChestDrops)
-			.OrderByDescending(c => c.OpenedAt)
+			.Include(c => c.Drops)
+			.OrderByDescending(c => c.Timestamp)
 			.Take(10)
 			.ToListAsync();
 
 		// Get last sync metadata
 		var syncMetadata = await context.SyncMetadata
-			.OrderByDescending(m => m.LastSync)
+			.OrderByDescending(m => m.UpdatedAt)
 			.FirstOrDefaultAsync();
 
-		Stats.LastSync = syncMetadata?.LastSync;
+		Stats.LastSync = syncMetadata?.UpdatedAt;
 	}
 
 	private string GetRelativeTime(DateTime timestamp)

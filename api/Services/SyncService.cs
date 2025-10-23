@@ -478,8 +478,8 @@ public class SyncService {
 		foreach (var quest in quests) {
 			// Check for duplicate (by PlayerId + QuestId + CompletedAt)
 			var exists = await context.QuestCompletions
-				.AnyAsync(q => q.PlayerId == quest.PlayerId && 
-							   q.QuestId == quest.QuestId && 
+				.AnyAsync(q => q.PlayerId == quest.PlayerId &&
+							   q.QuestId == quest.QuestId &&
 							   q.CompletedAt == quest.CompletedAt);
 
 			if (!exists) {
@@ -521,8 +521,8 @@ public class SyncService {
 		foreach (var purchase in purchases) {
 			// Check for duplicate (by PlayerId + PurchasedAt + ItemId)
 			var exists = await context.ShopPurchases
-				.AnyAsync(p => p.PlayerId == purchase.PlayerId && 
-							   p.PurchasedAt == purchase.PurchasedAt && 
+				.AnyAsync(p => p.PlayerId == purchase.PlayerId &&
+							   p.PurchasedAt == purchase.PurchasedAt &&
 							   p.ItemId == purchase.ItemId);
 
 			if (!exists) {
@@ -563,8 +563,8 @@ public class SyncService {
 		foreach (var battle in battles) {
 			// Check for duplicate (by PlayerId + Timestamp + ExpeditionId)
 			var exists = await context.ExpeditionBattles
-				.AnyAsync(b => b.PlayerId == battle.PlayerId && 
-							   b.Timestamp == battle.Timestamp && 
+				.AnyAsync(b => b.PlayerId == battle.PlayerId &&
+							   b.Timestamp == battle.Timestamp &&
 							   b.ExpeditionId == battle.ExpeditionId);
 
 			if (!exists) {
@@ -590,8 +590,8 @@ public class SyncService {
 		foreach (var activity in activities) {
 			// Check for duplicate (by PlayerId + Timestamp + ActivityType)
 			var exists = await context.GuildActivities
-				.AnyAsync(a => a.PlayerId == activity.PlayerId && 
-							   a.Timestamp == activity.Timestamp && 
+				.AnyAsync(a => a.PlayerId == activity.PlayerId &&
+							   a.Timestamp == activity.Timestamp &&
 							   a.ActivityType == activity.ActivityType);
 
 			if (!exists) {

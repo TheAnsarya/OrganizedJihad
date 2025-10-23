@@ -146,7 +146,23 @@ create a comprehensive todo for testing the api, database, and userscript, and t
 do 2, 3, and 4 in order. Remember: modern practices, comment everything, include links to external resources, update the chat log as you go.
 Activity Tracking Completion - Add more resource/guild tracking hooks
 
+---- use VS and chat-cpt
+ uninstall the powershell extension `ohmyposh` and return the powershell terminal to normal text colors because currently the text is showing as black on black and is unreadable
+do it
+----
+fix the build errors and warnings, etc, for all the projects, especially `desktopapp` keeping the aplications platform agnostic
 
+
+
+
+
+
+
+
+
+
+
+log guild chat and private chats and adventure chats and AoC chats
 
 
 
