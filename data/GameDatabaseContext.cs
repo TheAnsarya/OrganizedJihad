@@ -154,6 +154,21 @@ public class GameDatabaseContext : DbContext {
 	/// </summary>
 	public DbSet<GuildActivity> GuildActivities { get; set; }
 
+	// === Chat and Communication Tracking ===
+
+	/// <summary>
+	/// Chat messages from guild, private, adventure, and AoC chats
+	/// Immutable historical data for communication pattern analysis
+	/// Reference: https://hw-mobile.fandom.com/wiki/Chat
+	/// </summary>
+	public DbSet<ChatMessage> ChatMessages { get; set; }
+
+	/// <summary>
+	/// Aggregated chat activity summaries by date
+	/// Immutable statistical data for engagement metrics
+	/// </summary>
+	public DbSet<ChatActivitySummary> ChatActivitySummaries { get; set; }
+
 	public GameDatabaseContext(DbContextOptions<GameDatabaseContext> options)
 		: base(options) {
 	}

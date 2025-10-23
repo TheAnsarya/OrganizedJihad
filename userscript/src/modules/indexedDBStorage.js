@@ -29,7 +29,7 @@
 class IndexedDBStorage {
 	constructor() {
 		this.dbName = 'OrganizedJihad';
-		this.version = 2; // Incremented for new stores: heroes, titans, pets, inventory, activities
+		this.version = 3; // Incremented for new store: chatMessages
 		this.db = null;
 		this.initPromise = this.init();
 	}
@@ -187,6 +187,18 @@ class IndexedDBStorage {
 					guildStore.createIndex('timestamp', 'timestamp', { unique: false });
 					guildStore.createIndex('activityType', 'activityType', { unique: false });
 					guildStore.createIndex('guildId', 'guildId', { unique: false });
+				}
+
+				// Chat messages: Guild, private, adventure, and AoC chat tracking
+				// Reference: https://hw-mobile.fandom.com/wiki/Chat
+				if (!db.objectStoreNames.contains('chatMessages')) {
+					const chatStore = db.createObjectStore('chatMessages', { keyPath: 'id', autoIncrement: true });
+					chatStore.createIndex('timestamp', 'timestamp', { unique: false });
+					chatStore.createIndex('chatType', 'chatType', { unique: false });
+					chatStore.createIndex('conversationId', 'conversationId', { unique: false });
+					chatStore.createIndex('senderId', 'senderId', { unique: false });
+					chatStore.createIndex('isOutgoing', 'isOutgoing', { unique: false });
+					chatStore.createIndex('serverMessageId', 'serverMessageId', { unique: false });
 				}
 			};
 		});
