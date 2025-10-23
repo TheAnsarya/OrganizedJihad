@@ -647,6 +647,20 @@ class GameTracker {
 
 		// Update opponent record
 		await this.updateOpponentRecord(args.enemyUserId, 'Arena', battle.isWin);
+
+		// Track resource rewards from arena battle
+		// Hero Wars arena rewards: gold, arena tokens, and sometimes emeralds
+		// See: https://community.hero-wars.com/discussion/arena-rewards-system
+		const rewards = data.reward || {};
+		if (rewards.gold) {
+			await this.trackResourceTransaction('gold', rewards.gold, 'battle', 'arena');
+		}
+		if (rewards.arenaToken) {
+			await this.trackResourceTransaction('arena_coins', rewards.arenaToken, 'battle', 'arena');
+		}
+		if (rewards.starmoney) {
+			await this.trackResourceTransaction('emeralds', rewards.starmoney, 'battle', 'arena');
+		}
 	}
 
 	/**
@@ -701,6 +715,19 @@ class GameTracker {
 
 		await this.storage.add('battles', battle);
 		await this.updateOpponentRecord(args.enemyUserId, 'TitanArena', battle.isWin);
+
+		// Track resource rewards from titan arena battle
+		// Titan Arena rewards: gold, titan tokens/potions
+		const rewards = data.reward || {};
+		if (rewards.gold) {
+			await this.trackResourceTransaction('gold', rewards.gold, 'battle', 'titan_arena');
+		}
+		if (rewards.titanPotion) {
+			await this.trackResourceTransaction('titan_potion', rewards.titanPotion, 'battle', 'titan_arena');
+		}
+		if (rewards.starmoney) {
+			await this.trackResourceTransaction('emeralds', rewards.starmoney, 'battle', 'titan_arena');
+		}
 	}
 
 	/**
@@ -759,6 +786,19 @@ class GameTracker {
 
 		await this.storage.add('battles', battle);
 		await this.updateOpponentRecord(args.enemyUserId, 'GrandArena', battle.isWin);
+
+		// Track resource rewards from grand arena battle
+		// Grand Arena rewards: gold, trophies, sometimes emeralds
+		const rewards = data.reward || {};
+		if (rewards.gold) {
+			await this.trackResourceTransaction('gold', rewards.gold, 'battle', 'grand_arena');
+		}
+		if (rewards.grandArenaTrophy) {
+			await this.trackResourceTransaction('grand_arena_trophies', rewards.grandArenaTrophy, 'battle', 'grand_arena');
+		}
+		if (rewards.starmoney) {
+			await this.trackResourceTransaction('emeralds', rewards.starmoney, 'battle', 'grand_arena');
+		}
 	}
 
 	/**
@@ -809,6 +849,30 @@ class GameTracker {
 		}
 
 		await storageManager.set('guildWarBattleHistory', guildWarHistory);
+
+		// Track guild activity for guild war participation
+		// Hero Wars guild wars are major guild events
+		// See: https://community.hero-wars.com/discussion/guild-war-guide
+		const guildData = await storageManager.get('guildData', {});
+		await this.trackGuildActivity('war', {
+			guildId: guildData.id || 'unknown',
+			guildName: guildData.name || 'Unknown Guild',
+			fortId: args.fortId,
+			result: battleRecord.result,
+			damage: data.damage || 0,
+		});
+
+		// Track resource rewards from guild war
+		const rewards = data.reward || {};
+		if (rewards.gold) {
+			await this.trackResourceTransaction('gold', rewards.gold, 'battle', 'guild_war');
+		}
+		if (rewards.guildWarToken) {
+			await this.trackResourceTransaction('guild_war_coins', rewards.guildWarToken, 'battle', 'guild_war');
+		}
+		if (rewards.starmoney) {
+			await this.trackResourceTransaction('emeralds', rewards.starmoney, 'battle', 'guild_war');
+		}
 	}
 
 	/**
@@ -855,6 +919,29 @@ class GameTracker {
 		}
 
 		await storageManager.set('raidBossAttackHistory', raidHistory);
+
+		// Track guild activity for raid boss attacks
+		// Guild raids are cooperative PvE events
+		// See: https://community.hero-wars.com/discussion/guild-raid-boss-guide
+		const guildData = await storageManager.get('guildData', {});
+		await this.trackGuildActivity('raid', {
+			guildId: guildData.id || 'unknown',
+			guildName: guildData.name || 'Unknown Guild',
+			bossId: args.bossId,
+			damage: data.damage || 0,
+		});
+
+		// Track resource rewards from raid boss
+		const rewards = data.reward || {};
+		if (rewards.gold) {
+			await this.trackResourceTransaction('gold', rewards.gold, 'battle', 'guild_raid');
+		}
+		if (rewards.guildToken || rewards.clanToken) {
+			await this.trackResourceTransaction('guild_coins', rewards.guildToken || rewards.clanToken, 'battle', 'guild_raid');
+		}
+		if (rewards.starmoney) {
+			await this.trackResourceTransaction('emeralds', rewards.starmoney, 'battle', 'guild_raid');
+		}
 	}
 
 	/**
@@ -886,6 +973,28 @@ class GameTracker {
 
 		// Update drop rate statistics
 		await this.updateChestDropRates(chestRecord);
+
+		// Track resource rewards from chest opening
+		// Hero Wars chest rewards can contain gold, emeralds, tokens, items, etc.
+		// See: https://community.hero-wars.com/discussion/chest-drop-rates
+		const rewards = data.reward || data.rewards || {};
+		const chestName = `${chestRecord.chestType}_${chestRecord.chestId}`;
+		
+		if (rewards.gold) {
+			await this.trackResourceTransaction('gold', rewards.gold, 'chest', chestName);
+		}
+		if (rewards.starmoney) {
+			await this.trackResourceTransaction('emeralds', rewards.starmoney, 'chest', chestName);
+		}
+		if (rewards.arenaToken) {
+			await this.trackResourceTransaction('arena_coins', rewards.arenaToken, 'chest', chestName);
+		}
+		if (rewards.guildWarToken) {
+			await this.trackResourceTransaction('guild_war_coins', rewards.guildWarToken, 'chest', chestName);
+		}
+		if (rewards.titanPotion) {
+			await this.trackResourceTransaction('titan_potion', rewards.titanPotion, 'chest', chestName);
+		}
 	}
 
 	/**
@@ -954,6 +1063,28 @@ class GameTracker {
 
 		await this.storage.add('shopPurchases', purchase);
 		console.log(`[OrganizedJihad] Shop purchase tracked: ${purchase.itemName} from ${purchase.shopType}`);
+
+		// Track resource cost as negative transaction (spending)
+		// Hero Wars shop costs can be gold, emeralds, arena coins, guild war coins, etc.
+		// See: https://community.hero-wars.com/discussion/shop-currency-guide
+		const cost = args.cost || {};
+		const shopName = `${purchase.shopType}_shop`;
+		
+		if (cost.gold || (purchase.costType === 'gold' && purchase.costAmount > 0)) {
+			await this.trackResourceTransaction('gold', -(cost.gold || purchase.costAmount), 'shop', shopName);
+		}
+		if (cost.starmoney || (purchase.costType === 'emeralds' && purchase.costAmount > 0)) {
+			await this.trackResourceTransaction('emeralds', -(cost.starmoney || purchase.costAmount), 'shop', shopName);
+		}
+		if (cost.arenaToken || (purchase.costType === 'arena_coins' && purchase.costAmount > 0)) {
+			await this.trackResourceTransaction('arena_coins', -(cost.arenaToken || purchase.costAmount), 'shop', shopName);
+		}
+		if (cost.guildWarToken || (purchase.costType === 'guild_war_coins' && purchase.costAmount > 0)) {
+			await this.trackResourceTransaction('guild_war_coins', -(cost.guildWarToken || purchase.costAmount), 'shop', shopName);
+		}
+		if (cost.titanPotion || (purchase.costType === 'titan_potion' && purchase.costAmount > 0)) {
+			await this.trackResourceTransaction('titan_potion', -(cost.titanPotion || purchase.costAmount), 'shop', shopName);
+		}
 	}
 
 	/**
@@ -982,6 +1113,26 @@ class GameTracker {
 
 		await this.storage.add('questCompletions', quest);
 		console.log(`[OrganizedJihad] Quest completed: ${quest.questName} (${quest.questType})`);
+
+		// Track resource rewards from quest completion
+		// Hero Wars quest rewards format: {gold: 1000, starmoney: 50, exp: 100, ...}
+		// See: https://community.hero-wars.com/discussion/quest-rewards-guide
+		const rewards = data.reward || data.rewards || {};
+		if (rewards.gold) {
+			await this.trackResourceTransaction('gold', rewards.gold, 'quest', quest.questName);
+		}
+		if (rewards.starmoney) {
+			await this.trackResourceTransaction('emeralds', rewards.starmoney, 'quest', quest.questName);
+		}
+		if (rewards.arenaToken) {
+			await this.trackResourceTransaction('arena_coins', rewards.arenaToken, 'quest', quest.questName);
+		}
+		if (rewards.guildWarToken) {
+			await this.trackResourceTransaction('guild_war_coins', rewards.guildWarToken, 'quest', quest.questName);
+		}
+		if (rewards.titanPotion) {
+			await this.trackResourceTransaction('titan_potion', rewards.titanPotion, 'quest', quest.questName);
+		}
 	}
 
 	/**
@@ -1031,6 +1182,16 @@ class GameTracker {
 
 		await this.storage.add('expeditionBattles', battle);
 		console.log(`[OrganizedJihad] Expedition battle tracked: ${battle.bossName} - ${battle.isWin ? 'Win' : 'Loss'}`);
+
+		// Track resource rewards from expedition battles
+		// Expeditions reward gold, items, and sometimes emeralds
+		const rewards = data.reward || data.rewards || {};
+		if (rewards.gold) {
+			await this.trackResourceTransaction('gold', rewards.gold, 'battle', `expedition_${battle.expeditionId}`);
+		}
+		if (rewards.starmoney) {
+			await this.trackResourceTransaction('emeralds', rewards.starmoney, 'battle', `expedition_${battle.expeditionId}`);
+		}
 	}
 
 	/**
@@ -1073,6 +1234,17 @@ class GameTracker {
 
 		await this.storage.put('missionProgress', progress);
 		console.log(`[OrganizedJihad] Mission progress updated: ${progress.missionName} - ${progress.stars} stars`);
+
+		// Track resource rewards from mission completion
+		// Campaign missions reward gold, experience, and sometimes items
+		// See: https://community.hero-wars.com/discussion/campaign-rewards
+		const rewards = data.reward || data.rewards || {};
+		if (rewards.gold) {
+			await this.trackResourceTransaction('gold', rewards.gold, 'battle', `mission_${progress.missionName}`);
+		}
+		if (rewards.starmoney) {
+			await this.trackResourceTransaction('emeralds', rewards.starmoney, 'battle', `mission_${progress.missionName}`);
+		}
 	}
 
 	/**
@@ -1111,6 +1283,17 @@ class GameTracker {
 
 		await this.storage.put('towerProgress', progress);
 		console.log(`[OrganizedJihad] Tower progress updated: ${progress.towerType} - floor ${progress.highestFloor}`);
+
+		// Track resource rewards from tower floor completion
+		// Tower rewards vary by floor: gold, items, sometimes emeralds
+		// See: https://community.hero-wars.com/discussion/tower-rewards
+		const rewards = data.reward || data.rewards || {};
+		if (rewards.gold) {
+			await this.trackResourceTransaction('gold', rewards.gold, 'battle', `${towerType}_tower_floor_${newFloor}`);
+		}
+		if (rewards.starmoney) {
+			await this.trackResourceTransaction('emeralds', rewards.starmoney, 'battle', `${towerType}_tower_floor_${newFloor}`);
+		}
 	}
 
 	/**
@@ -1315,6 +1498,8 @@ class GameTracker {
 	 * @private
 	 */
 	async trackGuildData(data) {
+		const oldGuildData = await storageManager.get('guildData', {});
+		
 		const guildData = {
 			id: data.clan?.id || null,
 			name: data.clan?.name || 'No Guild',
@@ -1324,6 +1509,39 @@ class GameTracker {
 		};
 
 		await storageManager.set('guildData', guildData);
+
+		// Track guild join/leave events by detecting guild ID changes
+		// Hero Wars allows players to leave and join guilds
+		// See: https://community.hero-wars.com/discussion/guild-management
+		if (oldGuildData.id !== guildData.id) {
+			if (guildData.id && !oldGuildData.id) {
+				// Joined a guild
+				await this.trackGuildActivity('join', {
+					guildId: guildData.id,
+					guildName: guildData.name,
+					guildLevel: guildData.level,
+					memberCount: guildData.members,
+				});
+			} else if (!guildData.id && oldGuildData.id) {
+				// Left a guild
+				await this.trackGuildActivity('leave', {
+					guildId: oldGuildData.id,
+					guildName: oldGuildData.name,
+				});
+			} else if (guildData.id && oldGuildData.id) {
+				// Changed guilds (leave old, join new)
+				await this.trackGuildActivity('leave', {
+					guildId: oldGuildData.id,
+					guildName: oldGuildData.name,
+				});
+				await this.trackGuildActivity('join', {
+					guildId: guildData.id,
+					guildName: guildData.name,
+					guildLevel: guildData.level,
+					memberCount: guildData.members,
+				});
+			}
+		}
 	}
 
 	/**
