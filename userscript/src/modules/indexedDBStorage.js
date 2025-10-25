@@ -29,7 +29,7 @@
 class IndexedDBStorage {
 	constructor() {
 		this.dbName = 'OrganizedJihad';
-		this.version = 4; // Incremented for new stores: guild member tracking
+		this.version = 5; // Incremented for new stores: apiLogs
 		this.db = null;
 		this.initPromise = this.init();
 	}
@@ -260,6 +260,16 @@ class IndexedDBStorage {
 					titaniteStore.createIndex('transactionType', 'transactionType', { unique: false });
 					titaniteStore.createIndex('source', 'source', { unique: false });
 				}
+
+				// API Logs: Comprehensive API monitoring logs
+				// Reference: For API discovery and debugging
+				if (!db.objectStoreNames.contains('apiLogs')) {
+					const apiLogsStore = db.createObjectStore('apiLogs', { keyPath: 'id', autoIncrement: true });
+					apiLogsStore.createIndex('timestamp', 'timestamp', { unique: false });
+					apiLogsStore.createIndex('type', 'type', { unique: false }); // 'request' or 'response'
+					apiLogsStore.createIndex('url', 'url', { unique: false });
+					apiLogsStore.createIndex('status', 'status', { unique: false });
+				}
 			};
 		});
 	}
@@ -484,6 +494,149 @@ class IndexedDBStorage {
 		}
 
 		return stats;
+	}
+
+	/**
+	 * Save API monitoring logs to IndexedDB
+	 * Used by APIMonitor module for persistent API call tracking
+	 *
+	 * @param {Object} logData - API log data containing logs, endpoints, and stats
+	 * @returns {Promise<void>}
+	 */
+	async saveAPILogs(logData) {
+		try {
+			await this.ensureDB();
+
+			const transaction = this.db.transaction(['metadata'], 'readwrite');
+			const metadataStore = transaction.objectStore('metadata');
+
+			// Store the log data in metadata store
+			await metadataStore.put({
+				key: 'apiMonitorLogs',
+				value: logData,
+				timestamp: Date.now(),
+			});
+
+			await transaction.complete;
+		} catch (error) {
+			console.error('[IndexedDBStorage] Failed to save API logs:', error);
+			throw error;
+		}
+	}
+
+	/**
+	 * Get saved API monitoring logs from IndexedDB
+	 *
+	 * @returns {Promise<Object|null>} Saved API log data or null if not found
+	 */
+	async getAPILogs() {
+		try {
+			await this.ensureDB();
+
+			const data = await this.get('metadata', 'apiMonitorLogs');
+			return data ? data.value : null;
+		} catch (error) {
+			console.error('[IndexedDBStorage] Failed to load API logs:', error);
+			return null;
+		}
+	}
+
+	/**
+	 * Save individual API log entries to the apiLogs store
+	 * Used for bulk storage of API calls
+	 *
+	 * @param {Array} logEntries - Array of log entries to save
+	 * @returns {Promise<void>}
+	 */
+	async saveAPILogEntries(logEntries) {
+		try {
+			await this.ensureDB();
+
+			const transaction = this.db.transaction(['apiLogs'], 'readwrite');
+			const apiLogsStore = transaction.objectStore('apiLogs');
+
+			for (const entry of logEntries) {
+				await apiLogsStore.add({
+					...entry,
+					savedAt: Date.now(),
+				});
+			}
+
+			await transaction.complete;
+		} catch (error) {
+			console.error('[IndexedDBStorage] Failed to save API log entries:', error);
+			throw error;
+		}
+	}
+
+	/**
+	 * Get API log entries with optional filtering
+	 *
+	 * @param {Object} options - Query options
+	 * @param {number} options.limit - Maximum number of entries to return
+	 * @param {string} options.type - Filter by type ('request' or 'response')
+	 * @param {string} options.url - Filter by URL pattern
+	 * @returns {Promise<Array>} Array of API log entries
+	 */
+	async getAPILogEntries(options = {}) {
+		try {
+			await this.ensureDB();
+
+			const limit = options.limit || 1000;
+			let entries = await this.getAll('apiLogs', limit);
+
+			// Apply filters if provided
+			if (options.type) {
+				entries = entries.filter((e) => e.type === options.type);
+			}
+
+			if (options.url) {
+				entries = entries.filter((e) => e.url && e.url.includes(options.url));
+			}
+
+			return entries;
+		} catch (error) {
+			console.error('[IndexedDBStorage] Failed to load API log entries:', error);
+			return [];
+		}
+	}
+
+	/**
+	 * Clear old API log entries to prevent database bloat
+	 * Keeps only the most recent entries
+	 *
+	 * @param {number} keepCount - Number of entries to keep (default: 5000)
+	 * @returns {Promise<number>} Number of entries deleted
+	 */
+	async clearOldAPILogs(keepCount = 5000) {
+		try {
+			await this.ensureDB();
+
+			const allEntries = await this.getAll('apiLogs');
+
+			if (allEntries.length <= keepCount) {
+				return 0;
+			}
+
+			// Sort by timestamp descending and keep only the newest
+			allEntries.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+			const entriesToDelete = allEntries.slice(keepCount);
+
+			const transaction = this.db.transaction(['apiLogs'], 'readwrite');
+			const apiLogsStore = transaction.objectStore('apiLogs');
+
+			for (const entry of entriesToDelete) {
+				await apiLogsStore.delete(entry.id);
+			}
+
+			await transaction.complete;
+
+			console.log(`[IndexedDBStorage] Deleted ${entriesToDelete.length} old API log entries`);
+			return entriesToDelete.length;
+		} catch (error) {
+			console.error('[IndexedDBStorage] Failed to clear old API logs:', error);
+			return 0;
+		}
 	}
 }
 

@@ -17,6 +17,7 @@ import SyncClient from './modules/syncClient.js';
 import GoalsManager from './modules/goalsManager.js';
 import CalendarManager from './modules/calendarManager.js';
 import SuggestionsEngine from './modules/suggestionsEngine.js';
+import APIMonitor from './modules/apiMonitor.js';
 import './styles/main.css';
 
 (async function () {
@@ -46,6 +47,11 @@ import './styles/main.css';
 	const calendarManager = new CalendarManager(storage);
 	const suggestionsEngine = new SuggestionsEngine(storage, gameTracker, goalsManager);
 	const uiManager = new UIManager(storage, gameTracker, goalsManager, calendarManager, suggestionsEngine, syncClient);
+	
+	// Initialize API Monitor for comprehensive API call logging
+	const apiMonitor = new APIMonitor(storage);
+	await apiMonitor.init();
+	console.log('✅ API Monitor initialized - logging all Hero Wars API calls');
 
 	// Start tracking when page is loaded
 	async function initialize() {
