@@ -11,7 +11,15 @@
  * - heroSkinUpgrade        → HeroSkinUpgrade
  * - heroEnchantRune        → HeroGlyphUpgrade
  * - consumableUseHeroXp    → HeroLevelUpgrade (via XP potion usage)
+ * - heroLevelUp            → HeroLevelUpgrade (via gold spending)
+ * - heroEvolve / promote   → HeroStarUpgrade
+ * - heroColorEvolve        → HeroColorUpgrade
  * - titanArtifactLevelUp   → TitanArtifactUpgrade
+ * - titanUsePotions        → TitanLevelUpgrade
+ * - titanEvolve            → TitanStarUpgrade
+ * - titanUpgradeSkill      → TitanSkillUpgrade
+ * - titanSkinUpgrade       → TitanSkinUpgrade
+ * - heroEquip              → EquipmentChange
  *
  * Entity Models (C# side):
  * - data/Models/HeroUpgradeModels.cs  (HeroUpgradeBase + 7 derived classes)
@@ -277,6 +285,288 @@ class UpgradeTracker {
 
 		await this.storage.add('titanUpgrades', record);
 		console.log(`[UpgradeTracker] Titan artifact upgrade: Titan ${titanId}, slot ${slotId}`);
+	}
+
+	/**
+	 * Track a hero star/evolution upgrade event.
+	 * API call: heroEvolve({heroId}) or promote({heroId})
+	 *
+	 * The hero gains a star rank, requiring soul stones.
+	 * Reference: https://hw-mobile.fandom.com/wiki/Heroes#Stars
+	 *
+	 * @param {Object} args - Request arguments {heroId: number}
+	 * @param {Object} responseData - Response with updated hero data
+	 * @param {string|number} playerId - Current player ID
+	 * @returns {Promise<void>}
+	 */
+	async trackHeroStarUpgrade(args, responseData, playerId) {
+		const timestamp = new Date().toISOString();
+		const heroId = args.heroId || args.id;
+
+		const hero = responseData.hero || responseData;
+
+		const record = {
+			upgradeType: 'star',
+			timestamp,
+			heroId,
+			heroName: hero?.name || `Hero_${heroId}`,
+			playerId,
+			powerAfter: hero?.power || 0,
+			starsBefore: Math.max(0, (hero?.star || hero?.color || 1) - 1),
+			starsAfter: hero?.star || hero?.color || 0,
+			soulStonesConsumed: args.count || 0,
+		};
+
+		await this.storage.add('heroUpgrades', record);
+		console.log(`[UpgradeTracker] Hero star upgrade: Hero ${heroId}, now ${record.starsAfter} stars`);
+	}
+
+	/**
+	 * Track a hero color/rank evolution event.
+	 * API call: heroColorEvolve({heroId}) or similar promotion call.
+	 *
+	 * Hero color ranks: White → Green → Blue → Violet → Orange → Red.
+	 * Reference: https://hw-mobile.fandom.com/wiki/Heroes#Color
+	 *
+	 * @param {Object} args - Request arguments {heroId: number}
+	 * @param {Object} responseData - Response with updated hero data
+	 * @param {string|number} playerId - Current player ID
+	 * @returns {Promise<void>}
+	 */
+	async trackHeroColorUpgrade(args, responseData, playerId) {
+		const timestamp = new Date().toISOString();
+		const heroId = args.heroId || args.id;
+
+		const hero = responseData.hero || responseData;
+
+		// Color rank names for display
+		const colorNames = ['White', 'Green', 'Green+1', 'Blue', 'Blue+1', 'Blue+2',
+			'Violet', 'Violet+1', 'Violet+2', 'Violet+3',
+			'Orange', 'Orange+1', 'Orange+2', 'Orange+3', 'Orange+4',
+			'Red', 'Red+1', 'Red+2'];
+
+		const colorRank = hero?.color || 0;
+
+		const record = {
+			upgradeType: 'color',
+			timestamp,
+			heroId,
+			heroName: hero?.name || `Hero_${heroId}`,
+			playerId,
+			powerAfter: hero?.power || 0,
+			colorBefore: colorNames[Math.max(0, colorRank - 1)] || `Color_${colorRank - 1}`,
+			colorAfter: colorNames[colorRank] || `Color_${colorRank}`,
+			colorRankBefore: Math.max(0, colorRank - 1),
+			colorRankAfter: colorRank,
+		};
+
+		await this.storage.add('heroUpgrades', record);
+		console.log(`[UpgradeTracker] Hero color upgrade: Hero ${heroId}, now ${record.colorAfter}`);
+	}
+
+	/**
+	 * Track a hero level-up via gold spending.
+	 * API call: heroLevelUp({heroId, level}) - direct level purchase with gold.
+	 *
+	 * Different from consumableUseHeroXp which uses XP potions.
+	 *
+	 * @param {Object} args - Request arguments {heroId: number, level: number}
+	 * @param {Object} responseData - Response with updated hero data
+	 * @param {string|number} playerId - Current player ID
+	 * @returns {Promise<void>}
+	 */
+	async trackHeroGoldLevelUpgrade(args, responseData, playerId) {
+		const timestamp = new Date().toISOString();
+		const heroId = args.heroId || args.id;
+
+		const hero = responseData.hero || responseData;
+
+		const record = {
+			upgradeType: 'level',
+			timestamp,
+			heroId,
+			heroName: hero?.name || `Hero_${heroId}`,
+			playerId,
+			powerAfter: hero?.power || 0,
+			levelBefore: args.level ? args.level - 1 : 0,
+			levelAfter: hero?.level || args.level || 0,
+			experienceSpent: 0,
+			goldSpent: responseData?.goldSpent || 0,
+		};
+
+		await this.storage.add('heroUpgrades', record);
+		console.log(`[UpgradeTracker] Hero gold level-up: Hero ${heroId}, now level ${record.levelAfter}`);
+	}
+
+	/**
+	 * Track a titan level-up event via potions.
+	 * API call: titanUsePotions({titanId, libId, amount})
+	 *
+	 * @param {Object} args - Request arguments {titanId: number, libId: number, amount: number}
+	 * @param {Object} responseData - Response with updated titan data
+	 * @param {string|number} playerId - Current player ID
+	 * @returns {Promise<void>}
+	 */
+	async trackTitanLevelUpgrade(args, responseData, playerId) {
+		const timestamp = new Date().toISOString();
+		const titanId = args.titanId || args.id;
+
+		const titan = responseData.titan || responseData;
+
+		const record = {
+			upgradeType: 'level',
+			timestamp,
+			titanId,
+			titanName: titan?.name || `Titan_${titanId}`,
+			playerId,
+			powerAfter: titan?.power || 0,
+			levelBefore: 0, // Would need cached state
+			levelAfter: titan?.level || 0,
+			potionsSpent: args.amount || 1,
+			goldSpent: 0,
+		};
+
+		await this.storage.add('titanUpgrades', record);
+		console.log(`[UpgradeTracker] Titan level upgrade: Titan ${titanId}, now level ${titan?.level || '?'}`);
+	}
+
+	/**
+	 * Track a titan star/evolution upgrade event.
+	 * API call: titanEvolve({titanId}) or titanStarUp({titanId})
+	 *
+	 * Titan gains a star rank, requiring soul stones.
+	 * Reference: https://hw-mobile.fandom.com/wiki/Titans#Stars
+	 *
+	 * @param {Object} args - Request arguments {titanId: number}
+	 * @param {Object} responseData - Response with updated titan data
+	 * @param {string|number} playerId - Current player ID
+	 * @returns {Promise<void>}
+	 */
+	async trackTitanStarUpgrade(args, responseData, playerId) {
+		const timestamp = new Date().toISOString();
+		const titanId = args.titanId || args.id;
+
+		const titan = responseData.titan || responseData;
+
+		const record = {
+			upgradeType: 'star',
+			timestamp,
+			titanId,
+			titanName: titan?.name || `Titan_${titanId}`,
+			playerId,
+			powerAfter: titan?.power || 0,
+			starsBefore: Math.max(0, (titan?.star || 1) - 1),
+			starsAfter: titan?.star || 0,
+			soulStonesConsumed: args.count || 0,
+		};
+
+		await this.storage.add('titanUpgrades', record);
+		console.log(`[UpgradeTracker] Titan star upgrade: Titan ${titanId}, now ${record.starsAfter} stars`);
+	}
+
+	/**
+	 * Track a titan skill upgrade event.
+	 * API call: titanUpgradeSkill({titanId, skill})
+	 *
+	 * @param {Object} args - Request arguments {titanId: number, skill: number}
+	 * @param {Object} responseData - Response with updated titan data
+	 * @param {string|number} playerId - Current player ID
+	 * @returns {Promise<void>}
+	 */
+	async trackTitanSkillUpgrade(args, responseData, playerId) {
+		const timestamp = new Date().toISOString();
+		const titanId = args.titanId || args.id;
+
+		const titan = responseData.titan || responseData;
+		const skillIndex = args.skill ?? 0;
+
+		const record = {
+			upgradeType: 'skill',
+			timestamp,
+			titanId,
+			titanName: titan?.name || `Titan_${titanId}`,
+			playerId,
+			powerAfter: titan?.power || 0,
+			skillName: '', // Not always available in API response
+			skillLevelBefore: 0, // Would need cached state
+			skillLevelAfter: titan?.skills?.[skillIndex]?.level || 0,
+			titaniteSpent: responseData?.titaniteSpent || 0,
+		};
+
+		await this.storage.add('titanUpgrades', record);
+		console.log(`[UpgradeTracker] Titan skill upgrade: Titan ${titanId}, skill ${skillIndex}`);
+	}
+
+	/**
+	 * Track a titan skin upgrade event.
+	 * API call: titanSkinUpgrade({titanId, skinId})
+	 *
+	 * @param {Object} args - Request arguments {titanId: number, skinId: number|string}
+	 * @param {Object} responseData - Response with updated titan data
+	 * @param {string|number} playerId - Current player ID
+	 * @returns {Promise<void>}
+	 */
+	async trackTitanSkinUpgrade(args, responseData, playerId) {
+		const timestamp = new Date().toISOString();
+		const titanId = args.titanId || args.id;
+		const skinId = args.skinId;
+
+		const titan = responseData.titan || responseData;
+		const skinData = titan?.skins?.[skinId] || responseData;
+
+		const record = {
+			upgradeType: 'skin',
+			timestamp,
+			titanId,
+			titanName: titan?.name || `Titan_${titanId}`,
+			playerId,
+			powerAfter: titan?.power || 0,
+			skinName: skinData?.name || `Skin_${skinId}`,
+			skinId: String(skinId),
+			isNewUnlock: (skinData?.level || 0) <= 1,
+			levelBefore: Math.max(0, (skinData?.level || 1) - 1),
+			levelAfter: skinData?.level || 1,
+		};
+
+		await this.storage.add('titanUpgrades', record);
+		console.log(`[UpgradeTracker] Titan skin upgrade: Titan ${titanId}, skin ${skinId}`);
+	}
+
+	/**
+	 * Track an equipment change on a hero.
+	 * API call: heroEquip({heroId, slotId, itemId}) or similar equipment call.
+	 *
+	 * Records when a hero equips, upgrades, or evolves gear.
+	 * Reference: https://hw-mobile.fandom.com/wiki/Equipment
+	 *
+	 * @param {Object} args - Request arguments {heroId: number, slotId: number, itemId: string|number}
+	 * @param {Object} responseData - Response with updated hero data
+	 * @param {string|number} playerId - Current player ID
+	 * @param {string} [changeType='equipped'] - Type of change: 'equipped', 'upgraded', 'evolved'
+	 * @returns {Promise<void>}
+	 */
+	async trackEquipmentChange(args, responseData, playerId, changeType = 'equipped') {
+		const timestamp = new Date().toISOString();
+		const heroId = args.heroId || args.id;
+		const slotIndex = args.slotId ?? args.slot ?? 0;
+
+		const hero = responseData.hero || responseData;
+
+		const record = {
+			timestamp,
+			heroId,
+			heroName: hero?.name || `Hero_${heroId}`,
+			slotIndex,
+			equipmentItemId: String(args.itemId || args.libId || ''),
+			equipmentName: '', // Item name not always in response
+			changeType,
+			heroColorRank: hero?.color || 0,
+			materialsConsumed: JSON.stringify(args.items || {}),
+			playerId,
+		};
+
+		await this.storage.add('equipmentChanges', record);
+		console.log(`[UpgradeTracker] Equipment ${changeType}: Hero ${heroId}, slot ${slotIndex}`);
 	}
 }
 

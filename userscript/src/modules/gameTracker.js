@@ -363,11 +363,37 @@ class GameTracker {
 						// Also track as inventory item usage (XP potion consumed)
 						await this.trackInventoryItemUsage(args, responseData, 'potion', 'hero_level');
 						break;
+					case 'heroLevelUp':
+						await this.upgradeTracker.trackHeroGoldLevelUpgrade(args, responseData, await this._getPlayerId());
+						break;
+					case 'heroEvolve':
+					case 'heroPromote':
+						await this.upgradeTracker.trackHeroStarUpgrade(args, responseData, await this._getPlayerId());
+						break;
+					case 'heroColorEvolve':
+						await this.upgradeTracker.trackHeroColorUpgrade(args, responseData, await this._getPlayerId());
+						break;
+					case 'heroEquip':
+						await this.upgradeTracker.trackEquipmentChange(args, responseData, await this._getPlayerId(), 'equipped');
+						break;
 
 					// === Phase 8: Titan Upgrade Events ===
 					// Reference: data/Models/TitanUpgradeModels.cs
 					case 'titanArtifactLevelUp':
 						await this.upgradeTracker.trackTitanArtifactUpgrade(args, responseData, await this._getPlayerId());
+						break;
+					case 'titanUsePotions':
+						await this.upgradeTracker.trackTitanLevelUpgrade(args, responseData, await this._getPlayerId());
+						break;
+					case 'titanEvolve':
+					case 'titanStarUp':
+						await this.upgradeTracker.trackTitanStarUpgrade(args, responseData, await this._getPlayerId());
+						break;
+					case 'titanUpgradeSkill':
+						await this.upgradeTracker.trackTitanSkillUpgrade(args, responseData, await this._getPlayerId());
+						break;
+					case 'titanSkinUpgrade':
+						await this.upgradeTracker.trackTitanSkinUpgrade(args, responseData, await this._getPlayerId());
 						break;
 
 					// === Phase 8: Daily Activity Events ===
