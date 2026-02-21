@@ -24,12 +24,21 @@
  * - expeditionBattles: PvE boss fight records
  * - resourceTransactions: Economic activity tracking
  * - guildActivities: Guild participation records
+ *
+ * NEW in v3 (Phase 8 - Upgrade & Activity Event Tracking):
+ * - heroUpgrades: Hero upgrade events (level, star, color, skill, artifact, glyph, skin)
+ * - titanUpgrades: Titan upgrade events (level, star, skill, artifact, skin)
+ * - dailyQuestCompletions: Individual daily quest completion tracking
+ * - guildQuestCompletions: Guild-specific quest completion tracking
+ * - loginRewards: Daily login reward claims
+ * - inventoryItemUsages: Consumable item usage events
+ * - equipmentChanges: Hero equipment slot modifications
  */
 
 class IndexedDBStorage {
 	constructor() {
 		this.dbName = 'OrganizedJihad';
-		this.version = 5; // Incremented for new stores: apiLogs
+		this.version = 6; // Incremented for new stores: heroUpgrades, titanUpgrades, dailyQuestCompletions, guildQuestCompletions, loginRewards, inventoryItemUsages, equipmentChanges
 		this.db = null;
 		this.initPromise = this.init();
 	}
@@ -269,6 +278,78 @@ class IndexedDBStorage {
 					apiLogsStore.createIndex('type', 'type', { unique: false }); // 'request' or 'response'
 					apiLogsStore.createIndex('url', 'url', { unique: false });
 					apiLogsStore.createIndex('status', 'status', { unique: false });
+				}
+
+				// === Phase 8: Upgrade & Activity Event Tracking ===
+
+				// Hero Upgrades: Individual hero upgrade events (level, star, color, skill, artifact, glyph, skin)
+				// Matches C# HeroUpgradeBase-derived entities in data/Models/HeroUpgradeModels.cs
+				if (!db.objectStoreNames.contains('heroUpgrades')) {
+					const heroUpgradeStore = db.createObjectStore('heroUpgrades', { keyPath: 'id', autoIncrement: true });
+					heroUpgradeStore.createIndex('timestamp', 'timestamp', { unique: false });
+					heroUpgradeStore.createIndex('heroId', 'heroId', { unique: false });
+					heroUpgradeStore.createIndex('playerId', 'playerId', { unique: false });
+					heroUpgradeStore.createIndex('upgradeType', 'upgradeType', { unique: false }); // 'level', 'star', 'color', 'skill', 'artifact', 'glyph', 'skin'
+				}
+
+				// Titan Upgrades: Individual titan upgrade events (level, star, skill, artifact, skin)
+				// Matches C# TitanUpgradeBase-derived entities in data/Models/TitanUpgradeModels.cs
+				if (!db.objectStoreNames.contains('titanUpgrades')) {
+					const titanUpgradeStore = db.createObjectStore('titanUpgrades', { keyPath: 'id', autoIncrement: true });
+					titanUpgradeStore.createIndex('timestamp', 'timestamp', { unique: false });
+					titanUpgradeStore.createIndex('titanId', 'titanId', { unique: false });
+					titanUpgradeStore.createIndex('playerId', 'playerId', { unique: false });
+					titanUpgradeStore.createIndex('upgradeType', 'upgradeType', { unique: false }); // 'level', 'star', 'skill', 'artifact', 'skin'
+				}
+
+				// Daily Quest Completions: Individual daily quest tracking
+				// Matches C# DailyQuestCompletion in data/Models/DailyActivityModels.cs
+				if (!db.objectStoreNames.contains('dailyQuestCompletions')) {
+					const dailyQuestStore = db.createObjectStore('dailyQuestCompletions', { keyPath: 'id', autoIncrement: true });
+					dailyQuestStore.createIndex('completedAt', 'completedAt', { unique: false });
+					dailyQuestStore.createIndex('questDate', 'questDate', { unique: false });
+					dailyQuestStore.createIndex('questId', 'questId', { unique: false });
+					dailyQuestStore.createIndex('playerId', 'playerId', { unique: false });
+				}
+
+				// Guild Quest Completions: Guild-specific quest tracking
+				// Matches C# GuildQuestCompletion in data/Models/DailyActivityModels.cs
+				if (!db.objectStoreNames.contains('guildQuestCompletions')) {
+					const guildQuestStore = db.createObjectStore('guildQuestCompletions', { keyPath: 'id', autoIncrement: true });
+					guildQuestStore.createIndex('completedAt', 'completedAt', { unique: false });
+					guildQuestStore.createIndex('questDate', 'questDate', { unique: false });
+					guildQuestStore.createIndex('questId', 'questId', { unique: false });
+					guildQuestStore.createIndex('playerId', 'playerId', { unique: false });
+					guildQuestStore.createIndex('guildId', 'guildId', { unique: false });
+				}
+
+				// Login Rewards: Daily login reward claims
+				// Matches C# LoginReward in data/Models/DailyActivityModels.cs
+				if (!db.objectStoreNames.contains('loginRewards')) {
+					const loginStore = db.createObjectStore('loginRewards', { keyPath: 'id', autoIncrement: true });
+					loginStore.createIndex('claimedAt', 'claimedAt', { unique: false });
+					loginStore.createIndex('playerId', 'playerId', { unique: false });
+					loginStore.createIndex('dayNumber', 'dayNumber', { unique: false });
+				}
+
+				// Inventory Item Usages: Consumable item usage events
+				// Matches C# InventoryItemUsage in data/Models/InventoryModels.cs
+				if (!db.objectStoreNames.contains('inventoryItemUsages')) {
+					const itemUsageStore = db.createObjectStore('inventoryItemUsages', { keyPath: 'id', autoIncrement: true });
+					itemUsageStore.createIndex('timestamp', 'timestamp', { unique: false });
+					itemUsageStore.createIndex('playerId', 'playerId', { unique: false });
+					itemUsageStore.createIndex('itemId', 'itemId', { unique: false });
+					itemUsageStore.createIndex('category', 'category', { unique: false });
+				}
+
+				// Equipment Changes: Hero equipment slot modifications
+				// Matches C# EquipmentChange in data/Models/InventoryModels.cs
+				if (!db.objectStoreNames.contains('equipmentChanges')) {
+					const equipChangeStore = db.createObjectStore('equipmentChanges', { keyPath: 'id', autoIncrement: true });
+					equipChangeStore.createIndex('timestamp', 'timestamp', { unique: false });
+					equipChangeStore.createIndex('heroId', 'heroId', { unique: false });
+					equipChangeStore.createIndex('playerId', 'playerId', { unique: false });
+					equipChangeStore.createIndex('changeType', 'changeType', { unique: false }); // 'equipped', 'upgraded', 'consumed'
 				}
 			};
 		});

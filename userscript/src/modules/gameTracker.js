@@ -23,6 +23,7 @@
  */
 
 import IndexedDBStorage from './indexedDBStorage.js';
+import UpgradeTracker from './trackers/UpgradeTracker.js';
 
 /**
  * Game data tracking via API interception
@@ -39,6 +40,9 @@ class GameTracker {
 		this.originalFetch = null;
 		this.apiUrl = '';
 		this.requestHistory = {};
+
+		// Dedicated trackers for complex event categories
+		this.upgradeTracker = new UpgradeTracker(this.storage);
 
 		// Cache current rank values to use when player data lacks specific rank info
 		// These get updated whenever we see rank data in any API response
@@ -338,6 +342,47 @@ class GameTracker {
 						break;
 					case 'chatSendMessage':
 						await this.trackOutgoingMessage(args, responseData);
+						break;
+
+					// === Phase 8: Hero Upgrade Events ===
+					// Reference: data/Models/HeroUpgradeModels.cs
+					case 'heroUpgradeSkill':
+						await this.upgradeTracker.trackHeroSkillUpgrade(args, responseData, await this._getPlayerId());
+						break;
+					case 'heroArtifactLevelUp':
+						await this.upgradeTracker.trackHeroArtifactUpgrade(args, responseData, await this._getPlayerId());
+						break;
+					case 'heroSkinUpgrade':
+						await this.upgradeTracker.trackHeroSkinUpgrade(args, responseData, await this._getPlayerId());
+						break;
+					case 'heroEnchantRune':
+						await this.upgradeTracker.trackHeroGlyphUpgrade(args, responseData, await this._getPlayerId());
+						break;
+					case 'consumableUseHeroXp':
+						await this.upgradeTracker.trackHeroLevelUpgrade(args, responseData, await this._getPlayerId());
+						// Also track as inventory item usage (XP potion consumed)
+						await this.trackInventoryItemUsage(args, responseData, 'potion', 'hero_level');
+						break;
+
+					// === Phase 8: Titan Upgrade Events ===
+					// Reference: data/Models/TitanUpgradeModels.cs
+					case 'titanArtifactLevelUp':
+						await this.upgradeTracker.trackTitanArtifactUpgrade(args, responseData, await this._getPlayerId());
+						break;
+
+					// === Phase 8: Daily Activity Events ===
+					// Reference: data/Models/DailyActivityModels.cs
+					case 'questFarm':
+						await this.trackDailyQuestFarm(args, responseData);
+						break;
+					case 'quest_questsFarm':
+						await this.trackBatchQuestFarm(args, responseData);
+						break;
+					case 'dailyBonusFarm':
+						await this.trackLoginReward(args, responseData);
+						break;
+					case 'dailyBonusGetInfo':
+						await this.trackDailyBonusInfo(responseData);
 						break;
 				}
 			} catch (error) {
@@ -2492,6 +2537,187 @@ class GameTracker {
 			historical: await this.getHistoricalComparison(),
 			exportedAt: new Date().toISOString(),
 		};
+	}
+
+	// ========================================================================
+	// Phase 8: Daily Activity & Inventory Tracking Methods
+	// ========================================================================
+
+	/**
+	 * Get the current player ID from metadata cache.
+	 * Used by upgrade tracking methods that need the player ID.
+	 *
+	 * @returns {Promise<string|number>} Player ID or 'unknown'
+	 * @private
+	 */
+	async _getPlayerId() {
+		return (await this.storage.getMetadata('currentPlayerId')) || 'unknown';
+	}
+
+	/**
+	 * Track a single daily quest farm (reward collection).
+	 * API call: questFarm({questId})
+	 *
+	 * Daily quests have IDs in the 10000-10999 range.
+	 * Guild quests may have different ID ranges.
+	 *
+	 * Reference: data/Models/DailyActivityModels.cs
+	 *
+	 * @param {Object} args - Request arguments {questId: number}
+	 * @param {Object} responseData - Response with quest reward data
+	 * @returns {Promise<void>}
+	 * @private
+	 */
+	async trackDailyQuestFarm(args, responseData) {
+		const playerId = await this._getPlayerId();
+		const timestamp = new Date().toISOString();
+		const questId = String(args.questId || args.id || 0);
+		const questIdNum = parseInt(questId, 10);
+
+		// Determine if this is a daily quest (10001-10999) or guild quest
+		const isDailyQuest = questIdNum >= 10000 && questIdNum < 11000;
+
+		if (isDailyQuest) {
+			// Store as daily quest completion
+			const record = {
+				completedAt: timestamp,
+				questDate: new Date().toISOString().split('T')[0], // Date-only portion
+				questId,
+				questName: `Daily Quest ${questId}`,
+				category: null, // Would need quest name mapping
+				activityPoints: responseData?.reward?.activityPoints || 0,
+				rewardData: JSON.stringify(responseData?.reward || responseData || {}),
+				playerId,
+			};
+
+			await this.storage.add('dailyQuestCompletions', record);
+			console.log(`[OrganizedJihad] Daily quest farmed: ${questId}`);
+		} else {
+			// Store as guild quest completion
+			const guildId = (await this.storage.getMetadata('currentGuildId')) || 0;
+			const record = {
+				completedAt: timestamp,
+				questDate: new Date().toISOString().split('T')[0],
+				questId,
+				questName: `Guild Quest ${questId}`,
+				difficulty: null,
+				guildActivityPoints: responseData?.reward?.guildActivityPoints || 0,
+				rewardData: JSON.stringify(responseData?.reward || responseData || {}),
+				playerId,
+				guildId,
+			};
+
+			await this.storage.add('guildQuestCompletions', record);
+			console.log(`[OrganizedJihad] Guild quest farmed: ${questId}`);
+		}
+	}
+
+	/**
+	 * Track batch quest farming (multiple quests at once).
+	 * API call: quest_questsFarm({questIds: [...]})
+	 *
+	 * Used primarily for battle pass quests and batch daily completions.
+	 *
+	 * @param {Object} args - Request arguments {questIds: number[]}
+	 * @param {Object} responseData - Response with quest reward data
+	 * @returns {Promise<void>}
+	 * @private
+	 */
+	async trackBatchQuestFarm(args, responseData) {
+		const questIds = args.questIds || [];
+
+		// Process each quest ID as a separate farm event
+		for (const questId of questIds) {
+			await this.trackDailyQuestFarm({ questId }, responseData);
+		}
+
+		console.log(`[OrganizedJihad] Batch quest farm: ${questIds.length} quests`);
+	}
+
+	/**
+	 * Track daily login reward collection.
+	 * API call: dailyBonusFarm({vip})
+	 *
+	 * Matches C# LoginReward entity in data/Models/DailyActivityModels.cs
+	 *
+	 * @param {Object} args - Request arguments {vip: boolean}
+	 * @param {Object} responseData - Response with reward data
+	 * @returns {Promise<void>}
+	 * @private
+	 */
+	async trackLoginReward(args, responseData) {
+		const playerId = await this._getPlayerId();
+		const timestamp = new Date().toISOString();
+		const isVip = args.vip || false;
+
+		const record = {
+			claimedAt: timestamp,
+			dayNumber: responseData?.day || responseData?.dayCount || 0,
+			streakLength: responseData?.loginCount || responseData?.streak || 0,
+			isVipBonus: isVip,
+			rewardData: JSON.stringify(responseData?.reward || responseData || {}),
+			playerId,
+		};
+
+		await this.storage.add('loginRewards', record);
+		console.log(`[OrganizedJihad] Login reward claimed: day ${record.dayNumber}, VIP: ${isVip}`);
+	}
+
+	/**
+	 * Track daily bonus info for reference (cache streak/day info).
+	 * API call: dailyBonusGetInfo
+	 *
+	 * Stores the current day number and streak length in metadata
+	 * for use by subsequent dailyBonusFarm calls.
+	 *
+	 * @param {Object} responseData - Response with daily bonus state
+	 * @returns {Promise<void>}
+	 * @private
+	 */
+	async trackDailyBonusInfo(responseData) {
+		// Cache the daily bonus info for use when farming
+		if (responseData?.day || responseData?.dayCount) {
+			await this.storage.setMetadata('dailyBonusDay', responseData.day || responseData.dayCount);
+		}
+		if (responseData?.loginCount || responseData?.streak) {
+			await this.storage.setMetadata('dailyBonusStreak', responseData.loginCount || responseData.streak);
+		}
+
+		console.log('[OrganizedJihad] Daily bonus info cached');
+	}
+
+	/**
+	 * Track inventory item usage when consumables are spent.
+	 * Called from upgrade event handlers (e.g., XP potion usage) and other
+	 * consumable-spending API calls.
+	 *
+	 * Matches C# InventoryItemUsage entity in data/Models/InventoryModels.cs
+	 *
+	 * @param {Object} args - Request arguments with item info
+	 * @param {Object} responseData - Response data
+	 * @param {string} category - Item category: 'potion', 'fragment', 'scroll', etc.
+	 * @param {string} usageContext - Usage context: 'hero_level', 'artifact', etc.
+	 * @returns {Promise<void>}
+	 * @private
+	 */
+	async trackInventoryItemUsage(args, responseData, category, usageContext) {
+		const playerId = await this._getPlayerId();
+		const timestamp = new Date().toISOString();
+
+		const record = {
+			timestamp,
+			itemId: String(args.libId || args.itemId || 'unknown'),
+			itemName: `Item_${args.libId || args.itemId || 'unknown'}`, // Name lookup not available
+			category,
+			quantityUsed: args.amount || 1,
+			quantityRemaining: 0, // Not always available in response
+			usageContext,
+			targetEntity: args.heroId ? `Hero_${args.heroId}` : (args.titanId ? `Titan_${args.titanId}` : null),
+			playerId,
+		};
+
+		await this.storage.add('inventoryItemUsages', record);
+		console.log(`[OrganizedJihad] Inventory item used: ${record.itemId} x${record.quantityUsed} for ${usageContext}`);
 	}
 
 	/**

@@ -96,7 +96,7 @@ class SyncClient {
 		console.log('[OrganizedJihad] Starting sync to server...');
 
 		try {
-			// Gather all data from IndexedDB
+			// Gather all data from IndexedDB — Phase 1-7 entities
 			const [snapshots, battles, chests, opponents, goals, events] = await Promise.all([
 				storage.getAll('snapshots'),
 				storage.getAll('battles'),
@@ -140,6 +140,35 @@ class SyncClient {
 			const resourceTransactions = await storage.getAll('resourceTransactions');
 			const guildActivities = await storage.getAll('guildActivities');
 
+			// Phase 8: Gather upgrade, daily activity, and inventory tracking data
+			const [heroUpgrades, titanUpgrades, dailyQuestCompletions, guildQuestCompletions, loginRewards, inventoryItemUsages, equipmentChanges] =
+				await Promise.all([
+					storage.getAll('heroUpgrades'),
+					storage.getAll('titanUpgrades'),
+					storage.getAll('dailyQuestCompletions'),
+					storage.getAll('guildQuestCompletions'),
+					storage.getAll('loginRewards'),
+					storage.getAll('inventoryItemUsages'),
+					storage.getAll('equipmentChanges'),
+				]);
+
+			// Split hero upgrades by type to match BrowserSyncData DTO
+			// Each upgrade has an 'upgradeType' discriminator set by UpgradeTracker
+			const heroLevelUpgrades = heroUpgrades.filter((u) => u.upgradeType === 'level');
+			const heroStarUpgrades = heroUpgrades.filter((u) => u.upgradeType === 'star');
+			const heroColorUpgrades = heroUpgrades.filter((u) => u.upgradeType === 'color');
+			const heroSkillUpgrades = heroUpgrades.filter((u) => u.upgradeType === 'skill');
+			const heroArtifactUpgrades = heroUpgrades.filter((u) => u.upgradeType === 'artifact');
+			const heroGlyphUpgrades = heroUpgrades.filter((u) => u.upgradeType === 'glyph');
+			const heroSkinUpgrades = heroUpgrades.filter((u) => u.upgradeType === 'skin');
+
+			// Split titan upgrades by type to match BrowserSyncData DTO
+			const titanLevelUpgrades = titanUpgrades.filter((u) => u.upgradeType === 'level');
+			const titanStarUpgrades = titanUpgrades.filter((u) => u.upgradeType === 'star');
+			const titanSkillUpgrades = titanUpgrades.filter((u) => u.upgradeType === 'skill');
+			const titanArtifactUpgrades = titanUpgrades.filter((u) => u.upgradeType === 'artifact');
+			const titanSkinUpgrades = titanUpgrades.filter((u) => u.upgradeType === 'skin');
+
 			// Build sync payload matching API's BrowserSyncData DTO
 			const syncData = {
 				// Existing entities (Phase 1-6)
@@ -153,7 +182,7 @@ class SyncClient {
 				opponents,
 				goals,
 				calendarEvents: events,
-				// NEW entities (Phase 7 - Comprehensive Tracking)
+				// Phase 7 - Comprehensive Tracking
 				heroes,
 				titans,
 				pets,
@@ -165,6 +194,27 @@ class SyncClient {
 				expeditionBattles,
 				resourceTransactions,
 				guildActivities,
+				// Phase 8 - Hero Upgrade Tracking
+				heroLevelUpgrades,
+				heroStarUpgrades,
+				heroColorUpgrades,
+				heroSkillUpgrades,
+				heroArtifactUpgrades,
+				heroGlyphUpgrades,
+				heroSkinUpgrades,
+				// Phase 8 - Titan Upgrade Tracking
+				titanLevelUpgrades,
+				titanStarUpgrades,
+				titanSkillUpgrades,
+				titanArtifactUpgrades,
+				titanSkinUpgrades,
+				// Phase 8 - Daily Activity Tracking
+				dailyQuestCompletions,
+				guildQuestCompletions,
+				loginRewards,
+				// Phase 8 - Inventory Tracking
+				inventoryItemUsages,
+				equipmentChanges,
 			};
 
 			console.log('[OrganizedJihad] Sync payload:', {
@@ -178,7 +228,7 @@ class SyncClient {
 				opponents: opponents.length,
 				goals: goals.length,
 				calendarEvents: events.length,
-				// NEW counts
+				// Phase 7 counts
 				heroes: heroes.length,
 				titans: titans.length,
 				pets: pets.length,
@@ -190,6 +240,14 @@ class SyncClient {
 				expeditionBattles: expeditionBattles.length,
 				resourceTransactions: resourceTransactions.length,
 				guildActivities: guildActivities.length,
+				// Phase 8 counts
+				heroUpgrades: heroUpgrades.length,
+				titanUpgrades: titanUpgrades.length,
+				dailyQuestCompletions: dailyQuestCompletions.length,
+				guildQuestCompletions: guildQuestCompletions.length,
+				loginRewards: loginRewards.length,
+				inventoryItemUsages: inventoryItemUsages.length,
+				equipmentChanges: equipmentChanges.length,
 			});
 
 			// Send to API
