@@ -388,6 +388,397 @@ public class SyncServiceTests : IDisposable {
 	}
 
 	// ==========================================================================
+	// Titan Upgrade Deduplication Tests
+	// ==========================================================================
+
+	/// <summary>
+	/// Verifies that importing duplicate titan level upgrades does not create duplicate records.
+	/// Deduplication key: TitanId + Timestamp.
+	/// </summary>
+	[Fact]
+	public async Task Import_Should_Deduplicate_TitanLevelUpgrades() {
+		// Arrange
+		var timestamp = DateTime.UtcNow;
+		var syncData = new BrowserSyncData {
+			TitanLevelUpgrades = [
+				new TitanLevelUpgrade {
+					Timestamp = timestamp, TitanId = 1, TitanName = "Hyperion",
+					PlayerId = 100, PowerAfter = 40000, LevelBefore = 119, LevelAfter = 120
+				}
+			],
+			Heroes = [],
+			Titans = []
+		};
+
+		// Act - import same data twice
+		await _service.ImportBrowserDataAsync(syncData);
+		var counts = await _service.ImportBrowserDataAsync(syncData);
+
+		// Assert - second import should not add duplicates
+		counts.TitanLevelUpgrades.Should().Be(0);
+
+		await using var context = await _contextFactory.CreateDbContextAsync();
+		var total = await context.TitanLevelUpgrades.CountAsync();
+		total.Should().Be(1);
+	}
+
+	/// <summary>
+	/// Verifies that importing duplicate titan star upgrades does not create duplicate records.
+	/// Deduplication key: TitanId + Timestamp.
+	/// </summary>
+	[Fact]
+	public async Task Import_Should_Deduplicate_TitanStarUpgrades() {
+		// Arrange
+		var timestamp = DateTime.UtcNow;
+		var syncData = new BrowserSyncData {
+			TitanStarUpgrades = [
+				new TitanStarUpgrade {
+					Timestamp = timestamp, TitanId = 2, TitanName = "Araji",
+					PlayerId = 100, PowerAfter = 55000, StarsBefore = 5, StarsAfter = 6,
+					SoulStonesConsumed = 300
+				}
+			],
+			Heroes = [],
+			Titans = []
+		};
+
+		// Act
+		await _service.ImportBrowserDataAsync(syncData);
+		var counts = await _service.ImportBrowserDataAsync(syncData);
+
+		// Assert
+		counts.TitanStarUpgrades.Should().Be(0);
+
+		await using var context = await _contextFactory.CreateDbContextAsync();
+		var total = await context.TitanStarUpgrades.CountAsync();
+		total.Should().Be(1);
+	}
+
+	// ==========================================================================
+	// Daily Activity Deduplication Tests
+	// ==========================================================================
+
+	/// <summary>
+	/// Verifies that importing duplicate guild quest completions does not create duplicates.
+	/// Deduplication key: PlayerId + QuestId + CompletedAt.
+	/// </summary>
+	[Fact]
+	public async Task Import_Should_Deduplicate_GuildQuestCompletions() {
+		// Arrange
+		var completedAt = DateTime.UtcNow;
+		var syncData = new BrowserSyncData {
+			GuildQuestCompletions = [
+				new GuildQuestCompletion {
+					CompletedAt = completedAt, QuestDate = DateTime.Today,
+					QuestId = "guild_raid_1", QuestName = "Raid Boss Challenge",
+					PlayerId = 100, GuildId = 50, GuildActivityPoints = 30
+				}
+			],
+			Heroes = [],
+			Titans = []
+		};
+
+		// Act
+		await _service.ImportBrowserDataAsync(syncData);
+		var counts = await _service.ImportBrowserDataAsync(syncData);
+
+		// Assert
+		counts.GuildQuestCompletions.Should().Be(0);
+
+		await using var context = await _contextFactory.CreateDbContextAsync();
+		var total = await context.GuildQuestCompletions.CountAsync();
+		total.Should().Be(1);
+	}
+
+	/// <summary>
+	/// Verifies that importing duplicate login rewards does not create duplicates.
+	/// Deduplication key: PlayerId + ClaimedAt.
+	/// </summary>
+	[Fact]
+	public async Task Import_Should_Deduplicate_LoginRewards() {
+		// Arrange
+		var claimedAt = DateTime.UtcNow;
+		var syncData = new BrowserSyncData {
+			LoginRewards = [
+				new LoginReward {
+					ClaimedAt = claimedAt, DayNumber = 7, StreakLength = 7,
+					IsVipBonus = false, PlayerId = 100
+				}
+			],
+			Heroes = [],
+			Titans = []
+		};
+
+		// Act
+		await _service.ImportBrowserDataAsync(syncData);
+		var counts = await _service.ImportBrowserDataAsync(syncData);
+
+		// Assert
+		counts.LoginRewards.Should().Be(0);
+
+		await using var context = await _contextFactory.CreateDbContextAsync();
+		var total = await context.LoginRewards.CountAsync();
+		total.Should().Be(1);
+	}
+
+	/// <summary>
+	/// Verifies that daily activity summaries use upsert logic.
+	/// A second import with the same PlayerId + SummaryDate should update, not insert.
+	/// </summary>
+	[Fact]
+	public async Task Import_Should_Upsert_DailyActivitySummaries() {
+		// Arrange
+		var summaryDate = DateTime.Today;
+		var syncData1 = new BrowserSyncData {
+			DailyActivitySummaries = [
+				new DailyActivitySummary {
+					SummaryDate = summaryDate, PlayerId = 100,
+					TotalActivityPoints = 50, DailyQuestsCompleted = 3,
+					GuildQuestsCompleted = 1, ArenaBattlesFought = 5
+				}
+			],
+			Heroes = [],
+			Titans = []
+		};
+
+		var syncData2 = new BrowserSyncData {
+			DailyActivitySummaries = [
+				new DailyActivitySummary {
+					SummaryDate = summaryDate, PlayerId = 100,
+					TotalActivityPoints = 100, DailyQuestsCompleted = 6,
+					GuildQuestsCompleted = 2, ArenaBattlesFought = 10
+				}
+			],
+			Heroes = [],
+			Titans = []
+		};
+
+		// Act - import twice with updated data
+		await _service.ImportBrowserDataAsync(syncData1);
+		var counts = await _service.ImportBrowserDataAsync(syncData2);
+
+		// Assert - second import should return 0 (update, not insert)
+		counts.DailyActivitySummaries.Should().Be(0);
+
+		await using var context = await _contextFactory.CreateDbContextAsync();
+		var total = await context.DailyActivitySummaries.CountAsync();
+		total.Should().Be(1);
+
+		// Verify data was updated to latest values
+		var summary = await context.DailyActivitySummaries.FirstAsync();
+		summary.TotalActivityPoints.Should().Be(100);
+		summary.DailyQuestsCompleted.Should().Be(6);
+		summary.ArenaBattlesFought.Should().Be(10);
+	}
+
+	// ==========================================================================
+	// Inventory Deduplication Tests
+	// ==========================================================================
+
+	/// <summary>
+	/// Verifies that importing duplicate inventory item usages does not create duplicates.
+	/// Deduplication key: PlayerId + ItemId + Timestamp.
+	/// </summary>
+	[Fact]
+	public async Task Import_Should_Deduplicate_InventoryItemUsages() {
+		// Arrange
+		var timestamp = DateTime.UtcNow;
+		var syncData = new BrowserSyncData {
+			InventoryItemUsages = [
+				new InventoryItemUsage {
+					Timestamp = timestamp, ItemId = "potion_xp_100",
+					ItemName = "XP Potion (100)", Category = "potion",
+					QuantityUsed = 5, PlayerId = 100
+				}
+			],
+			Heroes = [],
+			Titans = []
+		};
+
+		// Act
+		await _service.ImportBrowserDataAsync(syncData);
+		var counts = await _service.ImportBrowserDataAsync(syncData);
+
+		// Assert
+		counts.InventoryItemUsages.Should().Be(0);
+
+		await using var context = await _contextFactory.CreateDbContextAsync();
+		var total = await context.InventoryItemUsages.CountAsync();
+		total.Should().Be(1);
+	}
+
+	/// <summary>
+	/// Verifies that importing duplicate equipment changes does not create duplicates.
+	/// Deduplication key: HeroId + SlotIndex + Timestamp.
+	/// </summary>
+	[Fact]
+	public async Task Import_Should_Deduplicate_EquipmentChanges() {
+		// Arrange
+		var timestamp = DateTime.UtcNow;
+		var syncData = new BrowserSyncData {
+			EquipmentChanges = [
+				new EquipmentChange {
+					Timestamp = timestamp, HeroId = 1, HeroName = "Galahad",
+					SlotIndex = 2, ChangeType = "equipped", PlayerId = 100
+				}
+			],
+			Heroes = [],
+			Titans = []
+		};
+
+		// Act
+		await _service.ImportBrowserDataAsync(syncData);
+		var counts = await _service.ImportBrowserDataAsync(syncData);
+
+		// Assert
+		counts.EquipmentChanges.Should().Be(0);
+
+		await using var context = await _contextFactory.CreateDbContextAsync();
+		var total = await context.EquipmentChanges.CountAsync();
+		total.Should().Be(1);
+	}
+
+	// ==========================================================================
+	// Hero/Titan Upgrade Additional Query Tests
+	// ==========================================================================
+
+	/// <summary>
+	/// Verifies that GetHeroUpgradeHistoryAsync returns all upgrade types when no filter is specified,
+	/// including records from multiple upgrade categories.
+	/// </summary>
+	[Fact]
+	public async Task GetHeroUpgradeHistory_Should_Return_All_Types_With_Multiple_Records() {
+		// Arrange
+		await using var context = await _contextFactory.CreateDbContextAsync();
+
+		context.HeroLevelUpgrades.Add(new HeroLevelUpgrade {
+			Timestamp = DateTime.UtcNow, HeroId = 1, HeroName = "Galahad",
+			PlayerId = 100, PowerAfter = 50000, LevelBefore = 99, LevelAfter = 100
+		});
+		context.HeroSkillUpgrades.Add(new HeroSkillUpgrade {
+			Timestamp = DateTime.UtcNow, HeroId = 1, HeroName = "Galahad",
+			PlayerId = 100, PowerAfter = 50000, SkillName = "Flaming Sword",
+			SkillSlot = 1, SkillLevelBefore = 99, SkillLevelAfter = 100
+		});
+		await context.SaveChangesAsync();
+
+		// Act
+		var result = await _service.GetHeroUpgradeHistoryAsync() as Dictionary<string, object>;
+
+		// Assert
+		result.Should().NotBeNull();
+		result!.Should().ContainKey("levelUpgrades");
+		result.Should().ContainKey("skillUpgrades");
+
+		var levels = result!["levelUpgrades"] as IList<HeroLevelUpgrade>;
+		levels.Should().NotBeNull();
+		levels!.Should().HaveCount(1);
+
+		var skills = result!["skillUpgrades"] as IList<HeroSkillUpgrade>;
+		skills.Should().NotBeNull();
+		skills!.Should().HaveCount(1);
+	}
+
+	/// <summary>
+	/// Verifies that GetHeroUpgradeHistoryAsync only returns the specified upgrade type key.
+	/// </summary>
+	[Fact]
+	public async Task GetHeroUpgradeHistory_Should_Only_Return_Filtered_UpgradeType_Key() {
+		// Arrange
+		await using var context = await _contextFactory.CreateDbContextAsync();
+
+		context.HeroLevelUpgrades.Add(new HeroLevelUpgrade {
+			Timestamp = DateTime.UtcNow, HeroId = 1, HeroName = "Galahad",
+			PlayerId = 100, PowerAfter = 50000, LevelBefore = 99, LevelAfter = 100
+		});
+		context.HeroSkillUpgrades.Add(new HeroSkillUpgrade {
+			Timestamp = DateTime.UtcNow, HeroId = 1, HeroName = "Galahad",
+			PlayerId = 100, PowerAfter = 50000, SkillName = "Shield",
+			SkillSlot = 2, SkillLevelBefore = 50, SkillLevelAfter = 51
+		});
+		await context.SaveChangesAsync();
+
+		// Act - filter to "level" type only
+		var result = await _service.GetHeroUpgradeHistoryAsync(upgradeType: "level") as Dictionary<string, object>;
+
+		// Assert - should only contain level upgrades key
+		result.Should().NotBeNull();
+		result!.Should().ContainKey("levelUpgrades");
+		result.Should().NotContainKey("skillUpgrades");
+	}
+
+	/// <summary>
+	/// Verifies that GetTitanUpgradeHistoryAsync returns data for multiple upgrade categories.
+	/// </summary>
+	[Fact]
+	public async Task GetTitanUpgradeHistory_Should_Return_Multiple_Categories() {
+		// Arrange
+		await using var context = await _contextFactory.CreateDbContextAsync();
+
+		context.TitanLevelUpgrades.Add(new TitanLevelUpgrade {
+			Timestamp = DateTime.UtcNow, TitanId = 1, TitanName = "Hyperion",
+			PlayerId = 100, PowerAfter = 40000, LevelBefore = 119, LevelAfter = 120
+		});
+		context.TitanSkillUpgrades.Add(new TitanSkillUpgrade {
+			Timestamp = DateTime.UtcNow, TitanId = 1, TitanName = "Hyperion",
+			PlayerId = 100, PowerAfter = 40000, SkillName = "Solar Strike",
+			SkillLevelBefore = 29, SkillLevelAfter = 30, TitaniteSpent = 500
+		});
+		await context.SaveChangesAsync();
+
+		// Act
+		var result = await _service.GetTitanUpgradeHistoryAsync() as Dictionary<string, object>;
+
+		// Assert
+		result.Should().NotBeNull();
+		result!.Should().ContainKey("levelUpgrades");
+		result.Should().ContainKey("skillUpgrades");
+
+		var levels = result!["levelUpgrades"] as IList<TitanLevelUpgrade>;
+		levels.Should().NotBeNull();
+		levels!.Should().HaveCount(1);
+	}
+
+	/// <summary>
+	/// Verifies that GetTitanUpgradeHistoryAsync filters by both titanId and upgrade type.
+	/// </summary>
+	[Fact]
+	public async Task GetTitanUpgradeHistory_Should_Filter_By_TitanId_And_Type() {
+		// Arrange
+		await using var context = await _contextFactory.CreateDbContextAsync();
+
+		context.TitanLevelUpgrades.AddRange(
+			new TitanLevelUpgrade {
+				Timestamp = DateTime.UtcNow, TitanId = 1, TitanName = "Hyperion",
+				PlayerId = 100, PowerAfter = 40000, LevelBefore = 119, LevelAfter = 120
+			},
+			new TitanLevelUpgrade {
+				Timestamp = DateTime.UtcNow, TitanId = 2, TitanName = "Araji",
+				PlayerId = 100, PowerAfter = 35000, LevelBefore = 100, LevelAfter = 101
+			}
+		);
+		context.TitanSkillUpgrades.Add(new TitanSkillUpgrade {
+			Timestamp = DateTime.UtcNow, TitanId = 1, TitanName = "Hyperion",
+			PlayerId = 100, PowerAfter = 40000, SkillName = "Solar Strike",
+			SkillLevelBefore = 29, SkillLevelAfter = 30, TitaniteSpent = 500
+		});
+		await context.SaveChangesAsync();
+
+		// Act - filter to titan 1 + level only
+		var result = await _service.GetTitanUpgradeHistoryAsync(titanId: 1, upgradeType: "level") as Dictionary<string, object>;
+
+		// Assert
+		result.Should().NotBeNull();
+		result!.Should().ContainKey("levelUpgrades");
+		result.Should().NotContainKey("skillUpgrades");
+
+		var levels = result!["levelUpgrades"] as IList<TitanLevelUpgrade>;
+		levels.Should().NotBeNull();
+		levels!.Should().HaveCount(1);
+		levels![0].TitanName.Should().Be("Hyperion");
+	}
+
+	// ==========================================================================
 	// Database Stats Tests
 	// ==========================================================================
 
