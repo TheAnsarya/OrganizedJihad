@@ -1,21 +1,42 @@
 /**
  * UIManager Module
- * Manages the browser UI overlay
+ * Manages the browser overlay panel for OrganizedJihad tracker.
+ *
+ * Receives two storage backends:
+ *   - prefStorage (StorageManager): synchronous localStorage for simple prefs
+ *   - idbStorage  (IndexedDBStorage): async IndexedDB for game data queries
+ *
+ * All render methods are async-safe with try/catch + fallback empty states.
  */
 
 class UIManager {
-	constructor(storage, gameTracker, goalsManager, calendarManager, suggestionsEngine) {
-		this.storage = storage;
+	/**
+	 * @param {import('./storageManager.js').default} prefStorage - Synchronous localStorage wrapper
+	 * @param {import('./indexedDBStorage.js').default} idbStorage - Async IndexedDB wrapper
+	 * @param {import('./gameTracker.js').default} gameTracker - Game data tracker
+	 * @param {import('./goalsManager.js').default} goalsManager - Goals management
+	 * @param {import('./calendarManager.js').default} calendarManager - Calendar management
+	 * @param {import('./suggestionsEngine.js').default} suggestionsEngine - Suggestions engine
+	 */
+	constructor(prefStorage, idbStorage, gameTracker, goalsManager, calendarManager, suggestionsEngine) {
+		this.prefStorage = prefStorage;
+		this.idbStorage = idbStorage;
 		this.gameTracker = gameTracker;
 		this.goalsManager = goalsManager;
 		this.calendarManager = calendarManager;
 		this.suggestionsEngine = suggestionsEngine;
 
-		this.isVisible = this.storage.get('uiVisible', true);
+		this.isVisible = this.prefStorage.get('uiVisible', false);
 		this.currentView = 'dashboard';
 		this.overlay = null;
+
+		// Saved position from last drag (null = use CSS default)
+		this._savedPos = this.prefStorage.get('overlayPosition', null);
 	}
 
+	/**
+	 * Initialize the overlay: create DOM, attach events, restore state.
+	 */
 	init() {
 		this.createOverlay();
 		this.attachEventListeners();
@@ -24,16 +45,23 @@ class UIManager {
 			this.show();
 		}
 
-		// Add keyboard shortcut to toggle UI (Ctrl+Shift+H)
+		// Keyboard shortcut: Ctrl+Shift+H
 		document.addEventListener('keydown', (e) => {
 			if (e.ctrlKey && e.shiftKey && e.key === 'H') {
+				e.preventDefault();
 				this.toggle();
 			}
 		});
 	}
 
+	// =====================================================================
+	// DOM Creation
+	// =====================================================================
+
+	/**
+	 * Build the overlay container and inject it into the page.
+	 */
 	createOverlay() {
-		// Create main overlay container
 		this.overlay = document.createElement('div');
 		this.overlay.id = 'organizedJihad-overlay';
 		this.overlay.className = 'oj-overlay';
@@ -41,588 +69,686 @@ class UIManager {
 		this.overlay.innerHTML = `
 			<div class="oj-container">
 				<div class="oj-header">
-					<h2 class="oj-title">OrganizedJihad Tracker</h2>
+					<h2 class="oj-title">\u2694\uFE0F OrganizedJihad</h2>
 					<div class="oj-header-actions">
-						<button class="oj-btn oj-btn-icon" id="oj-minimize" title="Minimize">−</button>
-						<button class="oj-btn oj-btn-icon" id="oj-close" title="Close">×</button>
+						<button class="oj-btn oj-btn-icon" id="oj-minimize" title="Minimize">\u2212</button>
+						<button class="oj-btn oj-btn-icon" id="oj-close" title="Close">\u00D7</button>
 					</div>
 				</div>
-				
+
 				<div class="oj-nav">
 					<button class="oj-nav-btn active" data-view="dashboard">Dashboard</button>
-					<button class="oj-nav-btn" data-view="goals">Goals</button>
-					<button class="oj-nav-btn" data-view="calendar">Calendar</button>
+					<button class="oj-nav-btn" data-view="activity">Activity</button>
 					<button class="oj-nav-btn" data-view="heroes">Heroes</button>
+					<button class="oj-nav-btn" data-view="battles">Battles</button>
 					<button class="oj-nav-btn" data-view="resources">Resources</button>
-					<button class="oj-nav-btn" data-view="reports">Reports</button>
 					<button class="oj-nav-btn" data-view="settings">Settings</button>
 				</div>
-				
+
 				<div class="oj-content" id="oj-content">
-					<!-- Content will be dynamically loaded here -->
+					<div class="oj-loading">Loading...</div>
 				</div>
 			</div>
 		`;
 
 		document.body.appendChild(this.overlay);
 
+		// Restore saved position if any
+		if (this._savedPos) {
+			this.overlay.style.left = this._savedPos.x + 'px';
+			this.overlay.style.top = this._savedPos.y + 'px';
+			this.overlay.style.right = 'auto';
+		}
+
 		// Render initial view
 		this.renderView('dashboard');
 	}
 
+	// =====================================================================
+	// Event Listeners
+	// =====================================================================
+
+	/**
+	 * Wire up all button / interaction handlers.
+	 */
 	attachEventListeners() {
 		// Navigation buttons
-		const navButtons = this.overlay.querySelectorAll('.oj-nav-btn');
-		navButtons.forEach((btn) => {
+		this.overlay.querySelectorAll('.oj-nav-btn').forEach((btn) => {
 			btn.addEventListener('click', (e) => {
-				const view = e.target.dataset.view;
-				this.switchView(view);
+				this.switchView(e.target.dataset.view);
 			});
 		});
 
-		// Close button
-		document.getElementById('oj-close').addEventListener('click', () => {
+		// Close button — hide overlay
+		this.overlay.querySelector('#oj-close').addEventListener('click', () => {
 			this.hide();
 		});
 
-		// Minimize button
-		document.getElementById('oj-minimize').addEventListener('click', () => {
-			this.overlay.classList.toggle('minimized');
+		// Minimize button — collapse to header-only
+		this.overlay.querySelector('#oj-minimize').addEventListener('click', () => {
+			const isMinimized = this.overlay.classList.toggle('minimized');
+			const btn = this.overlay.querySelector('#oj-minimize');
+			btn.textContent = isMinimized ? '+' : '\u2212';
+			btn.title = isMinimized ? 'Expand' : 'Minimize';
 		});
 
-		// Make draggable
+		// Draggable header
 		this.makeDraggable();
 	}
 
+	/**
+	 * Make the overlay draggable by its header bar.
+	 * Clears CSS "right" on first drag so "left" takes effect.
+	 */
 	makeDraggable() {
 		const header = this.overlay.querySelector('.oj-header');
 		let isDragging = false;
-		let currentX, currentY, initialX, initialY;
+		let startX, startY, startLeft, startTop;
 
 		header.addEventListener('mousedown', (e) => {
-			if (e.target.tagName === 'BUTTON') return;
+			// Don't start drag on button clicks
+			if (e.target.closest('button')) return;
 
 			isDragging = true;
-			initialX = e.clientX - this.overlay.offsetLeft;
-			initialY = e.clientY - this.overlay.offsetTop;
+
+			// On first drag, switch from right-positioned to left-positioned
+			if (this.overlay.style.left === '' || this.overlay.style.left === 'auto') {
+				const rect = this.overlay.getBoundingClientRect();
+				this.overlay.style.left = rect.left + 'px';
+				this.overlay.style.top = rect.top + 'px';
+				this.overlay.style.right = 'auto';
+			}
+
+			startX = e.clientX;
+			startY = e.clientY;
+			startLeft = parseInt(this.overlay.style.left, 10) || 0;
+			startTop = parseInt(this.overlay.style.top, 10) || 0;
+
 			header.style.cursor = 'grabbing';
+			e.preventDefault();
 		});
 
 		document.addEventListener('mousemove', (e) => {
 			if (!isDragging) return;
-
 			e.preventDefault();
-			currentX = e.clientX - initialX;
-			currentY = e.clientY - initialY;
 
-			this.overlay.style.left = currentX + 'px';
-			this.overlay.style.top = currentY + 'px';
+			const dx = e.clientX - startX;
+			const dy = e.clientY - startY;
+
+			this.overlay.style.left = (startLeft + dx) + 'px';
+			this.overlay.style.top = (startTop + dy) + 'px';
 		});
 
 		document.addEventListener('mouseup', () => {
+			if (!isDragging) return;
 			isDragging = false;
 			header.style.cursor = 'grab';
+
+			// Persist position
+			this._savedPos = {
+				x: parseInt(this.overlay.style.left, 10),
+				y: parseInt(this.overlay.style.top, 10),
+			};
+			this.prefStorage.set('overlayPosition', this._savedPos);
 		});
 	}
 
+	// =====================================================================
+	// View Switching
+	// =====================================================================
+
+	/**
+	 * Switch to a different tab view.
+	 * @param {string} view - The view name to render
+	 */
 	switchView(view) {
 		this.currentView = view;
 
-		// Update nav buttons
-		const navButtons = this.overlay.querySelectorAll('.oj-nav-btn');
-		navButtons.forEach((btn) => {
+		// Update active nav button
+		this.overlay.querySelectorAll('.oj-nav-btn').forEach((btn) => {
 			btn.classList.toggle('active', btn.dataset.view === view);
 		});
 
 		this.renderView(view);
 	}
 
-	renderView(view) {
-		const content = document.getElementById('oj-content');
+	/**
+	 * Render the content for a given view.
+	 * All render methods are async and wrapped in try/catch.
+	 *
+	 * @param {string} view - The view name
+	 */
+	async renderView(view) {
+		const content = this.overlay.querySelector('#oj-content');
+		content.innerHTML = '<div class="oj-loading">Loading...</div>';
 
-		switch (view) {
-			case 'dashboard':
-				content.innerHTML = this.renderDashboard();
-				break;
-			case 'goals':
-				content.innerHTML = this.renderGoals();
-				this.attachGoalEventListeners();
-				break;
-			case 'calendar':
-				content.innerHTML = this.renderCalendar();
-				this.attachCalendarEventListeners();
-				break;
-			case 'heroes':
-				content.innerHTML = this.renderHeroes();
-				break;
-			case 'resources':
-				content.innerHTML = this.renderResources();
-				break;
-			case 'reports':
-				content.innerHTML = this.renderReports();
-				break;
-			case 'settings':
-				content.innerHTML = this.renderSettings();
-				this.attachSettingsEventListeners();
-				break;
-			default:
-				content.innerHTML = '<p>View not found</p>';
+		try {
+			switch (view) {
+				case 'dashboard':
+					content.innerHTML = await this.renderDashboard();
+					break;
+				case 'activity':
+					content.innerHTML = await this.renderActivity();
+					break;
+				case 'heroes':
+					content.innerHTML = await this.renderHeroes();
+					break;
+				case 'battles':
+					content.innerHTML = await this.renderBattles();
+					break;
+				case 'resources':
+					content.innerHTML = await this.renderResources();
+					break;
+				case 'settings':
+					content.innerHTML = this.renderSettings();
+					this.attachSettingsEventListeners();
+					break;
+				default:
+					content.innerHTML = '<p class="oj-empty">Unknown view</p>';
+			}
+		} catch (err) {
+			console.error('[OrganizedJihad] Error rendering view:', view, err);
+			content.innerHTML = `
+				<div class="oj-error">
+					<h3>\u26A0\uFE0F Render Error</h3>
+					<p>${err.message || 'Unknown error'}</p>
+					<p class="oj-muted">Check the console for details.</p>
+				</div>
+			`;
 		}
 	}
 
-	renderDashboard() {
-		const gameData = this.gameTracker.getGameData();
-		const activeGoals = this.goalsManager.getActiveGoals();
-		const suggestions = this.suggestionsEngine.getSuggestions();
-		const upcomingEvents = this.calendarManager.getUpcomingEvents(3);
+	// =====================================================================
+	// View Renderers
+	// =====================================================================
+
+	/**
+	 * Dashboard — overview with counts from IndexedDB.
+	 * @returns {Promise<string>} HTML content
+	 */
+	async renderDashboard() {
+		// Gather counts from IndexedDB (safe — returns 0 on error)
+		const snapshotCount = await this._countStore('snapshots');
+		const heroCount = await this._countStore('heroes');
+		const battleCount = (await this._countStore('arenaBattles'))
+			+ (await this._countStore('grandArenaBattles'))
+			+ (await this._countStore('titanArenaBattles'));
+		const chestCount = await this._countStore('chestOpenings');
+		const apiLogCount = await this._countStore('apiLogs');
+
+		const goals = this._safeCall(() => this.goalsManager.getActiveGoals(), { shortTerm: [], longTerm: [] });
+		const goalCount = goals.shortTerm.length + goals.longTerm.length;
 
 		return `
 			<div class="oj-dashboard">
 				<div class="oj-section">
-					<h3>Quick Stats</h3>
+					<h3>\uD83D\uDCCA Tracked Data</h3>
 					<div class="oj-stats-grid">
-						<div class="oj-stat-card">
-							<div class="oj-stat-value">${gameData.heroes.length}</div>
-							<div class="oj-stat-label">Heroes Tracked</div>
+						${this._statCard(snapshotCount, 'Snapshots', '#4fc3f7')}
+						${this._statCard(heroCount, 'Hero Records', '#81c784')}
+						${this._statCard(battleCount, 'Battles', '#ffb74d')}
+						${this._statCard(chestCount, 'Chests', '#ce93d8')}
+						${this._statCard(apiLogCount, 'API Logs', '#90a4ae')}
+						${this._statCard(goalCount, 'Active Goals', '#fff176')}
+					</div>
+				</div>
+
+				<div class="oj-section">
+					<h3>\u2139\uFE0F Status</h3>
+					<div class="oj-status-list">
+						<div class="oj-status-row">
+							<span>IndexedDB</span>
+							<span class="oj-status-ok">Connected</span>
 						</div>
-						<div class="oj-stat-card">
-							<div class="oj-stat-value">${activeGoals.shortTerm.length + activeGoals.longTerm.length}</div>
-							<div class="oj-stat-label">Active Goals</div>
+						<div class="oj-status-row">
+							<span>API Interception</span>
+							<span class="oj-status-ok">Active</span>
 						</div>
-						<div class="oj-stat-card">
-							<div class="oj-stat-value">${upcomingEvents.length}</div>
-							<div class="oj-stat-label">Upcoming Events</div>
-						</div>
-						<div class="oj-stat-card">
-							<div class="oj-stat-value">${suggestions.length}</div>
-							<div class="oj-stat-label">Suggestions</div>
+						<div class="oj-status-row">
+							<span>Version</span>
+							<span>3.0.0</span>
 						</div>
 					</div>
 				</div>
-				
+
 				<div class="oj-section">
-					<h3>Suggestions</h3>
-					<div class="oj-suggestions-list">
-						${
-							suggestions
-								.slice(0, 5)
-								.map(
-									(s) => `
-							<div class="oj-suggestion ${s.priority}">
-								<div class="oj-suggestion-header">
-									<span class="oj-suggestion-title">${s.title}</span>
-									<span class="oj-suggestion-priority">${s.priority}</span>
-								</div>
-								<p class="oj-suggestion-desc">${s.description}</p>
-								<button class="oj-btn oj-btn-sm" onclick="dismissSuggestion(${s.id})">Dismiss</button>
-							</div>
-						`
-								)
-								.join('') || '<p class="oj-empty">No suggestions at the moment!</p>'
-						}
-					</div>
-				</div>
-				
-				<div class="oj-section">
-					<h3>Upcoming Events (Next 3 Days)</h3>
-					<div class="oj-events-list">
-						${
-							upcomingEvents
-								.map(
-									(e) => `
-							<div class="oj-event-item">
-								<div class="oj-event-date">${new Date(e.startDate).toLocaleDateString()}</div>
-								<div class="oj-event-title">${e.title}</div>
-							</div>
-						`
-								)
-								.join('') || '<p class="oj-empty">No upcoming events</p>'
-						}
-					</div>
+					<h3>\uD83C\uDFAF Quick Tips</h3>
+					<ul class="oj-tips">
+						<li>Play the game normally \u2014 all API calls are intercepted automatically</li>
+						<li>Open your hero roster, arena, or inventory to capture data</li>
+						<li>Check the <strong>Activity</strong> tab to see intercepted calls in real-time</li>
+						<li>Press <kbd>Ctrl+Shift+H</kbd> to toggle this panel</li>
+					</ul>
 				</div>
 			</div>
 		`;
 	}
 
-	renderGoals() {
-		const goals = this.goalsManager.getAllGoals();
-
-		return `
-			<div class="oj-goals">
-				<div class="oj-section-header">
-					<h3>Goals Management</h3>
-					<button class="oj-btn" id="oj-add-goal">+ Add Goal</button>
-				</div>
-				
-				<div class="oj-tabs">
-					<button class="oj-tab-btn active" data-tab="short">Short Term</button>
-					<button class="oj-tab-btn" data-tab="long">Long Term</button>
-				</div>
-				
-				<div class="oj-tab-content active" data-tab="short">
-					<div class="oj-goals-list">
-						${this.renderGoalsList(goals.shortTerm)}
-					</div>
-				</div>
-				
-				<div class="oj-tab-content" data-tab="long">
-					<div class="oj-goals-list">
-						${this.renderGoalsList(goals.longTerm)}
-					</div>
-				</div>
-			</div>
-		`;
-	}
-
-	renderGoalsList(goals) {
-		if (goals.length === 0) {
-			return '<p class="oj-empty">No goals yet. Add one to get started!</p>';
+	/**
+	 * Activity feed — recent API log entries from IndexedDB.
+	 * @returns {Promise<string>} HTML content
+	 */
+	async renderActivity() {
+		let logs = [];
+		try {
+			logs = await this.idbStorage.getAll('apiLogs', 50);
+			// Sort newest first
+			logs.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+		} catch {
+			// No logs yet
 		}
 
-		return goals
-			.map((goal) => {
-				const progress = goal.target ? ((goal.current / goal.target) * 100).toFixed(1) : 0;
-				return `
-				<div class="oj-goal-card ${goal.status}">
-					<div class="oj-goal-header">
-						<h4>${goal.title}</h4>
-						<span class="oj-badge ${goal.priority}">${goal.priority}</span>
-					</div>
-					<p class="oj-goal-desc">${goal.description}</p>
-					${
-						goal.target
-							? `
-						<div class="oj-progress-bar">
-							<div class="oj-progress-fill" style="width: ${progress}%"></div>
-							<span class="oj-progress-text">${goal.current} / ${goal.target}</span>
-						</div>
-					`
-							: ''
-					}
-					<div class="oj-goal-footer">
-						<span class="oj-goal-category">${goal.category}</span>
-						${goal.deadline ? `<span class="oj-goal-deadline">Due: ${new Date(goal.deadline).toLocaleDateString()}</span>` : ''}
-					</div>
+		if (logs.length === 0) {
+			return `
+				<div class="oj-activity">
+					<h3>\uD83D\uDCE1 Live Activity Feed</h3>
+					<p class="oj-empty">No API calls captured yet. Navigate around in the game to generate activity.</p>
 				</div>
 			`;
-			})
-			.join('');
-	}
+		}
 
-	renderCalendar() {
-		const events = this.calendarManager.getUpcomingEvents(30);
+		const rows = logs.map((log) => {
+			const time = log.timestamp ? new Date(log.timestamp).toLocaleTimeString() : '\u2014';
+			const name = log.name || log.endpoint || 'unknown';
+			const status = log.success !== false
+				? '<span class="oj-status-ok">OK</span>'
+				: '<span class="oj-status-err">ERR</span>';
+			return `
+				<tr>
+					<td class="oj-mono">${time}</td>
+					<td>${this._escapeHtml(name)}</td>
+					<td>${status}</td>
+				</tr>
+			`;
+		}).join('');
 
 		return `
-			<div class="oj-calendar">
-				<div class="oj-section-header">
-					<h3>Calendar & Events</h3>
-					<button class="oj-btn" id="oj-add-event">+ Add Event</button>
-				</div>
-				
-				<div class="oj-events-list">
-					${
-						events
-							.map(
-								(e) => `
-						<div class="oj-event-card ${e.type}">
-							<div class="oj-event-header">
-								<h4>${e.title}</h4>
-								<span class="oj-badge">${e.type}</span>
-							</div>
-							<p>${e.description}</p>
-							<div class="oj-event-dates">
-								<span>Start: ${new Date(e.startDate).toLocaleString()}</span>
-								<span>End: ${new Date(e.endDate).toLocaleString()}</span>
-							</div>
-						</div>
-					`
-							)
-							.join('') || '<p class="oj-empty">No upcoming events</p>'
-					}
-				</div>
+			<div class="oj-activity">
+				<h3>\uD83D\uDCE1 Live Activity Feed <span class="oj-muted">(last ${logs.length})</span></h3>
+				<table class="oj-table">
+					<thead>
+						<tr><th>Time</th><th>API Call</th><th>Status</th></tr>
+					</thead>
+					<tbody>${rows}</tbody>
+				</table>
 			</div>
 		`;
 	}
 
-	renderHeroes() {
-		const heroes = this.gameTracker.getHeroes();
+	/**
+	 * Heroes — display hero snapshot data from IndexedDB.
+	 * @returns {Promise<string>} HTML content
+	 */
+	async renderHeroes() {
+		let heroes = [];
+		try {
+			heroes = await this.idbStorage.getAll('heroes', 100);
+		} catch {
+			// No data yet
+		}
+
+		if (heroes.length === 0) {
+			return `
+				<div class="oj-heroes">
+					<h3>\uD83E\uDDB8 Heroes</h3>
+					<p class="oj-empty">No hero data captured yet. Open your hero roster in the game to trigger data capture.</p>
+				</div>
+			`;
+		}
+
+		// Sort by power descending
+		heroes.sort((a, b) => (b.power || 0) - (a.power || 0));
+
+		const rows = heroes.map((h) => `
+			<tr>
+				<td><strong>${this._escapeHtml(h.name || 'Hero #' + (h.heroId || h.id))}</strong></td>
+				<td>${h.level || '\u2014'}</td>
+				<td>${h.stars || '\u2014'}\u2605</td>
+				<td>${h.color || '\u2014'}</td>
+				<td class="oj-num">${h.power ? h.power.toLocaleString() : '\u2014'}</td>
+			</tr>
+		`).join('');
 
 		return `
 			<div class="oj-heroes">
-				<h3>Heroes</h3>
-				<div class="oj-heroes-grid">
-					${
-						heroes
-							.map(
-								(hero) => `
-						<div class="oj-hero-card">
-							<h4>${hero.name}</h4>
-							<div class="oj-hero-stats">
-								<span>Level: ${hero.level}</span>
-								<span>Power: ${hero.power}</span>
-							</div>
-						</div>
-					`
-							)
-							.join('') || '<p class="oj-empty">No hero data tracked yet</p>'
-					}
-				</div>
+				<h3>\uD83E\uDDB8 Heroes <span class="oj-muted">(${heroes.length})</span></h3>
+				<table class="oj-table">
+					<thead>
+						<tr><th>Name</th><th>Level</th><th>Stars</th><th>Color</th><th>Power</th></tr>
+					</thead>
+					<tbody>${rows}</tbody>
+				</table>
 			</div>
 		`;
 	}
 
-	renderResources() {
-		const resources = this.gameTracker.getResources();
+	/**
+	 * Battles — display arena battle history from IndexedDB.
+	 * @returns {Promise<string>} HTML content
+	 */
+	async renderBattles() {
+		let arenaData = [];
+		let grandData = [];
+		let titanData = [];
+		try {
+			arenaData = await this.idbStorage.getAll('arenaBattles', 30);
+			grandData = await this.idbStorage.getAll('grandArenaBattles', 30);
+			titanData = await this.idbStorage.getAll('titanArenaBattles', 30);
+		} catch {
+			// No data yet
+		}
+
+		const allBattles = [
+			...arenaData.map((b) => ({ ...b, type: 'Arena' })),
+			...grandData.map((b) => ({ ...b, type: 'Grand Arena' })),
+			...titanData.map((b) => ({ ...b, type: 'Titan Arena' })),
+		];
+
+		// Sort newest first
+		allBattles.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+
+		if (allBattles.length === 0) {
+			return `
+				<div class="oj-battles">
+					<h3>\u2694\uFE0F Battles</h3>
+					<p class="oj-empty">No battle data captured yet. Fight in the arena to start tracking!</p>
+				</div>
+			`;
+		}
+
+		const wins = allBattles.filter((b) => b.result === 'victory' || b.won === true).length;
+		const losses = allBattles.length - wins;
+		const winRate = allBattles.length > 0 ? ((wins / allBattles.length) * 100).toFixed(1) : '0.0';
+
+		const rows = allBattles.slice(0, 30).map((b) => {
+			const time = b.timestamp ? new Date(b.timestamp).toLocaleString() : '\u2014';
+			const result = (b.result === 'victory' || b.won === true)
+				? '<span class="oj-win">WIN</span>'
+				: '<span class="oj-loss">LOSS</span>';
+			const opponent = b.opponentName || b.defenderId || '\u2014';
+			return `
+				<tr>
+					<td class="oj-mono">${time}</td>
+					<td>${b.type}</td>
+					<td>${this._escapeHtml(String(opponent))}</td>
+					<td>${result}</td>
+				</tr>
+			`;
+		}).join('');
+
+		return `
+			<div class="oj-battles">
+				<h3>\u2694\uFE0F Battles <span class="oj-muted">(${allBattles.length} total)</span></h3>
+				<div class="oj-stats-grid oj-stats-sm">
+					${this._statCard(wins, 'Wins', '#4CAF50')}
+					${this._statCard(losses, 'Losses', '#f44336')}
+					${this._statCard(winRate + '%', 'Win Rate', '#2196F3')}
+				</div>
+				<table class="oj-table">
+					<thead>
+						<tr><th>Time</th><th>Type</th><th>Opponent</th><th>Result</th></tr>
+					</thead>
+					<tbody>${rows}</tbody>
+				</table>
+			</div>
+		`;
+	}
+
+	/**
+	 * Resources — display latest snapshot resource data.
+	 * @returns {Promise<string>} HTML content
+	 */
+	async renderResources() {
+		let snapshots = [];
+		try {
+			snapshots = await this.idbStorage.getAll('snapshots', 1);
+		} catch {
+			// No data yet
+		}
+
+		if (snapshots.length === 0) {
+			return `
+				<div class="oj-resources">
+					<h3>\uD83D\uDC8E Resources</h3>
+					<p class="oj-empty">No resource data captured yet. Play the game \u2014 your first snapshot will be taken automatically.</p>
+				</div>
+			`;
+		}
+
+		// Use the most recent snapshot
+		const snap = snapshots[snapshots.length - 1];
+		const ts = snap.timestamp ? new Date(snap.timestamp).toLocaleString() : 'Unknown';
+
+		// Extract resource fields (common Hero Wars player data fields)
+		const resources = [
+			{ label: 'Gold', value: snap.gold, icon: '\uD83E\uDE99' },
+			{ label: 'Emeralds', value: snap.starmoney || snap.emeralds, icon: '\uD83D\uDC8E' },
+			{ label: 'Energy', value: snap.stamina || snap.energy, icon: '\u26A1' },
+			{ label: 'Level', value: snap.level, icon: '\uD83D\uDCC8' },
+			{ label: 'VIP Level', value: snap.vipLevel || snap.vip, icon: '\uD83D\uDC51' },
+			{ label: 'Team Level', value: snap.teamLevel, icon: '\uD83C\uDFC6' },
+		].filter((r) => r.value !== undefined && r.value !== null);
+
+		const cards = resources.map((r) => `
+			<div class="oj-resource-card">
+				<div class="oj-resource-icon">${r.icon}</div>
+				<div class="oj-resource-amount">${typeof r.value === 'number' ? r.value.toLocaleString() : r.value}</div>
+				<div class="oj-resource-label">${r.label}</div>
+			</div>
+		`).join('');
 
 		return `
 			<div class="oj-resources">
-				<h3>Resources</h3>
-				<div class="oj-resources-grid">
-					${
-						Object.keys(resources)
-							.map(
-								(key) => `
-						<div class="oj-resource-card">
-							<h4>${key}</h4>
-							<div class="oj-resource-amount">${resources[key].amount}</div>
-							<div class="oj-resource-time">Updated: ${new Date(resources[key].timestamp).toLocaleString()}</div>
-						</div>
-					`
-							)
-							.join('') || '<p class="oj-empty">No resource data tracked yet</p>'
-					}
-				</div>
+				<h3>\uD83D\uDC8E Resources <span class="oj-muted">(as of ${ts})</span></h3>
+				${cards ? '<div class="oj-stats-grid">' + cards + '</div>' : '<p class="oj-empty">Snapshot exists but contains no recognizable resource fields.</p>'}
 			</div>
 		`;
 	}
 
-	renderReports() {
-		const goalStats = this.goalsManager.getStats();
-		const calendarStats = this.calendarManager.getStats();
-		const suggestionStats = this.suggestionsEngine.getStats();
-
-		return `
-			<div class="oj-reports">
-				<h3>Reports & Statistics</h3>
-				
-				<div class="oj-report-section">
-					<h4>Goals Statistics</h4>
-					<div class="oj-stats-grid">
-						<div class="oj-stat-card">
-							<div class="oj-stat-value">${goalStats.total}</div>
-							<div class="oj-stat-label">Total Goals</div>
-						</div>
-						<div class="oj-stat-card">
-							<div class="oj-stat-value">${goalStats.active}</div>
-							<div class="oj-stat-label">Active</div>
-						</div>
-						<div class="oj-stat-card">
-							<div class="oj-stat-value">${goalStats.completed}</div>
-							<div class="oj-stat-label">Completed</div>
-						</div>
-						<div class="oj-stat-card">
-							<div class="oj-stat-value">${goalStats.completionRate}%</div>
-							<div class="oj-stat-label">Completion Rate</div>
-						</div>
-					</div>
-				</div>
-				
-				<div class="oj-report-section">
-					<h4>Calendar Statistics</h4>
-					<div class="oj-stats-grid">
-						<div class="oj-stat-card">
-							<div class="oj-stat-value">${calendarStats.total}</div>
-							<div class="oj-stat-label">Total Events</div>
-						</div>
-						<div class="oj-stat-card">
-							<div class="oj-stat-value">${calendarStats.upcoming}</div>
-							<div class="oj-stat-label">Upcoming</div>
-						</div>
-						<div class="oj-stat-card">
-							<div class="oj-stat-value">${calendarStats.activeGameEvents}</div>
-							<div class="oj-stat-label">Active Game Events</div>
-						</div>
-					</div>
-				</div>
-				
-				<div class="oj-report-section">
-					<h4>Suggestions Statistics</h4>
-					<div class="oj-stats-grid">
-						<div class="oj-stat-card">
-							<div class="oj-stat-value">${suggestionStats.active}</div>
-							<div class="oj-stat-label">Active Suggestions</div>
-						</div>
-						<div class="oj-stat-card high">
-							<div class="oj-stat-value">${suggestionStats.high}</div>
-							<div class="oj-stat-label">High Priority</div>
-						</div>
-						<div class="oj-stat-card medium">
-							<div class="oj-stat-value">${suggestionStats.medium}</div>
-							<div class="oj-stat-label">Medium Priority</div>
-						</div>
-						<div class="oj-stat-card low">
-							<div class="oj-stat-value">${suggestionStats.low}</div>
-							<div class="oj-stat-label">Low Priority</div>
-						</div>
-					</div>
-				</div>
-			</div>
-		`;
-	}
-
+	/**
+	 * Settings — sync render (no async data needed).
+	 * @returns {string} HTML content
+	 */
 	renderSettings() {
+		const autoShow = this.prefStorage.get('uiVisible', false);
+
 		return `
 			<div class="oj-settings">
-				<h3>Settings</h3>
-				
-				<div class="oj-settings-group">
-					<h4>Data Management</h4>
-					<button class="oj-btn" id="oj-export-data">Export Data</button>
-					<button class="oj-btn" id="oj-import-data">Import Data</button>
-					<button class="oj-btn oj-btn-danger" id="oj-clear-data">Clear All Data</button>
-				</div>
-				
+				<h3>\u2699\uFE0F Settings</h3>
+
 				<div class="oj-settings-group">
 					<h4>Display</h4>
-					<label>
-						<input type="checkbox" id="oj-auto-show" ${this.isVisible ? 'checked' : ''}>
-						Show overlay on page load
+					<label class="oj-checkbox-label">
+						<input type="checkbox" id="oj-auto-show" ${autoShow ? 'checked' : ''}>
+						Show overlay automatically on page load
 					</label>
 				</div>
-				
+
+				<div class="oj-settings-group">
+					<h4>Data Management</h4>
+					<div class="oj-btn-row">
+						<button class="oj-btn" id="oj-export-data">\uD83D\uDCE5 Export All Data</button>
+						<button class="oj-btn oj-btn-danger" id="oj-clear-data">\uD83D\uDDD1\uFE0F Clear All Data</button>
+					</div>
+				</div>
+
 				<div class="oj-settings-group">
 					<h4>Keyboard Shortcuts</h4>
-					<p>Ctrl+Shift+H - Toggle overlay visibility</p>
+					<div class="oj-shortcut-list">
+						<div class="oj-shortcut-row">
+							<kbd>Ctrl+Shift+H</kbd>
+							<span>Toggle overlay visibility</span>
+						</div>
+					</div>
 				</div>
-				
+
 				<div class="oj-settings-group">
 					<h4>About</h4>
-					<p>OrganizedJihad - Hero Wars Tracker v1.0.0</p>
-					<p>Track your progress, manage goals, and optimize your gameplay!</p>
+					<p>OrganizedJihad \u2014 Hero Wars Tracker v3.0.0</p>
+					<p class="oj-muted">Tracks gameplay data locally via IndexedDB. Optional C# API sync.</p>
 				</div>
 			</div>
 		`;
 	}
 
-	attachGoalEventListeners() {
-		// Tab switching
-		const tabBtns = this.overlay.querySelectorAll('.oj-tab-btn');
-		tabBtns.forEach((btn) => {
-			btn.addEventListener('click', (e) => {
-				const tab = e.target.dataset.tab;
-				tabBtns.forEach((b) => b.classList.remove('active'));
-				e.target.classList.add('active');
-
-				const contents = this.overlay.querySelectorAll('.oj-tab-content');
-				contents.forEach((c) => {
-					c.classList.toggle('active', c.dataset.tab === tab);
-				});
-			});
-		});
-
-		// Add goal button
-		const addBtn = document.getElementById('oj-add-goal');
-		if (addBtn) {
-			addBtn.addEventListener('click', () => {
-				this.showAddGoalDialog();
-			});
-		}
-	}
-
-	attachCalendarEventListeners() {
-		const addBtn = document.getElementById('oj-add-event');
-		if (addBtn) {
-			addBtn.addEventListener('click', () => {
-				this.showAddEventDialog();
-			});
-		}
-	}
-
+	/**
+	 * Attach event listeners for the Settings view.
+	 */
 	attachSettingsEventListeners() {
 		// Export data
-		const exportBtn = document.getElementById('oj-export-data');
+		const exportBtn = this.overlay.querySelector('#oj-export-data');
 		if (exportBtn) {
-			exportBtn.addEventListener('click', () => {
-				const data = this.storage.exportData();
-				const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-				const url = URL.createObjectURL(blob);
-				const a = document.createElement('a');
-				a.href = url;
-				a.download = `organizedJihad-backup-${Date.now()}.json`;
-				a.click();
+			exportBtn.addEventListener('click', async () => {
+				try {
+					const data = await this.gameTracker.exportAllData();
+					const blob = new Blob([JSON.stringify(data, null, '\t')], { type: 'application/json' });
+					const url = URL.createObjectURL(blob);
+					const a = document.createElement('a');
+					a.href = url;
+					a.download = 'organized-jihad-export-' + new Date().toISOString().slice(0, 10) + '.json';
+					a.click();
+					URL.revokeObjectURL(url);
+				} catch (err) {
+					console.error('[OrganizedJihad] Export failed:', err);
+					alert('Export failed \u2014 check console for details.');
+				}
 			});
 		}
 
-		// Clear data
-		const clearBtn = document.getElementById('oj-clear-data');
+		// Clear all data
+		const clearBtn = this.overlay.querySelector('#oj-clear-data');
 		if (clearBtn) {
-			clearBtn.addEventListener('click', () => {
-				if (confirm('Are you sure you want to clear all data? This cannot be undone!')) {
-					this.storage.clearAll();
-					alert('All data cleared!');
-					this.renderView(this.currentView);
+			clearBtn.addEventListener('click', async () => {
+				if (confirm('\u26A0\uFE0F This will delete ALL tracked data (heroes, battles, snapshots, etc.).\n\nAre you sure?')) {
+					try {
+						// Clear preferences
+						this.prefStorage.clearAll();
+						// Delete IndexedDB
+						const dbName = 'OrganizedJihad';
+						const deleteReq = indexedDB.deleteDatabase(dbName);
+						deleteReq.onsuccess = () => {
+							alert('All data cleared. The page will reload.');
+							location.reload();
+						};
+						deleteReq.onerror = () => {
+							alert('Failed to clear IndexedDB. Try clearing manually in DevTools.');
+						};
+					} catch (err) {
+						console.error('[OrganizedJihad] Clear failed:', err);
+						alert('Clear failed \u2014 check console.');
+					}
 				}
 			});
 		}
 
 		// Auto-show checkbox
-		const autoShowCheckbox = document.getElementById('oj-auto-show');
-		if (autoShowCheckbox) {
-			autoShowCheckbox.addEventListener('change', (e) => {
-				this.isVisible = e.target.checked;
-				this.storage.set('uiVisible', this.isVisible);
+		const autoShowCb = this.overlay.querySelector('#oj-auto-show');
+		if (autoShowCb) {
+			autoShowCb.addEventListener('change', (e) => {
+				this.prefStorage.set('uiVisible', e.target.checked);
 			});
 		}
 	}
 
-	showAddGoalDialog() {
-		// This would show a modal dialog for adding goals
-		// For now, just a simple prompt
-		const title = prompt('Goal title:');
-		if (title) {
-			this.goalsManager.addGoal({
-				title,
-				type: 'shortTerm',
-				category: 'general',
-			});
-			this.renderView('goals');
-		}
-	}
+	// =====================================================================
+	// Show / Hide / Toggle
+	// =====================================================================
 
-	showAddEventDialog() {
-		const title = prompt('Event title:');
-		if (title) {
-			this.calendarManager.addEvent({
-				title,
-				startDate: Date.now(),
-				type: 'custom',
-			});
-			this.renderView('calendar');
-		}
-	}
-
+	/**
+	 * Show the overlay panel.
+	 */
 	show() {
 		if (this.overlay) {
 			this.overlay.style.display = 'block';
 			this.isVisible = true;
-			this.storage.set('uiVisible', true);
+			// Re-render current view when opening
+			this.renderView(this.currentView);
 		}
 	}
 
+	/**
+	 * Hide the overlay panel.
+	 */
 	hide() {
 		if (this.overlay) {
 			this.overlay.style.display = 'none';
 			this.isVisible = false;
-			this.storage.set('uiVisible', false);
 		}
 	}
 
+	/**
+	 * Toggle overlay visibility.
+	 */
 	toggle() {
 		if (this.isVisible) {
 			this.hide();
 		} else {
 			this.show();
 		}
+	}
+
+	// =====================================================================
+	// Helper Methods
+	// =====================================================================
+
+	/**
+	 * Safely count records in an IndexedDB object store.
+	 * Returns 0 on any error (store doesn't exist, etc.).
+	 *
+	 * @param {string} storeName - The object store name
+	 * @returns {Promise<number>} Record count
+	 */
+	async _countStore(storeName) {
+		try {
+			const all = await this.idbStorage.getAll(storeName);
+			return Array.isArray(all) ? all.length : 0;
+		} catch {
+			return 0;
+		}
+	}
+
+	/**
+	 * Safely call a synchronous function, returning a fallback on error.
+	 *
+	 * @param {Function} fn - Function to call
+	 * @param {*} fallback - Fallback value on error
+	 * @returns {*} Result or fallback
+	 */
+	_safeCall(fn, fallback) {
+		try {
+			return fn() ?? fallback;
+		} catch {
+			return fallback;
+		}
+	}
+
+	/**
+	 * Generate HTML for a stat card.
+	 *
+	 * @param {number|string} value - Stat value
+	 * @param {string} label - Stat label
+	 * @param {string} color - CSS color for the value
+	 * @returns {string} HTML
+	 */
+	_statCard(value, label, color = '#4fc3f7') {
+		return `
+			<div class="oj-stat-card">
+				<div class="oj-stat-value" style="color: ${color}">${value}</div>
+				<div class="oj-stat-label">${label}</div>
+			</div>
+		`;
+	}
+
+	/**
+	 * Escape HTML to prevent XSS in rendered content.
+	 *
+	 * @param {string} str - Raw string
+	 * @returns {string} HTML-safe string
+	 */
+	_escapeHtml(str) {
+		const div = document.createElement('div');
+		div.textContent = str;
+		return div.innerHTML;
 	}
 }
 

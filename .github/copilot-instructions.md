@@ -49,6 +49,23 @@ A multi-tier game tracking solution for Hero Wars that captures, stores, and ana
 
 ---
 
+## Session Logging (MANDATORY)
+
+**Every Copilot session MUST produce or update a session log** in `~docs/copilot-chats/`.
+
+- **File naming**: `YYYY-MM-DD-<short-description>.md` (e.g., `2026-02-21-overlay-window-fixes.md`)
+- **Content must include**:
+  - Date and session number
+  - Summary of what was accomplished
+  - List of files created or modified
+  - GitHub issues created, referenced, or closed
+  - Key decisions made and rationale
+  - Any known issues or follow-up items
+- **Update at the end of every session** — do not skip this step
+- If a session spans multiple conversations, append to the existing log for that date
+
+---
+
 ## Project Structure
 
 ```

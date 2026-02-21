@@ -36,21 +36,21 @@ describe('IndexedDBStorage', () => {
 
 		test('should create all required object stores', async () => {
 			const storeNames = Array.from(storage.db.objectStoreNames);
-			
+
 			// Core stores
 			expect(storeNames).toContain('playerData');
 			expect(storeNames).toContain('heroes');
 			expect(storeNames).toContain('titans');
 			expect(storeNames).toContain('pets');
-			
+
 			// Activity tracking stores
 			expect(storeNames).toContain('battleHistory');
 			expect(storeNames).toContain('resourceHistory');
 			expect(storeNames).toContain('questProgress');
-			
+
 			// Chat stores
 			expect(storeNames).toContain('chatMessages');
-			
+
 			// Guild member tracking stores
 			expect(storeNames).toContain('guildMembers');
 			expect(storeNames).toContain('guildMemberSnapshots');
@@ -83,7 +83,7 @@ describe('IndexedDBStorage', () => {
 
 			const key = await storage.add('playerData', testData);
 			const retrieved = await storage.get('playerData', key);
-			
+
 			expect(retrieved).toBeDefined();
 			expect(retrieved.playerId).toBe(testData.playerId);
 			expect(retrieved.playerName).toBe(testData.playerName);
@@ -98,11 +98,11 @@ describe('IndexedDBStorage', () => {
 			};
 
 			const key = await storage.add('playerData', testData);
-			
+
 			// Update the data
 			const updatedData = { ...testData, id: key, level: 60 };
 			await storage.put('playerData', updatedData);
-			
+
 			const retrieved = await storage.get('playerData', key);
 			expect(retrieved.level).toBe(60);
 		});
@@ -116,7 +116,7 @@ describe('IndexedDBStorage', () => {
 
 			const key = await storage.add('playerData', testData);
 			await storage.delete('playerData', key);
-			
+
 			const retrieved = await storage.get('playerData', key);
 			expect(retrieved).toBeUndefined();
 		});
@@ -162,7 +162,7 @@ describe('IndexedDBStorage', () => {
 
 			await storage.put('guildMembers', member);
 			const retrieved = await storage.get('guildMembers', 99999);
-			
+
 			expect(retrieved).toBeDefined();
 			expect(retrieved.playerName).toBe('NewMember');
 			expect(retrieved.level).toBe(80);
@@ -179,15 +179,15 @@ describe('IndexedDBStorage', () => {
 
 			// Insert
 			await storage.put('guildMembers', member);
-			
+
 			// Update
 			const updatedMember = { ...member, level: 90, teamPower: 600000 };
 			await storage.put('guildMembers', updatedMember);
-			
+
 			const retrieved = await storage.get('guildMembers', 99999);
 			expect(retrieved.level).toBe(90);
 			expect(retrieved.teamPower).toBe(600000);
-			
+
 			// Should only have one record
 			const allMembers = await storage.getAll('guildMembers');
 			expect(allMembers).toHaveLength(1);
@@ -212,7 +212,7 @@ describe('IndexedDBStorage', () => {
 			await storage.add('playerData', { playerId: 3, playerName: 'Player3' });
 
 			await storage.clear('playerData');
-			
+
 			const allData = await storage.getAll('playerData');
 			expect(allData).toHaveLength(0);
 		});

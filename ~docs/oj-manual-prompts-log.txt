@@ -25,6 +25,39 @@ continue working;
 
 [OJ - Organized Jihad] For this prompt now, ignore the c# server, etc, just focus on the tampermonkey script; make issues, docs, plans, etcs, for the script to collect all the information in a local db through javascript/typescript and display a menu and ways to view this data inside the web application, and make instructions for how I can install this is my browser and see _something_ in the game, so I know my script is working; continue;
 
+UI: clicking the badge opens a window, The minimize and close buttons on the interface don't work, there's nothing under any of the tabs, work on this window (make it moveable as well); make issues for the content and issues for the window funcationality itself and make issues for the data collection; update chat/sessions logs every time, add that to copilot instructions, then update the chat/session logs; continue;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 

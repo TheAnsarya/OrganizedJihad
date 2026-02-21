@@ -40,10 +40,10 @@ describe('GameTracker', () => {
 		test('should set up API interception', () => {
 			const originalXHR = global.XMLHttpRequest;
 			gameTracker.initialize();
-			
+
 			// XMLHttpRequest should be wrapped
 			expect(global.XMLHttpRequest).toBeDefined();
-			
+
 			// Restore original
 			global.XMLHttpRequest = originalXHR;
 		});
@@ -64,7 +64,7 @@ describe('GameTracker', () => {
 			};
 
 			await gameTracker.trackPlayerData(mockResponse.results[0]);
-			
+
 			expect(mockIndexedDB.put).toHaveBeenCalledWith(
 				'playerData',
 				expect.objectContaining({
@@ -86,7 +86,7 @@ describe('GameTracker', () => {
 			};
 
 			await gameTracker.trackHeroData(mockResponse.results[0]);
-			
+
 			expect(mockIndexedDB.add).toHaveBeenCalledTimes(2);
 			expect(mockIndexedDB.add).toHaveBeenCalledWith(
 				'heroes',
@@ -109,7 +109,7 @@ describe('GameTracker', () => {
 			};
 
 			await gameTracker.trackTitanData(mockResponse.results[0]);
-			
+
 			expect(mockIndexedDB.add).toHaveBeenCalledTimes(2);
 			expect(mockIndexedDB.add).toHaveBeenCalledWith(
 				'titans',
@@ -146,7 +146,7 @@ describe('GameTracker', () => {
 			};
 
 			await gameTracker.trackGuildMembers(mockResponse);
-			
+
 			expect(mockIndexedDB.put).toHaveBeenCalledWith(
 				'guildMembers',
 				expect.objectContaining({
@@ -173,7 +173,7 @@ describe('GameTracker', () => {
 			};
 
 			await gameTracker.trackGuildMembers(mockResponse);
-			
+
 			expect(mockIndexedDB.add).toHaveBeenCalledWith(
 				'guildMemberSnapshots',
 				expect.objectContaining({
@@ -199,7 +199,7 @@ describe('GameTracker', () => {
 			];
 
 			await gameTracker.trackChatMessages(mockMessages, 'guild');
-			
+
 			expect(mockIndexedDB.add).toHaveBeenCalledWith(
 				'chatMessages',
 				expect.objectContaining({
@@ -221,7 +221,7 @@ describe('GameTracker', () => {
 			mockStorage.get.mockResolvedValue({ playerId: 12345, playerName: 'Me' });
 
 			await gameTracker.trackOutgoingMessage(mockRequest);
-			
+
 			expect(mockIndexedDB.add).toHaveBeenCalledWith(
 				'chatMessages',
 				expect.objectContaining({
@@ -252,7 +252,7 @@ describe('GameTracker', () => {
 			mockIndexedDB.get.mockResolvedValue({ guildId: 999 });
 
 			await gameTracker.trackGuildWarParticipation(mockResponse);
-			
+
 			expect(mockIndexedDB.add).toHaveBeenCalledWith(
 				'guildWarParticipations',
 				expect.objectContaining({
@@ -276,7 +276,7 @@ describe('GameTracker', () => {
 				'Guild Raid',
 				'Boss kill reward'
 			);
-			
+
 			expect(mockIndexedDB.add).toHaveBeenCalledWith(
 				'titaniteTransactions',
 				expect.objectContaining({
@@ -297,7 +297,7 @@ describe('GameTracker', () => {
 
 		test('should handle storage errors', async () => {
 			mockIndexedDB.add.mockRejectedValue(new Error('Storage error'));
-			
+
 			// Should log error but not throw
 			await expect(gameTracker.trackHeroData([{ id: 1 }])).resolves.not.toThrow();
 		});

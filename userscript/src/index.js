@@ -20,6 +20,7 @@
 import GameTracker from './modules/gameTracker.js';
 import UIManager from './modules/uiManager.js';
 import IndexedDBStorage from './modules/indexedDBStorage.js';
+import StorageManager from './modules/storageManager.js';
 import SyncClient from './modules/syncClient.js';
 import GoalsManager from './modules/goalsManager.js';
 import CalendarManager from './modules/calendarManager.js';
@@ -138,10 +139,13 @@ import './styles/main.css';
 
 	// ─── Core Initialization ────────────────────────────────────────────
 
-	// Initialize IndexedDB storage
-	const storage = new IndexedDBStorage();
-	await storage.init();
+	// Initialize IndexedDB storage (for game data — heroes, battles, etc.)
+	const idbStorage = new IndexedDBStorage();
+	await idbStorage.init();
 	console.log('[OrganizedJihad] IndexedDB storage initialized');
+
+	// Initialize StorageManager (for preferences, goals, calendar — synchronous localStorage)
+	const prefStorage = new StorageManager();
 
 	// Initialize sync client (optional — only works if C# server is running)
 	const syncClient = new SyncClient('http://localhost:5124');
@@ -159,14 +163,16 @@ import './styles/main.css';
 	}
 
 	// Initialize core modules
-	const gameTracker = new GameTracker(storage);
-	const goalsManager = new GoalsManager(storage);
-	const calendarManager = new CalendarManager(storage);
-	const suggestionsEngine = new SuggestionsEngine(storage, gameTracker, goalsManager);
-	const uiManager = new UIManager(storage, gameTracker, goalsManager, calendarManager, suggestionsEngine, syncClient);
+	// GameTracker and APIMonitor use IndexedDB for large game data
+	// GoalsManager, CalendarManager, SuggestionsEngine use localStorage for preferences
+	const gameTracker = new GameTracker(idbStorage);
+	const goalsManager = new GoalsManager(prefStorage);
+	const calendarManager = new CalendarManager(prefStorage);
+	const suggestionsEngine = new SuggestionsEngine(prefStorage, gameTracker, goalsManager);
+	const uiManager = new UIManager(prefStorage, idbStorage, gameTracker, goalsManager, calendarManager, suggestionsEngine);
 
 	// Initialize API Monitor for comprehensive API call logging
-	const apiMonitor = new APIMonitor(storage);
+	const apiMonitor = new APIMonitor(idbStorage);
 	await apiMonitor.init();
 	console.log('[OrganizedJihad] ✅ API Monitor initialized');
 
@@ -207,7 +213,7 @@ import './styles/main.css';
 
 		// Start auto-sync if API server is available (every 15 minutes)
 		if (apiAvailable) {
-			const syncIntervalId = syncClient.startAutoSync(storage, 15);
+			const syncIntervalId = syncClient.startAutoSync(idbStorage, 15);
 			console.log('[OrganizedJihad] Auto-sync enabled (every 15 min). Interval:', syncIntervalId);
 			window.organizedJihadSyncInterval = syncIntervalId;
 		}

@@ -104,17 +104,18 @@ This produces `userscript/dist/organized-jihad.user.js` — a single bundled JS 
 3. Look for these messages:
 
 ```
-OrganizedJihad - Hero Wars Tracker v2.0 Loaded
-IndexedDB storage initialized
-✅ API Monitor initialized - logging all Hero Wars API calls
+[OrganizedJihad] Hero Wars Tracker v3.0 Loaded
+[OrganizedJihad] IndexedDB storage initialized
+[OrganizedJihad] ✅ API Monitor initialized
+[OrganizedJihad] Initializing tracker...
 [OrganizedJihad] GameTracker initialized - monitoring Hero Wars API
-[OrganizedJihad] Detected Hero Wars API URL: https://i-heroes-fb.nextersglobal.com/api/
-[OrganizedJihad] Player snapshot saved: YourName Level 130
+[OrganizedJihad] ✅ Tracker ready — play the game normally
 ```
 
-4. You should also see the **OJ overlay panel** in the top-right corner of the game.
-   - If not visible, press `Ctrl+Shift+H` to toggle it
-   - Or look for the status badge in the bottom-right corner (after Issue #23 is implemented)
+4. You should see a **yellow status badge** ("OJ: Listening...") in the bottom-right corner.
+   - When API calls start, it turns **green** and shows the call count
+   - Click the badge to open the full **overlay panel**
+   - Press `Ctrl+Shift+H` to toggle it
 
 ---
 

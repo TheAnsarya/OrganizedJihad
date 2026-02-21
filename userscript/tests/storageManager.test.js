@@ -31,7 +31,7 @@ describe('StorageManager', () => {
 			global.GM.getValue.mockReturnValue(JSON.stringify(testValue));
 
 			const result = await storageManager.get('testKey');
-			
+
 			expect(global.GM.getValue).toHaveBeenCalledWith('testKey', null);
 			expect(result).toEqual(testValue);
 		});
@@ -40,13 +40,13 @@ describe('StorageManager', () => {
 			const testValue = { playerId: 12345, playerName: 'TestPlayer' };
 
 			await storageManager.set('testKey', testValue);
-			
+
 			expect(global.GM.setValue).toHaveBeenCalledWith('testKey', JSON.stringify(testValue));
 		});
 
 		test('should delete value using GM.deleteValue', async () => {
 			await storageManager.delete('testKey');
-			
+
 			expect(global.GM.deleteValue).toHaveBeenCalledWith('testKey');
 		});
 
@@ -54,7 +54,7 @@ describe('StorageManager', () => {
 			global.GM.listValues.mockReturnValue(['key1', 'key2', 'key3']);
 
 			const keys = await storageManager.listKeys();
-			
+
 			expect(global.GM.listValues).toHaveBeenCalled();
 			expect(keys).toEqual(['key1', 'key2', 'key3']);
 		});
@@ -63,7 +63,7 @@ describe('StorageManager', () => {
 			global.GM.getValue.mockReturnValue(null);
 
 			const result = await storageManager.get('nonexistent', { default: 'value' });
-			
+
 			expect(result).toEqual({ default: 'value' });
 		});
 	});
@@ -84,7 +84,7 @@ describe('StorageManager', () => {
 
 			await storageManager.set('complex', complexObject);
 			global.GM.getValue.mockReturnValue(JSON.stringify(complexObject));
-			
+
 			const retrieved = await storageManager.get('complex');
 			expect(retrieved).toEqual(complexObject);
 		});
@@ -94,7 +94,7 @@ describe('StorageManager', () => {
 
 			await storageManager.set('array', testArray);
 			global.GM.getValue.mockReturnValue(JSON.stringify(testArray));
-			
+
 			const retrieved = await storageManager.get('array');
 			expect(retrieved).toEqual(testArray);
 		});
@@ -123,7 +123,7 @@ describe('StorageManager', () => {
 			global.GM.getValue.mockReturnValue('invalid json {');
 
 			const result = await storageManager.get('badJson', 'default');
-			
+
 			expect(result).toBe('default');
 		});
 
@@ -141,7 +141,7 @@ describe('StorageManager', () => {
 			global.GM.listValues.mockReturnValue(['key1', 'key2', 'key3']);
 
 			await storageManager.clear();
-			
+
 			expect(global.GM.deleteValue).toHaveBeenCalledTimes(3);
 			expect(global.GM.deleteValue).toHaveBeenCalledWith('key1');
 			expect(global.GM.deleteValue).toHaveBeenCalledWith('key2');
@@ -162,7 +162,7 @@ describe('StorageManager', () => {
 				.mockReturnValueOnce(JSON.stringify(mockData.key3));
 
 			const allData = await storageManager.getAll();
-			
+
 			expect(allData).toEqual(mockData);
 		});
 	});
