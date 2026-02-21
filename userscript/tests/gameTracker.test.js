@@ -3,7 +3,7 @@
  * Tests for Hero Wars API interception and data extraction
  */
 
-import { GameTracker } from '../../src/modules/gameTracker.js';
+import GameTracker from '../src/modules/gameTracker.js';
 
 describe('GameTracker', () => {
 	let gameTracker;

@@ -2761,6 +2761,4 @@ class GameTracker {
 	}
 }
 
-// Export singleton instance
-const gameTracker = new GameTracker();
-export default gameTracker;
+export default GameTracker;

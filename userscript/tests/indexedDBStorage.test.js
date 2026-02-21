@@ -3,7 +3,7 @@
  * Tests for browser-side IndexedDB storage operations
  */
 
-import { IndexedDBStorage } from '../../src/modules/indexedDBStorage.js';
+import IndexedDBStorage from '../src/modules/indexedDBStorage.js';
 
 describe('IndexedDBStorage', () => {
 	let storage;

@@ -3,7 +3,7 @@
  * Tests for storage abstraction layer (GM API / localStorage fallback)
  */
 
-import { StorageManager } from '../../src/modules/storageManager.js';
+import StorageManager from '../src/modules/storageManager.js';
 
 describe('StorageManager', () => {
 	let storageManager;

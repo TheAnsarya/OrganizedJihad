@@ -5,10 +5,25 @@
 
 [OJ - Organized Jihad] continue, make issues, work issues, make prompts for me to use in the future in a document; continue;
 
+*********************************** C:\Users\me\source\repos\OrganizedJihad\~docs\AI-Prompts-Reference.md
 
+work on some issues and continue;
 
+&&&&&&&&&
+[OJ] Perform a comprehensive update session:
 
+1. Assess current state (git status, gh issue list, dotnet build, dotnet test)
+2. Create GitHub issues for all planned work
+3. Work through issues in priority order
+4. Write tests as you go
+5. Create a session log
+6. Create a git commit per logical unit
+7. Report final status: tests, build, issues closed
+&&&&&&&&&&
 
+continue working;
+
+[OJ - Organized Jihad] For this prompt now, ignore the c# server, etc, just focus on the tampermonkey script; make issues, docs, plans, etcs, for the script to collect all the information in a local db through javascript/typescript and display a menu and ways to view this data inside the web application, and make instructions for how I can install this is my browser and see _something_ in the game, so I know my script is working; continue;
 
 
 
