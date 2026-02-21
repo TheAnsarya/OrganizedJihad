@@ -1,7 +1,7 @@
-# Session: Phase 8 — Userscript Capture for Upgrades, Quests & Inventory
+# Session: Phase 8 — Userscript Capture + Desktop Visualization
 
 **Date**: 2025-01-24
-**Issue**: #15 — Userscript: Capture hero/titan upgrades, daily quests, and inventory events
+**Issues**: #15 — Userscript capture, #16 — Desktop visualization
 **Branch**: `api-backend-creation`
 
 ## Summary
@@ -78,4 +78,44 @@ Implemented browser-side capture of Phase 8 entity data in the TamperMonkey user
 
 - ✅ `yarn build` — Webpack production build succeeded (no errors)
 - ✅ `dotnet build` — .NET solution builds successfully (0 errors, 2 pre-existing warnings)
+- ✅ `dotnet test` — All 55 tests pass (39 data + 16 API)
+
+---
+
+## Issue #16: Desktop App Data Visualization
+
+### New Files
+
+- **`desktop-app/Components/Pages/HeroUpgrades.razor`** (~280 lines)
+	- Unified timeline of all 7 hero upgrade types
+	- Filter by hero name, upgrade type, and date range
+	- Summary cards with per-type counts
+	- Paginated table (max 200 rows) with color-coded badges
+
+- **`desktop-app/Components/Pages/TitanUpgrades.razor`** (~260 lines)
+	- Timeline of all 5 titan upgrade types
+	- Same filter/display pattern as HeroUpgrades
+
+- **`desktop-app/Components/Pages/DailyActivity.razor`** (~310 lines)
+	- Dashboard with daily/guild quest counts, login rewards, activity points
+	- CSS-based bar chart showing quests completed by day (last 30 days)
+	- Login streak info card
+	- Unified activity log table
+
+- **`desktop-app/Components/Pages/InventoryUsage.razor`** (~310 lines)
+	- Item usage and equipment change tracking
+	- Category breakdown with progress bars
+	- Equipment change type summary
+	- Combined usage log table
+
+### Modified Files
+
+- **`desktop-app/Components/Layout/NavMenu.razor`**
+	- Replaced boilerplate links (Counter, Weather) with proper navigation
+	- Added section header for "Tracking" pages
+	- Links: Dashboard, Hero Upgrades, Titan Upgrades, Daily Activity, Inventory Usage
+
+### Verification
+
+- ✅ `dotnet build desktop-app` — 0 errors, 0 warnings
 - ✅ `dotnet test` — All 55 tests pass (39 data + 16 API)
