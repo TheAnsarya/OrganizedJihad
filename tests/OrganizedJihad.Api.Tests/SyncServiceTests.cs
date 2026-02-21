@@ -818,6 +818,270 @@ public class SyncServiceTests : IDisposable {
 		// Assert - TotalRecords should be 0 for empty database
 		stats.TotalRecords.Should().Be(0);
 	}
+
+	// ==========================================================================
+	// Phase 9: Older Entity Query Tests
+	// ==========================================================================
+
+	/// <summary>
+	/// Verifies that GetHeroesAsync returns hero snapshots ordered by timestamp descending.
+	/// </summary>
+	[Fact]
+	public async Task GetHeroes_Should_Return_Ordered_By_Timestamp() {
+		// Arrange
+		await using var context = await _contextFactory.CreateDbContextAsync();
+
+		context.Heroes.Add(new Hero {
+			HeroId = 1, HeroName = "Galahad", Level = 50, Stars = 4, Color = 3,
+			Power = 30000, Timestamp = DateTime.UtcNow.AddHours(-2), PlayerId = 100
+		});
+		context.Heroes.Add(new Hero {
+			HeroId = 1, HeroName = "Galahad", Level = 60, Stars = 5, Color = 4,
+			Power = 45000, Timestamp = DateTime.UtcNow, PlayerId = 100
+		});
+		await context.SaveChangesAsync();
+
+		// Act
+		var result = await _service.GetHeroesAsync();
+		var json = JsonSerializer.Serialize(result);
+		var doc = JsonDocument.Parse(json);
+
+		// Assert
+		doc.RootElement.GetProperty("count").GetInt32().Should().Be(2);
+		var heroes = doc.RootElement.GetProperty("heroes");
+		heroes.GetArrayLength().Should().Be(2);
+	}
+
+	/// <summary>
+	/// Verifies that GetHeroesAsync filters by heroId when specified.
+	/// </summary>
+	[Fact]
+	public async Task GetHeroes_Should_Filter_By_HeroId() {
+		// Arrange
+		await using var context = await _contextFactory.CreateDbContextAsync();
+
+		context.Heroes.Add(new Hero {
+			HeroId = 1, HeroName = "Galahad", Level = 50, Stars = 4, Color = 3,
+			Power = 30000, Timestamp = DateTime.UtcNow, PlayerId = 100
+		});
+		context.Heroes.Add(new Hero {
+			HeroId = 2, HeroName = "Keira", Level = 60, Stars = 5, Color = 5,
+			Power = 45000, Timestamp = DateTime.UtcNow, PlayerId = 100
+		});
+		await context.SaveChangesAsync();
+
+		// Act
+		var result = await _service.GetHeroesAsync(heroId: 1);
+		var json = JsonSerializer.Serialize(result);
+		var doc = JsonDocument.Parse(json);
+
+		// Assert
+		doc.RootElement.GetProperty("count").GetInt32().Should().Be(1);
+	}
+
+	/// <summary>
+	/// Verifies that GetTitansAsync returns titan snapshots and filters by titanId.
+	/// </summary>
+	[Fact]
+	public async Task GetTitans_Should_Return_And_Filter() {
+		// Arrange
+		await using var context = await _contextFactory.CreateDbContextAsync();
+
+		context.Titans.Add(new Titan {
+			TitanId = 10, TitanName = "Hyperion", Level = 80, Stars = 5,
+			Power = 60000, Timestamp = DateTime.UtcNow, PlayerId = 100
+		});
+		context.Titans.Add(new Titan {
+			TitanId = 11, TitanName = "Eden", Level = 70, Stars = 4,
+			Power = 50000, Timestamp = DateTime.UtcNow, PlayerId = 100
+		});
+		await context.SaveChangesAsync();
+
+		// Act - no filter
+		var allResult = await _service.GetTitansAsync();
+		var allJson = JsonSerializer.Serialize(allResult);
+		var allDoc = JsonDocument.Parse(allJson);
+		allDoc.RootElement.GetProperty("count").GetInt32().Should().Be(2);
+
+		// Act - filter by titanId
+		var filteredResult = await _service.GetTitansAsync(titanId: 10);
+		var filteredJson = JsonSerializer.Serialize(filteredResult);
+		var filteredDoc = JsonDocument.Parse(filteredJson);
+		filteredDoc.RootElement.GetProperty("count").GetInt32().Should().Be(1);
+	}
+
+	/// <summary>
+	/// Verifies that GetPetsAsync returns pet snapshots and respects the limit parameter.
+	/// </summary>
+	[Fact]
+	public async Task GetPets_Should_Return_And_Respect_Limit() {
+		// Arrange
+		await using var context = await _contextFactory.CreateDbContextAsync();
+
+		for (int i = 0; i < 5; i++) {
+			context.Pets.Add(new Pet {
+				PetId = i + 1, PetName = $"Pet_{i + 1}", Stars = 3, Power = 10000 + i,
+				Level = 30 + i, Timestamp = DateTime.UtcNow.AddMinutes(-i), PlayerId = 100
+			});
+		}
+		await context.SaveChangesAsync();
+
+		// Act
+		var result = await _service.GetPetsAsync(limit: 3);
+		var json = JsonSerializer.Serialize(result);
+		var doc = JsonDocument.Parse(json);
+
+		// Assert
+		doc.RootElement.GetProperty("count").GetInt32().Should().Be(3);
+	}
+
+	/// <summary>
+	/// Verifies that GetGuildWarBattlesAsync returns battles and filters by warId.
+	/// </summary>
+	[Fact]
+	public async Task GetGuildWarBattles_Should_Filter_By_WarId() {
+		// Arrange
+		await using var context = await _contextFactory.CreateDbContextAsync();
+
+		context.GuildWarBattles.Add(new GuildWarBattle {
+			Timestamp = DateTime.UtcNow, WarId = "war_1", EnemyGuildName = "Enemy A",
+			FortificationNumber = 1, IsWin = true, StarsEarned = 3
+		});
+		context.GuildWarBattles.Add(new GuildWarBattle {
+			Timestamp = DateTime.UtcNow, WarId = "war_2", EnemyGuildName = "Enemy B",
+			FortificationNumber = 2, IsWin = false, StarsEarned = 0
+		});
+		await context.SaveChangesAsync();
+
+		// Act
+		var result = await _service.GetGuildWarBattlesAsync(warId: "war_1");
+		var json = JsonSerializer.Serialize(result);
+		var doc = JsonDocument.Parse(json);
+
+		// Assert
+		doc.RootElement.GetProperty("count").GetInt32().Should().Be(1);
+	}
+
+	/// <summary>
+	/// Verifies that GetRaidBossAttacksAsync returns attacks in order.
+	/// </summary>
+	[Fact]
+	public async Task GetRaidBossAttacks_Should_Return_Ordered() {
+		// Arrange
+		await using var context = await _contextFactory.CreateDbContextAsync();
+
+		context.RaidBossAttacks.Add(new RaidBossAttack {
+			Timestamp = DateTime.UtcNow.AddHours(-1), BossName = "Ancient Dragon",
+			Difficulty = 3, DamageDealt = 5000000
+		});
+		context.RaidBossAttacks.Add(new RaidBossAttack {
+			Timestamp = DateTime.UtcNow, BossName = "Ancient Dragon",
+			Difficulty = 3, DamageDealt = 7000000
+		});
+		await context.SaveChangesAsync();
+
+		// Act
+		var result = await _service.GetRaidBossAttacksAsync();
+		var json = JsonSerializer.Serialize(result);
+		var doc = JsonDocument.Parse(json);
+
+		// Assert
+		doc.RootElement.GetProperty("count").GetInt32().Should().Be(2);
+	}
+
+	/// <summary>
+	/// Verifies that GetChestOpeningsAsync returns chests with drops and filters by type.
+	/// </summary>
+	[Fact]
+	public async Task GetChestOpenings_Should_Return_With_Drops_And_Filter() {
+		// Arrange
+		await using var context = await _contextFactory.CreateDbContextAsync();
+
+		var chest1 = new ChestOpening {
+			Timestamp = DateTime.UtcNow, ChestType = "legendary", Quantity = 1
+		};
+		var chest2 = new ChestOpening {
+			Timestamp = DateTime.UtcNow, ChestType = "heroic", Quantity = 1
+		};
+		context.ChestOpenings.AddRange(chest1, chest2);
+		await context.SaveChangesAsync();
+
+		// Act - no filter
+		var allResult = await _service.GetChestOpeningsAsync();
+		var allJson = JsonSerializer.Serialize(allResult);
+		var allDoc = JsonDocument.Parse(allJson);
+		allDoc.RootElement.GetProperty("count").GetInt32().Should().Be(2);
+
+		// Act - filter by type
+		var filteredResult = await _service.GetChestOpeningsAsync(chestType: "legendary");
+		var filteredJson = JsonSerializer.Serialize(filteredResult);
+		var filteredDoc = JsonDocument.Parse(filteredJson);
+		filteredDoc.RootElement.GetProperty("count").GetInt32().Should().Be(1);
+	}
+
+	/// <summary>
+	/// Verifies that GetGuildMembersAsync returns active members and respects includeInactive.
+	/// </summary>
+	[Fact]
+	public async Task GetGuildMembers_Should_Filter_Active_And_Inactive() {
+		// Arrange
+		await using var context = await _contextFactory.CreateDbContextAsync();
+
+		context.GuildMembers.Add(new GuildMember {
+			GuildId = 1, GuildName = "Test Guild", PlayerId = 100,
+			PlayerName = "Player1", Level = 100, TeamPower = 500000,
+			GuildRank = "Leader", LastOnline = DateTime.UtcNow, IsActive = true
+		});
+		context.GuildMembers.Add(new GuildMember {
+			GuildId = 1, GuildName = "Test Guild", PlayerId = 200,
+			PlayerName = "Player2", Level = 80, TeamPower = 300000,
+			GuildRank = "Member", LastOnline = DateTime.UtcNow.AddDays(-30), IsActive = false
+		});
+		await context.SaveChangesAsync();
+
+		// Act - active only (default)
+		var activeResult = await _service.GetGuildMembersAsync();
+		var activeJson = JsonSerializer.Serialize(activeResult);
+		var activeDoc = JsonDocument.Parse(activeJson);
+		activeDoc.RootElement.GetProperty("count").GetInt32().Should().Be(1);
+
+		// Act - include inactive
+		var allResult = await _service.GetGuildMembersAsync(includeInactive: true);
+		var allJson = JsonSerializer.Serialize(allResult);
+		var allDoc = JsonDocument.Parse(allJson);
+		allDoc.RootElement.GetProperty("count").GetInt32().Should().Be(2);
+	}
+
+	/// <summary>
+	/// Verifies that GetResourceTransactionsAsync returns and filters by resource type.
+	/// </summary>
+	[Fact]
+	public async Task GetResourceTransactions_Should_Filter_By_Type() {
+		// Arrange
+		await using var context = await _contextFactory.CreateDbContextAsync();
+
+		context.ResourceTransactions.Add(new ResourceTransaction {
+			Timestamp = DateTime.UtcNow, ResourceType = "gold",
+			Amount = 50000, Source = "quest_reward", PlayerId = 100
+		});
+		context.ResourceTransactions.Add(new ResourceTransaction {
+			Timestamp = DateTime.UtcNow, ResourceType = "emeralds",
+			Amount = 100, Source = "daily_login", PlayerId = 100
+		});
+		await context.SaveChangesAsync();
+
+		// Act - no filter
+		var allResult = await _service.GetResourceTransactionsAsync();
+		var allJson = JsonSerializer.Serialize(allResult);
+		var allDoc = JsonDocument.Parse(allJson);
+		allDoc.RootElement.GetProperty("count").GetInt32().Should().Be(2);
+
+		// Act - filter by gold
+		var goldResult = await _service.GetResourceTransactionsAsync(resourceType: "gold");
+		var goldJson = JsonSerializer.Serialize(goldResult);
+		var goldDoc = JsonDocument.Parse(goldJson);
+		goldDoc.RootElement.GetProperty("count").GetInt32().Should().Be(1);
+	}
 }
 
 /// <summary>

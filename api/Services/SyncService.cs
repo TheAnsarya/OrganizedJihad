@@ -1142,6 +1142,217 @@ public class SyncService {
 		};
 	}
 
+	// ========================================
+	// Phase 9: Older Entity Query Methods
+	// ========================================
+
+	/// <summary>
+	/// Gets hero snapshots with optional filtering by hero ID and player ID.
+	/// Returns snapshots ordered by most recent first.
+	/// </summary>
+	/// <param name="heroId">Optional hero ID to filter by</param>
+	/// <param name="playerId">Optional player ID to filter by</param>
+	/// <param name="limit">Maximum number of results (default: 50)</param>
+	/// <returns>List of hero snapshots</returns>
+	public async Task<object> GetHeroesAsync(long? heroId = null, long? playerId = null, int limit = 50) {
+		await using var context = await _contextFactory.CreateDbContextAsync();
+
+		var query = context.Heroes.AsNoTracking().AsQueryable();
+
+		if (heroId.HasValue) {
+			query = query.Where(h => h.HeroId == heroId.Value);
+		}
+
+		if (playerId.HasValue) {
+			query = query.Where(h => h.PlayerId == playerId.Value);
+		}
+
+		var heroes = await query
+			.OrderByDescending(h => h.Timestamp)
+			.Take(limit)
+			.ToListAsync();
+
+		return new { heroes, count = heroes.Count };
+	}
+
+	/// <summary>
+	/// Gets titan snapshots with optional filtering by titan ID and player ID.
+	/// Returns snapshots ordered by most recent first.
+	/// </summary>
+	/// <param name="titanId">Optional titan ID to filter by</param>
+	/// <param name="playerId">Optional player ID to filter by</param>
+	/// <param name="limit">Maximum number of results (default: 50)</param>
+	/// <returns>List of titan snapshots</returns>
+	public async Task<object> GetTitansAsync(long? titanId = null, long? playerId = null, int limit = 50) {
+		await using var context = await _contextFactory.CreateDbContextAsync();
+
+		var query = context.Titans.AsNoTracking().AsQueryable();
+
+		if (titanId.HasValue) {
+			query = query.Where(t => t.TitanId == titanId.Value);
+		}
+
+		if (playerId.HasValue) {
+			query = query.Where(t => t.PlayerId == playerId.Value);
+		}
+
+		var titans = await query
+			.OrderByDescending(t => t.Timestamp)
+			.Take(limit)
+			.ToListAsync();
+
+		return new { titans, count = titans.Count };
+	}
+
+	/// <summary>
+	/// Gets pet snapshots with optional filtering by pet ID and player ID.
+	/// Returns snapshots ordered by most recent first.
+	/// </summary>
+	/// <param name="petId">Optional pet ID to filter by</param>
+	/// <param name="playerId">Optional player ID to filter by</param>
+	/// <param name="limit">Maximum number of results (default: 50)</param>
+	/// <returns>List of pet snapshots</returns>
+	public async Task<object> GetPetsAsync(long? petId = null, long? playerId = null, int limit = 50) {
+		await using var context = await _contextFactory.CreateDbContextAsync();
+
+		var query = context.Pets.AsNoTracking().AsQueryable();
+
+		if (petId.HasValue) {
+			query = query.Where(p => p.PetId == petId.Value);
+		}
+
+		if (playerId.HasValue) {
+			query = query.Where(p => p.PlayerId == playerId.Value);
+		}
+
+		var pets = await query
+			.OrderByDescending(p => p.Timestamp)
+			.Take(limit)
+			.ToListAsync();
+
+		return new { pets, count = pets.Count };
+	}
+
+	/// <summary>
+	/// Gets guild war battles with optional filtering by war ID.
+	/// Returns battles ordered by most recent first.
+	/// </summary>
+	/// <param name="warId">Optional war ID to filter by</param>
+	/// <param name="limit">Maximum number of results (default: 50)</param>
+	/// <returns>List of guild war battles</returns>
+	public async Task<object> GetGuildWarBattlesAsync(string? warId = null, int limit = 50) {
+		await using var context = await _contextFactory.CreateDbContextAsync();
+
+		var query = context.GuildWarBattles.AsNoTracking().AsQueryable();
+
+		if (!string.IsNullOrEmpty(warId)) {
+			query = query.Where(b => b.WarId == warId);
+		}
+
+		var battles = await query
+			.OrderByDescending(b => b.Timestamp)
+			.Take(limit)
+			.ToListAsync();
+
+		return new { battles, count = battles.Count };
+	}
+
+	/// <summary>
+	/// Gets raid boss attacks ordered by most recent first.
+	/// </summary>
+	/// <param name="limit">Maximum number of results (default: 50)</param>
+	/// <returns>List of raid boss attacks</returns>
+	public async Task<object> GetRaidBossAttacksAsync(int limit = 50) {
+		await using var context = await _contextFactory.CreateDbContextAsync();
+
+		var attacks = await context.RaidBossAttacks
+			.AsNoTracking()
+			.OrderByDescending(a => a.Timestamp)
+			.Take(limit)
+			.ToListAsync();
+
+		return new { attacks, count = attacks.Count };
+	}
+
+	/// <summary>
+	/// Gets chest openings with their drops, ordered by most recent first.
+	/// </summary>
+	/// <param name="chestType">Optional chest type to filter by</param>
+	/// <param name="limit">Maximum number of results (default: 50)</param>
+	/// <returns>List of chest openings with associated drops</returns>
+	public async Task<object> GetChestOpeningsAsync(string? chestType = null, int limit = 50) {
+		await using var context = await _contextFactory.CreateDbContextAsync();
+
+		var query = context.ChestOpenings
+			.AsNoTracking()
+			.Include(c => c.Drops)
+			.AsQueryable();
+
+		if (!string.IsNullOrEmpty(chestType)) {
+			query = query.Where(c => c.ChestType == chestType);
+		}
+
+		var chests = await query
+			.OrderByDescending(c => c.Timestamp)
+			.Take(limit)
+			.ToListAsync();
+
+		return new { chests, count = chests.Count };
+	}
+
+	/// <summary>
+	/// Gets guild members with optional filtering by guild ID.
+	/// Returns active members ordered by team power descending.
+	/// </summary>
+	/// <param name="guildId">Optional guild ID to filter by</param>
+	/// <param name="includeInactive">Include inactive members (default: false)</param>
+	/// <param name="limit">Maximum number of results (default: 100)</param>
+	/// <returns>List of guild members</returns>
+	public async Task<object> GetGuildMembersAsync(long? guildId = null, bool includeInactive = false, int limit = 100) {
+		await using var context = await _contextFactory.CreateDbContextAsync();
+
+		var query = context.GuildMembers.AsNoTracking().AsQueryable();
+
+		if (guildId.HasValue) {
+			query = query.Where(m => m.GuildId == guildId.Value);
+		}
+
+		if (!includeInactive) {
+			query = query.Where(m => m.IsActive);
+		}
+
+		var members = await query
+			.OrderByDescending(m => m.TeamPower)
+			.Take(limit)
+			.ToListAsync();
+
+		return new { members, count = members.Count };
+	}
+
+	/// <summary>
+	/// Gets resource transactions with optional filtering by resource type.
+	/// Returns transactions ordered by most recent first.
+	/// </summary>
+	/// <param name="resourceType">Optional resource type to filter by (e.g., "gold", "emeralds")</param>
+	/// <param name="limit">Maximum number of results (default: 100)</param>
+	/// <returns>List of resource transactions</returns>
+	public async Task<object> GetResourceTransactionsAsync(string? resourceType = null, int limit = 100) {
+		await using var context = await _contextFactory.CreateDbContextAsync();
+
+		var query = context.ResourceTransactions.AsNoTracking().AsQueryable();
+
+		if (!string.IsNullOrEmpty(resourceType)) {
+			query = query.Where(r => r.ResourceType == resourceType);
+		}
+
+		var transactions = await query
+			.OrderByDescending(r => r.Timestamp)
+			.Take(limit)
+			.ToListAsync();
+
+		return new { transactions, count = transactions.Count };
+	}
+
 	/// <summary>
 	/// Gets statistics about the database contents.
 	/// </summary>

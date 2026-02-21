@@ -22,6 +22,14 @@ namespace OrganizedJihad.Api.Controllers;
 /// - GET /api/sync/titan-upgrades - Get titan upgrade history
 /// - GET /api/sync/daily-activity - Get daily activity data
 /// - GET /api/sync/inventory - Get inventory usage history
+/// - GET /api/sync/heroes - Get hero snapshots
+/// - GET /api/sync/titans - Get titan snapshots
+/// - GET /api/sync/pets - Get pet snapshots
+/// - GET /api/sync/guild-war-battles - Get guild war battles
+/// - GET /api/sync/raid-boss-attacks - Get raid boss attacks
+/// - GET /api/sync/chests - Get chest openings with drops
+/// - GET /api/sync/guild-members - Get guild member roster
+/// - GET /api/sync/resources - Get resource transactions
 ///
 /// References:
 /// - ASP.NET Core Controllers: https://learn.microsoft.com/en-us/aspnet/core/web-api/
@@ -484,6 +492,247 @@ public class SyncController : ControllerBase {
 			return Ok(result);
 		} catch (Exception ex) {
 			_logger.LogError(ex, "Error retrieving inventory history");
+			return StatusCode(500, new { error = ex.Message });
+		}
+	}
+
+	// ========================================
+	// Phase 9: Older Entity Query Endpoints
+	// ========================================
+
+	/// <summary>
+	/// Get hero snapshots with optional filtering by hero ID and player ID.
+	/// </summary>
+	/// <param name="heroId">Optional hero ID to filter to a specific hero</param>
+	/// <param name="playerId">Optional player ID filter</param>
+	/// <param name="limit">Maximum number of results (default: 50)</param>
+	/// <returns>Object containing hero snapshot array and count</returns>
+	/// <response code="200">Returns hero snapshots</response>
+	/// <response code="500">Error occurred while querying database</response>
+	/// <remarks>
+	/// GET: api/sync/heroes?heroId=1&amp;playerId=12345&amp;limit=50
+	///
+	/// Returns hero roster snapshots showing hero state over time.
+	/// Ordered by timestamp descending (newest first).
+	/// </remarks>
+	[HttpGet("heroes")]
+	[ProducesResponseType(StatusCodes.Status200OK)]
+	[ProducesResponseType(typeof(object), StatusCodes.Status500InternalServerError)]
+	public async Task<IActionResult> GetHeroes(
+		[FromQuery] long? heroId = null,
+		[FromQuery] long? playerId = null,
+		[FromQuery] int limit = 50) {
+		try {
+			var result = await _syncService.GetHeroesAsync(heroId, playerId, limit);
+			return Ok(result);
+		} catch (Exception ex) {
+			_logger.LogError(ex, "Error retrieving heroes");
+			return StatusCode(500, new { error = ex.Message });
+		}
+	}
+
+	/// <summary>
+	/// Get titan snapshots with optional filtering by titan ID and player ID.
+	/// </summary>
+	/// <param name="titanId">Optional titan ID to filter to a specific titan</param>
+	/// <param name="playerId">Optional player ID filter</param>
+	/// <param name="limit">Maximum number of results (default: 50)</param>
+	/// <returns>Object containing titan snapshot array and count</returns>
+	/// <response code="200">Returns titan snapshots</response>
+	/// <response code="500">Error occurred while querying database</response>
+	/// <remarks>
+	/// GET: api/sync/titans?titanId=1&amp;playerId=12345&amp;limit=50
+	///
+	/// Returns titan roster snapshots showing titan state over time.
+	/// Ordered by timestamp descending (newest first).
+	/// </remarks>
+	[HttpGet("titans")]
+	[ProducesResponseType(StatusCodes.Status200OK)]
+	[ProducesResponseType(typeof(object), StatusCodes.Status500InternalServerError)]
+	public async Task<IActionResult> GetTitans(
+		[FromQuery] long? titanId = null,
+		[FromQuery] long? playerId = null,
+		[FromQuery] int limit = 50) {
+		try {
+			var result = await _syncService.GetTitansAsync(titanId, playerId, limit);
+			return Ok(result);
+		} catch (Exception ex) {
+			_logger.LogError(ex, "Error retrieving titans");
+			return StatusCode(500, new { error = ex.Message });
+		}
+	}
+
+	/// <summary>
+	/// Get pet snapshots with optional filtering by pet ID and player ID.
+	/// </summary>
+	/// <param name="petId">Optional pet ID to filter to a specific pet</param>
+	/// <param name="playerId">Optional player ID filter</param>
+	/// <param name="limit">Maximum number of results (default: 50)</param>
+	/// <returns>Object containing pet snapshot array and count</returns>
+	/// <response code="200">Returns pet snapshots</response>
+	/// <response code="500">Error occurred while querying database</response>
+	/// <remarks>
+	/// GET: api/sync/pets?petId=1&amp;playerId=12345&amp;limit=50
+	///
+	/// Returns pet roster snapshots showing pet state over time.
+	/// Ordered by timestamp descending (newest first).
+	/// </remarks>
+	[HttpGet("pets")]
+	[ProducesResponseType(StatusCodes.Status200OK)]
+	[ProducesResponseType(typeof(object), StatusCodes.Status500InternalServerError)]
+	public async Task<IActionResult> GetPets(
+		[FromQuery] long? petId = null,
+		[FromQuery] long? playerId = null,
+		[FromQuery] int limit = 50) {
+		try {
+			var result = await _syncService.GetPetsAsync(petId, playerId, limit);
+			return Ok(result);
+		} catch (Exception ex) {
+			_logger.LogError(ex, "Error retrieving pets");
+			return StatusCode(500, new { error = ex.Message });
+		}
+	}
+
+	/// <summary>
+	/// Get guild war battle history with optional filtering by war ID.
+	/// </summary>
+	/// <param name="warId">Optional war ID to filter results to a specific war</param>
+	/// <param name="limit">Maximum number of results (default: 50)</param>
+	/// <returns>Object containing guild war battle array and count</returns>
+	/// <response code="200">Returns guild war battles</response>
+	/// <response code="500">Error occurred while querying database</response>
+	/// <remarks>
+	/// GET: api/sync/guild-war-battles?warId=war_123&amp;limit=50
+	///
+	/// Returns guild war battle history.
+	/// Ordered by timestamp descending (newest first).
+	/// </remarks>
+	[HttpGet("guild-war-battles")]
+	[ProducesResponseType(StatusCodes.Status200OK)]
+	[ProducesResponseType(typeof(object), StatusCodes.Status500InternalServerError)]
+	public async Task<IActionResult> GetGuildWarBattles(
+		[FromQuery] string? warId = null,
+		[FromQuery] int limit = 50) {
+		try {
+			var result = await _syncService.GetGuildWarBattlesAsync(warId, limit);
+			return Ok(result);
+		} catch (Exception ex) {
+			_logger.LogError(ex, "Error retrieving guild war battles");
+			return StatusCode(500, new { error = ex.Message });
+		}
+	}
+
+	/// <summary>
+	/// Get raid boss attack history.
+	/// </summary>
+	/// <param name="limit">Maximum number of results (default: 50)</param>
+	/// <returns>Object containing raid boss attack array and count</returns>
+	/// <response code="200">Returns raid boss attacks</response>
+	/// <response code="500">Error occurred while querying database</response>
+	/// <remarks>
+	/// GET: api/sync/raid-boss-attacks?limit=50
+	///
+	/// Returns raid boss attack history with damage dealt, teams used, and rewards.
+	/// Ordered by timestamp descending (newest first).
+	/// </remarks>
+	[HttpGet("raid-boss-attacks")]
+	[ProducesResponseType(StatusCodes.Status200OK)]
+	[ProducesResponseType(typeof(object), StatusCodes.Status500InternalServerError)]
+	public async Task<IActionResult> GetRaidBossAttacks([FromQuery] int limit = 50) {
+		try {
+			var result = await _syncService.GetRaidBossAttacksAsync(limit);
+			return Ok(result);
+		} catch (Exception ex) {
+			_logger.LogError(ex, "Error retrieving raid boss attacks");
+			return StatusCode(500, new { error = ex.Message });
+		}
+	}
+
+	/// <summary>
+	/// Get chest opening history with drops and optional chest type filter.
+	/// </summary>
+	/// <param name="chestType">Optional chest type filter (e.g., "legendary", "heroic")</param>
+	/// <param name="limit">Maximum number of results (default: 50)</param>
+	/// <returns>Object containing chest opening array with associated drops and count</returns>
+	/// <response code="200">Returns chest openings with drops</response>
+	/// <response code="500">Error occurred while querying database</response>
+	/// <remarks>
+	/// GET: api/sync/chests?chestType=legendary&amp;limit=50
+	///
+	/// Returns chest opening events with their individual drops.
+	/// Ordered by timestamp descending (newest first).
+	/// </remarks>
+	[HttpGet("chests")]
+	[ProducesResponseType(StatusCodes.Status200OK)]
+	[ProducesResponseType(typeof(object), StatusCodes.Status500InternalServerError)]
+	public async Task<IActionResult> GetChests(
+		[FromQuery] string? chestType = null,
+		[FromQuery] int limit = 50) {
+		try {
+			var result = await _syncService.GetChestOpeningsAsync(chestType, limit);
+			return Ok(result);
+		} catch (Exception ex) {
+			_logger.LogError(ex, "Error retrieving chest openings");
+			return StatusCode(500, new { error = ex.Message });
+		}
+	}
+
+	/// <summary>
+	/// Get guild member roster with optional guild ID filter.
+	/// </summary>
+	/// <param name="guildId">Optional guild ID to filter by</param>
+	/// <param name="includeInactive">Include inactive/departed members (default: false)</param>
+	/// <param name="limit">Maximum number of results (default: 100)</param>
+	/// <returns>Object containing guild member array and count</returns>
+	/// <response code="200">Returns guild members</response>
+	/// <response code="500">Error occurred while querying database</response>
+	/// <remarks>
+	/// GET: api/sync/guild-members?guildId=100&amp;includeInactive=true&amp;limit=100
+	///
+	/// Returns guild members ordered by team power descending.
+	/// By default only returns active members.
+	/// </remarks>
+	[HttpGet("guild-members")]
+	[ProducesResponseType(StatusCodes.Status200OK)]
+	[ProducesResponseType(typeof(object), StatusCodes.Status500InternalServerError)]
+	public async Task<IActionResult> GetGuildMembers(
+		[FromQuery] long? guildId = null,
+		[FromQuery] bool includeInactive = false,
+		[FromQuery] int limit = 100) {
+		try {
+			var result = await _syncService.GetGuildMembersAsync(guildId, includeInactive, limit);
+			return Ok(result);
+		} catch (Exception ex) {
+			_logger.LogError(ex, "Error retrieving guild members");
+			return StatusCode(500, new { error = ex.Message });
+		}
+	}
+
+	/// <summary>
+	/// Get resource transaction history with optional resource type filter.
+	/// </summary>
+	/// <param name="resourceType">Optional resource type filter (e.g., "gold", "emeralds")</param>
+	/// <param name="limit">Maximum number of results (default: 100)</param>
+	/// <returns>Object containing resource transaction array and count</returns>
+	/// <response code="200">Returns resource transactions</response>
+	/// <response code="500">Error occurred while querying database</response>
+	/// <remarks>
+	/// GET: api/sync/resources?resourceType=gold&amp;limit=100
+	///
+	/// Returns resource gain/spend events with source tracking.
+	/// Ordered by timestamp descending (newest first).
+	/// </remarks>
+	[HttpGet("resources")]
+	[ProducesResponseType(StatusCodes.Status200OK)]
+	[ProducesResponseType(typeof(object), StatusCodes.Status500InternalServerError)]
+	public async Task<IActionResult> GetResources(
+		[FromQuery] string? resourceType = null,
+		[FromQuery] int limit = 100) {
+		try {
+			var result = await _syncService.GetResourceTransactionsAsync(resourceType, limit);
+			return Ok(result);
+		} catch (Exception ex) {
+			_logger.LogError(ex, "Error retrieving resource transactions");
 			return StatusCode(500, new { error = ex.Message });
 		}
 	}
