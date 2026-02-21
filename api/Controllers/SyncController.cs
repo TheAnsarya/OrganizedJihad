@@ -9,7 +9,7 @@ namespace OrganizedJihad.Api.Controllers;
 /// <summary>
 /// API controller for synchronizing game data from the browser userscript.
 /// Provides endpoints for data import and retrieval of Hero Wars game statistics.
-/// 
+///
 /// Endpoints:
 /// - POST /api/sync/import - Main sync endpoint for browser data
 /// - GET /api/sync/health - Health check
@@ -22,7 +22,7 @@ namespace OrganizedJihad.Api.Controllers;
 /// - GET /api/sync/titan-upgrades - Get titan upgrade history
 /// - GET /api/sync/daily-activity - Get daily activity data
 /// - GET /api/sync/inventory - Get inventory usage history
-/// 
+///
 /// References:
 /// - ASP.NET Core Controllers: https://learn.microsoft.com/en-us/aspnet/core/web-api/
 /// - Model Binding: https://learn.microsoft.com/en-us/aspnet/core/mvc/models/model-binding
@@ -60,10 +60,10 @@ public class SyncController : ControllerBase {
 	/// <response code="200">API is healthy and running</response>
 	/// <remarks>
 	/// GET: api/sync/health
-	/// 
+	///
 	/// This endpoint can be used by monitoring tools or the browser userscript
 	/// to verify the API is available before attempting data synchronization.
-	/// 
+	///
 	/// Example response:
 	/// <code>
 	/// {
@@ -92,19 +92,19 @@ public class SyncController : ControllerBase {
 	/// <response code="500">Import failed due to server error</response>
 	/// <remarks>
 	/// POST: api/sync/import
-	/// 
+	///
 	/// This is the primary endpoint used by the TamperMonkey userscript to sync
 	/// game data from the browser to the local database. It processes all game
 	/// entities including player stats, battles, heroes, titans, and events.
-	/// 
+	///
 	/// The import process:
 	/// 1. Validates incoming data structure
 	/// 2. Creates database transaction for consistency
 	/// 3. Processes each entity type sequentially
 	/// 4. Returns counts of imported records
-	/// 
+	///
 	/// Content-Type: application/json
-	/// 
+	///
 	/// https://learn.microsoft.com/en-us/aspnet/core/web-api/action-return-types
 	/// </remarks>
 	[HttpPost("import")]
@@ -153,7 +153,7 @@ public class SyncController : ControllerBase {
 	/// <response code="200">Returns last sync timestamp or null</response>
 	/// <remarks>
 	/// GET: api/sync/last-sync
-	/// 
+	///
 	/// Queries the PlayerSnapshots table to find the most recent data point.
 	/// This helps the userscript determine if data is stale or needs refresh.
 	/// </remarks>
@@ -178,12 +178,12 @@ public class SyncController : ControllerBase {
 	/// <response code="500">Error occurred while querying database</response>
 	/// <remarks>
 	/// GET: api/sync/stats
-	/// 
+	///
 	/// Provides a quick overview of the database contents including:
 	/// - Total counts for each entity type (snapshots, battles, heroes, etc.)
 	/// - Date ranges for time-series data
 	/// - Latest sync information
-	/// 
+	///
 	/// Useful for dashboard displays or debugging data import issues.
 	/// </remarks>
 	[HttpGet("stats")]
@@ -209,12 +209,12 @@ public class SyncController : ControllerBase {
 	/// <response code="500">Error occurred while querying database</response>
 	/// <remarks>
 	/// GET: api/sync/snapshots?limit=10
-	/// 
+	///
 	/// Player snapshots represent the player's state at a specific point in time,
 	/// including level, team power, and other key statistics.
-	/// 
+	///
 	/// Ordered by timestamp descending (newest first).
-	/// 
+	///
 	/// https://learn.microsoft.com/en-us/ef/core/querying/
 	/// </remarks>
 	[HttpGet("snapshots")]
@@ -247,14 +247,14 @@ public class SyncController : ControllerBase {
 	/// <response code="500">Error occurred while querying database</response>
 	/// <remarks>
 	/// GET: api/sync/battles?limit=20
-	/// 
+	///
 	/// Retrieves recent battle history from multiple arena types:
 	/// - Arena: Standard PvP battles
 	/// - Grand Arena: Special tournament battles
 	/// - Titan Arena: Titan-based PvP battles
-	/// 
+	///
 	/// Each arena type returns up to 'limit' battles, ordered by most recent.
-	/// 
+	///
 	/// Example response:
 	/// <code>
 	/// {
@@ -307,10 +307,10 @@ public class SyncController : ControllerBase {
 	/// <response code="500">Error occurred while querying database</response>
 	/// <remarks>
 	/// GET: api/sync/opponents
-	/// 
+	///
 	/// Returns all opponents that have been encountered in any arena type.
 	/// Useful for tracking rival players and analyzing matchup history.
-	/// 
+	///
 	/// Opponents are unique by OpponentId across all arena types.
 	/// </remarks>
 	[HttpGet("opponents")]
@@ -344,10 +344,10 @@ public class SyncController : ControllerBase {
 	/// <response code="500">Error occurred while querying database</response>
 	/// <remarks>
 	/// GET: api/sync/hero-upgrades?heroId=1&amp;type=level&amp;limit=50
-	/// 
+	///
 	/// Returns hero upgrade events ordered by most recent first.
 	/// When no type filter is specified, returns all upgrade types in separate arrays.
-	/// 
+	///
 	/// Example response:
 	/// <code>
 	/// {
@@ -387,7 +387,7 @@ public class SyncController : ControllerBase {
 	/// <response code="500">Error occurred while querying database</response>
 	/// <remarks>
 	/// GET: api/sync/titan-upgrades?titanId=1&amp;type=level&amp;limit=50
-	/// 
+	///
 	/// Returns titan upgrade events ordered by most recent first.
 	/// </remarks>
 	[HttpGet("titan-upgrades")]
@@ -417,11 +417,11 @@ public class SyncController : ControllerBase {
 	/// <response code="500">Error occurred while querying database</response>
 	/// <remarks>
 	/// GET: api/sync/daily-activity?date=2025-01-23&amp;playerId=12345&amp;limit=30
-	/// 
+	///
 	/// Returns daily quests, guild quests, login rewards, and activity summaries.
 	/// When date is specified, returns data for that specific day only.
 	/// Otherwise returns the most recent entries.
-	/// 
+	///
 	/// Example response:
 	/// <code>
 	/// {
@@ -461,10 +461,10 @@ public class SyncController : ControllerBase {
 	/// <response code="500">Error occurred while querying database</response>
 	/// <remarks>
 	/// GET: api/sync/inventory?category=potion&amp;limit=50
-	/// 
+	///
 	/// Returns both inventory item usage events and equipment changes.
 	/// Category filter only applies to item usages, not equipment changes.
-	/// 
+	///
 	/// Example response:
 	/// <code>
 	/// {
