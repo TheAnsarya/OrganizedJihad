@@ -1,0 +1,330 @@
+@page "/titan-upgrades"
+@using OrganizedJihad.Data
+@using OrganizedJihad.Data.Models
+@using Microsoft.EntityFrameworkCore
+@inject IDbContextFactory<GameDatabaseContext> DbFactory
+
+<PageTitle>Titan Upgrades - OrganizedJihad</PageTitle>
+
+<div class="container-fluid">
+	<div class="row mb-4">
+		<div class="col-12">
+			<h1 class="display-5">Titan Upgrade Timeline</h1>
+			<p class="text-muted">Track titan level, star, skill, artifact, and skin upgrades over time.</p>
+		</div>
+	</div>
+
+	<!-- Filters -->
+	<div class="row mb-4">
+		<div class="col-md-3">
+			<label class="form-label fw-bold">Titan</label>
+			<select class="form-select" @bind="SelectedTitanName">
+				<option value="">All Titans</option>
+				@foreach (var name in TitanNames) {
+					<option value="@name">@name</option>
+				}
+			</select>
+		</div>
+		<div class="col-md-2">
+			<label class="form-label fw-bold">Upgrade Type</label>
+			<select class="form-select" @bind="SelectedUpgradeType">
+				<option value="">All Types</option>
+				<option value="level">Level</option>
+				<option value="star">Star</option>
+				<option value="skill">Skill</option>
+				<option value="artifact">Artifact</option>
+				<option value="skin">Skin</option>
+			</select>
+		</div>
+		<div class="col-md-2">
+			<label class="form-label fw-bold">From</label>
+			<input type="date" class="form-control" @bind="DateFrom" />
+		</div>
+		<div class="col-md-2">
+			<label class="form-label fw-bold">To</label>
+			<input type="date" class="form-control" @bind="DateTo" />
+		</div>
+		<div class="col-md-3 d-flex align-items-end">
+			<button class="btn btn-primary me-2" @onclick="ApplyFilters">Apply</button>
+			<button class="btn btn-outline-secondary" @onclick="ClearFilters">Clear</button>
+		</div>
+	</div>
+
+	@if (IsLoading) {
+		<div class="row">
+			<div class="col-12 text-center py-5">
+				<div class="spinner-border" role="status">
+					<span class="visually-hidden">Loading...</span>
+				</div>
+			</div>
+		</div>
+	} else {
+		<!-- Summary Cards -->
+		<div class="row mb-4">
+			<div class="col-md-2">
+				<div class="card text-center border-primary">
+					<div class="card-body py-2">
+						<div class="fs-4 fw-bold text-primary">@TotalUpgrades</div>
+						<small class="text-muted">Total</small>
+					</div>
+				</div>
+			</div>
+			<div class="col-md-2">
+				<div class="card text-center">
+					<div class="card-body py-2">
+						<div class="fs-4 fw-bold">@LevelCount</div>
+						<small class="text-muted">Levels</small>
+					</div>
+				</div>
+			</div>
+			<div class="col-md-2">
+				<div class="card text-center">
+					<div class="card-body py-2">
+						<div class="fs-4 fw-bold">@StarCount</div>
+						<small class="text-muted">Stars</small>
+					</div>
+				</div>
+			</div>
+			<div class="col-md-2">
+				<div class="card text-center">
+					<div class="card-body py-2">
+						<div class="fs-4 fw-bold">@SkillCount</div>
+						<small class="text-muted">Skills</small>
+					</div>
+				</div>
+			</div>
+			<div class="col-md-2">
+				<div class="card text-center">
+					<div class="card-body py-2">
+						<div class="fs-4 fw-bold">@ArtifactCount</div>
+						<small class="text-muted">Artifacts</small>
+					</div>
+				</div>
+			</div>
+			<div class="col-md-2">
+				<div class="card text-center">
+					<div class="card-body py-2">
+						<div class="fs-4 fw-bold">@SkinCount</div>
+						<small class="text-muted">Skins</small>
+					</div>
+				</div>
+			</div>
+		</div>
+
+		<!-- Upgrade Timeline Table -->
+		<div class="row">
+			<div class="col-12">
+				<div class="card">
+					<div class="card-header d-flex justify-content-between align-items-center">
+						<h5 class="mb-0">Upgrade Events</h5>
+						<span class="badge bg-secondary">@FilteredUpgrades.Count records</span>
+					</div>
+					<div class="card-body p-0">
+						@if (FilteredUpgrades.Any()) {
+							<div class="table-responsive">
+								<table class="table table-striped table-hover mb-0">
+									<thead class="table-dark">
+										<tr>
+											<th>Time</th>
+											<th>Titan</th>
+											<th>Type</th>
+											<th>Details</th>
+											<th class="text-end">Power</th>
+										</tr>
+									</thead>
+									<tbody>
+										@foreach (var upgrade in FilteredUpgrades.Take(200)) {
+											<tr>
+												<td>
+													<small>@upgrade.Timestamp.ToString("MMM dd HH:mm")</small>
+												</td>
+												<td>
+													<strong>@upgrade.TitanName</strong>
+												</td>
+												<td>
+													<span class="badge @GetUpgradeTypeBadgeClass(upgrade.UpgradeType)">
+														@upgrade.UpgradeType
+													</span>
+												</td>
+												<td>@upgrade.Details</td>
+												<td class="text-end">
+													@if (upgrade.PowerAfter > 0) {
+														<span class="text-muted">@upgrade.PowerAfter.ToString("N0")</span>
+													}
+												</td>
+											</tr>
+										}
+									</tbody>
+								</table>
+							</div>
+							@if (FilteredUpgrades.Count > 200) {
+								<div class="text-center py-2 text-muted">
+									<small>Showing first 200 of @FilteredUpgrades.Count records</small>
+								</div>
+							}
+						} else {
+							<div class="text-center py-5 text-muted">
+								<p class="mb-0">No titan upgrade events recorded yet.</p>
+								<small>Upgrade data will appear after syncing from the browser extension.</small>
+							</div>
+						}
+					</div>
+				</div>
+			</div>
+		</div>
+	}
+</div>
+
+@code {
+	private bool IsLoading { get; set; } = true;
+	private string SelectedTitanName { get; set; } = "";
+	private string SelectedUpgradeType { get; set; } = "";
+	private DateTime? DateFrom { get; set; }
+	private DateTime? DateTo { get; set; }
+	private List<string> TitanNames { get; set; } = new();
+	private List<UpgradeRow> AllUpgrades { get; set; } = new();
+	private List<UpgradeRow> FilteredUpgrades { get; set; } = new();
+
+	// Summary counts
+	private int TotalUpgrades => FilteredUpgrades.Count;
+	private int LevelCount => FilteredUpgrades.Count(u => u.UpgradeType == "Level");
+	private int StarCount => FilteredUpgrades.Count(u => u.UpgradeType == "Star");
+	private int SkillCount => FilteredUpgrades.Count(u => u.UpgradeType == "Skill");
+	private int ArtifactCount => FilteredUpgrades.Count(u => u.UpgradeType == "Artifact");
+	private int SkinCount => FilteredUpgrades.Count(u => u.UpgradeType == "Skin");
+
+	protected override async Task OnInitializedAsync() {
+		await LoadData();
+		IsLoading = false;
+	}
+
+	private async Task LoadData() {
+		using var context = await DbFactory.CreateDbContextAsync();
+
+		// Load all titan upgrade types
+		var levels = await context.TitanLevelUpgrades.AsNoTracking()
+			.OrderByDescending(u => u.Timestamp)
+			.ToListAsync();
+		var stars = await context.TitanStarUpgrades.AsNoTracking()
+			.OrderByDescending(u => u.Timestamp)
+			.ToListAsync();
+		var skills = await context.TitanSkillUpgrades.AsNoTracking()
+			.OrderByDescending(u => u.Timestamp)
+			.ToListAsync();
+		var artifacts = await context.TitanArtifactUpgrades.AsNoTracking()
+			.OrderByDescending(u => u.Timestamp)
+			.ToListAsync();
+		var skins = await context.TitanSkinUpgrades.AsNoTracking()
+			.OrderByDescending(u => u.Timestamp)
+			.ToListAsync();
+
+		// Combine into unified rows
+		AllUpgrades = new List<UpgradeRow>();
+
+		AllUpgrades.AddRange(levels.Select(u => new UpgradeRow {
+			Timestamp = u.Timestamp,
+			TitanName = u.TitanName,
+			UpgradeType = "Level",
+			Details = $"Lv {u.LevelBefore} → {u.LevelAfter} ({u.PotionsSpent:N0} potions, {u.GoldSpent:N0} gold)",
+			PowerAfter = u.PowerAfter,
+		}));
+
+		AllUpgrades.AddRange(stars.Select(u => new UpgradeRow {
+			Timestamp = u.Timestamp,
+			TitanName = u.TitanName,
+			UpgradeType = "Star",
+			Details = $"★{u.StarsBefore} → ★{u.StarsAfter} ({u.SoulStonesConsumed} soul stones)",
+			PowerAfter = u.PowerAfter,
+		}));
+
+		AllUpgrades.AddRange(skills.Select(u => new UpgradeRow {
+			Timestamp = u.Timestamp,
+			TitanName = u.TitanName,
+			UpgradeType = "Skill",
+			Details = $"{u.SkillName} Lv {u.SkillLevelBefore} → {u.SkillLevelAfter} ({u.TitaniteSpent:N0} titanite)",
+			PowerAfter = u.PowerAfter,
+		}));
+
+		AllUpgrades.AddRange(artifacts.Select(u => new UpgradeRow {
+			Timestamp = u.Timestamp,
+			TitanName = u.TitanName,
+			UpgradeType = "Artifact",
+			Details = $"{u.ArtifactType} {u.ArtifactName ?? ""} Lv {u.LevelBefore} → {u.LevelAfter}",
+			PowerAfter = u.PowerAfter,
+		}));
+
+		AllUpgrades.AddRange(skins.Select(u => new UpgradeRow {
+			Timestamp = u.Timestamp,
+			TitanName = u.TitanName,
+			UpgradeType = "Skin",
+			Details = $"{u.SkinName}",
+			PowerAfter = u.PowerAfter,
+		}));
+
+		// Sort by timestamp descending
+		AllUpgrades = AllUpgrades.OrderByDescending(u => u.Timestamp).ToList();
+
+		// Extract unique titan names for filter dropdown
+		TitanNames = AllUpgrades.Select(u => u.TitanName)
+			.Where(n => !string.IsNullOrEmpty(n))
+			.Distinct()
+			.OrderBy(n => n)
+			.ToList();
+
+		ApplyFilters();
+	}
+
+	private void ApplyFilters() {
+		var filtered = AllUpgrades.AsEnumerable();
+
+		if (!string.IsNullOrEmpty(SelectedTitanName)) {
+			filtered = filtered.Where(u => u.TitanName == SelectedTitanName);
+		}
+
+		if (!string.IsNullOrEmpty(SelectedUpgradeType)) {
+			var type = SelectedUpgradeType[..1].ToUpper() + SelectedUpgradeType[1..].ToLower();
+			filtered = filtered.Where(u => u.UpgradeType == type);
+		}
+
+		if (DateFrom.HasValue) {
+			filtered = filtered.Where(u => u.Timestamp >= DateFrom.Value);
+		}
+
+		if (DateTo.HasValue) {
+			filtered = filtered.Where(u => u.Timestamp <= DateTo.Value.AddDays(1));
+		}
+
+		FilteredUpgrades = filtered.ToList();
+	}
+
+	private void ClearFilters() {
+		SelectedTitanName = "";
+		SelectedUpgradeType = "";
+		DateFrom = null;
+		DateTo = null;
+		FilteredUpgrades = AllUpgrades;
+	}
+
+	/// <summary>
+	/// Returns a Bootstrap badge CSS class based on upgrade type for visual differentiation.
+	/// </summary>
+	private static string GetUpgradeTypeBadgeClass(string upgradeType) => upgradeType switch {
+		"Level" => "bg-info",
+		"Star" => "bg-warning text-dark",
+		"Skill" => "bg-primary",
+		"Artifact" => "bg-danger",
+		"Skin" => "bg-dark",
+		_ => "bg-secondary",
+	};
+
+	/// <summary>
+	/// Unified view model for displaying all titan upgrade types in a single table.
+	/// </summary>
+	private class UpgradeRow {
+		public DateTime Timestamp { get; set; }
+		public string TitanName { get; set; } = "";
+		public string UpgradeType { get; set; } = "";
+		public string Details { get; set; } = "";
+		public int PowerAfter { get; set; }
+	}
+}

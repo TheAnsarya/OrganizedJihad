@@ -1,0 +1,386 @@
+@page "/inventory-usage"
+@using OrganizedJihad.Data
+@using OrganizedJihad.Data.Models
+@using Microsoft.EntityFrameworkCore
+@inject IDbContextFactory<GameDatabaseContext> DbFactory
+
+<PageTitle>Inventory Usage - OrganizedJihad</PageTitle>
+
+<div class="container-fluid">
+	<div class="row mb-4">
+		<div class="col-12">
+			<h1 class="display-5">Inventory Usage Log</h1>
+			<p class="text-muted">Track consumable usage and equipment changes across your heroes.</p>
+		</div>
+	</div>
+
+	<!-- Filters -->
+	<div class="row mb-4">
+		<div class="col-md-2">
+			<label class="form-label fw-bold">Category</label>
+			<select class="form-select" @bind="SelectedCategory">
+				<option value="">All Categories</option>
+				@foreach (var cat in Categories) {
+					<option value="@cat">@cat</option>
+				}
+			</select>
+		</div>
+		<div class="col-md-2">
+			<label class="form-label fw-bold">View</label>
+			<select class="form-select" @bind="SelectedView">
+				<option value="items">Item Usage</option>
+				<option value="equipment">Equipment Changes</option>
+				<option value="all">Both</option>
+			</select>
+		</div>
+		<div class="col-md-2">
+			<label class="form-label fw-bold">From</label>
+			<input type="date" class="form-control" @bind="DateFrom" />
+		</div>
+		<div class="col-md-2">
+			<label class="form-label fw-bold">To</label>
+			<input type="date" class="form-control" @bind="DateTo" />
+		</div>
+		<div class="col-md-3 d-flex align-items-end">
+			<button class="btn btn-primary me-2" @onclick="ApplyFilters">Apply</button>
+			<button class="btn btn-outline-secondary" @onclick="ClearFilters">Clear</button>
+		</div>
+	</div>
+
+	@if (IsLoading) {
+		<div class="row">
+			<div class="col-12 text-center py-5">
+				<div class="spinner-border" role="status">
+					<span class="visually-hidden">Loading...</span>
+				</div>
+			</div>
+		</div>
+	} else {
+		<!-- Summary Cards -->
+		<div class="row mb-4">
+			<div class="col-md-3">
+				<div class="card text-white bg-primary">
+					<div class="card-body">
+						<h5 class="card-title">Items Used</h5>
+						<p class="card-text display-6">@ItemUsageCount</p>
+						<small>Unique events</small>
+					</div>
+				</div>
+			</div>
+			<div class="col-md-3">
+				<div class="card text-white bg-success">
+					<div class="card-body">
+						<h5 class="card-title">Total Consumed</h5>
+						<p class="card-text display-6">@TotalQuantityUsed.ToString("N0")</p>
+						<small>Items consumed</small>
+					</div>
+				</div>
+			</div>
+			<div class="col-md-3">
+				<div class="card text-white bg-info">
+					<div class="card-body">
+						<h5 class="card-title">Equipment Changes</h5>
+						<p class="card-text display-6">@EquipmentChangeCount</p>
+						<small>Equip/upgrade events</small>
+					</div>
+				</div>
+			</div>
+			<div class="col-md-3">
+				<div class="card text-white bg-warning">
+					<div class="card-body">
+						<h5 class="card-title">Categories</h5>
+						<p class="card-text display-6">@Categories.Count</p>
+						<small>Item types used</small>
+					</div>
+				</div>
+			</div>
+		</div>
+
+		<!-- Category Breakdown -->
+		@if (CategoryBreakdown.Any()) {
+			<div class="row mb-4">
+				<div class="col-md-6">
+					<div class="card">
+						<div class="card-header">
+							<h5 class="mb-0">Usage by Category</h5>
+						</div>
+						<div class="card-body">
+							@foreach (var cat in CategoryBreakdown) {
+								var pct = TotalQuantityUsed > 0
+									? (int)((cat.Quantity / (double)TotalQuantityUsed) * 100)
+									: 0;
+								<div class="mb-2">
+									<div class="d-flex justify-content-between">
+										<span class="fw-bold">@cat.Category</span>
+										<span class="text-muted">@cat.Quantity.ToString("N0") (@cat.Count events)</span>
+									</div>
+									<div class="progress" style="height: 8px;">
+										<div class="progress-bar" role="progressbar"
+											 style="width: @(pct)%"
+											 aria-valuenow="@pct" aria-valuemin="0" aria-valuemax="100">
+										</div>
+									</div>
+								</div>
+							}
+						</div>
+					</div>
+				</div>
+
+				<!-- Equipment Change Types -->
+				@if (EquipmentTypeBreakdown.Any()) {
+					<div class="col-md-6">
+						<div class="card">
+							<div class="card-header">
+								<h5 class="mb-0">Equipment Changes by Type</h5>
+							</div>
+							<div class="card-body">
+								@foreach (var eq in EquipmentTypeBreakdown) {
+									var pct = EquipmentChangeCount > 0
+										? (int)((eq.Count / (double)EquipmentChangeCount) * 100)
+										: 0;
+									<div class="mb-2">
+										<div class="d-flex justify-content-between">
+											<span class="fw-bold">@eq.ChangeType</span>
+											<span class="text-muted">@eq.Count events</span>
+										</div>
+										<div class="progress" style="height: 8px;">
+											<div class="progress-bar bg-info" role="progressbar"
+												 style="width: @(pct)%"
+												 aria-valuenow="@pct" aria-valuemin="0" aria-valuemax="100">
+											</div>
+										</div>
+									</div>
+								}
+							</div>
+						</div>
+					</div>
+				}
+			</div>
+		}
+
+		<!-- Inventory Log Table -->
+		<div class="row">
+			<div class="col-12">
+				<div class="card">
+					<div class="card-header d-flex justify-content-between align-items-center">
+						<h5 class="mb-0">Usage Log</h5>
+						<span class="badge bg-secondary">@FilteredRows.Count records</span>
+					</div>
+					<div class="card-body p-0">
+						@if (FilteredRows.Any()) {
+							<div class="table-responsive">
+								<table class="table table-striped table-hover mb-0">
+									<thead class="table-dark">
+										<tr>
+											<th>Time</th>
+											<th>Type</th>
+											<th>Item / Equipment</th>
+											<th>Details</th>
+											<th class="text-end">Qty</th>
+										</tr>
+									</thead>
+									<tbody>
+										@foreach (var row in FilteredRows.Take(200)) {
+											<tr>
+												<td><small>@row.Timestamp.ToString("MMM dd HH:mm")</small></td>
+												<td>
+													<span class="badge @(row.IsEquipment ? "bg-info" : "bg-primary")">
+														@(row.IsEquipment ? "Equipment" : row.Category)
+													</span>
+												</td>
+												<td>
+													<strong>@row.ItemName</strong>
+													@if (!string.IsNullOrEmpty(row.Target)) {
+														<br /><small class="text-muted">→ @row.Target</small>
+													}
+												</td>
+												<td><small class="text-muted">@row.Details</small></td>
+												<td class="text-end">
+													@if (row.Quantity > 0) {
+														<span class="fw-bold">@row.Quantity</span>
+													}
+												</td>
+											</tr>
+										}
+									</tbody>
+								</table>
+							</div>
+							@if (FilteredRows.Count > 200) {
+								<div class="text-center py-2 text-muted">
+									<small>Showing first 200 of @FilteredRows.Count records</small>
+								</div>
+							}
+						} else {
+							<div class="text-center py-5 text-muted">
+								<p class="mb-0">No inventory usage data recorded yet.</p>
+								<small>Usage data will appear after syncing from the browser extension.</small>
+							</div>
+						}
+					</div>
+				</div>
+			</div>
+		</div>
+	}
+</div>
+
+@code {
+	private bool IsLoading { get; set; } = true;
+	private string SelectedCategory { get; set; } = "";
+	private string SelectedView { get; set; } = "all";
+	private DateTime? DateFrom { get; set; }
+	private DateTime? DateTo { get; set; }
+
+	private List<InventoryRow> AllRows { get; set; } = new();
+	private List<InventoryRow> FilteredRows { get; set; } = new();
+	private List<string> Categories { get; set; } = new();
+	private List<CategorySummary> CategoryBreakdown { get; set; } = new();
+	private List<EquipmentTypeSummary> EquipmentTypeBreakdown { get; set; } = new();
+
+	// Summary counts
+	private int ItemUsageCount { get; set; }
+	private int TotalQuantityUsed { get; set; }
+	private int EquipmentChangeCount { get; set; }
+
+	protected override async Task OnInitializedAsync() {
+		await LoadData();
+		IsLoading = false;
+	}
+
+	private async Task LoadData() {
+		using var context = await DbFactory.CreateDbContextAsync();
+
+		// Load inventory item usages
+		var itemUsages = await context.InventoryItemUsages.AsNoTracking()
+			.OrderByDescending(u => u.Timestamp)
+			.ToListAsync();
+
+		// Load equipment changes
+		var equipChanges = await context.EquipmentChanges.AsNoTracking()
+			.OrderByDescending(e => e.Timestamp)
+			.ToListAsync();
+
+		// Set summary counts
+		ItemUsageCount = itemUsages.Count;
+		TotalQuantityUsed = itemUsages.Sum(u => u.QuantityUsed);
+		EquipmentChangeCount = equipChanges.Count;
+
+		// Build category breakdown
+		CategoryBreakdown = itemUsages
+			.GroupBy(u => u.Category)
+			.Select(g => new CategorySummary {
+				Category = g.Key,
+				Count = g.Count(),
+				Quantity = g.Sum(u => u.QuantityUsed),
+			})
+			.OrderByDescending(c => c.Quantity)
+			.ToList();
+
+		// Build equipment type breakdown
+		EquipmentTypeBreakdown = equipChanges
+			.GroupBy(e => e.ChangeType)
+			.Select(g => new EquipmentTypeSummary {
+				ChangeType = g.Key,
+				Count = g.Count(),
+			})
+			.OrderByDescending(e => e.Count)
+			.ToList();
+
+		// Extract unique categories
+		Categories = itemUsages.Select(u => u.Category)
+			.Where(c => !string.IsNullOrEmpty(c))
+			.Distinct()
+			.OrderBy(c => c)
+			.ToList();
+
+		// Build unified rows
+		AllRows = new List<InventoryRow>();
+
+		AllRows.AddRange(itemUsages.Select(u => new InventoryRow {
+			Timestamp = u.Timestamp,
+			Category = u.Category,
+			ItemName = u.ItemName,
+			Details = u.UsageContext ?? "",
+			Target = u.TargetEntity,
+			Quantity = u.QuantityUsed,
+			IsEquipment = false,
+		}));
+
+		AllRows.AddRange(equipChanges.Select(e => new InventoryRow {
+			Timestamp = e.Timestamp,
+			Category = "equipment",
+			ItemName = e.EquipmentName ?? $"Slot {e.SlotIndex}",
+			Details = $"{e.ChangeType} (Color Rank {e.HeroColorRank})",
+			Target = e.HeroName,
+			Quantity = 1,
+			IsEquipment = true,
+		}));
+
+		AllRows = AllRows.OrderByDescending(r => r.Timestamp).ToList();
+
+		ApplyFilters();
+	}
+
+	private void ApplyFilters() {
+		var filtered = AllRows.AsEnumerable();
+
+		// View filter
+		filtered = SelectedView switch {
+			"items" => filtered.Where(r => !r.IsEquipment),
+			"equipment" => filtered.Where(r => r.IsEquipment),
+			_ => filtered,
+		};
+
+		// Category filter (only applies to items)
+		if (!string.IsNullOrEmpty(SelectedCategory)) {
+			filtered = filtered.Where(r => r.Category == SelectedCategory);
+		}
+
+		if (DateFrom.HasValue) {
+			filtered = filtered.Where(r => r.Timestamp >= DateFrom.Value);
+		}
+
+		if (DateTo.HasValue) {
+			filtered = filtered.Where(r => r.Timestamp <= DateTo.Value.AddDays(1));
+		}
+
+		FilteredRows = filtered.ToList();
+	}
+
+	private void ClearFilters() {
+		SelectedCategory = "";
+		SelectedView = "all";
+		DateFrom = null;
+		DateTo = null;
+		FilteredRows = AllRows;
+	}
+
+	/// <summary>
+	/// Unified view model for displaying item usage and equipment changes.
+	/// </summary>
+	private class InventoryRow {
+		public DateTime Timestamp { get; set; }
+		public string Category { get; set; } = "";
+		public string ItemName { get; set; } = "";
+		public string Details { get; set; } = "";
+		public string? Target { get; set; }
+		public int Quantity { get; set; }
+		public bool IsEquipment { get; set; }
+	}
+
+	/// <summary>
+	/// Summary of item usage by category for the breakdown chart.
+	/// </summary>
+	private class CategorySummary {
+		public string Category { get; set; } = "";
+		public int Count { get; set; }
+		public int Quantity { get; set; }
+	}
+
+	/// <summary>
+	/// Summary of equipment changes by type.
+	/// </summary>
+	private class EquipmentTypeSummary {
+		public string ChangeType { get; set; } = "";
+		public int Count { get; set; }
+	}
+}
