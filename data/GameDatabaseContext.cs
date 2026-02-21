@@ -209,6 +209,122 @@ public class GameDatabaseContext : DbContext {
 	/// </summary>
 	public DbSet<TitaniteTransaction> TitaniteTransactions { get; set; }
 
+	// === Hero Upgrade Tracking ===
+
+	/// <summary>
+	/// Hero level-up events tracking experience and gold spent
+	/// Immutable historical data for hero progression analysis
+	/// </summary>
+	public DbSet<HeroLevelUpgrade> HeroLevelUpgrades { get; set; }
+
+	/// <summary>
+	/// Hero star (evolution) promotion events
+	/// Immutable historical data for hero evolution tracking
+	/// </summary>
+	public DbSet<HeroStarUpgrade> HeroStarUpgrades { get; set; }
+
+	/// <summary>
+	/// Hero color (rank/tier) evolution events
+	/// Immutable historical data for hero color progression
+	/// </summary>
+	public DbSet<HeroColorUpgrade> HeroColorUpgrades { get; set; }
+
+	/// <summary>
+	/// Hero skill level-up events
+	/// Immutable historical data for skill progression tracking
+	/// </summary>
+	public DbSet<HeroSkillUpgrade> HeroSkillUpgrades { get; set; }
+
+	/// <summary>
+	/// Hero artifact upgrade events (weapon, book, ring)
+	/// Immutable historical data for artifact progression
+	/// </summary>
+	public DbSet<HeroArtifactUpgrade> HeroArtifactUpgrades { get; set; }
+
+	/// <summary>
+	/// Hero glyph upgrade events
+	/// Immutable historical data for glyph stat progression
+	/// </summary>
+	public DbSet<HeroGlyphUpgrade> HeroGlyphUpgrades { get; set; }
+
+	/// <summary>
+	/// Hero skin unlock and upgrade events
+	/// Immutable historical data for skin collection tracking
+	/// </summary>
+	public DbSet<HeroSkinUpgrade> HeroSkinUpgrades { get; set; }
+
+	// === Titan Upgrade Tracking ===
+
+	/// <summary>
+	/// Titan level-up events tracking potions and gold spent
+	/// Immutable historical data for titan progression analysis
+	/// </summary>
+	public DbSet<TitanLevelUpgrade> TitanLevelUpgrades { get; set; }
+
+	/// <summary>
+	/// Titan star (evolution) promotion events
+	/// Immutable historical data for titan evolution tracking
+	/// </summary>
+	public DbSet<TitanStarUpgrade> TitanStarUpgrades { get; set; }
+
+	/// <summary>
+	/// Titan skill level-up events
+	/// Immutable historical data for titan skill progression
+	/// </summary>
+	public DbSet<TitanSkillUpgrade> TitanSkillUpgrades { get; set; }
+
+	/// <summary>
+	/// Titan artifact upgrade events
+	/// Immutable historical data for titan artifact progression
+	/// </summary>
+	public DbSet<TitanArtifactUpgrade> TitanArtifactUpgrades { get; set; }
+
+	/// <summary>
+	/// Titan skin unlock and upgrade events
+	/// Immutable historical data for titan skin collection tracking
+	/// </summary>
+	public DbSet<TitanSkinUpgrade> TitanSkinUpgrades { get; set; }
+
+	// === Daily Activity Tracking ===
+
+	/// <summary>
+	/// Daily quest completion events
+	/// Immutable historical data for daily quest tracking
+	/// </summary>
+	public DbSet<DailyQuestCompletion> DailyQuestCompletions { get; set; }
+
+	/// <summary>
+	/// Guild quest completion events
+	/// Immutable historical data for guild quest tracking
+	/// </summary>
+	public DbSet<GuildQuestCompletion> GuildQuestCompletions { get; set; }
+
+	/// <summary>
+	/// Daily login reward claims
+	/// Immutable historical data for login streak tracking
+	/// </summary>
+	public DbSet<LoginReward> LoginRewards { get; set; }
+
+	/// <summary>
+	/// Aggregated daily activity summaries
+	/// Immutable statistical data for daily engagement metrics
+	/// </summary>
+	public DbSet<DailyActivitySummary> DailyActivitySummaries { get; set; }
+
+	// === Inventory Tracking ===
+
+	/// <summary>
+	/// Inventory item usage events (potions, fragments, scrolls consumed)
+	/// Immutable historical data for item consumption analytics
+	/// </summary>
+	public DbSet<InventoryItemUsage> InventoryItemUsages { get; set; }
+
+	/// <summary>
+	/// Equipment changes on heroes (equipping, upgrading, evolving)
+	/// Immutable historical data for equipment progression tracking
+	/// </summary>
+	public DbSet<EquipmentChange> EquipmentChanges { get; set; }
+
 	public GameDatabaseContext(DbContextOptions<GameDatabaseContext> options)
 		: base(options) {
 	}
@@ -474,6 +590,163 @@ public class GameDatabaseContext : DbContext {
 			entity.HasIndex(e => e.ActivityType);
 			entity.HasIndex(e => new { e.PlayerId, e.Timestamp });
 			entity.HasIndex(e => new { e.GuildId, e.Timestamp });
+		});
+
+		// === Hero Upgrade Configurations ===
+
+		// Configure HeroLevelUpgrade
+		// Composite index on HeroId + Timestamp for hero-specific history
+		// Composite index on PlayerId + Timestamp for player-wide upgrade history
+		modelBuilder.Entity<HeroLevelUpgrade>(entity => {
+			entity.HasKey(e => e.Id);
+			entity.HasIndex(e => new { e.HeroId, e.Timestamp });
+			entity.HasIndex(e => new { e.PlayerId, e.Timestamp });
+		});
+
+		// Configure HeroStarUpgrade
+		modelBuilder.Entity<HeroStarUpgrade>(entity => {
+			entity.HasKey(e => e.Id);
+			entity.HasIndex(e => new { e.HeroId, e.Timestamp });
+			entity.HasIndex(e => new { e.PlayerId, e.Timestamp });
+		});
+
+		// Configure HeroColorUpgrade
+		modelBuilder.Entity<HeroColorUpgrade>(entity => {
+			entity.HasKey(e => e.Id);
+			entity.HasIndex(e => new { e.HeroId, e.Timestamp });
+			entity.HasIndex(e => new { e.PlayerId, e.Timestamp });
+		});
+
+		// Configure HeroSkillUpgrade
+		modelBuilder.Entity<HeroSkillUpgrade>(entity => {
+			entity.HasKey(e => e.Id);
+			entity.HasIndex(e => new { e.HeroId, e.Timestamp });
+			entity.HasIndex(e => new { e.PlayerId, e.Timestamp });
+		});
+
+		// Configure HeroArtifactUpgrade
+		modelBuilder.Entity<HeroArtifactUpgrade>(entity => {
+			entity.HasKey(e => e.Id);
+			entity.HasIndex(e => new { e.HeroId, e.Timestamp });
+			entity.HasIndex(e => new { e.PlayerId, e.Timestamp });
+		});
+
+		// Configure HeroGlyphUpgrade
+		modelBuilder.Entity<HeroGlyphUpgrade>(entity => {
+			entity.HasKey(e => e.Id);
+			entity.HasIndex(e => new { e.HeroId, e.Timestamp });
+			entity.HasIndex(e => new { e.PlayerId, e.Timestamp });
+		});
+
+		// Configure HeroSkinUpgrade
+		modelBuilder.Entity<HeroSkinUpgrade>(entity => {
+			entity.HasKey(e => e.Id);
+			entity.HasIndex(e => new { e.HeroId, e.Timestamp });
+			entity.HasIndex(e => new { e.PlayerId, e.Timestamp });
+		});
+
+		// === Titan Upgrade Configurations ===
+
+		// Configure TitanLevelUpgrade
+		// Composite index on TitanId + Timestamp for titan-specific history
+		// Composite index on PlayerId + Timestamp for player-wide upgrade history
+		modelBuilder.Entity<TitanLevelUpgrade>(entity => {
+			entity.HasKey(e => e.Id);
+			entity.HasIndex(e => new { e.TitanId, e.Timestamp });
+			entity.HasIndex(e => new { e.PlayerId, e.Timestamp });
+		});
+
+		// Configure TitanStarUpgrade
+		modelBuilder.Entity<TitanStarUpgrade>(entity => {
+			entity.HasKey(e => e.Id);
+			entity.HasIndex(e => new { e.TitanId, e.Timestamp });
+			entity.HasIndex(e => new { e.PlayerId, e.Timestamp });
+		});
+
+		// Configure TitanSkillUpgrade
+		modelBuilder.Entity<TitanSkillUpgrade>(entity => {
+			entity.HasKey(e => e.Id);
+			entity.HasIndex(e => new { e.TitanId, e.Timestamp });
+			entity.HasIndex(e => new { e.PlayerId, e.Timestamp });
+		});
+
+		// Configure TitanArtifactUpgrade
+		modelBuilder.Entity<TitanArtifactUpgrade>(entity => {
+			entity.HasKey(e => e.Id);
+			entity.HasIndex(e => new { e.TitanId, e.Timestamp });
+			entity.HasIndex(e => new { e.PlayerId, e.Timestamp });
+		});
+
+		// Configure TitanSkinUpgrade
+		modelBuilder.Entity<TitanSkinUpgrade>(entity => {
+			entity.HasKey(e => e.Id);
+			entity.HasIndex(e => new { e.TitanId, e.Timestamp });
+			entity.HasIndex(e => new { e.PlayerId, e.Timestamp });
+		});
+
+		// === Daily Activity Configurations ===
+
+		// Configure DailyQuestCompletion
+		// Index on QuestDate for date-based queries
+		// Composite index on PlayerId + QuestDate for player daily quest history
+		// Composite index on PlayerId + QuestId + CompletedAt for deduplication
+		modelBuilder.Entity<DailyQuestCompletion>(entity => {
+			entity.HasKey(e => e.Id);
+			entity.HasIndex(e => e.QuestDate);
+			entity.HasIndex(e => new { e.PlayerId, e.QuestDate });
+			entity.HasIndex(e => new { e.PlayerId, e.QuestId, e.CompletedAt });
+		});
+
+		// Configure GuildQuestCompletion
+		// Index on QuestDate for date-based queries
+		// Composite index on PlayerId + QuestDate for player guild quest history
+		modelBuilder.Entity<GuildQuestCompletion>(entity => {
+			entity.HasKey(e => e.Id);
+			entity.HasIndex(e => e.QuestDate);
+			entity.HasIndex(e => new { e.PlayerId, e.QuestDate });
+			entity.HasIndex(e => new { e.GuildId, e.QuestDate });
+		});
+
+		// Configure LoginReward
+		// Composite index on PlayerId + ClaimedAt for player login history
+		modelBuilder.Entity<LoginReward>(entity => {
+			entity.HasKey(e => e.Id);
+			entity.HasIndex(e => new { e.PlayerId, e.ClaimedAt });
+		});
+
+		// Configure DailyActivitySummary
+		// Composite index on PlayerId + SummaryDate for player daily summaries (unique per day)
+		// Index on SummaryDate for date-based queries
+		modelBuilder.Entity<DailyActivitySummary>(entity => {
+			entity.HasKey(e => e.Id);
+			entity.HasIndex(e => new { e.PlayerId, e.SummaryDate }).IsUnique();
+			entity.HasIndex(e => e.SummaryDate);
+		});
+
+		// === Inventory Tracking Configurations ===
+
+		// Configure InventoryItemUsage
+		// Index on Timestamp for recent usage queries
+		// Index on Category for item category analytics
+		// Composite index on PlayerId + Timestamp for player item usage history
+		// Composite index on ItemId + Timestamp for item-specific usage tracking
+		modelBuilder.Entity<InventoryItemUsage>(entity => {
+			entity.HasKey(e => e.Id);
+			entity.HasIndex(e => e.Timestamp);
+			entity.HasIndex(e => e.Category);
+			entity.HasIndex(e => new { e.PlayerId, e.Timestamp });
+			entity.HasIndex(e => new { e.ItemId, e.Timestamp });
+		});
+
+		// Configure EquipmentChange
+		// Index on Timestamp for recent equipment change queries
+		// Composite index on HeroId + Timestamp for hero equipment history
+		// Composite index on PlayerId + Timestamp for player equipment change history
+		modelBuilder.Entity<EquipmentChange>(entity => {
+			entity.HasKey(e => e.Id);
+			entity.HasIndex(e => e.Timestamp);
+			entity.HasIndex(e => new { e.HeroId, e.Timestamp });
+			entity.HasIndex(e => new { e.PlayerId, e.Timestamp });
 		});
 	}
 }

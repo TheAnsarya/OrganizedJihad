@@ -4,18 +4,18 @@ namespace OrganizedJihad.Api.Models;
 
 /// <summary>
 /// Data Transfer Object (DTO) for receiving comprehensive game data from the browser userscript.
-/// 
+///
 /// This class represents the complete payload sent from the TamperMonkey userscript
 /// when synchronizing Hero Wars game data to the local API/database.
-/// 
+///
 /// Organization:
 /// - Player and Battle Data: Current state and combat history
 /// - Hero/Titan/Pet Rosters: Character progression data
 /// - Activity Tracking: Quests, missions, purchases, guild activities
-/// 
+///
 /// Design Pattern: Data Transfer Object (DTO)
 /// Used to transfer complex data between browser and server in a single HTTP request.
-/// 
+///
 /// References:
 /// - DTO Pattern: https://learn.microsoft.com/en-us/aspnet/web-api/overview/data/using-web-api-with-entity-framework/part-5
 /// - Model Binding: https://learn.microsoft.com/en-us/aspnet/core/mvc/models/model-binding
@@ -132,11 +132,109 @@ public class BrowserSyncData {
 	/// Guild activity records (donations, raids, wars, etc.).
 	/// </summary>
 	public List<GuildActivity>? GuildActivities { get; set; }
+
+	// === Hero Upgrade Tracking ===
+
+	/// <summary>
+	/// Hero level-up events.
+	/// </summary>
+	public List<HeroLevelUpgrade>? HeroLevelUpgrades { get; set; }
+
+	/// <summary>
+	/// Hero star (evolution) promotion events.
+	/// </summary>
+	public List<HeroStarUpgrade>? HeroStarUpgrades { get; set; }
+
+	/// <summary>
+	/// Hero color (rank/tier) evolution events.
+	/// </summary>
+	public List<HeroColorUpgrade>? HeroColorUpgrades { get; set; }
+
+	/// <summary>
+	/// Hero skill level-up events.
+	/// </summary>
+	public List<HeroSkillUpgrade>? HeroSkillUpgrades { get; set; }
+
+	/// <summary>
+	/// Hero artifact upgrade events (weapon, book, ring).
+	/// </summary>
+	public List<HeroArtifactUpgrade>? HeroArtifactUpgrades { get; set; }
+
+	/// <summary>
+	/// Hero glyph upgrade events.
+	/// </summary>
+	public List<HeroGlyphUpgrade>? HeroGlyphUpgrades { get; set; }
+
+	/// <summary>
+	/// Hero skin unlock and upgrade events.
+	/// </summary>
+	public List<HeroSkinUpgrade>? HeroSkinUpgrades { get; set; }
+
+	// === Titan Upgrade Tracking ===
+
+	/// <summary>
+	/// Titan level-up events.
+	/// </summary>
+	public List<TitanLevelUpgrade>? TitanLevelUpgrades { get; set; }
+
+	/// <summary>
+	/// Titan star (evolution) promotion events.
+	/// </summary>
+	public List<TitanStarUpgrade>? TitanStarUpgrades { get; set; }
+
+	/// <summary>
+	/// Titan skill level-up events.
+	/// </summary>
+	public List<TitanSkillUpgrade>? TitanSkillUpgrades { get; set; }
+
+	/// <summary>
+	/// Titan artifact upgrade events.
+	/// </summary>
+	public List<TitanArtifactUpgrade>? TitanArtifactUpgrades { get; set; }
+
+	/// <summary>
+	/// Titan skin unlock and upgrade events.
+	/// </summary>
+	public List<TitanSkinUpgrade>? TitanSkinUpgrades { get; set; }
+
+	// === Daily Activity Tracking ===
+
+	/// <summary>
+	/// Daily quest completion events.
+	/// </summary>
+	public List<DailyQuestCompletion>? DailyQuestCompletions { get; set; }
+
+	/// <summary>
+	/// Guild quest completion events.
+	/// </summary>
+	public List<GuildQuestCompletion>? GuildQuestCompletions { get; set; }
+
+	/// <summary>
+	/// Daily login reward claims.
+	/// </summary>
+	public List<LoginReward>? LoginRewards { get; set; }
+
+	/// <summary>
+	/// Aggregated daily activity summaries.
+	/// </summary>
+	public List<DailyActivitySummary>? DailyActivitySummaries { get; set; }
+
+	// === Inventory Tracking ===
+
+	/// <summary>
+	/// Inventory item usage events (potions, fragments, scrolls consumed).
+	/// </summary>
+	public List<InventoryItemUsage>? InventoryItemUsages { get; set; }
+
+	/// <summary>
+	/// Equipment changes on heroes (equipping, upgrading, evolving).
+	/// </summary>
+	public List<EquipmentChange>? EquipmentChanges { get; set; }
 }
 
 /// <summary>
 /// Response payload returned after processing a sync import request.
-/// 
+///
 /// Provides feedback to the browser userscript about the success/failure
 /// of the import operation and statistics about what was imported.
 /// </summary>
@@ -165,7 +263,7 @@ public class SyncResponse {
 
 /// <summary>
 /// Detailed breakdown of record counts imported during a sync operation.
-/// 
+///
 /// Provides transparency about what data was processed and how many
 /// records were added to the database for each entity type.
 /// </summary>
@@ -196,6 +294,32 @@ public class ImportCounts {
 	public int ExpeditionBattles { get; set; }
 	public int ResourceTransactions { get; set; }
 	public int GuildActivities { get; set; }
+
+	// === Hero Upgrade Tracking ===
+	public int HeroLevelUpgrades { get; set; }
+	public int HeroStarUpgrades { get; set; }
+	public int HeroColorUpgrades { get; set; }
+	public int HeroSkillUpgrades { get; set; }
+	public int HeroArtifactUpgrades { get; set; }
+	public int HeroGlyphUpgrades { get; set; }
+	public int HeroSkinUpgrades { get; set; }
+
+	// === Titan Upgrade Tracking ===
+	public int TitanLevelUpgrades { get; set; }
+	public int TitanStarUpgrades { get; set; }
+	public int TitanSkillUpgrades { get; set; }
+	public int TitanArtifactUpgrades { get; set; }
+	public int TitanSkinUpgrades { get; set; }
+
+	// === Daily Activity Tracking ===
+	public int DailyQuestCompletions { get; set; }
+	public int GuildQuestCompletions { get; set; }
+	public int LoginRewards { get; set; }
+	public int DailyActivitySummaries { get; set; }
+
+	// === Inventory Tracking ===
+	public int InventoryItemUsages { get; set; }
+	public int EquipmentChanges { get; set; }
 }
 
 /// <summary>
@@ -229,13 +353,47 @@ public class DatabaseStats {
 	public int TotalResourceTransactions { get; set; }
 	public int TotalGuildActivities { get; set; }
 
+	// === Hero Upgrade Tracking ===
+	public int TotalHeroLevelUpgrades { get; set; }
+	public int TotalHeroStarUpgrades { get; set; }
+	public int TotalHeroColorUpgrades { get; set; }
+	public int TotalHeroSkillUpgrades { get; set; }
+	public int TotalHeroArtifactUpgrades { get; set; }
+	public int TotalHeroGlyphUpgrades { get; set; }
+	public int TotalHeroSkinUpgrades { get; set; }
+
+	// === Titan Upgrade Tracking ===
+	public int TotalTitanLevelUpgrades { get; set; }
+	public int TotalTitanStarUpgrades { get; set; }
+	public int TotalTitanSkillUpgrades { get; set; }
+	public int TotalTitanArtifactUpgrades { get; set; }
+	public int TotalTitanSkinUpgrades { get; set; }
+
+	// === Daily Activity Tracking ===
+	public int TotalDailyQuestCompletions { get; set; }
+	public int TotalGuildQuestCompletions { get; set; }
+	public int TotalLoginRewards { get; set; }
+	public int TotalDailyActivitySummaries { get; set; }
+
+	// === Inventory Tracking ===
+	public int TotalInventoryItemUsages { get; set; }
+	public int TotalEquipmentChanges { get; set; }
+
 	public int TotalRecords => TotalSnapshots + TotalArenaBattles + TotalGrandArenaBattles +
 								TotalTitanArenaBattles + TotalGuildWarBattles + TotalRaidBossAttacks +
 								TotalChestOpenings + TotalOpponents + TotalGoals + TotalCalendarEvents +
 								TotalHeroes + TotalTitans + TotalPets + TotalInventorySnapshots +
 								TotalQuestCompletions + TotalMissionProgress + TotalShopPurchases +
 								TotalTowerProgress + TotalExpeditionBattles + TotalResourceTransactions +
-								TotalGuildActivities;
+								TotalGuildActivities +
+								TotalHeroLevelUpgrades + TotalHeroStarUpgrades + TotalHeroColorUpgrades +
+								TotalHeroSkillUpgrades + TotalHeroArtifactUpgrades + TotalHeroGlyphUpgrades +
+								TotalHeroSkinUpgrades +
+								TotalTitanLevelUpgrades + TotalTitanStarUpgrades + TotalTitanSkillUpgrades +
+								TotalTitanArtifactUpgrades + TotalTitanSkinUpgrades +
+								TotalDailyQuestCompletions + TotalGuildQuestCompletions +
+								TotalLoginRewards + TotalDailyActivitySummaries +
+								TotalInventoryItemUsages + TotalEquipmentChanges;
 	public DateTime? OldestSnapshot { get; set; }
 	public DateTime? NewestSnapshot { get; set; }
 	public DateTime? LastSync { get; set; }

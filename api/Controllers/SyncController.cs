@@ -18,6 +18,10 @@ namespace OrganizedJihad.Api.Controllers;
 /// - GET /api/sync/snapshots - Get recent player snapshots
 /// - GET /api/sync/battles - Get recent battle history
 /// - GET /api/sync/opponents - Get all tracked opponents
+/// - GET /api/sync/hero-upgrades - Get hero upgrade history
+/// - GET /api/sync/titan-upgrades - Get titan upgrade history
+/// - GET /api/sync/daily-activity - Get daily activity data
+/// - GET /api/sync/inventory - Get inventory usage history
 /// 
 /// References:
 /// - ASP.NET Core Controllers: https://learn.microsoft.com/en-us/aspnet/core/web-api/
@@ -322,6 +326,164 @@ public class SyncController : ControllerBase {
 			return Ok(opponents);
 		} catch (Exception ex) {
 			_logger.LogError(ex, "Error retrieving opponents");
+			return StatusCode(500, new { error = ex.Message });
+		}
+	}
+
+	/// <summary>
+	/// Get hero upgrade history with optional filtering by hero and upgrade type.
+	/// </summary>
+	/// <param name="heroId">Optional hero ID to filter results to a specific hero</param>
+	/// <param name="type">
+	/// Optional upgrade type filter: "level", "star", "color", "skill", "artifact", "glyph", "skin".
+	/// If omitted, returns all upgrade types.
+	/// </param>
+	/// <param name="limit">Maximum number of results per upgrade type (default: 50)</param>
+	/// <returns>Object containing arrays of upgrade records grouped by type</returns>
+	/// <response code="200">Returns hero upgrade history</response>
+	/// <response code="500">Error occurred while querying database</response>
+	/// <remarks>
+	/// GET: api/sync/hero-upgrades?heroId=1&amp;type=level&amp;limit=50
+	/// 
+	/// Returns hero upgrade events ordered by most recent first.
+	/// When no type filter is specified, returns all upgrade types in separate arrays.
+	/// 
+	/// Example response:
+	/// <code>
+	/// {
+	///   "levelUpgrades": [...],
+	///   "starUpgrades": [...],
+	///   "colorUpgrades": [...]
+	/// }
+	/// </code>
+	/// </remarks>
+	[HttpGet("hero-upgrades")]
+	[ProducesResponseType(StatusCodes.Status200OK)]
+	[ProducesResponseType(typeof(object), StatusCodes.Status500InternalServerError)]
+	public async Task<IActionResult> GetHeroUpgrades(
+		[FromQuery] long? heroId = null,
+		[FromQuery] string? type = null,
+		[FromQuery] int limit = 50) {
+		try {
+			var result = await _syncService.GetHeroUpgradeHistoryAsync(heroId, type, limit);
+			return Ok(result);
+		} catch (Exception ex) {
+			_logger.LogError(ex, "Error retrieving hero upgrades");
+			return StatusCode(500, new { error = ex.Message });
+		}
+	}
+
+	/// <summary>
+	/// Get titan upgrade history with optional filtering by titan and upgrade type.
+	/// </summary>
+	/// <param name="titanId">Optional titan ID to filter results to a specific titan</param>
+	/// <param name="type">
+	/// Optional upgrade type filter: "level", "star", "skill", "artifact", "skin".
+	/// If omitted, returns all upgrade types.
+	/// </param>
+	/// <param name="limit">Maximum number of results per upgrade type (default: 50)</param>
+	/// <returns>Object containing arrays of upgrade records grouped by type</returns>
+	/// <response code="200">Returns titan upgrade history</response>
+	/// <response code="500">Error occurred while querying database</response>
+	/// <remarks>
+	/// GET: api/sync/titan-upgrades?titanId=1&amp;type=level&amp;limit=50
+	/// 
+	/// Returns titan upgrade events ordered by most recent first.
+	/// </remarks>
+	[HttpGet("titan-upgrades")]
+	[ProducesResponseType(StatusCodes.Status200OK)]
+	[ProducesResponseType(typeof(object), StatusCodes.Status500InternalServerError)]
+	public async Task<IActionResult> GetTitanUpgrades(
+		[FromQuery] long? titanId = null,
+		[FromQuery] string? type = null,
+		[FromQuery] int limit = 50) {
+		try {
+			var result = await _syncService.GetTitanUpgradeHistoryAsync(titanId, type, limit);
+			return Ok(result);
+		} catch (Exception ex) {
+			_logger.LogError(ex, "Error retrieving titan upgrades");
+			return StatusCode(500, new { error = ex.Message });
+		}
+	}
+
+	/// <summary>
+	/// Get daily activity data including quest completions, login rewards, and summaries.
+	/// </summary>
+	/// <param name="date">Optional date filter (format: yyyy-MM-dd). Returns data for that specific day.</param>
+	/// <param name="playerId">Optional player ID filter</param>
+	/// <param name="limit">Maximum number of results per category (default: 30)</param>
+	/// <returns>Object containing daily activity data grouped by type</returns>
+	/// <response code="200">Returns daily activity data</response>
+	/// <response code="500">Error occurred while querying database</response>
+	/// <remarks>
+	/// GET: api/sync/daily-activity?date=2025-01-23&amp;playerId=12345&amp;limit=30
+	/// 
+	/// Returns daily quests, guild quests, login rewards, and activity summaries.
+	/// When date is specified, returns data for that specific day only.
+	/// Otherwise returns the most recent entries.
+	/// 
+	/// Example response:
+	/// <code>
+	/// {
+	///   "dailyQuests": [...],
+	///   "guildQuests": [...],
+	///   "loginRewards": [...],
+	///   "summaries": [...]
+	/// }
+	/// </code>
+	/// </remarks>
+	[HttpGet("daily-activity")]
+	[ProducesResponseType(StatusCodes.Status200OK)]
+	[ProducesResponseType(typeof(object), StatusCodes.Status500InternalServerError)]
+	public async Task<IActionResult> GetDailyActivity(
+		[FromQuery] DateTime? date = null,
+		[FromQuery] long? playerId = null,
+		[FromQuery] int limit = 30) {
+		try {
+			var result = await _syncService.GetDailyActivityAsync(date, playerId, limit);
+			return Ok(result);
+		} catch (Exception ex) {
+			_logger.LogError(ex, "Error retrieving daily activity");
+			return StatusCode(500, new { error = ex.Message });
+		}
+	}
+
+	/// <summary>
+	/// Get inventory usage history and equipment changes.
+	/// </summary>
+	/// <param name="category">
+	/// Optional item category filter: "potion", "fragment", "scroll", "gear", "consumable", "material", "key".
+	/// If omitted, returns all categories.
+	/// </param>
+	/// <param name="limit">Maximum number of results (default: 50)</param>
+	/// <returns>Object containing item usage and equipment change arrays</returns>
+	/// <response code="200">Returns inventory history</response>
+	/// <response code="500">Error occurred while querying database</response>
+	/// <remarks>
+	/// GET: api/sync/inventory?category=potion&amp;limit=50
+	/// 
+	/// Returns both inventory item usage events and equipment changes.
+	/// Category filter only applies to item usages, not equipment changes.
+	/// 
+	/// Example response:
+	/// <code>
+	/// {
+	///   "itemUsages": [...],
+	///   "equipmentChanges": [...]
+	/// }
+	/// </code>
+	/// </remarks>
+	[HttpGet("inventory")]
+	[ProducesResponseType(StatusCodes.Status200OK)]
+	[ProducesResponseType(typeof(object), StatusCodes.Status500InternalServerError)]
+	public async Task<IActionResult> GetInventory(
+		[FromQuery] string? category = null,
+		[FromQuery] int limit = 50) {
+		try {
+			var result = await _syncService.GetInventoryHistoryAsync(category, limit);
+			return Ok(result);
+		} catch (Exception ex) {
+			_logger.LogError(ex, "Error retrieving inventory history");
 			return StatusCode(500, new { error = ex.Message });
 		}
 	}

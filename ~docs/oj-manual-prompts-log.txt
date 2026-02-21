@@ -1,0 +1,23 @@
+
+[OJ - Organized Jihad] using `C:\Users\me\source\repos\Nexen\` as a reference, update the editorconfig, and update the co-pilot instructions, and the gitignore, and the format files like markdownlint, and all of the other work-item files, etc., and continue; update plans, issues, documentation, chat/session logs, code-plans, and todos, etc; and make a bunch of tests (make a testing project) and make performance benchmarking (make a benchmark project as well if you need to); and focus on logging the state of our account and tracking all battles and hero/titan upgrades and inventory usage, and daily/guild quests and everything, track it all!; continue;
+
+[OJ - Organized Jihad] make sure you are creating github issues for all work and try to make those issues **before** you do the changes; continue;
+
+[OJ - Organized Jihad] continue, make issues, work issues, make prompts for me to use in the future in a document; continue;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

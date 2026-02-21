@@ -35,7 +35,7 @@ public class GameDatabaseContextTests : IDisposable {
 
 		// Assert
 		properties.Should().NotBeEmpty();
-		properties.Should().HaveCountGreaterOrEqualTo(29); // Total number of DbSets
+		properties.Should().HaveCountGreaterOrEqualTo(47); // Total number of DbSets (29 original + 18 new)
 	}
 
 	[Fact]

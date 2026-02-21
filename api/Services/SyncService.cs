@@ -12,17 +12,17 @@ namespace OrganizedJihad.Api.Services;
 /// <summary>
 /// Service for synchronizing game data from the browser userscript to the local database.
 /// Handles all business logic for data import, validation, and persistence.
-/// 
+///
 /// Responsibilities:
 /// - Import and process battle records from all arena types
 /// - Track player snapshots and progression over time
 /// - Record chest openings, guild activities, and raid boss attacks
 /// - Manage goals and calendar events
 /// - Generate database statistics
-/// 
+///
 /// Design Pattern: Service Layer
 /// Uses DbContextFactory for thread-safe database access in a web API.
-/// 
+///
 /// References:
 /// - Service Layer Pattern: https://learn.microsoft.com/en-us/dotnet/architecture/microservices/microservice-ddd-cqrs-patterns/microservice-application-layer-implementation-web-api
 /// - EF Core DbContextFactory: https://learn.microsoft.com/en-us/ef/core/dbcontext-configuration/#using-a-dbcontext-factory
@@ -58,10 +58,10 @@ public class SyncService {
 	/// 5. Imports guild-related data
 	/// 6. Imports events, goals, and other tracking data
 	/// 7. Commits transaction or rolls back on error
-	/// 
+	///
 	/// Uses transaction to ensure data consistency - if any import fails,
 	/// all changes are rolled back to prevent partial data corruption.
-	/// 
+	///
 	/// https://learn.microsoft.com/en-us/ef/core/saving/transactions
 	/// </remarks>
 	/// <exception cref="DbUpdateException">Thrown when database update fails</exception>
@@ -188,6 +188,86 @@ public class SyncService {
 				// Import guild activities
 				if (data.GuildActivities != null) {
 					counts.GuildActivities = await ImportGuildActivitiesAsync(context, data.GuildActivities);
+				}
+
+				// === Import Hero Upgrade Events ===
+
+				if (data.HeroLevelUpgrades != null) {
+					counts.HeroLevelUpgrades = await ImportHeroUpgradesAsync(context.HeroLevelUpgrades, data.HeroLevelUpgrades);
+				}
+
+				if (data.HeroStarUpgrades != null) {
+					counts.HeroStarUpgrades = await ImportHeroUpgradesAsync(context.HeroStarUpgrades, data.HeroStarUpgrades);
+				}
+
+				if (data.HeroColorUpgrades != null) {
+					counts.HeroColorUpgrades = await ImportHeroUpgradesAsync(context.HeroColorUpgrades, data.HeroColorUpgrades);
+				}
+
+				if (data.HeroSkillUpgrades != null) {
+					counts.HeroSkillUpgrades = await ImportHeroUpgradesAsync(context.HeroSkillUpgrades, data.HeroSkillUpgrades);
+				}
+
+				if (data.HeroArtifactUpgrades != null) {
+					counts.HeroArtifactUpgrades = await ImportHeroUpgradesAsync(context.HeroArtifactUpgrades, data.HeroArtifactUpgrades);
+				}
+
+				if (data.HeroGlyphUpgrades != null) {
+					counts.HeroGlyphUpgrades = await ImportHeroUpgradesAsync(context.HeroGlyphUpgrades, data.HeroGlyphUpgrades);
+				}
+
+				if (data.HeroSkinUpgrades != null) {
+					counts.HeroSkinUpgrades = await ImportHeroUpgradesAsync(context.HeroSkinUpgrades, data.HeroSkinUpgrades);
+				}
+
+				// === Import Titan Upgrade Events ===
+
+				if (data.TitanLevelUpgrades != null) {
+					counts.TitanLevelUpgrades = await ImportTitanUpgradesAsync(context.TitanLevelUpgrades, data.TitanLevelUpgrades);
+				}
+
+				if (data.TitanStarUpgrades != null) {
+					counts.TitanStarUpgrades = await ImportTitanUpgradesAsync(context.TitanStarUpgrades, data.TitanStarUpgrades);
+				}
+
+				if (data.TitanSkillUpgrades != null) {
+					counts.TitanSkillUpgrades = await ImportTitanUpgradesAsync(context.TitanSkillUpgrades, data.TitanSkillUpgrades);
+				}
+
+				if (data.TitanArtifactUpgrades != null) {
+					counts.TitanArtifactUpgrades = await ImportTitanUpgradesAsync(context.TitanArtifactUpgrades, data.TitanArtifactUpgrades);
+				}
+
+				if (data.TitanSkinUpgrades != null) {
+					counts.TitanSkinUpgrades = await ImportTitanUpgradesAsync(context.TitanSkinUpgrades, data.TitanSkinUpgrades);
+				}
+
+				// === Import Daily Activity Tracking ===
+
+				if (data.DailyQuestCompletions != null) {
+					counts.DailyQuestCompletions = await ImportDailyQuestCompletionsAsync(context, data.DailyQuestCompletions);
+				}
+
+				if (data.GuildQuestCompletions != null) {
+					counts.GuildQuestCompletions = await ImportGuildQuestCompletionsAsync(context, data.GuildQuestCompletions);
+				}
+
+				if (data.LoginRewards != null) {
+					counts.LoginRewards = await ImportLoginRewardsAsync(context, data.LoginRewards);
+				}
+
+				if (data.DailyActivitySummaries != null) {
+					counts.DailyActivitySummaries = await ImportDailyActivitySummariesAsync(context, data.DailyActivitySummaries);
+				}
+
+				// === Import Inventory Tracking ===
+
+				if (data.InventoryItemUsages != null) {
+					counts.InventoryItemUsages = await ImportInventoryItemUsagesAsync(context, data.InventoryItemUsages);
+				}
+
+				if (data.EquipmentChanges != null) {
+					counts.EquipmentChanges = await ImportEquipmentChangesAsync(context, data.EquipmentChanges);
 				}
 
 				// Update sync metadata
@@ -647,6 +727,421 @@ public class SyncService {
 		return imported;
 	}
 
+	// === Hero Upgrade Import Methods ===
+
+	/// <summary>
+	/// Generic import method for hero upgrade events.
+	/// Hero upgrades are immutable event records with deduplication by HeroId + Timestamp.
+	/// </summary>
+	/// <typeparam name="T">The specific hero upgrade type (inherits HeroUpgradeBase)</typeparam>
+	/// <param name="dbSet">The DbSet for the upgrade type</param>
+	/// <param name="upgrades">List of upgrade events to import</param>
+	/// <returns>Number of records imported (excluding duplicates)</returns>
+	private async Task<int> ImportHeroUpgradesAsync<T>(DbSet<T> dbSet, List<T> upgrades) where T : HeroUpgradeBase {
+		int imported = 0;
+		foreach (var upgrade in upgrades) {
+			// Deduplicate by HeroId + Timestamp (same hero can't upgrade twice at the exact same instant)
+			var exists = await dbSet
+				.AnyAsync(u => u.HeroId == upgrade.HeroId && u.Timestamp == upgrade.Timestamp);
+
+			if (!exists) {
+				dbSet.Add(upgrade);
+				imported++;
+			}
+		}
+
+		// SaveChanges is handled by the caller via transaction
+		return imported;
+	}
+
+	// === Titan Upgrade Import Methods ===
+
+	/// <summary>
+	/// Generic import method for titan upgrade events.
+	/// Titan upgrades are immutable event records with deduplication by TitanId + Timestamp.
+	/// </summary>
+	/// <typeparam name="T">The specific titan upgrade type (inherits TitanUpgradeBase)</typeparam>
+	/// <param name="dbSet">The DbSet for the upgrade type</param>
+	/// <param name="upgrades">List of upgrade events to import</param>
+	/// <returns>Number of records imported (excluding duplicates)</returns>
+	private async Task<int> ImportTitanUpgradesAsync<T>(DbSet<T> dbSet, List<T> upgrades) where T : TitanUpgradeBase {
+		int imported = 0;
+		foreach (var upgrade in upgrades) {
+			// Deduplicate by TitanId + Timestamp
+			var exists = await dbSet
+				.AnyAsync(u => u.TitanId == upgrade.TitanId && u.Timestamp == upgrade.Timestamp);
+
+			if (!exists) {
+				dbSet.Add(upgrade);
+				imported++;
+			}
+		}
+
+		return imported;
+	}
+
+	// === Daily Activity Import Methods ===
+
+	/// <summary>
+	/// Imports daily quest completion events with deduplication.
+	/// Deduplicates by PlayerId + QuestId + CompletedAt.
+	/// </summary>
+	private async Task<int> ImportDailyQuestCompletionsAsync(GameDatabaseContext context, List<DailyQuestCompletion> quests) {
+		int imported = 0;
+		foreach (var quest in quests) {
+			var exists = await context.DailyQuestCompletions
+				.AnyAsync(q => q.PlayerId == quest.PlayerId &&
+							   q.QuestId == quest.QuestId &&
+							   q.CompletedAt == quest.CompletedAt);
+
+			if (!exists) {
+				context.DailyQuestCompletions.Add(quest);
+				imported++;
+			}
+		}
+
+		await context.SaveChangesAsync();
+		return imported;
+	}
+
+	/// <summary>
+	/// Imports guild quest completion events with deduplication.
+	/// Deduplicates by PlayerId + QuestId + CompletedAt.
+	/// </summary>
+	private async Task<int> ImportGuildQuestCompletionsAsync(GameDatabaseContext context, List<GuildQuestCompletion> quests) {
+		int imported = 0;
+		foreach (var quest in quests) {
+			var exists = await context.GuildQuestCompletions
+				.AnyAsync(q => q.PlayerId == quest.PlayerId &&
+							   q.QuestId == quest.QuestId &&
+							   q.CompletedAt == quest.CompletedAt);
+
+			if (!exists) {
+				context.GuildQuestCompletions.Add(quest);
+				imported++;
+			}
+		}
+
+		await context.SaveChangesAsync();
+		return imported;
+	}
+
+	/// <summary>
+	/// Imports login reward claims with deduplication.
+	/// Deduplicates by PlayerId + ClaimedAt (one reward per login time).
+	/// </summary>
+	private async Task<int> ImportLoginRewardsAsync(GameDatabaseContext context, List<LoginReward> rewards) {
+		int imported = 0;
+		foreach (var reward in rewards) {
+			var exists = await context.LoginRewards
+				.AnyAsync(r => r.PlayerId == reward.PlayerId &&
+							   r.ClaimedAt == reward.ClaimedAt);
+
+			if (!exists) {
+				context.LoginRewards.Add(reward);
+				imported++;
+			}
+		}
+
+		await context.SaveChangesAsync();
+		return imported;
+	}
+
+	/// <summary>
+	/// Imports daily activity summaries with upsert logic.
+	/// One summary per player per day - updates if exists, inserts if new.
+	/// </summary>
+	private async Task<int> ImportDailyActivitySummariesAsync(GameDatabaseContext context, List<DailyActivitySummary> summaries) {
+		int imported = 0;
+		foreach (var summary in summaries) {
+			var existing = await context.DailyActivitySummaries
+				.FirstOrDefaultAsync(s => s.PlayerId == summary.PlayerId &&
+										  s.SummaryDate == summary.SummaryDate);
+
+			if (existing == null) {
+				context.DailyActivitySummaries.Add(summary);
+				imported++;
+			} else {
+				// Upsert - update with latest data
+				existing.TotalActivityPoints = summary.TotalActivityPoints;
+				existing.DailyQuestsCompleted = summary.DailyQuestsCompleted;
+				existing.GuildQuestsCompleted = summary.GuildQuestsCompleted;
+				existing.ArenaBattlesFought = summary.ArenaBattlesFought;
+				existing.GrandArenaBattlesFought = summary.GrandArenaBattlesFought;
+				existing.TowerFloorsCleared = summary.TowerFloorsCleared;
+				existing.CampaignMissionsCompleted = summary.CampaignMissionsCompleted;
+				existing.OutlandBossesFought = summary.OutlandBossesFought;
+				existing.GoldEarned = summary.GoldEarned;
+				existing.GoldSpent = summary.GoldSpent;
+				existing.EmeraldsEarned = summary.EmeraldsEarned;
+				existing.EmeraldsSpent = summary.EmeraldsSpent;
+				existing.DailyChestClaimed = summary.DailyChestClaimed;
+			}
+		}
+
+		await context.SaveChangesAsync();
+		return imported;
+	}
+
+	// === Inventory Import Methods ===
+
+	/// <summary>
+	/// Imports inventory item usage events with deduplication.
+	/// Deduplicates by PlayerId + ItemId + Timestamp.
+	/// </summary>
+	private async Task<int> ImportInventoryItemUsagesAsync(GameDatabaseContext context, List<InventoryItemUsage> usages) {
+		int imported = 0;
+		foreach (var usage in usages) {
+			var exists = await context.InventoryItemUsages
+				.AnyAsync(u => u.PlayerId == usage.PlayerId &&
+							   u.ItemId == usage.ItemId &&
+							   u.Timestamp == usage.Timestamp);
+
+			if (!exists) {
+				context.InventoryItemUsages.Add(usage);
+				imported++;
+			}
+		}
+
+		await context.SaveChangesAsync();
+		return imported;
+	}
+
+	/// <summary>
+	/// Imports equipment change events with deduplication.
+	/// Deduplicates by HeroId + SlotIndex + Timestamp.
+	/// </summary>
+	private async Task<int> ImportEquipmentChangesAsync(GameDatabaseContext context, List<EquipmentChange> changes) {
+		int imported = 0;
+		foreach (var change in changes) {
+			var exists = await context.EquipmentChanges
+				.AnyAsync(c => c.HeroId == change.HeroId &&
+							   c.SlotIndex == change.SlotIndex &&
+							   c.Timestamp == change.Timestamp);
+
+			if (!exists) {
+				context.EquipmentChanges.Add(change);
+				imported++;
+			}
+		}
+
+		await context.SaveChangesAsync();
+		return imported;
+	}
+
+	/// <summary>
+	/// Gets hero upgrade history for a specific hero or all heroes, filtered by upgrade type.
+	/// </summary>
+	/// <param name="heroId">Optional hero ID filter. If null, returns all heroes.</param>
+	/// <param name="upgradeType">
+	/// Optional upgrade type filter: "level", "star", "color", "skill", "artifact", "glyph", "skin".
+	/// If null, returns all types.
+	/// </param>
+	/// <param name="limit">Maximum number of results per type (default 50).</param>
+	/// <returns>Object containing arrays of each upgrade type.</returns>
+	/// <remarks>
+	/// Uses AsNoTracking() for read-only performance optimization.
+	/// Results are ordered by Timestamp descending (newest first).
+	/// https://learn.microsoft.com/en-us/ef/core/querying/tracking#no-tracking-queries
+	/// </remarks>
+	public async Task<object> GetHeroUpgradeHistoryAsync(long? heroId = null, string? upgradeType = null, int limit = 50) {
+		await using var context = await _contextFactory.CreateDbContextAsync();
+		var result = new Dictionary<string, object>();
+
+		// Helper to apply common filters and ordering to any hero upgrade query
+		async Task<List<T>> QueryUpgrades<T>(IQueryable<T> query) where T : HeroUpgradeBase {
+			if (heroId.HasValue) {
+				query = query.Where(u => u.HeroId == heroId.Value);
+			}
+
+			return await query
+				.AsNoTracking()
+				.OrderByDescending(u => u.Timestamp)
+				.Take(limit)
+				.ToListAsync();
+		}
+
+		// Include each upgrade type based on filter (or all if no filter specified)
+		if (upgradeType is null or "level") {
+			result["levelUpgrades"] = await QueryUpgrades(context.HeroLevelUpgrades);
+		}
+
+		if (upgradeType is null or "star") {
+			result["starUpgrades"] = await QueryUpgrades(context.HeroStarUpgrades);
+		}
+
+		if (upgradeType is null or "color") {
+			result["colorUpgrades"] = await QueryUpgrades(context.HeroColorUpgrades);
+		}
+
+		if (upgradeType is null or "skill") {
+			result["skillUpgrades"] = await QueryUpgrades(context.HeroSkillUpgrades);
+		}
+
+		if (upgradeType is null or "artifact") {
+			result["artifactUpgrades"] = await QueryUpgrades(context.HeroArtifactUpgrades);
+		}
+
+		if (upgradeType is null or "glyph") {
+			result["glyphUpgrades"] = await QueryUpgrades(context.HeroGlyphUpgrades);
+		}
+
+		if (upgradeType is null or "skin") {
+			result["skinUpgrades"] = await QueryUpgrades(context.HeroSkinUpgrades);
+		}
+
+		return result;
+	}
+
+	/// <summary>
+	/// Gets titan upgrade history for a specific titan or all titans, filtered by upgrade type.
+	/// </summary>
+	/// <param name="titanId">Optional titan ID filter. If null, returns all titans.</param>
+	/// <param name="upgradeType">
+	/// Optional upgrade type filter: "level", "star", "skill", "artifact", "skin".
+	/// If null, returns all types.
+	/// </param>
+	/// <param name="limit">Maximum number of results per type (default 50).</param>
+	/// <returns>Object containing arrays of each upgrade type.</returns>
+	/// <remarks>
+	/// Uses AsNoTracking() for read-only performance optimization.
+	/// Results are ordered by Timestamp descending (newest first).
+	/// </remarks>
+	public async Task<object> GetTitanUpgradeHistoryAsync(long? titanId = null, string? upgradeType = null, int limit = 50) {
+		await using var context = await _contextFactory.CreateDbContextAsync();
+		var result = new Dictionary<string, object>();
+
+		// Helper to apply common filters and ordering to any titan upgrade query
+		async Task<List<T>> QueryUpgrades<T>(IQueryable<T> query) where T : TitanUpgradeBase {
+			if (titanId.HasValue) {
+				query = query.Where(u => u.TitanId == titanId.Value);
+			}
+
+			return await query
+				.AsNoTracking()
+				.OrderByDescending(u => u.Timestamp)
+				.Take(limit)
+				.ToListAsync();
+		}
+
+		// Include each upgrade type based on filter
+		if (upgradeType is null or "level") {
+			result["levelUpgrades"] = await QueryUpgrades(context.TitanLevelUpgrades);
+		}
+
+		if (upgradeType is null or "star") {
+			result["starUpgrades"] = await QueryUpgrades(context.TitanStarUpgrades);
+		}
+
+		if (upgradeType is null or "skill") {
+			result["skillUpgrades"] = await QueryUpgrades(context.TitanSkillUpgrades);
+		}
+
+		if (upgradeType is null or "artifact") {
+			result["artifactUpgrades"] = await QueryUpgrades(context.TitanArtifactUpgrades);
+		}
+
+		if (upgradeType is null or "skin") {
+			result["skinUpgrades"] = await QueryUpgrades(context.TitanSkinUpgrades);
+		}
+
+		return result;
+	}
+
+	/// <summary>
+	/// Gets daily activity data including summaries, quest completions, and login rewards.
+	/// </summary>
+	/// <param name="date">Optional date filter. If null, returns recent data.</param>
+	/// <param name="playerId">Optional player ID filter.</param>
+	/// <param name="limit">Maximum number of results per category (default 30).</param>
+	/// <returns>Object containing daily activity data grouped by type.</returns>
+	/// <remarks>
+	/// When a date is specified, returns data for that specific day.
+	/// Otherwise, returns the most recent entries up to the limit.
+	/// </remarks>
+	public async Task<object> GetDailyActivityAsync(DateTime? date = null, long? playerId = null, int limit = 30) {
+		await using var context = await _contextFactory.CreateDbContextAsync();
+
+		// Build daily quest query with optional filters
+		var dailyQuestsQuery = context.DailyQuestCompletions.AsNoTracking().AsQueryable();
+		var guildQuestsQuery = context.GuildQuestCompletions.AsNoTracking().AsQueryable();
+		var loginRewardsQuery = context.LoginRewards.AsNoTracking().AsQueryable();
+		var summariesQuery = context.DailyActivitySummaries.AsNoTracking().AsQueryable();
+
+		// Apply date filter if specified
+		if (date.HasValue) {
+			var targetDate = date.Value.Date;
+			dailyQuestsQuery = dailyQuestsQuery.Where(q => q.QuestDate == targetDate);
+			guildQuestsQuery = guildQuestsQuery.Where(q => q.QuestDate == targetDate);
+			loginRewardsQuery = loginRewardsQuery.Where(r => r.ClaimedAt.Date == targetDate);
+			summariesQuery = summariesQuery.Where(s => s.SummaryDate == targetDate);
+		}
+
+		// Apply player ID filter if specified
+		if (playerId.HasValue) {
+			dailyQuestsQuery = dailyQuestsQuery.Where(q => q.PlayerId == playerId.Value);
+			guildQuestsQuery = guildQuestsQuery.Where(q => q.PlayerId == playerId.Value);
+			loginRewardsQuery = loginRewardsQuery.Where(r => r.PlayerId == playerId.Value);
+			summariesQuery = summariesQuery.Where(s => s.PlayerId == playerId.Value);
+		}
+
+		return new {
+			dailyQuests = await dailyQuestsQuery
+				.OrderByDescending(q => q.CompletedAt)
+				.Take(limit)
+				.ToListAsync(),
+			guildQuests = await guildQuestsQuery
+				.OrderByDescending(q => q.CompletedAt)
+				.Take(limit)
+				.ToListAsync(),
+			loginRewards = await loginRewardsQuery
+				.OrderByDescending(r => r.ClaimedAt)
+				.Take(limit)
+				.ToListAsync(),
+			summaries = await summariesQuery
+				.OrderByDescending(s => s.SummaryDate)
+				.Take(limit)
+				.ToListAsync()
+		};
+	}
+
+	/// <summary>
+	/// Gets inventory usage history filtered by category, item, or date range.
+	/// </summary>
+	/// <param name="category">Optional item category filter (e.g., "potion", "fragment", "scroll").</param>
+	/// <param name="limit">Maximum number of results (default 50).</param>
+	/// <returns>Object containing inventory usage and equipment change arrays.</returns>
+	/// <remarks>
+	/// Provides both item usage events and equipment change logs.
+	/// Results ordered by timestamp descending.
+	/// </remarks>
+	public async Task<object> GetInventoryHistoryAsync(string? category = null, int limit = 50) {
+		await using var context = await _contextFactory.CreateDbContextAsync();
+
+		// Build inventory item usage query
+		var usageQuery = context.InventoryItemUsages.AsNoTracking().AsQueryable();
+
+		// Apply category filter if specified
+		if (!string.IsNullOrWhiteSpace(category)) {
+			usageQuery = usageQuery.Where(u => u.Category == category);
+		}
+
+		// Query equipment changes separately (always unfiltered by category)
+		var equipmentChanges = await context.EquipmentChanges
+			.AsNoTracking()
+			.OrderByDescending(c => c.Timestamp)
+			.Take(limit)
+			.ToListAsync();
+
+		return new {
+			itemUsages = await usageQuery
+				.OrderByDescending(u => u.Timestamp)
+				.Take(limit)
+				.ToListAsync(),
+			equipmentChanges
+		};
+	}
+
 	/// <summary>
 	/// Gets statistics about the database contents.
 	/// </summary>
@@ -680,6 +1175,32 @@ public class SyncService {
 			TotalExpeditionBattles = await context.ExpeditionBattles.CountAsync(),
 			TotalResourceTransactions = await context.ResourceTransactions.CountAsync(),
 			TotalGuildActivities = await context.GuildActivities.CountAsync(),
+
+			// Hero Upgrade Tracking
+			TotalHeroLevelUpgrades = await context.HeroLevelUpgrades.CountAsync(),
+			TotalHeroStarUpgrades = await context.HeroStarUpgrades.CountAsync(),
+			TotalHeroColorUpgrades = await context.HeroColorUpgrades.CountAsync(),
+			TotalHeroSkillUpgrades = await context.HeroSkillUpgrades.CountAsync(),
+			TotalHeroArtifactUpgrades = await context.HeroArtifactUpgrades.CountAsync(),
+			TotalHeroGlyphUpgrades = await context.HeroGlyphUpgrades.CountAsync(),
+			TotalHeroSkinUpgrades = await context.HeroSkinUpgrades.CountAsync(),
+
+			// Titan Upgrade Tracking
+			TotalTitanLevelUpgrades = await context.TitanLevelUpgrades.CountAsync(),
+			TotalTitanStarUpgrades = await context.TitanStarUpgrades.CountAsync(),
+			TotalTitanSkillUpgrades = await context.TitanSkillUpgrades.CountAsync(),
+			TotalTitanArtifactUpgrades = await context.TitanArtifactUpgrades.CountAsync(),
+			TotalTitanSkinUpgrades = await context.TitanSkinUpgrades.CountAsync(),
+
+			// Daily Activity Tracking
+			TotalDailyQuestCompletions = await context.DailyQuestCompletions.CountAsync(),
+			TotalGuildQuestCompletions = await context.GuildQuestCompletions.CountAsync(),
+			TotalLoginRewards = await context.LoginRewards.CountAsync(),
+			TotalDailyActivitySummaries = await context.DailyActivitySummaries.CountAsync(),
+
+			// Inventory Tracking
+			TotalInventoryItemUsages = await context.InventoryItemUsages.CountAsync(),
+			TotalEquipmentChanges = await context.EquipmentChanges.CountAsync(),
 
 			LastSync = await GetLastSyncTimestampAsync()
 		};
