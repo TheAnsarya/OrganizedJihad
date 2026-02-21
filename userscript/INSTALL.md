@@ -75,8 +75,6 @@ This produces `userscript/dist/organized-jihad.user.js` — a single bundled JS 
 // @namespace    http://tampermonkey.net/
 // @version      0.1
 // @description  Development loader
-// @match        https://www.hero-wars.com/*
-// @match        https://*.hero-wars.com/*
 // @match        https://i-heroes-fb.nextersglobal.com/*
 // @match        https://i.hero-wars-fb.com/*
 // @match        https://i-heroes-vk.nextersglobal.com/*

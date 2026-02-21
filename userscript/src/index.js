@@ -1,11 +1,13 @@
-// ==UserScript==
+// NOTE: The canonical TamperMonkey metadata block is emitted by
+// webpack.BannerPlugin (see webpack.config.cjs).  The block below is
+// kept only as human-readable documentation of the directives.
+//
+// ==UserScript==  (informational — webpack banner is authoritative)
 // @name         OrganizedJihad - Hero Wars Tracker
 // @namespace    http://tampermonkey.net/
-// @version      3.0.0
+// @version      3.0.1
 // @description  Track and manage Hero Wars game data with IndexedDB storage and in-game UI
 // @author       Andy Hubbard <me@ansarya.com>
-// @match        https://www.hero-wars.com/*
-// @match        https://*.hero-wars.com/*
 // @match        https://i-heroes-fb.nextersglobal.com/*
 // @match        https://i.hero-wars-fb.com/*
 // @match        https://i-heroes-vk.nextersglobal.com/*
@@ -31,8 +33,19 @@ import './styles/main.css';
 (async function () {
 	'use strict';
 
+	// ─── Guard: only run inside the game iframe ────────────────────────
+	// The outer hero-wars.com page is just a shell; the real game and its
+	// API traffic live inside an iframe on nextersglobal.com (or
+	// hero-wars-fb.com).  Running the tracker on the outer page would
+	// create a second badge, double-patch XHR, etc.
+	const host = window.location.hostname;
+	if (!host.includes('nextersglobal.com') && !host.includes('hero-wars-fb.com')) {
+		console.log('[OrganizedJihad] Skipping — not in the game iframe (' + host + ')');
+		return;
+	}
+
 	console.log(
-		'%c[OrganizedJihad]%c Hero Wars Tracker v3.0 Loaded',
+		'%c[OrganizedJihad]%c Hero Wars Tracker v3.0.1 Loaded',
 		'color: #4CAF50; font-weight: bold; font-size: 14px;',
 		'color: #2196F3; font-size: 14px;'
 	);
@@ -140,8 +153,9 @@ import './styles/main.css';
 	// ─── Core Initialization ────────────────────────────────────────────
 
 	// Initialize IndexedDB storage (for game data — heroes, battles, etc.)
+	// The constructor starts init(); await it here so the DB is ready.
 	const idbStorage = new IndexedDBStorage();
-	await idbStorage.init();
+	await idbStorage.initPromise;
 	console.log('[OrganizedJihad] IndexedDB storage initialized');
 
 	// Initialize StorageManager (for preferences, goals, calendar — synchronous localStorage)

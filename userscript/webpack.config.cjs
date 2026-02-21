@@ -5,6 +5,30 @@
  */
 
 const path = require('path');
+const webpack = require('webpack');
+
+/**
+ * TamperMonkey metadata block.
+ * Must appear at the VERY FIRST LINE of the output file or TamperMonkey
+ * will not recognise @match, @grant, @run-at, etc.
+ * Webpack's BannerPlugin injects this before any bundled code.
+ */
+const userscriptBanner = `// ==UserScript==
+// @name         OrganizedJihad - Hero Wars Tracker
+// @namespace    http://tampermonkey.net/
+// @version      3.0.1
+// @description  Track and manage Hero Wars game data with IndexedDB storage and in-game UI
+// @author       Andy Hubbard <me@ansarya.com>
+// @match        https://i-heroes-fb.nextersglobal.com/*
+// @match        https://i.hero-wars-fb.com/*
+// @match        https://i-heroes-vk.nextersglobal.com/*
+// @match        https://i-heroes-ok.nextersglobal.com/*
+// @match        https://i-heroes-mm.nextersglobal.com/*
+// @match        https://i-heroes-wb.nextersglobal.com/*
+// @match        https://i-heroes-mg.nextersglobal.com/*
+// @grant        GM_addStyle
+// @run-at       document-end
+// ==/UserScript==`;
 
 module.exports = {
 	// Entry point for the application
@@ -64,6 +88,18 @@ module.exports = {
 	optimization: {
 		minimize: false, // Don't minify for easier debugging in TamperMonkey
 	},
+
+	// Plugins
+	// @see https://webpack.js.org/configuration/plugins/
+	plugins: [
+		// Prepend TamperMonkey metadata as the very first content in the file.
+		// raw:true means the banner string is emitted verbatim (not wrapped in /**/)
+		new webpack.BannerPlugin({
+			banner: userscriptBanner,
+			raw: true,
+			entryOnly: true,
+		}),
+	],
 
 	// Development mode for better debugging
 	mode: 'development',

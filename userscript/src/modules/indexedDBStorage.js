@@ -40,14 +40,28 @@ class IndexedDBStorage {
 		this.dbName = 'OrganizedJihad';
 		this.version = 6; // Incremented for new stores: heroUpgrades, titanUpgrades, dailyQuestCompletions, guildQuestCompletions, loginRewards, inventoryItemUsages, equipmentChanges
 		this.db = null;
-		this.initPromise = this.init();
+		/** @type {Promise<IDBDatabase>} Resolves once the DB is open and upgraded. */
+		this.initPromise = this._openDatabase();
 	}
 
 	/**
-	 * Initialize IndexedDB
+	 * Public init() — idempotent.
+	 * Multiple callers (index.js, gameTracker.init, apiMonitor.init) can all
+	 * call this safely; they all share the single initPromise created in the
+	 * constructor.
+	 *
 	 * @returns {Promise<IDBDatabase>}
 	 */
 	async init() {
+		return this.initPromise;
+	}
+
+	/**
+	 * Open the IndexedDB database (called once from the constructor).
+	 * @returns {Promise<IDBDatabase>}
+	 * @private
+	 */
+	_openDatabase() {
 		return new Promise((resolve, reject) => {
 			const request = indexedDB.open(this.dbName, this.version);
 
