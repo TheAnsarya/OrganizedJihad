@@ -257,7 +257,7 @@ public class SyncServiceTests : IDisposable {
 
 		dailyQuests.Should().NotBeNull();
 		dailyQuests!.Should().HaveCount(1);
-		dailyQuests[0].QuestName.Should().Be("Today");
+		dailyQuests![0].QuestName.Should().Be("Today");
 	}
 
 	// ==========================================================================
@@ -319,7 +319,7 @@ public class SyncServiceTests : IDisposable {
 
 		itemUsages.Should().NotBeNull();
 		itemUsages!.Should().HaveCount(1);
-		itemUsages[0].ItemName.Should().Be("XP Potion");
+		itemUsages![0].ItemName.Should().Be("XP Potion");
 	}
 
 	// ==========================================================================
