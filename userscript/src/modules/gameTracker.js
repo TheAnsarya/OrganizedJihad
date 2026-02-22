@@ -605,6 +605,28 @@ class GameTracker {
 					case 'dailyBonusGetInfo':
 						await this.trackDailyBonusInfo(responseData);
 						break;
+
+					// === Phase 10: Consumable Reward / Drop-Rate Tracking ===
+					// Track rewards from opening all chest/consumable types so we can
+					// compute empirical drop-rate percentages per item per source.
+					case 'artifactChestOpen':
+						await this.trackConsumableOpening(args, responseData, 'artifactChest');
+						break;
+					case 'titanArtifactChestOpen':
+						await this.trackConsumableOpening(args, responseData, 'titanArtifactChest');
+						break;
+					case 'pet_chestOpen':
+						await this.trackConsumableOpening(args, responseData, 'petChest');
+						break;
+					case 'consumableUseLootBox':
+						await this.trackConsumableOpening(args, responseData, 'lootBox');
+						break;
+					case 'towerOpenChest':
+						await this.trackConsumableOpening(args, responseData, 'towerChest');
+						break;
+					case 'bossOpenChestPay':
+						await this.trackConsumableOpening(args, responseData, 'outlandChest');
+						break;
 				}
 			} catch (error) {
 				console.error(`[OrganizedJihad] Error processing ${callName}:`, error);
@@ -1312,7 +1334,9 @@ class GameTracker {
 	}
 
 	/**
-	 * Track chest openings for drop rate analysis
+	 * Track chest openings for drop rate analysis.
+	 * Writes to both the `chests` IDB store AND metadata cache.
+	 * Individual drops are recorded in `consumableRewards`.
 	 * THIS IS KEY FOR UNDERSTANDING LOOT PROBABILITIES
 	 *
 	 * @param {Object} args - Chest opening arguments
@@ -1320,58 +1344,241 @@ class GameTracker {
 	 * @private
 	 */
 	async trackChestOpening(args, data) {
+		await this.trackConsumableOpening(args, data, 'genericChest');
+	}
+
+	/**
+	 * Unified handler for all consumable/chest opening types.
+	 * Records the opening in the `chests` IDB store, extracts individual
+	 * drops to `consumableRewards`, updates aggregated drop-rate metadata,
+	 * and tracks known resource rewards as resource transactions.
+	 *
+	 * Supported sourceTypes:
+	 *   genericChest, artifactChest, titanArtifactChest, petChest,
+	 *   lootBox, towerChest, outlandChest
+	 *
+	 * @param {Object} args         - Request arguments (chestId, id, libId, amount, etc.)
+	 * @param {Object} data         - Response data containing rewards
+	 * @param {string} sourceType   - Consumable category key
+	 * @private
+	 */
+	async trackConsumableOpening(args, data, sourceType) {
+		const timestamp = Date.now();
+		const sourceId = String(args.chestId || args.id || args.libId || 'unknown');
+		const quantity = args.amount || 1;
+
+		// Normalise the rewards from the varied game API formats
+		const drops = this._normalizeRewards(data);
+
+		// ── 1. Write to chests IDB store ────────────────────────────────
 		const chestRecord = {
-			chestId: args.chestId || args.id,
-			chestType: args.chestType || 'unknown',
-			quantity: args.amount || 1,
-			rewards: data.reward || data.rewards || [],
-			timestamp: Date.now(),
+			chestType: sourceType,
+			sourceId,
+			quantity,
+			dropCount: drops.length,
+			timestamp,
 		};
 
-		// Store individual chest opening
-		const chestHistory = await this.storage.getMetadata('chestOpeningHistory', []);
-		chestHistory.push(chestRecord);
-
-		if (chestHistory.length > 1000) {
-			chestHistory.shift();
+		let openingId = null;
+		try {
+			openingId = await this.storage.add('chests', chestRecord);
+		} catch (err) {
+			console.warn('[OrganizedJihad] Failed to write chest record:', err);
 		}
 
-		await this.storage.setMetadata('chestOpeningHistory', chestHistory);
-
-		// Live activity event
-		const dropCount = Array.isArray(chestRecord.rewards) ? chestRecord.rewards.length : 0;
-		await this._logActivity('chest', `Chest opened: ${chestRecord.chestType} (${chestRecord.quantity}x, ${dropCount} drops)`);
-
-		// Update drop rate statistics
-		await this.updateChestDropRates(chestRecord);
-
-		// Track resource rewards from chest opening
-		// Hero Wars chest rewards can contain gold, emeralds, tokens, items, etc.
-		// See: https://community.hero-wars.com/discussion/chest-drop-rates
-		const rewards = data.reward || data.rewards || {};
-		const chestName = `${chestRecord.chestType}_${chestRecord.chestId}`;
-
-		if (rewards.gold) {
-			await this.trackResourceTransaction('gold', rewards.gold, 'chest', chestName);
+		// ── 2. Write individual drops to consumableRewards ──────────────
+		for (const drop of drops) {
+			try {
+				await this.storage.add('consumableRewards', {
+					timestamp,
+					sourceType,
+					sourceId,
+					itemType: drop.itemType,
+					itemId: String(drop.itemId),
+					quantity: drop.quantity,
+					openingId: openingId || 0,
+				});
+			} catch (err) {
+				console.warn('[OrganizedJihad] Failed to write drop record:', err);
+			}
 		}
-		if (rewards.starmoney) {
-			await this.trackResourceTransaction('emeralds', rewards.starmoney, 'chest', chestName);
-		}
-		if (rewards.arenaToken) {
-			await this.trackResourceTransaction('arena_coins', rewards.arenaToken, 'chest', chestName);
-		}
-		if (rewards.guildWarToken) {
-			await this.trackResourceTransaction('guild_war_coins', rewards.guildWarToken, 'chest', chestName);
-		}
-		if (rewards.titanPotion) {
-			await this.trackResourceTransaction('titan_potion', rewards.titanPotion, 'chest', chestName);
+
+		// ── 3. Mirror to metadata cache (for backward compat) ───────────
+		try {
+			const chestHistory = await this.storage.getMetadata('chestOpeningHistory', []);
+			chestHistory.push({
+				chestId: sourceId,
+				chestType: sourceType,
+				quantity,
+				rewards: drops,
+				timestamp,
+			});
+			if (chestHistory.length > 1000) chestHistory.shift();
+			await this.storage.setMetadata('chestOpeningHistory', chestHistory);
+		} catch { /* non-critical */ }
+
+		// ── 4. Live activity event ──────────────────────────────────────
+		const typeLabel = this._sourceTypeLabel(sourceType);
+		await this._logActivity('chest', `${typeLabel} opened: ${sourceId} (${quantity}x, ${drops.length} drops)`);
+
+		// ── 5. Update aggregated drop-rate statistics ────────────────────
+		await this.updateChestDropRates({
+			chestType: sourceType,
+			chestId: sourceId,
+			quantity,
+			rewards: drops,
+		});
+
+		// ── 6. Track resource rewards as resource transactions ──────────
+		const chestName = `${sourceType}_${sourceId}`;
+		for (const drop of drops) {
+			if (drop.itemType === 'gold') {
+				await this.trackResourceTransaction('gold', drop.quantity, 'chest', chestName);
+			} else if (drop.itemType === 'starmoney') {
+				await this.trackResourceTransaction('emeralds', drop.quantity, 'chest', chestName);
+			} else if (drop.itemType === 'coin') {
+				// Coin subtypes: 3 = arena, 4 = outland, 5 = tower, 7 = skull
+				const coinNames = { '3': 'arena_coins', '4': 'outland_coins', '5': 'tower_coins', '7': 'skull_coins' };
+				const resName = coinNames[drop.itemId] || `coin_${drop.itemId}`;
+				await this.trackResourceTransaction(resName, drop.quantity, 'chest', chestName);
+			}
 		}
 	}
 
 	/**
-	 * Update chest drop rate statistics
+	 * Normalise game API reward data into a flat array of drop records.
 	 *
-	 * @param {Object} chestRecord - Record of chest opening
+	 * The game uses several reward formats depending on the API call:
+	 *
+	 * 1. **Category-keyed object** (most common):
+	 *    `{ consumable: {45: 1}, gold: 500, gear: {123: 2} }`
+	 *
+	 * 2. **Array of category-keyed objects** (artifact/titan chests):
+	 *    `[{consumable: {45: 1}}, {fragmentHero: {12: 50}}]`
+	 *    Also used as `data.chestReward`, `data.reward`, `data.rewards`
+	 *
+	 * 3. **Nested count-keyed** (consumableUseLootBox):
+	 *    `{ 500: { consumable: {362: 1}, gear: {55: 3} } }`
+	 *    The outer key is the gold reward count.
+	 *
+	 * 4. **Tower chest** (towerOpenChest):
+	 *    `{ skullReward: { coin: {7: 150} } }`
+	 *
+	 * Returns a flat array: `[{ itemType, itemId, quantity }, ...]`
+	 *
+	 * @param {Object} data - Raw response data
+	 * @returns {Array<{itemType: string, itemId: string, quantity: number}>}
+	 * @private
+	 */
+	_normalizeRewards(data) {
+		if (!data || typeof data !== 'object') return [];
+
+		const drops = [];
+
+		// Determine where the rewards live in the response
+		const sources = [];
+		if (data.chestReward) sources.push(data.chestReward);
+		if (data.reward) sources.push(data.reward);
+		if (data.rewards) sources.push(data.rewards);
+		if (data.skullReward) sources.push(data.skullReward);
+
+		// If none of the known keys match, treat the whole response as rewards
+		if (sources.length === 0) sources.push(data);
+
+		for (const src of sources) {
+			this._extractDrops(src, drops);
+		}
+
+		return drops;
+	}
+
+	/**
+	 * Recursively extract drop records from a reward structure.
+	 * Handles objects, arrays, and nested count-keyed formats.
+	 *
+	 * Known category keys: consumable, gear, coin, gold, starmoney,
+	 * fragmentHero, fragmentTitan, petCard, titanCard, scroll,
+	 * artifact, titanArtifact, skinStone, titanSkinStone
+	 *
+	 * @param {any} source - Reward data (object, array, or primitive)
+	 * @param {Array} drops - Accumulator array
+	 * @private
+	 */
+	_extractDrops(source, drops) {
+		if (!source || typeof source !== 'object') return;
+
+		// Array → extract each element
+		if (Array.isArray(source)) {
+			for (const item of source) {
+				this._extractDrops(item, drops);
+			}
+			return;
+		}
+
+		// Known scalar resource keys (value is the quantity directly)
+		const scalarKeys = new Set(['gold', 'starmoney', 'experience', 'stamina', 'titanExp']);
+
+		// Known category keys (value is { itemId: quantity, ... })
+		const categoryKeys = new Set([
+			'consumable', 'gear', 'coin', 'fragmentHero', 'fragmentTitan',
+			'petCard', 'titanCard', 'scroll', 'artifact', 'titanArtifact',
+			'skinStone', 'titanSkinStone', 'heroSoulStone', 'titanSoulStone',
+		]);
+
+		let hasKnownKey = false;
+
+		for (const [key, value] of Object.entries(source)) {
+			if (scalarKeys.has(key) && typeof value === 'number') {
+				drops.push({ itemType: key, itemId: key, quantity: value });
+				hasKnownKey = true;
+			} else if (categoryKeys.has(key) && typeof value === 'object' && value !== null) {
+				hasKnownKey = true;
+				for (const [itemId, qty] of Object.entries(value)) {
+					drops.push({
+						itemType: key,
+						itemId: String(itemId),
+						quantity: typeof qty === 'number' ? qty : 1,
+					});
+				}
+			}
+		}
+
+		// If no known keys matched, this might be a count-keyed wrapper like
+		// { 500: { consumable: {...} } } — recurse into numeric-keyed values.
+		if (!hasKnownKey) {
+			for (const [key, value] of Object.entries(source)) {
+				if (typeof value === 'object' && value !== null && /^\d+$/.test(key)) {
+					this._extractDrops(value, drops);
+				}
+			}
+		}
+	}
+
+	/**
+	 * Return a human-readable label for a consumable source type.
+	 *
+	 * @param {string} sourceType - Source type key
+	 * @returns {string} Display label
+	 * @private
+	 */
+	_sourceTypeLabel(sourceType) {
+		const labels = {
+			genericChest: 'Chest',
+			artifactChest: 'Artifact Chest',
+			titanArtifactChest: 'Titan Artifact Chest',
+			petChest: 'Pet Chest',
+			lootBox: 'Loot Box',
+			towerChest: 'Tower Chest',
+			outlandChest: 'Outland Chest',
+		};
+		return labels[sourceType] || sourceType;
+	}
+
+	/**
+	 * Update aggregated chest drop rate statistics in metadata.
+	 * Tracks per-chest-type open counts and per-item drop counts/totals.
+	 *
+	 * @param {Object} chestRecord - Record with chestType, chestId, quantity, rewards[]
 	 * @private
 	 */
 	async updateChestDropRates(chestRecord) {
@@ -1389,22 +1596,22 @@ class GameTracker {
 
 		dropRates[chestKey].openCount += chestRecord.quantity;
 
-		// Count each item dropped
+		// Count each normalised drop
 		if (Array.isArray(chestRecord.rewards)) {
-			chestRecord.rewards.forEach((reward) => {
-				const itemKey = `${reward.type}_${reward.id}`;
+			for (const drop of chestRecord.rewards) {
+				const itemKey = `${drop.itemType}_${drop.itemId}`;
 				if (!dropRates[chestKey].itemDrops[itemKey]) {
 					dropRates[chestKey].itemDrops[itemKey] = {
-						type: reward.type,
-						id: reward.id,
-						name: reward.name || itemKey,
+						type: drop.itemType,
+						id: drop.itemId,
+						name: drop.itemName || itemKey,
 						dropCount: 0,
 						totalAmount: 0,
 					};
 				}
 				dropRates[chestKey].itemDrops[itemKey].dropCount += 1;
-				dropRates[chestKey].itemDrops[itemKey].totalAmount += reward.amount || 1;
-			});
+				dropRates[chestKey].itemDrops[itemKey].totalAmount += drop.quantity || 1;
+			}
 		}
 
 		await this.storage.setMetadata('chestDropRates', dropRates);

@@ -650,3 +650,24 @@
 	color: #4fc3f7;
 	font-weight: 600;
 }
+
+/* ── Drop Rate Analysis Tables ────────────────────────────────────── */
+
+.oj-drop-rates {
+	margin: 8px 0 16px;
+}
+
+.oj-drop-rate-section {
+	margin-bottom: 12px;
+}
+
+.oj-table-compact th,
+.oj-table-compact td {
+	padding: 3px 8px;
+	font-size: 11px;
+}
+
+.oj-drop-rate {
+	font-weight: bold;
+	color: #4fc3f7;
+}

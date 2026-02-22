@@ -7,8 +7,8 @@
  *
  * Actual IndexedDBStorage key facts:
  *   - DB name: 'OrganizedJihad'
- *   - Version: 6
- *   - 25+ object stores (snapshots, battles, heroes, titans, etc.)
+ *   - Version: 8
+ *   - 35 object stores (snapshots, battles, heroes, titans, consumableRewards, etc.)
  *   - Methods: add, put, get, getAll, getByIndex, delete, clear, ensureDB
  *   - init() is idempotent — returns the single initPromise
  */
@@ -46,7 +46,7 @@ describe('IndexedDBStorage', () => {
 		test('should initialize database successfully', async () => {
 			expect(storage.db).toBeDefined();
 			expect(storage.db.name).toBe('OrganizedJihad');
-			expect(storage.db.version).toBe(7);
+			expect(storage.db.version).toBe(8);
 		});
 
 		test('should create core object stores', async () => {
@@ -106,6 +106,22 @@ describe('IndexedDBStorage', () => {
 		test('should create Phase 9 activityEvents store', async () => {
 			const names = Array.from(storage.db.objectStoreNames);
 			expect(names).toContain('activityEvents');
+		});
+
+		test('should create Phase 10 consumableRewards store with indexes', async () => {
+			const names = Array.from(storage.db.objectStoreNames);
+			expect(names).toContain('consumableRewards');
+
+			// Verify the store has the expected indexes
+			const tx = storage.db.transaction('consumableRewards', 'readonly');
+			const store = tx.objectStore('consumableRewards');
+			const indexNames = Array.from(store.indexNames);
+			expect(indexNames).toContain('timestamp');
+			expect(indexNames).toContain('sourceType');
+			expect(indexNames).toContain('sourceId');
+			expect(indexNames).toContain('itemType');
+			expect(indexNames).toContain('itemId');
+			expect(indexNames).toContain('openingId');
 		});
 
 		test('init() should be idempotent (calling multiple times returns same db)', async () => {

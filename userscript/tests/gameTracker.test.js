@@ -324,4 +324,192 @@ describe('GameTracker', () => {
 			);
 		});
 	});
+
+	// ─── Reward Normalization ────────────────────────────────────────────
+
+	describe('_normalizeRewards', () => {
+		test('should return empty array for null/undefined data', () => {
+			expect(tracker._normalizeRewards(null)).toEqual([]);
+			expect(tracker._normalizeRewards(undefined)).toEqual([]);
+			expect(tracker._normalizeRewards('string')).toEqual([]);
+		});
+
+		test('should extract scalar resource keys (gold, starmoney, etc.)', () => {
+			const data = { gold: 5000, starmoney: 100 };
+			const drops = tracker._normalizeRewards(data);
+
+			expect(drops).toEqual(expect.arrayContaining([
+				{ itemType: 'gold', itemId: 'gold', quantity: 5000 },
+				{ itemType: 'starmoney', itemId: 'starmoney', quantity: 100 },
+			]));
+			expect(drops).toHaveLength(2);
+		});
+
+		test('should extract category-keyed items (consumable, gear, coin)', () => {
+			const data = { consumable: { '45': 1 }, gear: { '123': 3 } };
+			const drops = tracker._normalizeRewards(data);
+
+			expect(drops).toEqual(expect.arrayContaining([
+				{ itemType: 'consumable', itemId: '45', quantity: 1 },
+				{ itemType: 'gear', itemId: '123', quantity: 3 },
+			]));
+			expect(drops).toHaveLength(2);
+		});
+
+		test('should handle data.chestReward (array of category objects)', () => {
+			const data = {
+				chestReward: [
+					{ consumable: { '45': 2 } },
+					{ fragmentHero: { '12': 50 } },
+				],
+			};
+			const drops = tracker._normalizeRewards(data);
+
+			expect(drops).toEqual(expect.arrayContaining([
+				{ itemType: 'consumable', itemId: '45', quantity: 2 },
+				{ itemType: 'fragmentHero', itemId: '12', quantity: 50 },
+			]));
+			expect(drops).toHaveLength(2);
+		});
+
+		test('should handle nested count-keyed format (consumableUseLootBox)', () => {
+			const data = { '500': { consumable: { '362': 1 }, gear: { '55': 3 } } };
+			const drops = tracker._normalizeRewards(data);
+
+			expect(drops).toEqual(expect.arrayContaining([
+				{ itemType: 'consumable', itemId: '362', quantity: 1 },
+				{ itemType: 'gear', itemId: '55', quantity: 3 },
+			]));
+			expect(drops).toHaveLength(2);
+		});
+
+		test('should handle tower chest skullReward format', () => {
+			const data = { skullReward: { coin: { '7': 150 } } };
+			const drops = tracker._normalizeRewards(data);
+
+			expect(drops).toEqual([
+				{ itemType: 'coin', itemId: '7', quantity: 150 },
+			]);
+		});
+
+		test('should combine drops from multiple reward keys', () => {
+			const data = {
+				reward: { gold: 1000 },
+				chestReward: [{ consumable: { '45': 1 } }],
+			};
+			const drops = tracker._normalizeRewards(data);
+
+			expect(drops).toHaveLength(2);
+			expect(drops).toEqual(expect.arrayContaining([
+				{ itemType: 'gold', itemId: 'gold', quantity: 1000 },
+				{ itemType: 'consumable', itemId: '45', quantity: 1 },
+			]));
+		});
+	});
+
+	// ─── Source Type Labels ──────────────────────────────────────────────
+
+	describe('_sourceTypeLabel', () => {
+		test('should return known labels', () => {
+			expect(tracker._sourceTypeLabel('genericChest')).toBe('Chest');
+			expect(tracker._sourceTypeLabel('artifactChest')).toBe('Artifact Chest');
+			expect(tracker._sourceTypeLabel('petChest')).toBe('Pet Chest');
+			expect(tracker._sourceTypeLabel('towerChest')).toBe('Tower Chest');
+		});
+
+		test('should return raw key for unknown types', () => {
+			expect(tracker._sourceTypeLabel('unknownType')).toBe('unknownType');
+		});
+	});
+
+	// ─── trackConsumableOpening ──────────────────────────────────────────
+
+	describe('trackConsumableOpening', () => {
+		test('should write chest record and drop records to storage', async () => {
+			mockStorage.add.mockResolvedValue(42); // openingId
+			mockStorage.getMetadata.mockResolvedValue([]);
+
+			const args = { chestId: '100', amount: 3 };
+			const data = { consumable: { '45': 1 }, gold: 500 };
+
+			await tracker.trackConsumableOpening(args, data, 'artifactChest');
+
+			// 1 chest record + 2 consumableRewards drops + 1 activityEvent + 1 resource transaction (gold)
+			expect(mockStorage.add).toHaveBeenCalledWith(
+				'chests',
+				expect.objectContaining({
+					chestType: 'artifactChest',
+					sourceId: '100',
+					quantity: 3,
+					dropCount: 2,
+				}),
+			);
+
+			expect(mockStorage.add).toHaveBeenCalledWith(
+				'consumableRewards',
+				expect.objectContaining({
+					sourceType: 'artifactChest',
+					sourceId: '100',
+					itemType: 'consumable',
+					itemId: '45',
+					quantity: 1,
+					openingId: 42,
+				}),
+			);
+
+			expect(mockStorage.add).toHaveBeenCalledWith(
+				'consumableRewards',
+				expect.objectContaining({
+					itemType: 'gold',
+					itemId: 'gold',
+					quantity: 500,
+					openingId: 42,
+				}),
+			);
+		});
+
+		test('should mirror to metadata chestOpeningHistory', async () => {
+			mockStorage.add.mockResolvedValue(1);
+			mockStorage.getMetadata.mockResolvedValue([]);
+
+			await tracker.trackConsumableOpening({ id: '99' }, { gold: 100 }, 'towerChest');
+
+			expect(mockStorage.setMetadata).toHaveBeenCalledWith(
+				'chestOpeningHistory',
+				expect.arrayContaining([
+					expect.objectContaining({
+						chestId: '99',
+						chestType: 'towerChest',
+					}),
+				]),
+			);
+		});
+
+		test('should dispatch new API calls to trackConsumableOpening', async () => {
+			const spy = jest.spyOn(tracker, 'trackConsumableOpening').mockResolvedValue();
+
+			const apiCalls = [
+				{ name: 'artifactChestOpen', expectedType: 'artifactChest' },
+				{ name: 'titanArtifactChestOpen', expectedType: 'titanArtifactChest' },
+				{ name: 'pet_chestOpen', expectedType: 'petChest' },
+				{ name: 'consumableUseLootBox', expectedType: 'lootBox' },
+				{ name: 'towerOpenChest', expectedType: 'towerChest' },
+				{ name: 'bossOpenChestPay', expectedType: 'outlandChest' },
+			];
+
+			for (const { name, expectedType } of apiCalls) {
+				spy.mockClear();
+
+				const request = {
+					calls: [{ name, ident: name, args: { id: '1' } }],
+				};
+				const response = {
+					results: [{ ident: name, result: { response: { gold: 100 } } }],
+				};
+
+				await tracker.processAPIResponse(request, response);
+				expect(spy).toHaveBeenCalledWith({ id: '1' }, { gold: 100 }, expectedType);
+			}
+		});
+	});
 });

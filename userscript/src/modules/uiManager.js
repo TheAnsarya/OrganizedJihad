@@ -963,90 +963,218 @@ class UIManager {
 	async renderChests() {
 		const vs = this._viewState.chests;
 
+		// ── Load chest openings from IDB store first (proper source) ────
 		let chests = [];
 		try {
-			const cached = await this.idbStorage.getMetadata('chestOpeningHistory', null);
-			if (Array.isArray(cached) && cached.length > 0) {
-				chests = cached;
-			}
+			chests = await this.idbStorage.getAll('chests', 5000);
 		} catch { /* empty */ }
 
-		// Fallback: read from chests IDB store
+		// Fallback: metadata cache for pre-Phase-10 data
 		if (chests.length === 0) {
 			try {
-				chests = await this.idbStorage.getAll('chests', 5000);
+				const cached = await this.idbStorage.getMetadata('chestOpeningHistory', null);
+				if (Array.isArray(cached) && cached.length > 0) {
+					chests = cached;
+				}
 			} catch { /* empty */ }
 		}
 
-		if (chests.length === 0) {
+		// ── Load consumableRewards for drop-rate analysis ───────────────
+		let allDrops = [];
+		try {
+			allDrops = await this.idbStorage.getAll('consumableRewards', 50000);
+		} catch { /* empty */ }
+
+		// ── Load aggregated drop rates from metadata ────────────────────
+		let dropRates = {};
+		try {
+			dropRates = (await this.idbStorage.getMetadata('chestDropRates', null)) || {};
+		} catch { /* empty */ }
+
+		if (chests.length === 0 && Object.keys(dropRates).length === 0) {
 			return `
 				<div class="oj-chests">
-					<h3>\uD83C\uDF81 Chests</h3>
+					<h3>\uD83C\uDF81 Chests & Drop Rates</h3>
 					<p class="oj-empty">No chest data captured yet. Open some chests in the game to start tracking!</p>
 				</div>
 			`;
 		}
 
-		// Sort newest first by default
+		// Sort openings newest first
 		chests.sort((a, b) => {
-			const ta = a.timestamp ? new Date(a.timestamp).getTime() : 0;
-			const tb = b.timestamp ? new Date(b.timestamp).getTime() : 0;
+			const ta = typeof a.timestamp === 'number' ? a.timestamp : new Date(a.timestamp || 0).getTime();
+			const tb = typeof b.timestamp === 'number' ? b.timestamp : new Date(b.timestamp || 0).getTime();
 			return tb - ta;
 		});
 
-		// Summary stats: count by type
+		// ── Summary stats: count by type ────────────────────────────────
 		const byType = {};
 		for (const c of chests) {
 			const type = c.chestType || c.type || 'Unknown';
 			byType[type] = (byType[type] || 0) + 1;
 		}
 
-		const typePills = Object.entries(byType).map(([type, count]) =>
-			`<span class="oj-pill">\uD83C\uDF81 ${this._escapeHtml(type)}: ${count}</span>`
-		).join(' ');
+		const sourceLabels = {
+			genericChest: 'Chest', artifactChest: 'Artifact', titanArtifactChest: 'Titan Artifact',
+			petChest: 'Pet', lootBox: 'Loot Box', towerChest: 'Tower', outlandChest: 'Outland',
+		};
 
-		// Filter
+		const typePills = Object.entries(byType).map(([type, count]) => {
+			const label = sourceLabels[type] || type;
+			return `<span class="oj-pill">\uD83C\uDF81 ${this._escapeHtml(label)}: ${count}</span>`;
+		}).join(' ');
+
+		// ── Drop Rate Analytics ─────────────────────────────────────────
+		let dropRateHtml = '';
+		if (Object.keys(dropRates).length > 0) {
+			const tables = [];
+			for (const [chestKey, info] of Object.entries(dropRates)) {
+				if (!info.itemDrops || Object.keys(info.itemDrops).length === 0) continue;
+
+				const label = sourceLabels[info.chestType] || info.chestType || chestKey;
+				const opens = info.openCount || 0;
+
+				// Sort items by drop count descending
+				const items = Object.values(info.itemDrops)
+					.sort((a, b) => (b.dropCount || 0) - (a.dropCount || 0));
+
+				const itemRows = items.map((item) => {
+					const rate = opens > 0 ? ((item.dropCount / opens) * 100).toFixed(1) : '0.0';
+					const avg = item.dropCount > 0 ? (item.totalAmount / item.dropCount).toFixed(1) : '0';
+					const name = this._escapeHtml(item.name || `${item.type}_${item.id}`);
+					return `
+						<tr>
+							<td>${name}</td>
+							<td class="oj-num">${item.dropCount}</td>
+							<td class="oj-num">${item.totalAmount.toLocaleString()}</td>
+							<td class="oj-num">${avg}</td>
+							<td class="oj-num oj-drop-rate">${rate}%</td>
+						</tr>
+					`;
+				}).join('');
+
+				tables.push(`
+					<div class="oj-drop-rate-section">
+						<h4 class="oj-section-sub">${this._escapeHtml(label)} <span class="oj-muted">(${opens} openings)</span></h4>
+						<table class="oj-table oj-table-compact">
+							<thead>
+								<tr><th>Item</th><th>Drops</th><th>Total Qty</th><th>Avg/Drop</th><th>Rate</th></tr>
+							</thead>
+							<tbody>${itemRows}</tbody>
+						</table>
+					</div>
+				`);
+			}
+			if (tables.length > 0) {
+				dropRateHtml = `
+					<div class="oj-drop-rates">
+						<h3>\uD83D\uDCCA Drop Rate Analysis</h3>
+						${tables.join('')}
+					</div>
+				`;
+			}
+		}
+
+		// Also build a drop-rate section from raw consumableRewards data if available
+		if (allDrops.length > 0 && !dropRateHtml) {
+			// Group by sourceType+sourceId → itemType+itemId
+			const grouped = {};
+			for (const drop of allDrops) {
+				const key = `${drop.sourceType}_${drop.sourceId}`;
+				if (!grouped[key]) {
+					grouped[key] = { sourceType: drop.sourceType, sourceId: drop.sourceId, openCount: 0, items: {} };
+				}
+				const itemKey = `${drop.itemType}_${drop.itemId}`;
+				if (!grouped[key].items[itemKey]) {
+					grouped[key].items[itemKey] = { type: drop.itemType, id: drop.itemId, count: 0, totalQty: 0 };
+				}
+				grouped[key].items[itemKey].count++;
+				grouped[key].items[itemKey].totalQty += drop.quantity || 0;
+			}
+
+			// Count openings per source from chests store
+			for (const c of chests) {
+				const key = `${c.chestType}_${c.sourceId || c.chestId || 'unknown'}`;
+				if (grouped[key]) grouped[key].openCount += (c.quantity || 1);
+			}
+
+			const tables = [];
+			for (const [key, info] of Object.entries(grouped)) {
+				const label = sourceLabels[info.sourceType] || info.sourceType || key;
+				const opens = info.openCount || Object.values(info.items).reduce((s, i) => Math.max(s, i.count), 0);
+
+				const items = Object.values(info.items).sort((a, b) => b.count - a.count);
+				const itemRows = items.map((item) => {
+					const rate = opens > 0 ? ((item.count / opens) * 100).toFixed(1) : '?';
+					const avg = item.count > 0 ? (item.totalQty / item.count).toFixed(1) : '0';
+					return `
+						<tr>
+							<td>${this._escapeHtml(`${item.type}:${item.id}`)}</td>
+							<td class="oj-num">${item.count}</td>
+							<td class="oj-num">${item.totalQty.toLocaleString()}</td>
+							<td class="oj-num">${avg}</td>
+							<td class="oj-num oj-drop-rate">${rate}%</td>
+						</tr>
+					`;
+				}).join('');
+
+				tables.push(`
+					<div class="oj-drop-rate-section">
+						<h4 class="oj-section-sub">${this._escapeHtml(label)} <span class="oj-muted">(~${opens} openings)</span></h4>
+						<table class="oj-table oj-table-compact">
+							<thead><tr><th>Item</th><th>Drops</th><th>Total Qty</th><th>Avg/Drop</th><th>Rate</th></tr></thead>
+							<tbody>${itemRows}</tbody>
+						</table>
+					</div>
+				`);
+			}
+			if (tables.length > 0) {
+				dropRateHtml = `<div class="oj-drop-rates"><h3>\uD83D\uDCCA Drop Rate Analysis</h3>${tables.join('')}</div>`;
+			}
+		}
+
+		// ── Filter openings list ────────────────────────────────────────
+		let filteredChests = chests;
 		if (vs.filter) {
 			const q = vs.filter.toLowerCase();
-			chests = chests.filter((c) => {
+			filteredChests = chests.filter((c) => {
 				const type = (c.chestType || c.type || '').toLowerCase();
 				return type.includes(q);
 			});
 		}
 
-		// Paginate
-		const totalCount = chests.length;
+		// ── Paginate ────────────────────────────────────────────────────
+		const totalCount = filteredChests.length;
 		const totalPages = Math.max(1, Math.ceil(totalCount / this.PAGE_SIZE));
 		vs.page = Math.min(vs.page, totalPages - 1);
-		const pageItems = chests.slice(vs.page * this.PAGE_SIZE, (vs.page + 1) * this.PAGE_SIZE);
+		const pageItems = filteredChests.slice(vs.page * this.PAGE_SIZE, (vs.page + 1) * this.PAGE_SIZE);
 
 		const rows = pageItems.map((c) => {
-			const time = c.timestamp ? new Date(c.timestamp).toLocaleString() : '\u2014';
-			const type = this._escapeHtml(c.chestType || c.type || 'Unknown');
-			const drops = Array.isArray(c.drops) ? c.drops.length : (c.dropCount || '\u2014');
-			const notable = Array.isArray(c.drops)
-				? c.drops.filter((d) => d.rare || d.epic || d.legendary || (d.stars && d.stars >= 3))
-					.map((d) => this._escapeHtml(d.name || d.itemName || 'rare item'))
-					.slice(0, 3).join(', ') || '\u2014'
+			const time = c.timestamp
+				? new Date(typeof c.timestamp === 'number' ? c.timestamp : c.timestamp).toLocaleString()
 				: '\u2014';
+			const type = this._escapeHtml(sourceLabels[c.chestType] || c.chestType || c.type || 'Unknown');
+			const drops = c.dropCount ?? (Array.isArray(c.rewards) ? c.rewards.length : '\u2014');
 			return `
 				<tr>
 					<td class="oj-mono">${time}</td>
 					<td>${type}</td>
 					<td class="oj-num">${drops}</td>
-					<td>${notable}</td>
+					<td class="oj-num">${c.quantity || 1}</td>
 				</tr>
 			`;
 		}).join('');
 
 		return `
 			<div class="oj-chests" data-browser="chests">
-				<h3>\uD83C\uDF81 Chests <span class="oj-muted">(${chests.length} total openings)</span></h3>
+				<h3>\uD83C\uDF81 Chests & Drop Rates <span class="oj-muted">(${chests.length} openings \u2022 ${allDrops.length} drops tracked)</span></h3>
 				<div class="oj-pills">${typePills}</div>
+				${dropRateHtml}
+				<h4 class="oj-section-sub">Opening History</h4>
 				${this._renderSearchBar(vs.filter, 'Filter by chest type...')}
 				<table class="oj-table">
 					<thead>
-						<tr><th>Time</th><th>Type</th><th>Drops</th><th>Notable</th></tr>
+						<tr><th>Time</th><th>Type</th><th>Drops</th><th>Qty</th></tr>
 					</thead>
 					<tbody>${rows}</tbody>
 				</table>

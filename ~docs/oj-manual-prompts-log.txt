@@ -33,13 +33,13 @@ You are spiraling; figure it out or quit; don't waste all my resources going in 
 
 Keep working on issues; continue;
 
+Keep working on issues; continue;
 
+Keep working on issues; continue;
 
+keep the version low, we're already showing `3.1.0` and we haven't even have an alpha release yet, drop the version number back below 1.0; Keep working on issues; continue;
 
-
-
-
-
+add tracking for rewards from opening various consumable items in the inventory; we want to figure out the percentages for each item you can get from chests and such; continue;
 
 
 

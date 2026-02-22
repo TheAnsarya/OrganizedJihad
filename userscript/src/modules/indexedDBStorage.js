@@ -36,12 +36,17 @@
  *
  * NEW in v4 (Phase 9 - Live Activity Feed):
  * - activityEvents: Color-coded live event log (capped at 500 entries)
+ *
+ * NEW in v5 (Phase 10 - Consumable Reward Tracking):
+ * - consumableRewards: Individual drop records from chests/loot boxes for
+ *   drop-rate analysis. Each record links to a parent chest opening and
+ *   records the item type, item ID, quantity, and source.
  */
 
 class IndexedDBStorage {
 	constructor() {
 		this.dbName = 'OrganizedJihad';
-		this.version = 7; // v7: Added activityEvents store for live activity feed
+		this.version = 8; // v8: Added consumableRewards store for drop-rate analysis
 		this.db = null;
 		/** @type {Promise<IDBDatabase>} Resolves once the DB is open and upgraded. */
 		this.initPromise = this._openDatabase();
@@ -378,6 +383,21 @@ class IndexedDBStorage {
 					const activityStore = db.createObjectStore('activityEvents', { keyPath: 'id', autoIncrement: true });
 					activityStore.createIndex('timestamp', 'timestamp', { unique: false });
 					activityStore.createIndex('eventType', 'eventType', { unique: false });
+				}
+
+				// === Phase 10: Consumable Reward / Drop-Rate Tracking ===
+
+				// Individual reward drops from chests, loot boxes, artifact chests, etc.
+				// Each record represents one item received from a consumable opening.
+				// Enables drop-rate calculation: (dropCount for item / total openings) * 100
+				if (!db.objectStoreNames.contains('consumableRewards')) {
+					const rewardStore = db.createObjectStore('consumableRewards', { keyPath: 'id', autoIncrement: true });
+					rewardStore.createIndex('timestamp', 'timestamp', { unique: false });
+					rewardStore.createIndex('sourceType', 'sourceType', { unique: false }); // 'artifactChest', 'titanArtifactChest', 'petChest', 'lootBox', 'towerChest', 'outlandChest', 'genericChest'
+					rewardStore.createIndex('sourceId', 'sourceId', { unique: false });   // chestId or consumable libId
+					rewardStore.createIndex('itemType', 'itemType', { unique: false });   // 'consumable', 'gear', 'gold', 'starmoney', 'fragmentHero', 'fragmentTitan', 'coin', 'petCard', etc.
+					rewardStore.createIndex('itemId', 'itemId', { unique: false });       // Specific item ID within the type
+					rewardStore.createIndex('openingId', 'openingId', { unique: false }); // FK to chests store id
 				}
 			};
 		});
