@@ -1,157 +1,195 @@
 /**
  * IndexedDBStorage Tests
- * Tests for browser-side IndexedDB storage operations
+ * Tests for browser-side IndexedDB storage operations.
+ *
+ * Uses fake-indexeddb (imported in tests/setup.js via 'fake-indexeddb/auto')
+ * to provide an in-memory IndexedDB implementation.
+ *
+ * Actual IndexedDBStorage key facts:
+ *   - DB name: 'OrganizedJihad'
+ *   - Version: 6
+ *   - 25+ object stores (snapshots, battles, heroes, titans, etc.)
+ *   - Methods: add, put, get, getAll, getByIndex, delete, clear, ensureDB
+ *   - init() is idempotent — returns the single initPromise
  */
 
 import IndexedDBStorage from '../src/modules/indexedDBStorage.js';
+
+// Node 16 doesn't have structuredClone — polyfill for fake-indexeddb
+if (typeof globalThis.structuredClone === 'undefined') {
+	globalThis.structuredClone = (obj) => JSON.parse(JSON.stringify(obj));
+}
 
 describe('IndexedDBStorage', () => {
 	let storage;
 
 	beforeEach(async () => {
-		// Create a fresh storage instance for each test
 		storage = new IndexedDBStorage();
 		await storage.init();
 	});
 
 	afterEach(async () => {
-		// Clean up after each test
-		if (storage && storage.db) {
+		if (storage?.db) {
 			storage.db.close();
 		}
-		// Delete the database
-		const deleteRequest = indexedDB.deleteDatabase('OrganizedJihadDB');
+		// Delete the database so each test starts fresh
+		const deleteRequest = indexedDB.deleteDatabase('OrganizedJihad');
 		await new Promise((resolve) => {
 			deleteRequest.onsuccess = resolve;
 			deleteRequest.onerror = resolve;
 		});
 	});
 
+	// ─── Initialization ──────────────────────────────────────────────────
+
 	describe('Initialization', () => {
 		test('should initialize database successfully', async () => {
 			expect(storage.db).toBeDefined();
-			expect(storage.db.name).toBe('OrganizedJihadDB');
-			expect(storage.db.version).toBe(4);
+			expect(storage.db.name).toBe('OrganizedJihad');
+			expect(storage.db.version).toBe(6);
 		});
 
-		test('should create all required object stores', async () => {
-			const storeNames = Array.from(storage.db.objectStoreNames);
+		test('should create core object stores', async () => {
+			const names = Array.from(storage.db.objectStoreNames);
 
-			// Core stores
-			expect(storeNames).toContain('playerData');
-			expect(storeNames).toContain('heroes');
-			expect(storeNames).toContain('titans');
-			expect(storeNames).toContain('pets');
+			// Phase 1 stores
+			expect(names).toContain('snapshots');
+			expect(names).toContain('battles');
+			expect(names).toContain('chests');
+			expect(names).toContain('opponents');
+			expect(names).toContain('goals');
+			expect(names).toContain('events');
+			expect(names).toContain('metadata');
+		});
 
-			// Activity tracking stores
-			expect(storeNames).toContain('battleHistory');
-			expect(storeNames).toContain('resourceHistory');
-			expect(storeNames).toContain('questProgress');
+		test('should create Phase 7 tracking stores', async () => {
+			const names = Array.from(storage.db.objectStoreNames);
 
-			// Chat stores
-			expect(storeNames).toContain('chatMessages');
+			expect(names).toContain('heroes');
+			expect(names).toContain('titans');
+			expect(names).toContain('pets');
+			expect(names).toContain('inventory');
+			expect(names).toContain('questCompletions');
+			expect(names).toContain('missionProgress');
+			expect(names).toContain('shopPurchases');
+			expect(names).toContain('towerProgress');
+			expect(names).toContain('expeditionBattles');
+			expect(names).toContain('resourceTransactions');
+			expect(names).toContain('guildActivities');
+		});
 
-			// Guild member tracking stores
-			expect(storeNames).toContain('guildMembers');
-			expect(storeNames).toContain('guildMemberSnapshots');
-			expect(storeNames).toContain('guildWarParticipations');
-			expect(storeNames).toContain('guildRaidParticipations');
-			expect(storeNames).toContain('guildDungeonParticipations');
-			expect(storeNames).toContain('titaniteTransactions');
+		test('should create guild & chat stores', async () => {
+			const names = Array.from(storage.db.objectStoreNames);
+
+			expect(names).toContain('chatMessages');
+			expect(names).toContain('guildMembers');
+			expect(names).toContain('guildMemberSnapshots');
+			expect(names).toContain('guildWarParticipations');
+			expect(names).toContain('guildRaidParticipations');
+			expect(names).toContain('guildDungeonParticipations');
+			expect(names).toContain('titaniteTransactions');
+		});
+
+		test('should create Phase 8 upgrade & activity stores', async () => {
+			const names = Array.from(storage.db.objectStoreNames);
+
+			expect(names).toContain('apiLogs');
+			expect(names).toContain('heroUpgrades');
+			expect(names).toContain('titanUpgrades');
+			expect(names).toContain('dailyQuestCompletions');
+			expect(names).toContain('guildQuestCompletions');
+			expect(names).toContain('loginRewards');
+			expect(names).toContain('inventoryItemUsages');
+			expect(names).toContain('equipmentChanges');
+		});
+
+		test('init() should be idempotent (calling multiple times returns same db)', async () => {
+			const db1 = await storage.init();
+			const db2 = await storage.init();
+			expect(db1).toBe(db2);
 		});
 	});
 
+	// ─── CRUD Operations ─────────────────────────────────────────────────
+
 	describe('CRUD Operations', () => {
 		test('should add data to a store', async () => {
-			const testData = {
+			const key = await storage.add('snapshots', {
 				playerId: 12345,
 				playerName: 'TestPlayer',
 				level: 50,
-			};
-
-			const key = await storage.add('playerData', testData);
+				timestamp: Date.now(),
+			});
 			expect(key).toBeDefined();
 			expect(typeof key).toBe('number');
 		});
 
 		test('should retrieve data by key', async () => {
-			const testData = {
-				playerId: 12345,
-				playerName: 'TestPlayer',
-				level: 50,
-			};
-
-			const key = await storage.add('playerData', testData);
-			const retrieved = await storage.get('playerData', key);
+			const data = { playerId: 12345, playerName: 'TestPlayer', level: 50, timestamp: Date.now() };
+			const key = await storage.add('snapshots', data);
+			const retrieved = await storage.get('snapshots', key);
 
 			expect(retrieved).toBeDefined();
-			expect(retrieved.playerId).toBe(testData.playerId);
-			expect(retrieved.playerName).toBe(testData.playerName);
-			expect(retrieved.level).toBe(testData.level);
+			expect(retrieved.playerId).toBe(12345);
+			expect(retrieved.playerName).toBe('TestPlayer');
 		});
 
-		test('should update existing data', async () => {
-			const testData = {
-				playerId: 12345,
-				playerName: 'TestPlayer',
-				level: 50,
-			};
+		test('should update existing data via put', async () => {
+			const data = { playerId: 12345, playerName: 'TestPlayer', level: 50, timestamp: Date.now() };
+			const key = await storage.add('snapshots', data);
 
-			const key = await storage.add('playerData', testData);
+			const updated = { ...data, id: key, level: 60 };
+			await storage.put('snapshots', updated);
 
-			// Update the data
-			const updatedData = { ...testData, id: key, level: 60 };
-			await storage.put('playerData', updatedData);
-
-			const retrieved = await storage.get('playerData', key);
+			const retrieved = await storage.get('snapshots', key);
 			expect(retrieved.level).toBe(60);
 		});
 
 		test('should delete data by key', async () => {
-			const testData = {
-				playerId: 12345,
-				playerName: 'TestPlayer',
-				level: 50,
-			};
+			const data = { playerId: 12345, playerName: 'TestPlayer', timestamp: Date.now() };
+			const key = await storage.add('snapshots', data);
+			await storage.delete('snapshots', key);
 
-			const key = await storage.add('playerData', testData);
-			await storage.delete('playerData', key);
-
-			const retrieved = await storage.get('playerData', key);
+			const retrieved = await storage.get('snapshots', key);
 			expect(retrieved).toBeUndefined();
 		});
 
 		test('should retrieve all data from a store', async () => {
-			const testData1 = { playerId: 1, playerName: 'Player1', level: 50 };
-			const testData2 = { playerId: 2, playerName: 'Player2', level: 60 };
-			const testData3 = { playerId: 3, playerName: 'Player3', level: 70 };
+			await storage.add('snapshots', { playerId: 1, timestamp: 1 });
+			await storage.add('snapshots', { playerId: 2, timestamp: 2 });
+			await storage.add('snapshots', { playerId: 3, timestamp: 3 });
 
-			await storage.add('playerData', testData1);
-			await storage.add('playerData', testData2);
-			await storage.add('playerData', testData3);
+			const all = await storage.getAll('snapshots');
+			expect(all).toHaveLength(3);
+		});
 
-			const allData = await storage.getAll('playerData');
-			expect(allData).toHaveLength(3);
+		test('should respect limit in getAll', async () => {
+			await storage.add('snapshots', { playerId: 1, timestamp: 1 });
+			await storage.add('snapshots', { playerId: 2, timestamp: 2 });
+			await storage.add('snapshots', { playerId: 3, timestamp: 3 });
+
+			const limited = await storage.getAll('snapshots', 2);
+			expect(limited).toHaveLength(2);
 		});
 	});
+
+	// ─── Index Queries ───────────────────────────────────────────────────
 
 	describe('Index Queries', () => {
 		test('should query by index', async () => {
-			const hero1 = { heroId: 1, heroName: 'Galahad', level: 120 };
-			const hero2 = { heroId: 2, heroName: 'Astaroth', level: 120 };
-			const hero3 = { heroId: 3, heroName: 'Karkh', level: 100 };
+			await storage.add('battles', { battleType: 'arena', timestamp: 1, opponentId: 1, isWin: true });
+			await storage.add('battles', { battleType: 'arena', timestamp: 2, opponentId: 2, isWin: false });
+			await storage.add('battles', { battleType: 'guildWar', timestamp: 3, opponentId: 3, isWin: true });
 
-			await storage.add('heroes', hero1);
-			await storage.add('heroes', hero2);
-			await storage.add('heroes', hero3);
-
-			const level120Heroes = await storage.getAllByIndex('heroes', 'level', 120);
-			expect(level120Heroes).toHaveLength(2);
+			const arenaBattles = await storage.getByIndex('battles', 'battleType', 'arena');
+			expect(arenaBattles).toHaveLength(2);
 		});
 	});
 
+	// ─── Guild Member Upsert ─────────────────────────────────────────────
+
 	describe('Guild Member Upsert', () => {
-		test('should insert new guild member', async () => {
+		test('should insert new guild member via put', async () => {
 			const member = {
 				playerId: 99999,
 				playerName: 'NewMember',
@@ -159,7 +197,7 @@ describe('IndexedDBStorage', () => {
 				level: 80,
 				teamPower: 500000,
 			};
-
+			// guildMembers uses keyPath: 'playerId'
 			await storage.put('guildMembers', member);
 			const retrieved = await storage.get('guildMembers', 99999);
 
@@ -168,53 +206,50 @@ describe('IndexedDBStorage', () => {
 			expect(retrieved.level).toBe(80);
 		});
 
-		test('should update existing guild member', async () => {
+		test('should update existing guild member via put', async () => {
 			const member = {
 				playerId: 99999,
-				playerName: 'ExistingMember',
+				playerName: 'Member',
 				guildId: 1,
 				level: 80,
 				teamPower: 500000,
 			};
-
-			// Insert
 			await storage.put('guildMembers', member);
-
-			// Update
-			const updatedMember = { ...member, level: 90, teamPower: 600000 };
-			await storage.put('guildMembers', updatedMember);
+			await storage.put('guildMembers', { ...member, level: 90, teamPower: 600000 });
 
 			const retrieved = await storage.get('guildMembers', 99999);
 			expect(retrieved.level).toBe(90);
 			expect(retrieved.teamPower).toBe(600000);
 
-			// Should only have one record
-			const allMembers = await storage.getAll('guildMembers');
-			expect(allMembers).toHaveLength(1);
+			const all = await storage.getAll('guildMembers');
+			expect(all).toHaveLength(1);
 		});
 	});
+
+	// ─── Error Handling ──────────────────────────────────────────────────
 
 	describe('Error Handling', () => {
 		test('should throw error for invalid store name', async () => {
-			await expect(storage.add('invalidStore', {})).rejects.toThrow();
+			await expect(storage.add('nonExistentStore', {})).rejects.toThrow();
 		});
 
-		test('should handle transaction errors gracefully', async () => {
-			// Try to add data without required fields
-			await expect(storage.add('playerData', null)).rejects.toThrow();
+		test('should throw on null data add', async () => {
+			// fake-indexeddb throws when trying to add null/undefined
+			await expect(storage.add('snapshots', null)).rejects.toThrow();
 		});
 	});
 
+	// ─── Bulk Operations ─────────────────────────────────────────────────
+
 	describe('Bulk Operations', () => {
 		test('should clear all data from a store', async () => {
-			await storage.add('playerData', { playerId: 1, playerName: 'Player1' });
-			await storage.add('playerData', { playerId: 2, playerName: 'Player2' });
-			await storage.add('playerData', { playerId: 3, playerName: 'Player3' });
+			await storage.add('snapshots', { playerId: 1, timestamp: 1 });
+			await storage.add('snapshots', { playerId: 2, timestamp: 2 });
 
-			await storage.clear('playerData');
+			await storage.clear('snapshots');
 
-			const allData = await storage.getAll('playerData');
-			expect(allData).toHaveLength(0);
+			const all = await storage.getAll('snapshots');
+			expect(all).toHaveLength(0);
 		});
 	});
 });

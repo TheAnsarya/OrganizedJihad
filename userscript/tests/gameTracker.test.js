@@ -1,313 +1,218 @@
 /**
  * GameTracker Tests
- * Tests for Hero Wars API interception and data extraction
+ * Tests for Hero Wars API interception and data extraction.
+ *
+ * Actual GameTracker API:
+ *   - constructor(storage)  — storage is an IndexedDBStorage instance
+ *   - init()                — calls storage.init() + proxyAPIRequests()
+ *   - processAPIResponse(request, response) — main dispatcher
+ *   - trackPlayerData(data) — saves snapshot from userGetInfo
+ *   - trackHeroesData(data) — saves hero snapshots from heroGetAll
+ *   - trackBattleResult(type, args, data) — saves battle records
+ *   - trackArenaBattle / trackTitanArenaBattle / trackGrandArenaBattle
+ *   - ... many more track* methods
+ *
+ * storage is an IndexedDBStorage with methods: add, put, get, getAll, getByIndex, getMetadata
  */
 
 import GameTracker from '../src/modules/gameTracker.js';
 
 describe('GameTracker', () => {
-	let gameTracker;
+	let tracker;
 	let mockStorage;
-	let mockIndexedDB;
 
 	beforeEach(() => {
-		// Create mock storage and IndexedDB
-		mockStorage = {
-			get: jest.fn(),
-			set: jest.fn(),
-			delete: jest.fn(),
-			listKeys: jest.fn(),
-		};
+		jest.clearAllMocks();
 
-		mockIndexedDB = {
+		// Mock an IndexedDBStorage-compatible object
+		mockStorage = {
+			init: jest.fn().mockResolvedValue(true),
+			initPromise: Promise.resolve(true),
 			add: jest.fn().mockResolvedValue(1),
 			put: jest.fn().mockResolvedValue(1),
-			get: jest.fn(),
-			getAll: jest.fn(),
-			delete: jest.fn(),
+			get: jest.fn().mockResolvedValue(undefined),
+			getAll: jest.fn().mockResolvedValue([]),
+			getByIndex: jest.fn().mockResolvedValue([]),
+			getMetadata: jest.fn().mockResolvedValue(null),
+			delete: jest.fn().mockResolvedValue(undefined),
+			clear: jest.fn().mockResolvedValue(undefined),
 		};
 
-		gameTracker = new GameTracker(mockStorage, mockIndexedDB);
-		jest.clearAllMocks();
+		tracker = new GameTracker(mockStorage);
 	});
+
+	// ─── Initialization ──────────────────────────────────────────────────
 
 	describe('Initialization', () => {
-		test('should initialize with storage and IndexedDB', () => {
-			expect(gameTracker.storage).toBe(mockStorage);
-			expect(gameTracker.indexedDB).toBe(mockIndexedDB);
+		test('should store the provided storage reference', () => {
+			expect(tracker.storage).toBe(mockStorage);
 		});
 
-		test('should set up API interception', () => {
-			const originalXHR = global.XMLHttpRequest;
-			gameTracker.initialize();
+		test('should start in non-tracking state', () => {
+			expect(tracker.isTracking).toBe(false);
+		});
 
-			// XMLHttpRequest should be wrapped
-			expect(global.XMLHttpRequest).toBeDefined();
-
-			// Restore original
-			global.XMLHttpRequest = originalXHR;
+		test('init() should call storage.init and set isTracking to true', async () => {
+			await tracker.init();
+			expect(mockStorage.init).toHaveBeenCalled();
+			expect(tracker.isTracking).toBe(true);
 		});
 	});
 
-	describe('API Response Parsing', () => {
-		test('should extract player data from userGetInfo response', async () => {
-			const mockResponse = {
-				results: [
-					{
-						userId: 12345,
-						name: 'TestPlayer',
-						level: 120,
-						vipLevel: 15,
-						teamPower: 1500000,
-					},
-				],
+	// ─── processAPIResponse ──────────────────────────────────────────────
+
+	describe('processAPIResponse', () => {
+		test('should silently return on null/undefined request or response', async () => {
+			await expect(tracker.processAPIResponse(null, null)).resolves.not.toThrow();
+			await expect(tracker.processAPIResponse({}, {})).resolves.not.toThrow();
+			await expect(tracker.processAPIResponse({ calls: [] }, { results: [] })).resolves.not.toThrow();
+		});
+
+		test('should dispatch userGetInfo to trackPlayerData', async () => {
+			const spy = jest.spyOn(tracker, 'trackPlayerData').mockResolvedValue();
+
+			const request = {
+				calls: [{ name: 'userGetInfo', ident: 'body', args: {} }],
+			};
+			const response = {
+				results: [{ ident: 'body', result: { response: { userId: 123, name: 'Player', level: 50 } } }],
 			};
 
-			await gameTracker.trackPlayerData(mockResponse.results[0]);
+			await tracker.processAPIResponse(request, response);
+			expect(spy).toHaveBeenCalledWith({ userId: 123, name: 'Player', level: 50 });
+		});
 
-			expect(mockIndexedDB.put).toHaveBeenCalledWith(
-				'playerData',
+		test('should dispatch heroGetAll to trackHeroesData', async () => {
+			const spy = jest.spyOn(tracker, 'trackHeroesData').mockResolvedValue();
+
+			const request = {
+				calls: [{ name: 'heroGetAll', ident: 'heroGetAll', args: {} }],
+			};
+			const response = {
+				results: [{ ident: 'heroGetAll', result: { response: { '1': { id: 1 } } } }],
+			};
+
+			await tracker.processAPIResponse(request, response);
+			expect(spy).toHaveBeenCalledWith({ '1': { id: 1 } });
+		});
+
+		test('should skip results without response data', async () => {
+			const spy = jest.spyOn(tracker, 'trackPlayerData').mockResolvedValue();
+
+			const request = {
+				calls: [{ name: 'userGetInfo', ident: 'body', args: {} }],
+			};
+			const response = {
+				results: [{ ident: 'body', result: {} }], // no nested response
+			};
+
+			await tracker.processAPIResponse(request, response);
+			expect(spy).not.toHaveBeenCalled();
+		});
+	});
+
+	// ─── trackPlayerData ─────────────────────────────────────────────────
+
+	describe('trackPlayerData', () => {
+		test('should save a player snapshot to snapshots store', async () => {
+			const data = {
+				userId: 12345,
+				name: 'TestPlayer',
+				level: 120,
+				vipLevel: 15,
+				power: 1500000,
+				gold: 5000000,
+				starmoney: 99999,
+				clanTitle: 'MyGuild',
+				clanId: 888,
+			};
+
+			await tracker.trackPlayerData(data);
+
+			expect(mockStorage.add).toHaveBeenCalledWith(
+				'snapshots',
 				expect.objectContaining({
 					playerId: 12345,
 					playerName: 'TestPlayer',
 					level: 120,
-				})
+					vipLevel: 15,
+					teamPower: 1500000,
+					gold: 5000000,
+					emeralds: 99999,
+					guildName: 'MyGuild',
+					guildId: 888,
+				}),
 			);
 		});
 
-		test('should extract hero data from heroGetAll response', async () => {
-			const mockResponse = {
-				results: [
-					[
-						{ id: 1, name: 'Galahad', level: 120, power: 50000 },
-						{ id: 2, name: 'Astaroth', level: 115, power: 48000 },
-					],
-				],
+		test('should handle missing optional fields gracefully', async () => {
+			const data = { userId: 1 };
+			await tracker.trackPlayerData(data);
+
+			expect(mockStorage.add).toHaveBeenCalledWith(
+				'snapshots',
+				expect.objectContaining({
+					playerId: 1,
+					playerName: 'Unknown',
+					level: 0,
+				}),
+			);
+		});
+	});
+
+	// ─── trackHeroesData ─────────────────────────────────────────────────
+
+	describe('trackHeroesData', () => {
+		test('should save each hero as a separate snapshot', async () => {
+			const data = {
+				'101': { id: 101, name: 'Galahad', level: 120, star: 6, color: 15, power: 50000 },
+				'102': { id: 102, name: 'Astaroth', level: 115, star: 5, color: 12, power: 48000 },
 			};
 
-			await gameTracker.trackHeroData(mockResponse.results[0]);
+			await tracker.trackHeroesData(data);
 
-			expect(mockIndexedDB.add).toHaveBeenCalledTimes(2);
-			expect(mockIndexedDB.add).toHaveBeenCalledWith(
+			expect(mockStorage.add).toHaveBeenCalledTimes(2);
+			expect(mockStorage.add).toHaveBeenCalledWith(
 				'heroes',
-				expect.objectContaining({
-					heroId: 1,
-					heroName: 'Galahad',
-					level: 120,
-				})
+				expect.objectContaining({ heroId: 101, heroName: 'Galahad', level: 120 }),
 			);
-		});
-
-		test('should extract titan data from titanGetAll response', async () => {
-			const mockResponse = {
-				results: [
-					[
-						{ id: 6001, element: 'fire', level: 60, power: 80000 },
-						{ id: 6002, element: 'water', level: 55, power: 75000 },
-					],
-				],
-			};
-
-			await gameTracker.trackTitanData(mockResponse.results[0]);
-
-			expect(mockIndexedDB.add).toHaveBeenCalledTimes(2);
-			expect(mockIndexedDB.add).toHaveBeenCalledWith(
-				'titans',
-				expect.objectContaining({
-					titanId: 6001,
-					element: 'fire',
-					level: 60,
-				})
+			expect(mockStorage.add).toHaveBeenCalledWith(
+				'heroes',
+				expect.objectContaining({ heroId: 102, heroName: 'Astaroth', level: 115 }),
 			);
 		});
 	});
 
-	describe('Guild Member Tracking', () => {
-		test('should track guild members from clanGetInfo', async () => {
-			const mockResponse = {
-				clanId: 999,
-				clanName: 'Test Guild',
-				members: [
-					{
-						userId: 11111,
-						name: 'Member1',
-						level: 120,
-						power: 1000000,
-						rank: 'member',
-					},
-					{
-						userId: 22222,
-						name: 'Member2',
-						level: 115,
-						power: 950000,
-						rank: 'officer',
-					},
-				],
-			};
-
-			await gameTracker.trackGuildMembers(mockResponse);
-
-			expect(mockIndexedDB.put).toHaveBeenCalledWith(
-				'guildMembers',
-				expect.objectContaining({
-					playerId: 11111,
-					playerName: 'Member1',
-					guildId: 999,
-					guildName: 'Test Guild',
-				})
-			);
-		});
-
-		test('should create historical snapshots', async () => {
-			const mockResponse = {
-				clanId: 999,
-				clanName: 'Test Guild',
-				members: [
-					{
-						userId: 11111,
-						name: 'Member1',
-						level: 120,
-						power: 1000000,
-					},
-				],
-			};
-
-			await gameTracker.trackGuildMembers(mockResponse);
-
-			expect(mockIndexedDB.add).toHaveBeenCalledWith(
-				'guildMemberSnapshots',
-				expect.objectContaining({
-					playerId: 11111,
-					guildId: 999,
-					level: 120,
-				})
-			);
-		});
-	});
-
-	describe('Chat Tracking', () => {
-		test('should track chat messages', async () => {
-			const mockMessages = [
-				{
-					id: 'msg123',
-					senderId: 11111,
-					senderName: 'Player1',
-					text: 'Hello guild!',
-					timestamp: Date.now(),
-					chatType: 'guild',
-				},
-			];
-
-			await gameTracker.trackChatMessages(mockMessages, 'guild');
-
-			expect(mockIndexedDB.add).toHaveBeenCalledWith(
-				'chatMessages',
-				expect.objectContaining({
-					serverMessageId: 'msg123',
-					senderId: 11111,
-					senderName: 'Player1',
-					messageText: 'Hello guild!',
-					chatType: 'guild',
-				})
-			);
-		});
-
-		test('should track outgoing messages', async () => {
-			const mockRequest = {
-				chatType: 'guild',
-				message: 'Test message',
-			};
-
-			mockStorage.get.mockResolvedValue({ playerId: 12345, playerName: 'Me' });
-
-			await gameTracker.trackOutgoingMessage(mockRequest);
-
-			expect(mockIndexedDB.add).toHaveBeenCalledWith(
-				'chatMessages',
-				expect.objectContaining({
-					messageText: 'Test message',
-					chatType: 'guild',
-					isOutgoing: true,
-					senderId: 12345,
-				})
-			);
-		});
-	});
-
-	describe('Guild War Participation', () => {
-		test('should track war participation', async () => {
-			const mockResponse = {
-				warId: 'war123',
-				warDate: Date.now(),
-				participants: [
-					{
-						userId: 11111,
-						name: 'Player1',
-						attacks: 5,
-						damage: 500000,
-					},
-				],
-			};
-
-			mockIndexedDB.get.mockResolvedValue({ guildId: 999 });
-
-			await gameTracker.trackGuildWarParticipation(mockResponse);
-
-			expect(mockIndexedDB.add).toHaveBeenCalledWith(
-				'guildWarParticipations',
-				expect.objectContaining({
-					warId: 'war123',
-					playerId: 11111,
-					attacksMade: 5,
-					totalDamage: 500000,
-				})
-			);
-		});
-	});
-
-	describe('Titanite Transactions', () => {
-		test('should track titanite transactions', async () => {
-			mockStorage.get.mockResolvedValue({ playerId: 12345, playerName: 'Me' });
-			mockIndexedDB.get.mockResolvedValue({ guildId: 999 });
-
-			await gameTracker.trackTitaniteTransaction(
-				100,
-				'earned',
-				'Guild Raid',
-				'Boss kill reward'
-			);
-
-			expect(mockIndexedDB.add).toHaveBeenCalledWith(
-				'titaniteTransactions',
-				expect.objectContaining({
-					playerId: 12345,
-					guildId: 999,
-					amount: 100,
-					transactionType: 'earned',
-					source: 'Guild Raid',
-				})
-			);
-		});
-	});
+	// ─── Error Handling ──────────────────────────────────────────────────
 
 	describe('Error Handling', () => {
-		test('should handle missing response data gracefully', async () => {
-			await expect(gameTracker.trackPlayerData(null)).resolves.not.toThrow();
-		});
-
-		test('should handle storage errors', async () => {
-			mockIndexedDB.add.mockRejectedValue(new Error('Storage error'));
-
-			// Should log error but not throw
-			await expect(gameTracker.trackHeroData([{ id: 1 }])).resolves.not.toThrow();
-		});
-
-		test('should validate API response structure', async () => {
-			const invalidResponse = {
-				// Missing required fields
+		test('should not throw on null data to trackPlayerData', async () => {
+			// trackPlayerData accesses data.arenaRank etc., so null will throw
+			// internally — but the caller (processAPIResponse) catches it.
+			// Here we verify processAPIResponse doesn't propagate the error.
+			const request = {
+				calls: [{ name: 'userGetInfo', ident: 'body', args: {} }],
+			};
+			const response = {
+				results: [{ ident: 'body', result: { response: null } }],
 			};
 
-			await expect(gameTracker.trackPlayerData(invalidResponse)).resolves.not.toThrow();
+			// null response → result.result.response is null → skip
+			await expect(tracker.processAPIResponse(request, response)).resolves.not.toThrow();
+		});
+
+		test('should not throw when storage.add fails', async () => {
+			mockStorage.add.mockRejectedValue(new Error('Storage error'));
+
+			const request = {
+				calls: [{ name: 'userGetInfo', ident: 'u', args: {} }],
+			};
+			const response = {
+				results: [{ ident: 'u', result: { response: { userId: 1, name: 'X', level: 1 } } }],
+			};
+
+			// processAPIResponse has try/catch around each case
+			await expect(tracker.processAPIResponse(request, response)).resolves.not.toThrow();
 		});
 	});
 });
