@@ -374,24 +374,71 @@ class UIManager {
 	// =====================================================================
 
 	/**
-	 * Dashboard — overview with counts from IndexedDB.
+	 * Dashboard — player overview, store counts, status, and quick tips.
+	 * Pulls live data from IndexedDB metadata + store counts.
 	 * @returns {Promise<string>} HTML content
 	 */
 	async renderDashboard() {
-		// Gather counts from IndexedDB (safe — returns 0 on error)
+		// Player data from metadata (cached by trackPlayerData)
+		let playerData = {};
+		try {
+			playerData = (await this.idbStorage.getMetadata('playerData', null)) || {};
+		} catch { /* empty */ }
+
+		// Also try the latest snapshot for richer fields
+		let latestSnapshot = null;
+		try {
+			const snaps = await this.idbStorage.getAll('snapshots', 1);
+			if (snaps.length > 0) {
+				// getAll returns oldest-first; grab last
+				latestSnapshot = snaps[snaps.length - 1];
+			}
+		} catch { /* empty */ }
+
+		// Merge snapshot fields into playerData for display
+		const player = latestSnapshot || playerData || {};
+		const playerName = player.playerName || player.name || null;
+		const playerLevel = player.level || 0;
+		const playerGuild = player.guildName || player.clanTitle || null;
+
+		// Gather counts from actual IndexedDB stores
 		const snapshotCount = await this._countStore('snapshots');
 		const heroCount = await this._countStore('heroes');
-		const battleCount = (await this._countStore('arenaBattles'))
-			+ (await this._countStore('grandArenaBattles'))
-			+ (await this._countStore('titanArenaBattles'));
-		const chestCount = await this._countStore('chestOpenings');
+		const battleCount = await this._countStore('battles');
+		const chestCount = await this._countStore('chests');
 		const apiLogCount = await this._countStore('apiLogs');
+		const resourceTxCount = await this._countStore('resourceTransactions');
+		const questCount = await this._countStore('questCompletions');
 
 		const goals = this._safeCall(() => this.goalsManager.getActiveGoals(), { shortTerm: [], longTerm: [] });
 		const goalCount = goals.shortTerm.length + goals.longTerm.length;
 
+		// Error count from tracker
+		const errorCount = this.gameTracker?.errorCount || 0;
+
+		// Last snapshot time
+		const lastSnapshotTime = player.timestamp
+			? new Date(player.timestamp).toLocaleString()
+			: 'None yet';
+
+		// Player info section
+		const playerSection = playerName
+			? `<div class="oj-section">
+					<h3>\uD83D\uDC64 Player</h3>
+					<div class="oj-status-list">
+						<div class="oj-status-row"><span>Name</span><span><strong>${this._escapeHtml(playerName)}</strong></span></div>
+						<div class="oj-status-row"><span>Level</span><span>${playerLevel}</span></div>
+						${playerGuild ? `<div class="oj-status-row"><span>Guild</span><span>${this._escapeHtml(playerGuild)}</span></div>` : ''}
+						${player.gold ? `<div class="oj-status-row"><span>\uD83E\uDE99 Gold</span><span>${Number(player.gold).toLocaleString()}</span></div>` : ''}
+						${player.emeralds || player.starmoney ? `<div class="oj-status-row"><span>\uD83D\uDC8E Emeralds</span><span>${Number(player.emeralds || player.starmoney).toLocaleString()}</span></div>` : ''}
+					</div>
+				</div>`
+			: '';
+
 		return `
 			<div class="oj-dashboard">
+				${playerSection}
+
 				<div class="oj-section">
 					<h3>\uD83D\uDCCA Tracked Data</h3>
 					<div class="oj-stats-grid">
@@ -399,8 +446,10 @@ class UIManager {
 						${this._statCard(heroCount, 'Hero Records', '#81c784')}
 						${this._statCard(battleCount, 'Battles', '#ffb74d')}
 						${this._statCard(chestCount, 'Chests', '#ce93d8')}
+						${this._statCard(resourceTxCount, 'Transactions', '#ef9a9a')}
+						${this._statCard(questCount, 'Quests', '#fff176')}
 						${this._statCard(apiLogCount, 'API Logs', '#90a4ae')}
-						${this._statCard(goalCount, 'Active Goals', '#fff176')}
+						${this._statCard(goalCount, 'Goals', '#a5d6a7')}
 					</div>
 				</div>
 
@@ -413,11 +462,16 @@ class UIManager {
 						</div>
 						<div class="oj-status-row">
 							<span>API Interception</span>
-							<span class="oj-status-ok">Active</span>
+							<span class="${this.gameTracker?.isTracking ? 'oj-status-ok' : 'oj-status-err'}">${this.gameTracker?.isTracking ? 'Active' : 'Inactive'}</span>
 						</div>
 						<div class="oj-status-row">
+							<span>Last Snapshot</span>
+							<span class="oj-mono">${lastSnapshotTime}</span>
+						</div>
+						${errorCount > 0 ? `<div class="oj-status-row"><span>Errors</span><span class="oj-status-err">${errorCount}</span></div>` : ''}
+						<div class="oj-status-row">
 							<span>Version</span>
-							<span>3.0.0</span>
+							<span>3.1.0</span>
 						</div>
 					</div>
 				</div>
@@ -487,15 +541,43 @@ class UIManager {
 	}
 
 	/**
-	 * Heroes — display hero snapshot data from IndexedDB.
+	 * Heroes — display current hero roster from metadata cache.
+	 * Falls back to the `heroes` IDB store if metadata is empty.
+	 *
+	 * Hero Wars color/rank names for readability:
+	 *  0=Gray, 1=Green, 2=Green+1, 3=Blue, 4=Blue+1, 5=Blue+2,
+	 *  6=Violet, 7=Violet+1, 8=Violet+2, 9=Violet+3,
+	 *  10=Orange, 11=Orange+1, 12=Orange+2, 13=Orange+3, 14=Orange+4,
+	 *  15=Red, 16=Red+1, 17=Red+2
+	 *
 	 * @returns {Promise<string>} HTML content
 	 */
 	async renderHeroes() {
+		// Prefer the metadata cache (latest roster, one row per hero)
 		let heroes = [];
 		try {
-			heroes = await this.idbStorage.getAll('heroes', 100);
-		} catch {
-			// No data yet
+			const cached = await this.idbStorage.getMetadata('heroesData', null);
+			if (Array.isArray(cached) && cached.length > 0) {
+				heroes = cached;
+			}
+		} catch { /* empty */ }
+
+		// Fallback: read from the heroes IDB store and deduplicate by heroId
+		if (heroes.length === 0) {
+			try {
+				const all = await this.idbStorage.getAll('heroes', 5000);
+				if (all.length > 0) {
+					// Keep only the latest record per heroId
+					const byId = {};
+					for (const h of all) {
+						const key = h.heroId || h.id;
+						if (!byId[key] || (h.timestamp || '') > (byId[key].timestamp || '')) {
+							byId[key] = h;
+						}
+					}
+					heroes = Object.values(byId);
+				}
+			} catch { /* empty */ }
 		}
 
 		if (heroes.length === 0) {
@@ -510,22 +592,30 @@ class UIManager {
 		// Sort by power descending
 		heroes.sort((a, b) => (b.power || 0) - (a.power || 0));
 
-		const rows = heroes.map((h) => `
-			<tr>
-				<td><strong>${this._escapeHtml(h.name || 'Hero #' + (h.heroId || h.id))}</strong></td>
-				<td>${h.level || '\u2014'}</td>
-				<td>${h.stars || '\u2014'}\u2605</td>
-				<td>${h.color || '\u2014'}</td>
-				<td class="oj-num">${h.power ? h.power.toLocaleString() : '\u2014'}</td>
-			</tr>
-		`).join('');
+		// Total team power
+		const totalPower = heroes.reduce((s, h) => s + (h.power || 0), 0);
+
+		const rows = heroes.map((h) => {
+			const name = this._escapeHtml(h.heroName || h.name || `Hero #${h.heroId || h.id}`);
+			const colorName = this._colorRankName(h.color);
+			const colorClass = this._colorRankClass(h.color);
+			return `
+				<tr>
+					<td><strong>${name}</strong></td>
+					<td>${h.level || '\u2014'}</td>
+					<td>${'\u2B50'.repeat(Math.min(h.stars || 0, 6)) || '\u2014'}</td>
+					<td><span class="${colorClass}">${colorName}</span></td>
+					<td class="oj-num">${h.power ? h.power.toLocaleString() : '\u2014'}</td>
+				</tr>
+			`;
+		}).join('');
 
 		return `
 			<div class="oj-heroes">
-				<h3>\uD83E\uDDB8 Heroes <span class="oj-muted">(${heroes.length})</span></h3>
+				<h3>\uD83E\uDDB8 Heroes <span class="oj-muted">(${heroes.length} \u2022 ${totalPower.toLocaleString()} total power)</span></h3>
 				<table class="oj-table">
 					<thead>
-						<tr><th>Name</th><th>Level</th><th>Stars</th><th>Color</th><th>Power</th></tr>
+						<tr><th>Name</th><th>Lvl</th><th>Stars</th><th>Rank</th><th>Power</th></tr>
 					</thead>
 					<tbody>${rows}</tbody>
 				</table>
@@ -534,29 +624,23 @@ class UIManager {
 	}
 
 	/**
-	 * Battles — display arena battle history from IndexedDB.
+	 * Battles — display battle history from the unified `battles` IDB store.
+	 * All battle types (Arena, GrandArena, TitanArena, GuildWar) are stored in
+	 * a single store with a `battleType` field and `isWin` boolean.
 	 * @returns {Promise<string>} HTML content
 	 */
 	async renderBattles() {
-		let arenaData = [];
-		let grandData = [];
-		let titanData = [];
+		let allBattles = [];
 		try {
-			arenaData = await this.idbStorage.getAll('arenaBattles', 30);
-			grandData = await this.idbStorage.getAll('grandArenaBattles', 30);
-			titanData = await this.idbStorage.getAll('titanArenaBattles', 30);
-		} catch {
-			// No data yet
-		}
-
-		const allBattles = [
-			...arenaData.map((b) => ({ ...b, type: 'Arena' })),
-			...grandData.map((b) => ({ ...b, type: 'Grand Arena' })),
-			...titanData.map((b) => ({ ...b, type: 'Titan Arena' })),
-		];
+			allBattles = await this.idbStorage.getAll('battles', 200);
+		} catch { /* empty */ }
 
 		// Sort newest first
-		allBattles.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+		allBattles.sort((a, b) => {
+			const ta = a.timestamp ? new Date(a.timestamp).getTime() : 0;
+			const tb = b.timestamp ? new Date(b.timestamp).getTime() : 0;
+			return tb - ta;
+		});
 
 		if (allBattles.length === 0) {
 			return `
@@ -567,20 +651,51 @@ class UIManager {
 			`;
 		}
 
-		const wins = allBattles.filter((b) => b.result === 'victory' || b.won === true).length;
+		// Overall stats
+		const wins = allBattles.filter((b) => b.isWin === true).length;
 		const losses = allBattles.length - wins;
-		const winRate = allBattles.length > 0 ? ((wins / allBattles.length) * 100).toFixed(1) : '0.0';
+		const winRate = ((wins / allBattles.length) * 100).toFixed(1);
 
-		const rows = allBattles.slice(0, 30).map((b) => {
+		// Per-type breakdown
+		const types = ['Arena', 'GrandArena', 'TitanArena', 'GuildWar'];
+		const typeLabels = { Arena: 'Arena', GrandArena: 'Grand Arena', TitanArena: 'Titan Arena', GuildWar: 'Guild War' };
+		const typeIcons = { Arena: '\uD83C\uDFC6', GrandArena: '\uD83C\uDFDF\uFE0F', TitanArena: '\uD83D\uDCA0', GuildWar: '\u2694\uFE0F' };
+		const byType = {};
+		for (const t of types) {
+			const group = allBattles.filter((b) => b.battleType === t);
+			if (group.length > 0) {
+				const w = group.filter((b) => b.isWin === true).length;
+				byType[t] = { battles: group, wins: w, losses: group.length - w };
+			}
+		}
+		// Catch any unlabelled battles
+		const knownTypes = new Set(types);
+		const otherBattles = allBattles.filter((b) => !knownTypes.has(b.battleType));
+		if (otherBattles.length > 0) {
+			const w = otherBattles.filter((b) => b.isWin === true).length;
+			byType['Other'] = { battles: otherBattles, wins: w, losses: otherBattles.length - w };
+		}
+
+		// Type summary pills
+		const pills = Object.entries(byType).map(([t, d]) => {
+			const label = typeLabels[t] || t;
+			const icon = typeIcons[t] || '\u2753';
+			const wr = ((d.wins / d.battles.length) * 100).toFixed(0);
+			return `<span class="oj-pill" title="${label}: ${d.wins}W / ${d.losses}L">${icon} ${label} ${d.battles.length} (${wr}%)</span>`;
+		}).join(' ');
+
+		// Recent battles table (last 40)
+		const rows = allBattles.slice(0, 40).map((b) => {
 			const time = b.timestamp ? new Date(b.timestamp).toLocaleString() : '\u2014';
-			const result = (b.result === 'victory' || b.won === true)
+			const result = b.isWin === true
 				? '<span class="oj-win">WIN</span>'
 				: '<span class="oj-loss">LOSS</span>';
-			const opponent = b.opponentName || b.defenderId || '\u2014';
+			const opponent = b.opponentName || b.defenderId || b.opponentId || '\u2014';
+			const type = typeLabels[b.battleType] || b.battleType || '\u2014';
 			return `
 				<tr>
 					<td class="oj-mono">${time}</td>
-					<td>${b.type}</td>
+					<td>${type}</td>
 					<td>${this._escapeHtml(String(opponent))}</td>
 					<td>${result}</td>
 				</tr>
@@ -595,6 +710,7 @@ class UIManager {
 					${this._statCard(losses, 'Losses', '#f44336')}
 					${this._statCard(winRate + '%', 'Win Rate', '#2196F3')}
 				</div>
+				<div class="oj-pills">${pills}</div>
 				<table class="oj-table">
 					<thead>
 						<tr><th>Time</th><th>Type</th><th>Opponent</th><th>Result</th></tr>
@@ -606,18 +722,41 @@ class UIManager {
 	}
 
 	/**
-	 * Resources — display latest snapshot resource data.
+	 * Resources — display player resources from metadata cache and recent
+	 * resource transaction history from the `resourceTransactions` IDB store.
 	 * @returns {Promise<string>} HTML content
 	 */
 	async renderResources() {
-		let snapshots = [];
+		// Get current player data from metadata (set by trackPlayerData)
+		let playerData = null;
 		try {
-			snapshots = await this.idbStorage.getAll('snapshots', 1);
-		} catch {
-			// No data yet
+			playerData = await this.idbStorage.getMetadata('playerData', null);
+		} catch { /* empty */ }
+
+		// Also try the latest snapshot as fallback
+		let snap = null;
+		if (!playerData) {
+			try {
+				const snapshots = await this.idbStorage.getAll('snapshots', 10);
+				if (snapshots.length > 0) {
+					snap = snapshots[snapshots.length - 1];
+				}
+			} catch { /* empty */ }
 		}
 
-		if (snapshots.length === 0) {
+		// Get recent resource transactions
+		let transactions = [];
+		try {
+			transactions = await this.idbStorage.getAll('resourceTransactions', 100);
+			transactions.sort((a, b) => {
+				const ta = a.timestamp ? new Date(a.timestamp).getTime() : 0;
+				const tb = b.timestamp ? new Date(b.timestamp).getTime() : 0;
+				return tb - ta;
+			});
+		} catch { /* empty */ }
+
+		const src = playerData || snap;
+		if (!src && transactions.length === 0) {
 			return `
 				<div class="oj-resources">
 					<h3>\uD83D\uDC8E Resources</h3>
@@ -626,32 +765,70 @@ class UIManager {
 			`;
 		}
 
-		// Use the most recent snapshot
-		const snap = snapshots[snapshots.length - 1];
-		const ts = snap.timestamp ? new Date(snap.timestamp).toLocaleString() : 'Unknown';
+		// Current resources section
+		let cardsHtml = '';
+		if (src) {
+			const ts = src.timestamp ? new Date(src.timestamp).toLocaleString() : 'Unknown';
+			const resources = [
+				{ label: 'Gold', value: src.gold, icon: '\uD83E\uDE99' },
+				{ label: 'Emeralds', value: src.starmoney || src.emeralds, icon: '\uD83D\uDC8E' },
+				{ label: 'Energy', value: src.stamina || src.energy, icon: '\u26A1' },
+				{ label: 'Level', value: src.level, icon: '\uD83D\uDCC8' },
+				{ label: 'VIP Level', value: src.vipLevel || src.vip, icon: '\uD83D\uDC51' },
+				{ label: 'Arena Coins', value: src.arenaCoins, icon: '\uD83C\uDFC6' },
+				{ label: 'Tower Coins', value: src.towerCoins, icon: '\uD83C\uDFF0' },
+				{ label: 'Friendship Pts', value: src.friendshipPoints || src.friendship, icon: '\uD83E\uDD1D' },
+			].filter((r) => r.value !== undefined && r.value !== null);
 
-		// Extract resource fields (common Hero Wars player data fields)
-		const resources = [
-			{ label: 'Gold', value: snap.gold, icon: '\uD83E\uDE99' },
-			{ label: 'Emeralds', value: snap.starmoney || snap.emeralds, icon: '\uD83D\uDC8E' },
-			{ label: 'Energy', value: snap.stamina || snap.energy, icon: '\u26A1' },
-			{ label: 'Level', value: snap.level, icon: '\uD83D\uDCC8' },
-			{ label: 'VIP Level', value: snap.vipLevel || snap.vip, icon: '\uD83D\uDC51' },
-			{ label: 'Team Level', value: snap.teamLevel, icon: '\uD83C\uDFC6' },
-		].filter((r) => r.value !== undefined && r.value !== null);
+			const cards = resources.map((r) => `
+				<div class="oj-resource-card">
+					<div class="oj-resource-icon">${r.icon}</div>
+					<div class="oj-resource-amount">${typeof r.value === 'number' ? r.value.toLocaleString() : r.value}</div>
+					<div class="oj-resource-label">${r.label}</div>
+				</div>
+			`).join('');
 
-		const cards = resources.map((r) => `
-			<div class="oj-resource-card">
-				<div class="oj-resource-icon">${r.icon}</div>
-				<div class="oj-resource-amount">${typeof r.value === 'number' ? r.value.toLocaleString() : r.value}</div>
-				<div class="oj-resource-label">${r.label}</div>
-			</div>
-		`).join('');
+			cardsHtml = cards
+				? `<h4 class="oj-section-sub">Current Resources <span class="oj-muted">(as of ${ts})</span></h4>
+				   <div class="oj-stats-grid">${cards}</div>`
+				: '';
+		}
+
+		// Recent transactions section
+		let txHtml = '';
+		if (transactions.length > 0) {
+			const txRows = transactions.slice(0, 30).map((tx) => {
+				const time = tx.timestamp ? new Date(tx.timestamp).toLocaleString() : '\u2014';
+				const amount = tx.amount || 0;
+				const sign = amount >= 0 ? '+' : '';
+				const amtClass = amount >= 0 ? 'oj-positive' : 'oj-negative';
+				const type = this._escapeHtml(tx.resourceType || tx.type || '\u2014');
+				const source = this._escapeHtml(tx.source || tx.reason || '\u2014');
+				return `
+					<tr>
+						<td class="oj-mono">${time}</td>
+						<td>${type}</td>
+						<td class="${amtClass} oj-num">${sign}${amount.toLocaleString()}</td>
+						<td>${source}</td>
+					</tr>
+				`;
+			}).join('');
+
+			txHtml = `
+				<h4 class="oj-section-sub">Recent Transactions <span class="oj-muted">(${transactions.length})</span></h4>
+				<table class="oj-table">
+					<thead><tr><th>Time</th><th>Resource</th><th>Amount</th><th>Source</th></tr></thead>
+					<tbody>${txRows}</tbody>
+				</table>
+			`;
+		}
 
 		return `
 			<div class="oj-resources">
-				<h3>\uD83D\uDC8E Resources <span class="oj-muted">(as of ${ts})</span></h3>
-				${cards ? '<div class="oj-stats-grid">' + cards + '</div>' : '<p class="oj-empty">Snapshot exists but contains no recognizable resource fields.</p>'}
+				<h3>\uD83D\uDC8E Resources</h3>
+				${cardsHtml}
+				${txHtml}
+				${!cardsHtml && !txHtml ? '<p class="oj-empty">No recognizable resource data found.</p>' : ''}
 			</div>
 		`;
 	}
@@ -695,7 +872,7 @@ class UIManager {
 
 				<div class="oj-settings-group">
 					<h4>About</h4>
-					<p>OrganizedJihad \u2014 Hero Wars Tracker v3.0.0</p>
+					<p>OrganizedJihad \u2014 Hero Wars Tracker v3.1.0</p>
 					<p class="oj-muted">Tracks gameplay data locally via IndexedDB. Optional C# API sync.</p>
 				</div>
 			</div>
@@ -867,6 +1044,42 @@ class UIManager {
 		const div = document.createElement('div');
 		div.textContent = str;
 		return div.innerHTML;
+	}
+
+	/**
+	 * Map Hero Wars numeric color/rank to a human-readable name.
+	 *
+	 * @param {number|string} color - Numeric color rank (0-17+)
+	 * @returns {string} Rank name
+	 */
+	_colorRankName(color) {
+		/** @type {Record<number, string>} */
+		const names = {
+			0: 'Gray', 1: 'Green', 2: 'Green+1',
+			3: 'Blue', 4: 'Blue+1', 5: 'Blue+2',
+			6: 'Violet', 7: 'Violet+1', 8: 'Violet+2', 9: 'Violet+3',
+			10: 'Orange', 11: 'Orange+1', 12: 'Orange+2', 13: 'Orange+3', 14: 'Orange+4',
+			15: 'Red', 16: 'Red+1', 17: 'Red+2',
+		};
+		const num = typeof color === 'string' ? parseInt(color, 10) : color;
+		return names[num] ?? (color != null ? `Rank ${color}` : '\u2014');
+	}
+
+	/**
+	 * Return a CSS class for a Hero Wars color rank (for styling).
+	 *
+	 * @param {number|string} color - Numeric color rank
+	 * @returns {string} CSS class name
+	 */
+	_colorRankClass(color) {
+		const num = typeof color === 'string' ? parseInt(color, 10) : color;
+		if (num == null || isNaN(num)) return 'oj-rank-gray';
+		if (num <= 0) return 'oj-rank-gray';
+		if (num <= 2) return 'oj-rank-green';
+		if (num <= 5) return 'oj-rank-blue';
+		if (num <= 9) return 'oj-rank-violet';
+		if (num <= 14) return 'oj-rank-orange';
+		return 'oj-rank-red';
 	}
 }
 

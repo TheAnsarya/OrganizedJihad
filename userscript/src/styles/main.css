@@ -442,6 +442,55 @@
 	font-size: 12px;
 }
 
+/* ── Battle Type Pills ──────────────────────────────────────────────── */
+
+.oj-pills {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 6px;
+	margin: 8px 0 12px;
+}
+
+.oj-pill {
+	display: inline-block;
+	padding: 3px 10px;
+	background: rgba(255, 255, 255, 0.08);
+	border: 1px solid rgba(255, 255, 255, 0.15);
+	border-radius: 12px;
+	font-size: 11px;
+	color: #ccc;
+	white-space: nowrap;
+}
+
+/* ── Hero Color Rank Classes ─────────────────────────────────────── */
+
+.oj-rank-gray   { color: #9e9e9e; }
+.oj-rank-green  { color: #4caf50; font-weight: bold; }
+.oj-rank-blue   { color: #42a5f5; font-weight: bold; }
+.oj-rank-violet { color: #ab47bc; font-weight: bold; }
+.oj-rank-orange { color: #ff9800; font-weight: bold; }
+.oj-rank-red    { color: #ef5350; font-weight: bold; }
+
+/* ── Resource Transactions ───────────────────────────────────────── */
+
+.oj-positive { color: #4caf50; }
+.oj-negative { color: #ef5350; }
+
+.oj-section-sub {
+	font-size: 13px;
+	margin: 14px 0 6px;
+	color: #b0bec5;
+	border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+	padding-bottom: 4px;
+}
+
+/* ── Numeric Column ──────────────────────────────────────────────── */
+
+.oj-num {
+	text-align: right;
+	font-variant-numeric: tabular-nums;
+}
+
 /* ── Responsive ──────────────────────────────────────────────────────── */
 
 @media (max-width: 768px) {
