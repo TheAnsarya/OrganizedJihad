@@ -46,7 +46,7 @@ describe('IndexedDBStorage', () => {
 		test('should initialize database successfully', async () => {
 			expect(storage.db).toBeDefined();
 			expect(storage.db.name).toBe('OrganizedJihad');
-			expect(storage.db.version).toBe(6);
+			expect(storage.db.version).toBe(7);
 		});
 
 		test('should create core object stores', async () => {
@@ -101,6 +101,11 @@ describe('IndexedDBStorage', () => {
 			expect(names).toContain('loginRewards');
 			expect(names).toContain('inventoryItemUsages');
 			expect(names).toContain('equipmentChanges');
+		});
+
+		test('should create Phase 9 activityEvents store', async () => {
+			const names = Array.from(storage.db.objectStoreNames);
+			expect(names).toContain('activityEvents');
 		});
 
 		test('init() should be idempotent (calling multiple times returns same db)', async () => {

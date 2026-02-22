@@ -33,12 +33,15 @@
  * - loginRewards: Daily login reward claims
  * - inventoryItemUsages: Consumable item usage events
  * - equipmentChanges: Hero equipment slot modifications
+ *
+ * NEW in v4 (Phase 9 - Live Activity Feed):
+ * - activityEvents: Color-coded live event log (capped at 500 entries)
  */
 
 class IndexedDBStorage {
 	constructor() {
 		this.dbName = 'OrganizedJihad';
-		this.version = 6; // Incremented for new stores: heroUpgrades, titanUpgrades, dailyQuestCompletions, guildQuestCompletions, loginRewards, inventoryItemUsages, equipmentChanges
+		this.version = 7; // v7: Added activityEvents store for live activity feed
 		this.db = null;
 		/** @type {Promise<IDBDatabase>} Resolves once the DB is open and upgraded. */
 		this.initPromise = this._openDatabase();
@@ -364,6 +367,17 @@ class IndexedDBStorage {
 					equipChangeStore.createIndex('heroId', 'heroId', { unique: false });
 					equipChangeStore.createIndex('playerId', 'playerId', { unique: false });
 					equipChangeStore.createIndex('changeType', 'changeType', { unique: false }); // 'equipped', 'upgraded', 'consumed'
+				}
+
+				// === Phase 9: Live Activity Feed ===
+
+				// Activity Events: Color-coded live event log, capped at 500 entries.
+				// Each event has a type (battle, resource, hero, chest, info, error),
+				// a human-readable message, and a timestamp.
+				if (!db.objectStoreNames.contains('activityEvents')) {
+					const activityStore = db.createObjectStore('activityEvents', { keyPath: 'id', autoIncrement: true });
+					activityStore.createIndex('timestamp', 'timestamp', { unique: false });
+					activityStore.createIndex('eventType', 'eventType', { unique: false });
 				}
 			};
 		});

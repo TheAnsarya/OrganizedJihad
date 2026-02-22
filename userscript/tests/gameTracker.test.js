@@ -172,7 +172,8 @@ describe('GameTracker', () => {
 
 			await tracker.trackHeroesData(data);
 
-			expect(mockStorage.add).toHaveBeenCalledTimes(2);
+			// 2 heroes + 1 activity event = 3 add calls
+			expect(mockStorage.add).toHaveBeenCalledTimes(3);
 			expect(mockStorage.add).toHaveBeenCalledWith(
 				'heroes',
 				expect.objectContaining({ heroId: 101, heroName: 'Galahad', level: 120 }),
@@ -272,8 +273,8 @@ describe('GameTracker', () => {
 			await tracker.trackPlayerData(data);
 			await tracker.trackPlayerData(data);
 
-			// add should only be called once (second call is deduped)
-			expect(mockStorage.add).toHaveBeenCalledTimes(1);
+			// add called once for snapshot + once for activity event (second call is deduped)
+			expect(mockStorage.add).toHaveBeenCalledTimes(2);
 		});
 
 		test('should write player snapshot when key fields change', async () => {
@@ -283,7 +284,8 @@ describe('GameTracker', () => {
 			await tracker.trackPlayerData(data1);
 			await tracker.trackPlayerData(data2);
 
-			expect(mockStorage.add).toHaveBeenCalledTimes(2);
+			// 2 snapshots + 2 activity events = 4 add calls
+			expect(mockStorage.add).toHaveBeenCalledTimes(4);
 		});
 
 		test('should skip duplicate hero snapshots', async () => {
@@ -295,8 +297,8 @@ describe('GameTracker', () => {
 			await tracker.trackHeroesData(data);
 			await tracker.trackHeroesData(data);
 
-			// 2 heroes stored on first call, 0 on second (deduped)
-			expect(mockStorage.add).toHaveBeenCalledTimes(2);
+			// 2 heroes + 1 activity on first call, 0 on second (deduped) = 3
+			expect(mockStorage.add).toHaveBeenCalledTimes(3);
 		});
 
 		test('should write hero snapshots when power changes', async () => {
@@ -310,8 +312,8 @@ describe('GameTracker', () => {
 			await tracker.trackHeroesData(data1);
 			await tracker.trackHeroesData(data2);
 
-			// 1 hero on each call
-			expect(mockStorage.add).toHaveBeenCalledTimes(2);
+			// 1 hero + 1 activity on each call = 4
+			expect(mockStorage.add).toHaveBeenCalledTimes(4);
 		});
 
 		test('should produce deterministic fingerprints', () => {

@@ -38,6 +38,7 @@ class UIManager {
 
 	/**
 	 * Initialize the overlay: create DOM, attach events, restore state.
+	 * Subscribes to live activity events from GameTracker.
 	 */
 	init() {
 		this.createOverlay();
@@ -54,6 +55,16 @@ class UIManager {
 				this.toggle();
 			}
 		});
+
+		// Subscribe to live activity events for real-time feed updates.
+		// When the Activity tab is visible, re-render it on each new event.
+		if (this.gameTracker && typeof this.gameTracker.on === 'function') {
+			this.gameTracker.on('activity', () => {
+				if (this.isVisible && this.currentView === 'activity') {
+					this.renderView('activity');
+				}
+			});
+		}
 	}
 
 	// =====================================================================
@@ -490,52 +501,88 @@ class UIManager {
 	}
 
 	/**
-	 * Activity feed — recent API log entries from IndexedDB.
+	 * Activity feed — live, color-coded event log from the `activityEvents`
+	 * IDB store. Falls back to `apiLogs` if no activity events exist yet.
+	 *
+	 * Color scheme:
+	 *   green  = win / reward / gain
+	 *   red    = loss / error
+	 *   blue   = info / snapshot
+	 *   gold   = upgrade / hero
+	 *   purple = chest
+	 *
 	 * @returns {Promise<string>} HTML content
 	 */
 	async renderActivity() {
-		let logs = [];
+		// Try activityEvents first (richer, color-coded)
+		let events = [];
 		try {
-			logs = await this.idbStorage.getAll('apiLogs', 50);
-			// Sort newest first
-			logs.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
-		} catch {
-			// No logs yet
-		}
+			events = await this.idbStorage.getAll('activityEvents', 200);
+			events.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+		} catch { /* store may not exist yet on older DBs */ }
 
-		if (logs.length === 0) {
+		// Fallback: show raw API logs if no activity events
+		if (events.length === 0) {
+			let logs = [];
+			try {
+				logs = await this.idbStorage.getAll('apiLogs', 50);
+				logs.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+			} catch { /* empty */ }
+
+			if (logs.length === 0) {
+				return `
+					<div class="oj-activity">
+						<h3>\uD83D\uDCE1 Live Activity Feed</h3>
+						<p class="oj-empty">No activity captured yet. Navigate around in the game to generate events.</p>
+					</div>
+				`;
+			}
+
+			// Render fallback API log table
+			const rows = logs.map((log) => {
+				const time = log.timestamp ? new Date(log.timestamp).toLocaleTimeString() : '\u2014';
+				const name = log.name || log.endpoint || 'unknown';
+				const status = log.success !== false
+					? '<span class="oj-status-ok">OK</span>'
+					: '<span class="oj-status-err">ERR</span>';
+				return `
+					<tr>
+						<td class="oj-mono">${time}</td>
+						<td>${this._escapeHtml(name)}</td>
+						<td>${status}</td>
+					</tr>
+				`;
+			}).join('');
+
 			return `
 				<div class="oj-activity">
-					<h3>\uD83D\uDCE1 Live Activity Feed</h3>
-					<p class="oj-empty">No API calls captured yet. Navigate around in the game to generate activity.</p>
+					<h3>\uD83D\uDCE1 API Logs <span class="oj-muted">(${logs.length})</span></h3>
+					<table class="oj-table">
+						<thead><tr><th>Time</th><th>API Call</th><th>Status</th></tr></thead>
+						<tbody>${rows}</tbody>
+					</table>
 				</div>
 			`;
 		}
 
-		const rows = logs.map((log) => {
-			const time = log.timestamp ? new Date(log.timestamp).toLocaleTimeString() : '\u2014';
-			const name = log.name || log.endpoint || 'unknown';
-			const status = log.success !== false
-				? '<span class="oj-status-ok">OK</span>'
-				: '<span class="oj-status-err">ERR</span>';
+		// Render color-coded activity events
+		const rows = events.slice(0, 100).map((evt) => {
+			const time = evt.timestamp ? new Date(evt.timestamp).toLocaleTimeString() : '\u2014';
+			const colorClass = this._activityColorClass(evt);
+			const icon = this._activityIcon(evt);
 			return `
-				<tr>
-					<td class="oj-mono">${time}</td>
-					<td>${this._escapeHtml(name)}</td>
-					<td>${status}</td>
-				</tr>
+				<div class="oj-activity-row ${colorClass}">
+					<span class="oj-activity-time oj-mono">${time}</span>
+					<span class="oj-activity-icon">${icon}</span>
+					<span class="oj-activity-msg">${this._escapeHtml(evt.message || '')}</span>
+				</div>
 			`;
 		}).join('');
 
 		return `
 			<div class="oj-activity">
-				<h3>\uD83D\uDCE1 Live Activity Feed <span class="oj-muted">(last ${logs.length})</span></h3>
-				<table class="oj-table">
-					<thead>
-						<tr><th>Time</th><th>API Call</th><th>Status</th></tr>
-					</thead>
-					<tbody>${rows}</tbody>
-				</table>
+				<h3>\uD83D\uDCE1 Live Activity Feed <span class="oj-muted">(${events.length} events)</span></h3>
+				<div class="oj-activity-list">${rows}</div>
 			</div>
 		`;
 	}
@@ -1080,6 +1127,41 @@ class UIManager {
 		if (num <= 9) return 'oj-rank-violet';
 		if (num <= 14) return 'oj-rank-orange';
 		return 'oj-rank-red';
+	}
+
+	/**
+	 * Return a CSS class for an activity event row based on event type and data.
+	 *
+	 * @param {object} evt - Activity event object
+	 * @returns {string} CSS class name
+	 */
+	_activityColorClass(evt) {
+		const type = evt.eventType || '';
+		if (type === 'error') return 'oj-event-red';
+		if (type === 'battle') return evt.isWin ? 'oj-event-green' : 'oj-event-red';
+		if (type === 'resource') return 'oj-event-green';
+		if (type === 'hero' || type === 'upgrade') return 'oj-event-gold';
+		if (type === 'chest') return 'oj-event-purple';
+		return 'oj-event-blue'; // info, default
+	}
+
+	/**
+	 * Return an emoji icon for an activity event type.
+	 *
+	 * @param {object} evt - Activity event object
+	 * @returns {string} Emoji
+	 */
+	_activityIcon(evt) {
+		const icons = {
+			battle: '\u2694\uFE0F',
+			resource: '\uD83D\uDCB0',
+			hero: '\uD83E\uDDB8',
+			chest: '\uD83C\uDF81',
+			upgrade: '\u2B06\uFE0F',
+			error: '\u274C',
+			info: '\uD83D\uDCCB',
+		};
+		return icons[evt.eventType] || '\u2022';
 	}
 }
 

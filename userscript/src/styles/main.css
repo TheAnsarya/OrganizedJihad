@@ -491,6 +491,52 @@
 	font-variant-numeric: tabular-nums;
 }
 
+/* ── Live Activity Feed ──────────────────────────────────────────── */
+
+.oj-activity-list {
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+	max-height: 400px;
+	overflow-y: auto;
+}
+
+.oj-activity-row {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	padding: 4px 8px;
+	border-radius: 4px;
+	font-size: 12px;
+	border-left: 3px solid transparent;
+}
+
+.oj-activity-time {
+	flex-shrink: 0;
+	font-size: 11px;
+	opacity: 0.6;
+	min-width: 70px;
+}
+
+.oj-activity-icon {
+	flex-shrink: 0;
+	font-size: 13px;
+}
+
+.oj-activity-msg {
+	flex: 1;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+/* Activity event color variants */
+.oj-event-green  { border-left-color: #4caf50; color: #a5d6a7; }
+.oj-event-red    { border-left-color: #ef5350; color: #ef9a9a; }
+.oj-event-blue   { border-left-color: #42a5f5; color: #90caf9; }
+.oj-event-gold   { border-left-color: #ffc107; color: #ffe082; }
+.oj-event-purple { border-left-color: #ab47bc; color: #ce93d8; }
+
 /* ── Responsive ──────────────────────────────────────────────────────── */
 
 @media (max-width: 768px) {

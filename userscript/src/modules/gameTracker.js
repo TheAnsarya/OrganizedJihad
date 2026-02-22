@@ -76,6 +76,12 @@ class GameTracker {
 		 * @type {((count: number) => void)|null}
 		 */
 		this.onError = null;
+
+		// ── Event emitter ──────────────────────────────────────────────────
+		// Simple pub-sub for live activity feed (Issue #24).
+		// Listeners subscribe via on(event, handler) and are notified with _emit().
+		/** @type {Map<string, Set<Function>>} */
+		this._eventListeners = new Map();
 	}
 
 	/**
@@ -89,6 +95,104 @@ class GameTracker {
 	 */
 	_computeDataFingerprint(data) {
 		return JSON.stringify(data);
+	}
+
+	// =====================================================================
+	// Event Emitter (Issue #24 — Live Activity Feed)
+	// =====================================================================
+
+	/**
+	 * Subscribe to a named event.
+	 *
+	 * @param {string} event  - Event name (e.g. 'activity', 'error')
+	 * @param {Function} handler - Callback receiving the event payload
+	 */
+	on(event, handler) {
+		if (!this._eventListeners.has(event)) {
+			this._eventListeners.set(event, new Set());
+		}
+		this._eventListeners.get(event).add(handler);
+	}
+
+	/**
+	 * Unsubscribe from a named event.
+	 *
+	 * @param {string} event  - Event name
+	 * @param {Function} handler - The exact handler reference passed to on()
+	 */
+	off(event, handler) {
+		const listeners = this._eventListeners.get(event);
+		if (listeners) {
+			listeners.delete(handler);
+		}
+	}
+
+	/**
+	 * Emit a named event to all subscribers. Errors in handlers are swallowed.
+	 *
+	 * @param {string} event - Event name
+	 * @param {*} payload - Data to pass to handlers
+	 * @private
+	 */
+	_emit(event, payload) {
+		const listeners = this._eventListeners.get(event);
+		if (!listeners) return;
+		for (const handler of listeners) {
+			try {
+				handler(payload);
+			} catch {
+				// Listener blew up — don't let it cascade
+			}
+		}
+	}
+
+	/**
+	 * Log a live activity event to IndexedDB and emit it to subscribers.
+	 *
+	 * Event types:
+	 *   - 'battle'   : Arena / Grand Arena / Titan Arena / Guild War (green=win, red=loss)
+	 *   - 'resource'  : Gold, emeralds, energy changes
+	 *   - 'hero'      : Hero data captured, upgrades detected
+	 *   - 'chest'     : Chest openings
+	 *   - 'info'      : General tracking events (snapshot, player data)
+	 *   - 'upgrade'   : Hero/Titan upgrades
+	 *   - 'error'     : Errors encountered
+	 *
+	 * The store is capped at 500 entries — oldest are pruned on write.
+	 *
+	 * @param {string} eventType - One of the types listed above
+	 * @param {string} message   - Human-readable description
+	 * @param {object} [extra]   - Optional extra data for the event detail
+	 * @returns {Promise<void>}
+	 * @private
+	 */
+	async _logActivity(eventType, message, extra = {}) {
+		const entry = {
+			eventType,
+			message,
+			timestamp: Date.now(),
+			...extra,
+		};
+
+		// Emit to live listeners immediately (before IDB write)
+		this._emit('activity', entry);
+
+		try {
+			await this.storage.add('activityEvents', entry);
+
+			// Cap at 500 entries — prune oldest
+			const all = await this.storage.getAll('activityEvents');
+			if (all.length > 500) {
+				const toDelete = all
+					.sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0))
+					.slice(0, all.length - 500);
+				for (const old of toDelete) {
+					await this.storage.delete('activityEvents', old.id);
+				}
+			}
+		} catch {
+			// Activity logging is best-effort — don't bubble up
+		}
 	}
 
 	/**
@@ -131,6 +235,15 @@ class GameTracker {
 		} catch {
 			// Error logging itself failed — nothing more we can do
 		}
+
+		// Emit to activity feed (best-effort, separate try/catch)
+		try {
+			this._emit('activity', {
+				eventType: 'error',
+				message: `Error in ${context}: ${error?.message || String(error)}`,
+				timestamp: Date.now(),
+			});
+		} catch { /* empty */ }
 	}
 
 	/**
@@ -561,6 +674,9 @@ class GameTracker {
 
 		await this.storage.add('snapshots', snapshot);
 		console.log('[OrganizedJihad] Player snapshot saved:', snapshot.playerName, 'Level', snapshot.level);
+
+		// Live activity event
+		await this._logActivity('info', `Player snapshot: ${snapshot.playerName} (Lv${snapshot.level}, ${snapshot.gold?.toLocaleString()} gold, ${snapshot.emeralds?.toLocaleString()} emeralds)`);
 	}
 
 	/**
@@ -623,6 +739,10 @@ class GameTracker {
 		}
 
 		console.log(`[OrganizedJihad] Heroes tracked: ${heroes.length} heroes stored as snapshots`);
+
+		// Live activity event
+		const topHero = heroes.reduce((best, h) => (h.power > (best?.power || 0) ? h : best), null);
+		await this._logActivity('hero', `Hero roster captured: ${heroes.length} heroes (top: ${topHero?.heroName || '?'} at ${topHero?.power?.toLocaleString() || 0} power)`);
 	}
 
 	/**
@@ -688,6 +808,10 @@ class GameTracker {
 		console.log(
 			`[OrganizedJihad] Inventory tracked: ${totalHeroSoulStones} hero souls, ${totalTitanSoulStones} titan souls, ${totalPetSoulStones} pet souls, ${totalConsumables} consumables`
 		);
+
+		// Live activity event
+		const totalItems = totalHeroSoulStones + totalTitanSoulStones + totalPetSoulStones + totalConsumables;
+		await this._logActivity('info', `Inventory snapshot: ${totalItems.toLocaleString()} items tracked`);
 	}
 
 	/**
@@ -861,6 +985,9 @@ class GameTracker {
 
 		await this.storage.add('battles', battle);
 
+		// Live activity event
+		await this._logActivity('battle', `Arena ${battle.isWin ? 'WIN' : 'LOSS'} vs opponent #${battle.opponentId || '?'}`, { isWin: battle.isWin });
+
 		// Update opponent record
 		await this.updateOpponentRecord(args.enemyUserId, 'Arena', battle.isWin);
 
@@ -931,6 +1058,9 @@ class GameTracker {
 
 		await this.storage.add('battles', battle);
 		await this.updateOpponentRecord(args.enemyUserId, 'TitanArena', battle.isWin);
+
+		// Live activity event
+		await this._logActivity('battle', `Titan Arena ${battle.isWin ? 'WIN' : 'LOSS'} vs opponent #${battle.opponentId || '?'}`, { isWin: battle.isWin });
 
 		// Track resource rewards from titan arena battle
 		// Titan Arena rewards: gold, titan tokens/potions
@@ -1007,6 +1137,9 @@ class GameTracker {
 		await this.storage.add('battles', battle);
 		await this.updateOpponentRecord(args.enemyUserId, 'GrandArena', battle.isWin);
 
+		// Live activity event
+		await this._logActivity('battle', `Grand Arena ${battle.isWin ? 'WIN' : 'LOSS'} vs opponent #${battle.opponentId || '?'}`, { isWin: battle.isWin });
+
 		// Track resource rewards from grand arena battle
 		// Grand Arena rewards: gold, trophies, sometimes emeralds
 		const rewards = data.reward || {};
@@ -1074,6 +1207,10 @@ class GameTracker {
 		}
 
 		await this.storage.setMetadata('guildWarBattleHistory', guildWarHistory);
+
+		// Live activity event
+		const isWin = data.result?.win || false;
+		await this._logActivity('battle', `Guild War ${isWin ? 'WIN' : 'LOSS'} at fort #${args.fortId || '?'}`, { isWin });
 
 		// Track guild activity for guild war participation
 		// Hero Wars guild wars are major guild events
@@ -1200,6 +1337,10 @@ class GameTracker {
 		}
 
 		await this.storage.setMetadata('chestOpeningHistory', chestHistory);
+
+		// Live activity event
+		const dropCount = Array.isArray(chestRecord.rewards) ? chestRecord.rewards.length : 0;
+		await this._logActivity('chest', `Chest opened: ${chestRecord.chestType} (${chestRecord.quantity}x, ${dropCount} drops)`);
 
 		// Update drop rate statistics
 		await this.updateChestDropRates(chestRecord);
