@@ -34,6 +34,7 @@ describe('GameTracker', () => {
 			getAll: jest.fn().mockResolvedValue([]),
 			getByIndex: jest.fn().mockResolvedValue([]),
 			getMetadata: jest.fn().mockResolvedValue(null),
+			setMetadata: jest.fn().mockResolvedValue(undefined),
 			delete: jest.fn().mockResolvedValue(undefined),
 			clear: jest.fn().mockResolvedValue(undefined),
 		};
@@ -213,6 +214,112 @@ describe('GameTracker', () => {
 
 			// processAPIResponse has try/catch around each case
 			await expect(tracker.processAPIResponse(request, response)).resolves.not.toThrow();
+		});
+
+		test('should log errors via _logError and increment errorCount', async () => {
+			const onErrorSpy = jest.fn();
+			tracker.onError = onErrorSpy;
+
+			// getMetadata needs to return an array for the errorLog key
+			mockStorage.getMetadata.mockResolvedValue([]);
+
+			await tracker._logError('testContext', new Error('boom'));
+
+			expect(tracker.errorCount).toBe(1);
+			expect(onErrorSpy).toHaveBeenCalledWith(1);
+			expect(mockStorage.setMetadata).toHaveBeenCalledWith(
+				'errorLog',
+				expect.arrayContaining([
+					expect.objectContaining({
+						context: 'testContext',
+						message: 'boom',
+					}),
+				]),
+			);
+		});
+
+		test('should keep only last 50 errors in log', async () => {
+			// Pre-fill with 55 existing entries
+			const existing = Array.from({ length: 55 }, (_, i) => ({
+				context: `old_${i}`,
+				message: `error ${i}`,
+				stack: null,
+				timestamp: i,
+			}));
+			mockStorage.getMetadata.mockResolvedValue(existing);
+
+			await tracker._logError('new_error', new Error('newest'));
+
+			const savedLog = mockStorage.setMetadata.mock.calls[0][1];
+			expect(savedLog.length).toBe(50);
+			expect(savedLog[savedLog.length - 1].context).toBe('new_error');
+		});
+
+		test('should not throw if _logError itself fails', async () => {
+			mockStorage.getMetadata.mockRejectedValue(new Error('IDB dead'));
+
+			await expect(tracker._logError('ctx', new Error('x'))).resolves.not.toThrow();
+			expect(tracker.errorCount).toBe(1);
+		});
+	});
+
+	// ─── Deduplication ───────────────────────────────────────────────────
+
+	describe('Deduplication', () => {
+		test('should skip duplicate player snapshots', async () => {
+			const data = { userId: 1, name: 'A', level: 50, gold: 1000, starmoney: 500 };
+
+			await tracker.trackPlayerData(data);
+			await tracker.trackPlayerData(data);
+
+			// add should only be called once (second call is deduped)
+			expect(mockStorage.add).toHaveBeenCalledTimes(1);
+		});
+
+		test('should write player snapshot when key fields change', async () => {
+			const data1 = { userId: 1, name: 'A', level: 50, gold: 1000, starmoney: 500 };
+			const data2 = { userId: 1, name: 'A', level: 51, gold: 1000, starmoney: 500 };
+
+			await tracker.trackPlayerData(data1);
+			await tracker.trackPlayerData(data2);
+
+			expect(mockStorage.add).toHaveBeenCalledTimes(2);
+		});
+
+		test('should skip duplicate hero snapshots', async () => {
+			const data = {
+				'1': { id: 1, level: 100, star: 6, color: 15, power: 50000 },
+				'2': { id: 2, level: 90, star: 5, color: 12, power: 40000 },
+			};
+
+			await tracker.trackHeroesData(data);
+			await tracker.trackHeroesData(data);
+
+			// 2 heroes stored on first call, 0 on second (deduped)
+			expect(mockStorage.add).toHaveBeenCalledTimes(2);
+		});
+
+		test('should write hero snapshots when power changes', async () => {
+			const data1 = {
+				'1': { id: 1, level: 100, star: 6, color: 15, power: 50000 },
+			};
+			const data2 = {
+				'1': { id: 1, level: 100, star: 6, color: 15, power: 50001 },
+			};
+
+			await tracker.trackHeroesData(data1);
+			await tracker.trackHeroesData(data2);
+
+			// 1 hero on each call
+			expect(mockStorage.add).toHaveBeenCalledTimes(2);
+		});
+
+		test('should produce deterministic fingerprints', () => {
+			const data = [1, 'two', [3, 4]];
+			expect(tracker._computeDataFingerprint(data)).toBe(tracker._computeDataFingerprint(data));
+			expect(tracker._computeDataFingerprint(data)).not.toBe(
+				tracker._computeDataFingerprint([1, 'two', [3, 5]]),
+			);
 		});
 	});
 });

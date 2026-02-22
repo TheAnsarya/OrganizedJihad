@@ -49,6 +49,88 @@ class GameTracker {
 		this.lastKnownArenaRank = 0;
 		this.lastKnownGrandArenaRank = 0;
 		this.lastKnownTitanArenaRank = 0;
+
+		// ── Deduplication fingerprints ──────────────────────────────────────
+		// Prevents writing identical snapshots on repeated API calls.
+		// Each fingerprint is a JSON string derived from the data's key fields;
+		// if the fingerprint matches the previous write, the snapshot is skipped.
+
+		/** @type {string|null} Last fingerprint of hero roster for dedup */
+		this._lastHeroHash = null;
+		/** @type {string|null} Last fingerprint of titan roster for dedup */
+		this._lastTitanHash = null;
+		/** @type {string|null} Last fingerprint of pet roster for dedup */
+		this._lastPetHash = null;
+		/** @type {string|null} Last fingerprint of player key fields for dedup */
+		this._lastPlayerKey = null;
+		/** @type {string|null} Last fingerprint of inventory totals for dedup */
+		this._lastInventoryHash = null;
+
+		// ── Error tracking ─────────────────────────────────────────────────
+		/** @type {number} Count of errors encountered during this session */
+		this.errorCount = 0;
+		/**
+		 * Optional callback invoked whenever a tracker error is logged.
+		 * Set by the host (index.js) to update the status badge.
+		 *
+		 * @type {((count: number) => void)|null}
+		 */
+		this.onError = null;
+	}
+
+	/**
+	 * Compute a lightweight fingerprint for deduplication.
+	 * Produces a JSON string from the data's key fields. Comparing two
+	 * fingerprints is ~100× cheaper than re-writing to IndexedDB.
+	 *
+	 * @param {*} data - Any JSON-serialisable value
+	 * @returns {string} Deterministic JSON string
+	 * @private
+	 */
+	_computeDataFingerprint(data) {
+		return JSON.stringify(data);
+	}
+
+	/**
+	 * Log a tracker error to IndexedDB (last 50 kept) and notify the host.
+	 * This is intentionally defensive — if the error-logging itself fails,
+	 * we silently swallow rather than creating a cascade.
+	 *
+	 * @param {string} context - Human-readable location where the error occurred
+	 * @param {Error|string} error - The caught error
+	 * @returns {Promise<void>}
+	 * @private
+	 */
+	async _logError(context, error) {
+		this.errorCount++;
+
+		// Notify host (index.js) so it can update the UI badge
+		if (typeof this.onError === 'function') {
+			try {
+				this.onError(this.errorCount);
+			} catch {
+				// Badge callback blew up — ignore
+			}
+		}
+
+		try {
+			const errorLog = await this.storage.getMetadata('errorLog', []);
+			errorLog.push({
+				context,
+				message: error?.message || String(error),
+				stack: error?.stack?.substring(0, 500) || null,
+				timestamp: Date.now(),
+			});
+
+			// Keep only the 50 most-recent errors
+			if (errorLog.length > 50) {
+				errorLog.splice(0, errorLog.length - 50);
+			}
+
+			await this.storage.setMetadata('errorLog', errorLog);
+		} catch {
+			// Error logging itself failed — nothing more we can do
+		}
 	}
 
 	/**
@@ -413,11 +495,17 @@ class GameTracker {
 				}
 			} catch (error) {
 				console.error(`[OrganizedJihad] Error processing ${callName}:`, error);
+				await this._logError(`processAPIResponse:${callName}`, error);
 			}
 		}
 
 		// Trigger periodic data snapshot
-		await this.updateSnapshot();
+		try {
+			await this.updateSnapshot();
+		} catch (error) {
+			console.error('[OrganizedJihad] Error in updateSnapshot:', error);
+			await this._logError('updateSnapshot', error);
+		}
 	}
 
 	/**
@@ -434,6 +522,24 @@ class GameTracker {
 		const arenaRank = data.arenaRank || this.lastKnownArenaRank || 0;
 		const grandArenaRank = data.grandArenaRank || this.lastKnownGrandArenaRank || 0;
 		const titanArenaRank = data.titanArenaRank || this.lastKnownTitanArenaRank || 0;
+
+		// ── Deduplication: skip if key fields unchanged since last call ───
+		// userGetInfo fires on nearly every API batch, so this prevents
+		// writing an identical snapshot row every few seconds.
+		const playerKey = this._computeDataFingerprint([
+			data.userId, data.level, data.vipLevel, data.power,
+			data.gold, data.starmoney, data.clanId,
+			arenaRank, grandArenaRank, titanArenaRank,
+		]);
+		if (playerKey === this._lastPlayerKey) {
+			return; // Identical to previous snapshot — skip write
+		}
+		this._lastPlayerKey = playerKey;
+
+		// Also cache the player ID for other tracker methods
+		if (data.userId) {
+			await this.storage.setMetadata('currentPlayerId', data.userId);
+		}
 
 		const snapshot = {
 			playerId: data.userId,
@@ -475,6 +581,18 @@ class GameTracker {
 	async trackHeroesData(data) {
 		const playerId = (await this.storage.getMetadata('currentPlayerId')) || 'unknown';
 		const timestamp = new Date().toISOString();
+
+		// ── Deduplication: skip if hero roster hasn't changed ────────────
+		// heroGetAll fires frequently; writing 50+ rows each time is
+		// expensive when nothing has actually been upgraded.
+		const heroFingerprint = this._computeDataFingerprint(
+			Object.values(data).map((h) => [h.id, h.level, h.star, h.color, h.power])
+		);
+		if (heroFingerprint === this._lastHeroHash) {
+			console.log('[OrganizedJihad] Heroes unchanged — skipping snapshot');
+			return;
+		}
+		this._lastHeroHash = heroFingerprint;
 
 		const heroes = Object.values(data).map((hero) => ({
 			heroId: hero.id,
@@ -540,6 +658,17 @@ class GameTracker {
 		// Count chests (usually in consumable with specific IDs)
 		const chestIds = Object.keys(consumable).filter((key) => key.includes('chest') || key.includes('box'));
 		const totalChests = chestIds.reduce((sum, id) => sum + (consumable[id] || 0), 0);
+
+		// ── Deduplication: skip if inventory totals haven't changed ──────
+		const inventoryFingerprint = this._computeDataFingerprint([
+			totalHeroSoulStones, totalTitanSoulStones, totalPetSoulStones,
+			totalEvolutionItems, totalConsumables, totalChests,
+		]);
+		if (inventoryFingerprint === this._lastInventoryHash) {
+			console.log('[OrganizedJihad] Inventory unchanged — skipping snapshot');
+			return;
+		}
+		this._lastInventoryHash = inventoryFingerprint;
 
 		const inventorySnapshot = {
 			inventoryData: JSON.stringify(data), // Store complete raw data
@@ -656,7 +785,7 @@ class GameTracker {
 			mission: args.mission || args.id || 'unknown',
 		};
 
-		const battleHistory = await storageManager.get('battleHistory', []);
+		const battleHistory = await this.storage.getMetadata('battleHistory', []);
 		battleHistory.push(battleRecord);
 
 		// Keep last 1000 battles
@@ -664,7 +793,7 @@ class GameTracker {
 			battleHistory.shift();
 		}
 
-		await storageManager.set('battleHistory', battleHistory);
+		await this.storage.setMetadata('battleHistory', battleHistory);
 	}
 
 	/**
@@ -693,10 +822,10 @@ class GameTracker {
 		}));
 
 		// Store current arena enemies
-		await storageManager.set('arenaEnemies', enemies);
+		await this.storage.setMetadata('arenaEnemies', enemies);
 
 		// Track historical arena encounters
-		const encounterHistory = (await storageManager.get('arenaEncounterHistory', [])).concat(
+		const encounterHistory = (await this.storage.getMetadata('arenaEncounterHistory', [])).concat(
 			enemies.map((e) => ({ ...e, encounter: 'available' }))
 		);
 
@@ -705,7 +834,7 @@ class GameTracker {
 			encounterHistory.splice(0, encounterHistory.length - 500);
 		}
 
-		await storageManager.set('arenaEncounterHistory', encounterHistory);
+		await this.storage.setMetadata('arenaEncounterHistory', encounterHistory);
 	}
 
 	/**
@@ -775,7 +904,7 @@ class GameTracker {
 			timestamp,
 		}));
 
-		await storageManager.set('titanArenaEnemies', enemies);
+		await this.storage.setMetadata('titanArenaEnemies', enemies);
 	}
 
 	/**
@@ -846,7 +975,7 @@ class GameTracker {
 			timestamp,
 		}));
 
-		await storageManager.set('grandArenaEnemies', enemies);
+		await this.storage.setMetadata('grandArenaEnemies', enemies);
 	}
 
 	/**
@@ -915,7 +1044,7 @@ class GameTracker {
 			timestamp: Date.now(),
 		};
 
-		await storageManager.set('currentGuildWar', warData);
+		await this.storage.setMetadata('currentGuildWar', warData);
 	}
 
 	/**
@@ -937,19 +1066,19 @@ class GameTracker {
 			timestamp: Date.now(),
 		};
 
-		const guildWarHistory = await storageManager.get('guildWarBattleHistory', []);
+		const guildWarHistory = await this.storage.getMetadata('guildWarBattleHistory', []);
 		guildWarHistory.push(battleRecord);
 
 		if (guildWarHistory.length > 500) {
 			guildWarHistory.shift();
 		}
 
-		await storageManager.set('guildWarBattleHistory', guildWarHistory);
+		await this.storage.setMetadata('guildWarBattleHistory', guildWarHistory);
 
 		// Track guild activity for guild war participation
 		// Hero Wars guild wars are major guild events
 		// See: https://community.hero-wars.com/discussion/guild-war-guide
-		const guildData = await storageManager.get('guildData', {});
+		const guildData = await this.storage.getMetadata('guildData', {});
 		await this.trackGuildActivity('war', {
 			guildId: guildData.id || 'unknown',
 			guildName: guildData.name || 'Unknown Guild',
@@ -988,7 +1117,7 @@ class GameTracker {
 			timestamp: Date.now(),
 		};
 
-		await storageManager.set('currentRaidBoss', bossData);
+		await this.storage.setMetadata('currentRaidBoss', bossData);
 	}
 
 	/**
@@ -1007,19 +1136,19 @@ class GameTracker {
 			timestamp: Date.now(),
 		};
 
-		const raidHistory = await storageManager.get('raidBossAttackHistory', []);
+		const raidHistory = await this.storage.getMetadata('raidBossAttackHistory', []);
 		raidHistory.push(attackRecord);
 
 		if (raidHistory.length > 500) {
 			raidHistory.shift();
 		}
 
-		await storageManager.set('raidBossAttackHistory', raidHistory);
+		await this.storage.setMetadata('raidBossAttackHistory', raidHistory);
 
 		// Track guild activity for raid boss attacks
 		// Guild raids are cooperative PvE events
 		// See: https://community.hero-wars.com/discussion/guild-raid-boss-guide
-		const guildData = await storageManager.get('guildData', {});
+		const guildData = await this.storage.getMetadata('guildData', {});
 		await this.trackGuildActivity('raid', {
 			guildId: guildData.id || 'unknown',
 			guildName: guildData.name || 'Unknown Guild',
@@ -1063,14 +1192,14 @@ class GameTracker {
 		};
 
 		// Store individual chest opening
-		const chestHistory = await storageManager.get('chestOpeningHistory', []);
+		const chestHistory = await this.storage.getMetadata('chestOpeningHistory', []);
 		chestHistory.push(chestRecord);
 
 		if (chestHistory.length > 1000) {
 			chestHistory.shift();
 		}
 
-		await storageManager.set('chestOpeningHistory', chestHistory);
+		await this.storage.setMetadata('chestOpeningHistory', chestHistory);
 
 		// Update drop rate statistics
 		await this.updateChestDropRates(chestRecord);
@@ -1105,7 +1234,7 @@ class GameTracker {
 	 * @private
 	 */
 	async updateChestDropRates(chestRecord) {
-		const dropRates = await storageManager.get('chestDropRates', {});
+		const dropRates = await this.storage.getMetadata('chestDropRates', {});
 		const chestKey = `${chestRecord.chestType}_${chestRecord.chestId}`;
 
 		if (!dropRates[chestKey]) {
@@ -1137,7 +1266,7 @@ class GameTracker {
 			});
 		}
 
-		await storageManager.set('chestDropRates', dropRates);
+		await this.storage.setMetadata('chestDropRates', dropRates);
 	}
 
 	/**
@@ -1265,7 +1394,7 @@ class GameTracker {
 			timestamp: Date.now(),
 		};
 
-		await storageManager.set('expeditionState', expeditionData);
+		await this.storage.setMetadata('expeditionState', expeditionData);
 	}
 
 	/**
@@ -1492,7 +1621,9 @@ class GameTracker {
 	}
 
 	/**
-	 * Track titans data
+	 * Track titans data (metadata summary — called from titanGetAll)
+	 * NOTE: The earlier IDB-store version of this method is overridden by
+	 * this definition (same method name, last-wins in ES6 classes).
 	 *
 	 * @param {Object} data - Titans data
 	 * @private
@@ -1507,11 +1638,22 @@ class GameTracker {
 			artifacts: titan.artifacts || [],
 		}));
 
-		await storageManager.set('titansData', titans);
+		// ── Deduplication: skip if titan roster hasn't changed ───────────
+		const titanFingerprint = this._computeDataFingerprint(
+			titans.map((t) => [t.id, t.level, t.stars, t.power])
+		);
+		if (titanFingerprint === this._lastTitanHash) {
+			return;
+		}
+		this._lastTitanHash = titanFingerprint;
+
+		await this.storage.setMetadata('titansData', titans);
 	}
 
 	/**
-	 * Track pets data
+	 * Track pets data (metadata summary — called from petGetAll)
+	 * NOTE: The earlier IDB-store version of this method is overridden by
+	 * this definition (same method name, last-wins in ES6 classes).
 	 *
 	 * @param {Object} data - Pets data
 	 * @private
@@ -1524,7 +1666,16 @@ class GameTracker {
 			power: pet.power || 0,
 		}));
 
-		await storageManager.set('petsData', pets);
+		// ── Deduplication: skip if pet roster hasn't changed ─────────────
+		const petFingerprint = this._computeDataFingerprint(
+			pets.map((p) => [p.id, p.level, p.stars, p.power])
+		);
+		if (petFingerprint === this._lastPetHash) {
+			return;
+		}
+		this._lastPetHash = petFingerprint;
+
+		await this.storage.setMetadata('petsData', pets);
 	}
 
 	/**
@@ -1536,7 +1687,7 @@ class GameTracker {
 	 * @private
 	 */
 	async updateOpponentRecord(battleType, opponentId, result) {
-		const opponentRecords = await storageManager.get('opponentRecords', {});
+		const opponentRecords = await this.storage.getMetadata('opponentRecords', {});
 		const key = `${battleType}_${opponentId}`;
 
 		if (!opponentRecords[key]) {
@@ -1557,7 +1708,7 @@ class GameTracker {
 
 		opponentRecords[key].lastBattle = Date.now();
 
-		await storageManager.set('opponentRecords', opponentRecords);
+		await this.storage.setMetadata('opponentRecords', opponentRecords);
 	}
 
 	/**
@@ -1621,7 +1772,7 @@ class GameTracker {
 			lastUpdate: Date.now(),
 		}));
 
-		await storageManager.set('questsData', quests);
+		await this.storage.setMetadata('questsData', quests);
 	}
 
 	/**
@@ -1631,7 +1782,7 @@ class GameTracker {
 	 * @private
 	 */
 	async trackGuildData(data) {
-		const oldGuildData = await storageManager.get('guildData', {});
+		const oldGuildData = await this.storage.getMetadata('guildData', {});
 
 		const guildData = {
 			id: data.clan?.id || null,
@@ -1641,7 +1792,7 @@ class GameTracker {
 			lastUpdate: Date.now(),
 		};
 
-		await storageManager.set('guildData', guildData);
+		await this.storage.setMetadata('guildData', guildData);
 
 		// Track guild join/leave events by detecting guild ID changes
 		// Hero Wars allows players to leave and join guilds
@@ -1702,11 +1853,11 @@ class GameTracker {
 			const conversationId = String(args.dialogId || args.conversationId || args.chatId || '');
 
 			// Get current player ID for determining message direction
-			const playerData = await storageManager.get('playerData', {});
+			const playerData = await this.storage.getMetadata('playerData', {});
 			const currentPlayerId = playerData.player?.id || 0;
 
 			// Get guild data for guild name context
-			const guildData = await storageManager.get('guildData', {});
+			const guildData = await this.storage.getMetadata('guildData', {});
 
 			// Extract messages array
 			// Hero Wars chat API typically returns { messages: [...], users: {...} }
@@ -1792,12 +1943,12 @@ class GameTracker {
 			const messageText = args.text || args.message || '';
 
 			// Get player data
-			const playerData = await storageManager.get('playerData', {});
+			const playerData = await this.storage.getMetadata('playerData', {});
 			const playerId = playerData.player?.id || 0;
 			const playerName = playerData.player?.name || 'Unknown';
 
 			// Get guild data for context
-			const guildData = await storageManager.get('guildData', {});
+			const guildData = await this.storage.getMetadata('guildData', {});
 
 			// Build outgoing message record
 			// Note: Server message ID comes from response data
@@ -1853,7 +2004,7 @@ class GameTracker {
 
 			// Retrieve existing summary or create new one
 			const summaryKey = `chatActivity_${chatType}_${today}`;
-			const existingSummary = await storageManager.get(summaryKey, null);
+			const existingSummary = await this.storage.getMetadata(summaryKey, null);
 
 			// Get messages to count sent vs received
 			const todayStart = new Date(today).getTime();
@@ -1874,7 +2025,7 @@ class GameTracker {
 				groupName: existingSummary?.groupName || null,
 			};
 
-			await storageManager.set(summaryKey, summary);
+			await this.storage.setMetadata(summaryKey, summary);
 		} catch (error) {
 			console.error('[OrganizedJihad] Error updating chat activity summary:', error);
 		}
@@ -1909,7 +2060,7 @@ class GameTracker {
 			const members = data.clan.members || {};
 
 			// Get current player ID to identify self
-			const playerData = await storageManager.get('playerData', {});
+			const playerData = await this.storage.getMetadata('playerData', {});
 			const currentPlayerId = playerData.player?.id || 0;
 
 			// Track each guild member
@@ -2190,7 +2341,7 @@ class GameTracker {
 	 * @private
 	 */
 	async getStoredGuildId() {
-		const guildData = await storageManager.get('guildData', {});
+		const guildData = await this.storage.getMetadata('guildData', {});
 		return guildData.id || 0;
 	}
 
@@ -2206,17 +2357,17 @@ class GameTracker {
 
 		const snapshot = {
 			timestamp: now,
-			player: await storageManager.get('playerData', {}),
-			heroes: await storageManager.get('heroesData', []),
-			inventory: await storageManager.get('inventoryData', {}),
-			guild: await storageManager.get('guildData', {}),
+			player: await this.storage.getMetadata('playerData', {}),
+			heroes: await this.storage.getMetadata('heroesData', []),
+			inventory: await this.storage.getMetadata('inventoryData', {}),
+			guild: await this.storage.getMetadata('guildData', {}),
 		};
 
 		// Save current snapshot
-		await storageManager.set('lastGameData', snapshot);
+		await this.storage.setMetadata('lastGameData', snapshot);
 
 		// Update historical data
-		const history = await storageManager.get('gameHistory', []);
+		const history = await this.storage.getMetadata('gameHistory', []);
 		history.push({
 			timestamp: now,
 			level: snapshot.player.level || 0,
@@ -2230,7 +2381,7 @@ class GameTracker {
 			history.shift();
 		}
 
-		await storageManager.set('gameHistory', history);
+		await this.storage.setMetadata('gameHistory', history);
 		this.lastUpdate = now;
 	}
 
@@ -2242,7 +2393,7 @@ class GameTracker {
 	 * @returns {Object} Last captured game data
 	 */
 	async captureCurrentState() {
-		return await storageManager.get('lastGameData', {});
+		return await this.storage.getMetadata('lastGameData', {});
 	}
 
 	/**
@@ -2250,7 +2401,7 @@ class GameTracker {
 	 * @returns {Object} Player data
 	 */
 	async getPlayerStats() {
-		return await storageManager.get('playerData', {});
+		return await this.storage.getMetadata('playerData', {});
 	}
 
 	/**
@@ -2258,7 +2409,7 @@ class GameTracker {
 	 * @returns {Array} Array of hero objects
 	 */
 	async getHeroRoster() {
-		return await storageManager.get('heroesData', []);
+		return await this.storage.getMetadata('heroesData', []);
 	}
 
 	/**
@@ -2267,7 +2418,7 @@ class GameTracker {
 	 */
 	async getResources() {
 		const player = await this.getPlayerStats();
-		const inventory = await storageManager.get('inventoryData', {});
+		const inventory = await this.storage.getMetadata('inventoryData', {});
 
 		return {
 			gold: player.gold || 0,
@@ -2283,7 +2434,7 @@ class GameTracker {
 	 * @returns {Array} Array of battle records
 	 */
 	async getBattleHistory() {
-		return await storageManager.get('battleHistory', []);
+		return await this.storage.getMetadata('battleHistory', []);
 	}
 
 	/**
@@ -2291,9 +2442,9 @@ class GameTracker {
 	 * @returns {Object} Arena data with history and stats
 	 */
 	async getArenaData() {
-		const history = await storageManager.get('arenaBattleHistory', []);
-		const currentEnemies = await storageManager.get('arenaEnemies', []);
-		const encounters = await storageManager.get('arenaEncounterHistory', []);
+		const history = await this.storage.getMetadata('arenaBattleHistory', []);
+		const currentEnemies = await this.storage.getMetadata('arenaEnemies', []);
+		const encounters = await this.storage.getMetadata('arenaEncounterHistory', []);
 
 		const stats = this.calculateBattleStats(history);
 
@@ -2310,8 +2461,8 @@ class GameTracker {
 	 * @returns {Object} Titan arena data
 	 */
 	async getTitanArenaData() {
-		const history = await storageManager.get('titanArenaBattleHistory', []);
-		const currentEnemies = await storageManager.get('titanArenaEnemies', []);
+		const history = await this.storage.getMetadata('titanArenaBattleHistory', []);
+		const currentEnemies = await this.storage.getMetadata('titanArenaEnemies', []);
 		const stats = this.calculateBattleStats(history);
 
 		return {
@@ -2326,8 +2477,8 @@ class GameTracker {
 	 * @returns {Object} Grand arena data
 	 */
 	async getGrandArenaData() {
-		const history = await storageManager.get('grandArenaBattleHistory', []);
-		const currentEnemies = await storageManager.get('grandArenaEnemies', []);
+		const history = await this.storage.getMetadata('grandArenaBattleHistory', []);
+		const currentEnemies = await this.storage.getMetadata('grandArenaEnemies', []);
 		const stats = this.calculateBattleStats(history);
 
 		return {
@@ -2342,8 +2493,8 @@ class GameTracker {
 	 * @returns {Object} Guild war data with current war and history
 	 */
 	async getGuildWarData() {
-		const currentWar = await storageManager.get('currentGuildWar', null);
-		const history = await storageManager.get('guildWarBattleHistory', []);
+		const currentWar = await this.storage.getMetadata('currentGuildWar', null);
+		const history = await this.storage.getMetadata('guildWarBattleHistory', []);
 		const stats = this.calculateBattleStats(history);
 
 		return {
@@ -2358,8 +2509,8 @@ class GameTracker {
 	 * @returns {Object} Raid boss data with current boss and attack history
 	 */
 	async getRaidBossData() {
-		const currentBoss = await storageManager.get('currentRaidBoss', null);
-		const history = await storageManager.get('raidBossAttackHistory', []);
+		const currentBoss = await this.storage.getMetadata('currentRaidBoss', null);
+		const history = await this.storage.getMetadata('raidBossAttackHistory', []);
 
 		const totalDamage = history.reduce((sum, attack) => sum + attack.damage, 0);
 		const averageDamage = history.length > 0 ? totalDamage / history.length : 0;
@@ -2377,8 +2528,8 @@ class GameTracker {
 	 * @returns {Object} Chest opening data and calculated drop rates
 	 */
 	async getChestStatistics() {
-		const history = await storageManager.get('chestOpeningHistory', []);
-		const dropRates = await storageManager.get('chestDropRates', {});
+		const history = await this.storage.getMetadata('chestOpeningHistory', []);
+		const dropRates = await this.storage.getMetadata('chestDropRates', {});
 
 		// Calculate drop probabilities
 		const probabilityData = {};
@@ -2408,7 +2559,7 @@ class GameTracker {
 	 * @returns {Object} Opponent records by battle type
 	 */
 	async getOpponentRecords() {
-		return await storageManager.get('opponentRecords', {});
+		return await this.storage.getMetadata('opponentRecords', {});
 	}
 
 	/**
@@ -2416,8 +2567,8 @@ class GameTracker {
 	 * @returns {Object} Expedition state and battle history
 	 */
 	async getExpeditionData() {
-		const state = await storageManager.get('expeditionState', null);
-		const history = await storageManager.get('expeditionBattleHistory', []);
+		const state = await this.storage.getMetadata('expeditionState', null);
+		const history = await this.storage.getMetadata('expeditionBattleHistory', []);
 		const stats = this.calculateBattleStats(history);
 
 		return {
@@ -2432,7 +2583,7 @@ class GameTracker {
 	 * @returns {Array} Array of titan objects
 	 */
 	async getTitansRoster() {
-		return await storageManager.get('titansData', []);
+		return await this.storage.getMetadata('titansData', []);
 	}
 
 	/**
@@ -2440,7 +2591,7 @@ class GameTracker {
 	 * @returns {Array} Array of pet objects
 	 */
 	async getPetsRoster() {
-		return await storageManager.get('petsData', []);
+		return await this.storage.getMetadata('petsData', []);
 	}
 
 	/**
@@ -2448,7 +2599,7 @@ class GameTracker {
 	 * @returns {Array} Purchase history
 	 */
 	async getShopPurchaseHistory() {
-		return await storageManager.get('shopPurchaseHistory', []);
+		return await this.storage.getMetadata('shopPurchaseHistory', []);
 	}
 
 	/**
@@ -2456,7 +2607,7 @@ class GameTracker {
 	 * @returns {Array} Quest completion history
 	 */
 	async getQuestHistory() {
-		return await storageManager.get('questCompletionHistory', []);
+		return await this.storage.getMetadata('questCompletionHistory', []);
 	}
 
 	/**
@@ -2466,7 +2617,7 @@ class GameTracker {
 	 * @returns {Object} Historical comparison data
 	 */
 	async getHistoricalComparison() {
-		const history = await storageManager.get('gameHistory', []);
+		const history = await this.storage.getMetadata('gameHistory', []);
 		const current = await this.captureCurrentState();
 
 		if (history.length === 0) {

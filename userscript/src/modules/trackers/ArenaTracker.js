@@ -14,8 +14,6 @@
  * @module trackers/ArenaTracker
  */
 
-import storageManager from '../storageManager.js';
-
 /**
  * Arena-specific tracking functionality
  * Extracted from gameTracker.js for better separation of concerns
@@ -66,10 +64,10 @@ class ArenaTracker {
 		}));
 
 		// Store current arena enemies
-		await storageManager.set('arenaEnemies', enemies);
+		await this.storage.setMetadata('arenaEnemies', enemies);
 
 		// Track historical arena encounters
-		const encounterHistory = (await storageManager.get('arenaEncounterHistory', [])).concat(
+		const encounterHistory = (await this.storage.getMetadata('arenaEncounterHistory', [])).concat(
 			enemies.map((e) => ({ ...e, encounter: 'available' }))
 		);
 
@@ -78,7 +76,7 @@ class ArenaTracker {
 			encounterHistory.splice(0, encounterHistory.length - 500);
 		}
 
-		await storageManager.set('arenaEncounterHistory', encounterHistory);
+		await this.storage.setMetadata('arenaEncounterHistory', encounterHistory);
 	}
 
 	/**
@@ -137,7 +135,7 @@ class ArenaTracker {
 			timestamp,
 		}));
 
-		await storageManager.set('titanArenaEnemies', enemies);
+		await this.storage.setMetadata('titanArenaEnemies', enemies);
 	}
 
 	/**
@@ -200,7 +198,7 @@ class ArenaTracker {
 			timestamp,
 		}));
 
-		await storageManager.set('grandArenaEnemies', enemies);
+		await this.storage.setMetadata('grandArenaEnemies', enemies);
 	}
 
 	/**

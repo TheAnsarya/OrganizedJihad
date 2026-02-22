@@ -27,8 +27,11 @@ continue working;
 
 UI: clicking the badge opens a window, The minimize and close buttons on the interface don't work, there's nothing under any of the tabs, work on this window (make it moveable as well); make issues for the content and issues for the window funcationality itself and make issues for the data collection; update chat/sessions logs every time, add that to copilot instructions, then update the chat/session logs; continue;
 
+Tamper monkey is now spiraling in an infinite loop so I cannot interact with it, is that our fault? Did a code change to the script mess it up? Also, I thought changes to the user script would auto update in the game after a refresh, but nothing works; continue;
 
+You are spiraling; figure it out or quit; don't waste all my resources going in circles; find other issues and work on them; continue;
 
+Keep working on issues; continue;
 
 
 

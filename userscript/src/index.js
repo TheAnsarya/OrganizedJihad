@@ -5,7 +5,7 @@
 // ==UserScript==  (informational — webpack banner is authoritative)
 // @name         OrganizedJihad - Hero Wars Tracker
 // @namespace    http://tampermonkey.net/
-// @version      3.0.1
+// @version      3.1.0
 // @description  Track and manage Hero Wars game data with IndexedDB storage and in-game UI
 // @author       Andy Hubbard <me@ansarya.com>
 // @match        https://i-heroes-fb.nextersglobal.com/*
@@ -45,7 +45,7 @@ import './styles/main.css';
 	}
 
 	console.log(
-		'%c[OrganizedJihad]%c Hero Wars Tracker v3.0.1 Loaded',
+		'%c[OrganizedJihad]%c Hero Wars Tracker v3.1.0 Loaded',
 		'color: #4CAF50; font-weight: bold; font-size: 14px;',
 		'color: #2196F3; font-size: 14px;'
 	);
@@ -138,6 +138,10 @@ import './styles/main.css';
 		.oj-badge-dot-active {
 			background: #4CAF50 !important;
 		}
+		.oj-badge-dot-error {
+			background: #F44336 !important;
+			animation: oj-pulse 1s infinite !important;
+		}
 		.oj-badge-active {
 			border-color: rgba(76, 175, 80, 0.4);
 		}
@@ -149,6 +153,59 @@ import './styles/main.css';
 	document.head.appendChild(badgeStyles);
 
 	const statusBadge = createStatusBadge();
+
+	// ─── Global Error Handlers ──────────────────────────────────────────
+	// Catch any uncaught errors/rejections from our code and surface them
+	// on the badge as a red indicator so the user knows something is off.
+
+	/** @type {number} Running count of uncaught errors */
+	let errorCount = 0;
+
+	/**
+	 * Show the error state on the status badge.
+	 * Changes the dot to red and appends the error count.
+	 *
+	 * @param {number} count - Current error count
+	 */
+	function showBadgeError(count) {
+		const dot = statusBadge.querySelector('.oj-badge-dot');
+		if (dot) {
+			dot.classList.add('oj-badge-dot-error');
+		}
+		statusBadge.title = `OrganizedJihad Tracker — ${count} error${count !== 1 ? 's' : ''} logged`;
+	}
+
+	/**
+	 * Shared error handler for window.onerror and unhandledrejection.
+	 * Only counts errors that originate from our own code.
+	 *
+	 * @param {string} source - Error origin description
+	 * @param {Error|string} error - The error
+	 */
+	function handleGlobalError(source, error) {
+		// Only count errors likely from our code (stack mentions OrganizedJihad or our bundle)
+		const msg = String(error?.message || error || '');
+		const stack = String(error?.stack || '');
+		const isOurs = msg.includes('OrganizedJihad') ||
+			stack.includes('organized-jihad') ||
+			stack.includes('OrganizedJihad');
+
+		if (!isOurs) return;
+
+		errorCount++;
+		console.error(`[OrganizedJihad] Uncaught ${source}:`, error);
+		showBadgeError(errorCount);
+	}
+
+	// Catch synchronous errors
+	window.addEventListener('error', (event) => {
+		handleGlobalError('error', event.error || event.message);
+	});
+
+	// Catch unhandled promise rejections
+	window.addEventListener('unhandledrejection', (event) => {
+		handleGlobalError('rejection', event.reason);
+	});
 
 	// ─── Core Initialization ────────────────────────────────────────────
 
@@ -180,6 +237,13 @@ import './styles/main.css';
 	// GameTracker and APIMonitor use IndexedDB for large game data
 	// GoalsManager, CalendarManager, SuggestionsEngine use localStorage for preferences
 	const gameTracker = new GameTracker(idbStorage);
+
+	// Wire tracker-level error reporting to the badge
+	gameTracker.onError = (count) => {
+		errorCount = Math.max(errorCount, count); // Keep the higher count
+		showBadgeError(errorCount);
+	};
+
 	const goalsManager = new GoalsManager(prefStorage);
 	const calendarManager = new CalendarManager(prefStorage);
 	const suggestionsEngine = new SuggestionsEngine(prefStorage, gameTracker, goalsManager);

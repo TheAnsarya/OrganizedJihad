@@ -30,8 +30,10 @@ class UIManager {
 		this.currentView = 'dashboard';
 		this.overlay = null;
 
-		// Saved position from last drag (null = use CSS default)
+		// Saved position/size from last session (null = use CSS default)
 		this._savedPos = this.prefStorage.get('overlayPosition', null);
+		this._savedSize = this.prefStorage.get('overlaySize', null);
+		this._isMinimized = this.prefStorage.get('overlayMinimized', false);
 	}
 
 	/**
@@ -66,11 +68,17 @@ class UIManager {
 		this.overlay.id = 'organizedJihad-overlay';
 		this.overlay.className = 'oj-overlay';
 
+		// ARIA attributes for accessibility (role=dialog, aria-label)
+		this.overlay.setAttribute('role', 'dialog');
+		this.overlay.setAttribute('aria-label', 'OrganizedJihad Game Tracker');
+		this.overlay.setAttribute('aria-modal', 'false');
+
 		this.overlay.innerHTML = `
 			<div class="oj-container">
 				<div class="oj-header">
 					<h2 class="oj-title">\u2694\uFE0F OrganizedJihad</h2>
 					<div class="oj-header-actions">
+						<button class="oj-btn oj-btn-icon" id="oj-reset-pos" title="Reset Position">\u21BA</button>
 						<button class="oj-btn oj-btn-icon" id="oj-minimize" title="Minimize">\u2212</button>
 						<button class="oj-btn oj-btn-icon" id="oj-close" title="Close">\u00D7</button>
 					</div>
@@ -88,6 +96,8 @@ class UIManager {
 				<div class="oj-content" id="oj-content">
 					<div class="oj-loading">Loading...</div>
 				</div>
+
+				<div class="oj-resize-handle" id="oj-resize-handle" title="Drag to resize"></div>
 			</div>
 		`;
 
@@ -98,6 +108,22 @@ class UIManager {
 			this.overlay.style.left = this._savedPos.x + 'px';
 			this.overlay.style.top = this._savedPos.y + 'px';
 			this.overlay.style.right = 'auto';
+		}
+
+		// Restore saved size if any
+		if (this._savedSize) {
+			this.overlay.style.width = this._savedSize.w + 'px';
+			this.overlay.style.height = this._savedSize.h + 'px';
+		}
+
+		// Restore minimized state
+		if (this._isMinimized) {
+			this.overlay.classList.add('minimized');
+			const btn = this.overlay.querySelector('#oj-minimize');
+			if (btn) {
+				btn.textContent = '+';
+				btn.title = 'Expand';
+			}
 		}
 
 		// Render initial view
@@ -124,16 +150,42 @@ class UIManager {
 			this.hide();
 		});
 
-		// Minimize button — collapse to header-only
+		// Minimize button — collapse to header-only, persist state
 		this.overlay.querySelector('#oj-minimize').addEventListener('click', () => {
 			const isMinimized = this.overlay.classList.toggle('minimized');
 			const btn = this.overlay.querySelector('#oj-minimize');
 			btn.textContent = isMinimized ? '+' : '\u2212';
 			btn.title = isMinimized ? 'Expand' : 'Minimize';
+			this._isMinimized = isMinimized;
+			this.prefStorage.set('overlayMinimized', isMinimized);
+		});
+
+		// Reset position button — clear saved position/size, revert to CSS defaults
+		this.overlay.querySelector('#oj-reset-pos').addEventListener('click', () => {
+			this.overlay.style.left = '';
+			this.overlay.style.top = '';
+			this.overlay.style.right = '';
+			this.overlay.style.width = '';
+			this.overlay.style.height = '';
+			this._savedPos = null;
+			this._savedSize = null;
+			this.prefStorage.delete('overlayPosition');
+			this.prefStorage.delete('overlaySize');
+		});
+
+		// Escape key — close overlay when visible
+		document.addEventListener('keydown', (e) => {
+			if (e.key === 'Escape' && this.isVisible) {
+				e.preventDefault();
+				this.hide();
+			}
 		});
 
 		// Draggable header
 		this.makeDraggable();
+
+		// Resizable via bottom-right handle
+		this.makeResizable();
 	}
 
 	/**
@@ -190,6 +242,65 @@ class UIManager {
 				y: parseInt(this.overlay.style.top, 10),
 			};
 			this.prefStorage.set('overlayPosition', this._savedPos);
+		});
+	}
+
+	/**
+	 * Make the overlay resizable via a bottom-right drag handle.
+	 * Enforces minimum size of 400×300 and persists size in localStorage.
+	 */
+	makeResizable() {
+		const handle = this.overlay.querySelector('#oj-resize-handle');
+		if (!handle) return;
+
+		const MIN_WIDTH = 400;
+		const MIN_HEIGHT = 300;
+		let isResizing = false;
+		let startX, startY, startW, startH;
+
+		handle.addEventListener('mousedown', (e) => {
+			isResizing = true;
+
+			// Need explicit left/top so resize works after position is set
+			if (this.overlay.style.left === '' || this.overlay.style.left === 'auto') {
+				const rect = this.overlay.getBoundingClientRect();
+				this.overlay.style.left = rect.left + 'px';
+				this.overlay.style.top = rect.top + 'px';
+				this.overlay.style.right = 'auto';
+			}
+
+			startX = e.clientX;
+			startY = e.clientY;
+			startW = this.overlay.offsetWidth;
+			startH = this.overlay.offsetHeight;
+
+			e.preventDefault();
+			e.stopPropagation();
+		});
+
+		document.addEventListener('mousemove', (e) => {
+			if (!isResizing) return;
+			e.preventDefault();
+
+			const newW = Math.max(MIN_WIDTH, startW + (e.clientX - startX));
+			const newH = Math.max(MIN_HEIGHT, startH + (e.clientY - startY));
+
+			this.overlay.style.width = newW + 'px';
+			this.overlay.style.height = newH + 'px';
+			// Remove max-height constraint set by CSS so manual height works
+			this.overlay.style.maxHeight = 'none';
+		});
+
+		document.addEventListener('mouseup', () => {
+			if (!isResizing) return;
+			isResizing = false;
+
+			// Persist size
+			this._savedSize = {
+				w: this.overlay.offsetWidth,
+				h: this.overlay.offsetHeight,
+			};
+			this.prefStorage.set('overlaySize', this._savedSize);
 		});
 	}
 
@@ -655,19 +766,26 @@ class UIManager {
 	// =====================================================================
 
 	/**
-	 * Show the overlay panel.
+	 * Show the overlay panel and set focus for accessibility.
 	 */
 	show() {
 		if (this.overlay) {
 			this.overlay.style.display = 'block';
 			this.isVisible = true;
+			// Restore max-height if it was overridden by resize
+			if (this._savedSize) {
+				this.overlay.style.maxHeight = 'none';
+			}
 			// Re-render current view when opening
 			this.renderView(this.currentView);
+			// Set focus on the overlay for keyboard accessibility
+			this.overlay.setAttribute('tabindex', '-1');
+			this.overlay.focus();
 		}
 	}
 
 	/**
-	 * Hide the overlay panel.
+	 * Hide the overlay panel and restore focus.
 	 */
 	hide() {
 		if (this.overlay) {
