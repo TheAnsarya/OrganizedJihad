@@ -9,6 +9,8 @@
  * All render methods are async-safe with try/catch + fallback empty states.
  */
 
+import HeroCompletionCalculator from './helpers/HeroCompletionCalculator.js';
+
 class UIManager {
 	/**
 	 * @param {import('./storageManager.js').default} prefStorage - Synchronous localStorage wrapper
@@ -634,6 +636,7 @@ class UIManager {
 	 */
 	async renderHeroes() {
 		const vs = this._viewState.heroes;
+		const Calc = HeroCompletionCalculator;
 
 		// Prefer the metadata cache (latest roster, one row per hero)
 		let heroes = [];
@@ -670,6 +673,13 @@ class UIManager {
 			`;
 		}
 
+		// Pre-compute completion for every hero (keyed by heroId for fast lookup)
+		const completionMap = {};
+		for (const h of heroes) {
+			const key = h.heroId || h.id;
+			completionMap[key] = Calc.calculateCompletion(h);
+		}
+
 		// Filter
 		if (vs.filter) {
 			const q = vs.filter.toLowerCase();
@@ -679,11 +689,24 @@ class UIManager {
 			});
 		}
 
-		// Sort
-		heroes = this._sortData(heroes, vs.sortField, vs.sortDir);
+		// Sort — add virtual 'completion' field for sorting
+		if (vs.sortField === 'completion') {
+			heroes.sort((a, b) => {
+				const ca = completionMap[a.heroId || a.id]?.overall || 0;
+				const cb = completionMap[b.heroId || b.id]?.overall || 0;
+				return vs.sortDir === 'asc' ? ca - cb : cb - ca;
+			});
+		} else {
+			heroes = this._sortData(heroes, vs.sortField, vs.sortDir);
+		}
 
 		// Total power (post-filter for accuracy)
 		const totalPower = heroes.reduce((s, h) => s + (h.power || 0), 0);
+
+		// Average completion
+		const avgCompletion = heroes.length > 0
+			? heroes.reduce((s, h) => s + (completionMap[h.heroId || h.id]?.overall || 0), 0) / heroes.length
+			: 0;
 
 		// Paginate
 		const totalCount = heroes.length;
@@ -692,16 +715,35 @@ class UIManager {
 		const pageItems = heroes.slice(vs.page * this.PAGE_SIZE, (vs.page + 1) * this.PAGE_SIZE);
 
 		const rows = pageItems.map((h) => {
-			const name = this._escapeHtml(h.heroName || h.name || `Hero #${h.heroId || h.id}`);
+			const hId = h.heroId || h.id;
+			const name = this._escapeHtml(h.heroName || h.name || `Hero #${hId}`);
 			const colorName = this._colorRankName(h.color);
 			const colorClass = this._colorRankClass(h.color);
+			const comp = completionMap[hId] || { overall: 0, systems: {} };
+
+			// Build expandable per-system breakdown (hidden by default)
+			const sysRows = Object.entries(Calc.SYSTEM_LABELS).map(([key, label]) => {
+				const pct = comp.systems[key] || 0;
+				return `<div class="oj-sys-row">` +
+					`<span class="oj-sys-icon">${Calc.SYSTEM_ICONS[key] || ''}</span>` +
+					`<span class="oj-sys-name">${label}</span>` +
+					Calc.renderBar(pct) +
+					`</div>`;
+			}).join('');
+
 			return `
-				<tr>
+				<tr class="oj-hero-row" data-hero-id="${hId}">
 					<td><strong>${name}</strong></td>
 					<td>${h.level || '\u2014'}</td>
 					<td>${'\u2B50'.repeat(Math.min(h.stars || 0, 6)) || '\u2014'}</td>
 					<td><span class="${colorClass}">${colorName}</span></td>
 					<td class="oj-num">${h.power ? h.power.toLocaleString() : '\u2014'}</td>
+					<td class="oj-completion-cell">${Calc.renderBar(comp.overall)}</td>
+				</tr>
+				<tr class="oj-hero-detail" data-detail-for="${hId}" style="display:none">
+					<td colspan="6">
+						<div class="oj-sys-breakdown">${sysRows}</div>
+					</td>
 				</tr>
 			`;
 		}).join('');
@@ -710,7 +752,7 @@ class UIManager {
 
 		return `
 			<div class="oj-heroes" data-browser="heroes">
-				<h3>\uD83E\uDDB8 Heroes <span class="oj-muted">(${totalCount} \u2022 ${totalPower.toLocaleString()} total power)</span></h3>
+				<h3>\uD83E\uDDB8 Heroes <span class="oj-muted">(${totalCount} \u2022 ${totalPower.toLocaleString()} power \u2022 avg ${Calc.formatPercent(avgCompletion)} complete)</span></h3>
 				${this._renderSearchBar(vs.filter)}
 				<table class="oj-table oj-sortable">
 					<thead>
@@ -720,6 +762,7 @@ class UIManager {
 							<th data-sort="stars" class="oj-sort-header">Stars ${sortInd('stars')}</th>
 							<th data-sort="color" class="oj-sort-header">Rank ${sortInd('color')}</th>
 							<th data-sort="power" class="oj-sort-header">Power ${sortInd('power')}</th>
+							<th data-sort="completion" class="oj-sort-header">Complete ${sortInd('completion')}</th>
 						</tr>
 					</thead>
 					<tbody>${rows}</tbody>
@@ -1706,6 +1749,19 @@ class UIManager {
 				vs.subTab = pill.dataset.subtab;
 				vs.page = 0;
 				this.renderView(viewName);
+			});
+		});
+
+		// Hero row expand/collapse (heroes view only)
+		content.querySelectorAll('.oj-hero-row[data-hero-id]').forEach((row) => {
+			row.addEventListener('click', () => {
+				const hId = row.dataset.heroId;
+				const detailRow = content.querySelector(`tr.oj-hero-detail[data-detail-for="${hId}"]`);
+				if (detailRow) {
+					const isHidden = detailRow.style.display === 'none';
+					detailRow.style.display = isHidden ? '' : 'none';
+					row.classList.toggle('oj-expanded', isHidden);
+				}
 			});
 		});
 	}

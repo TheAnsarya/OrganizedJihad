@@ -183,6 +183,179 @@ describe('GameTracker', () => {
 				expect.objectContaining({ heroId: 102, heroName: 'Astaroth', level: 115 }),
 			);
 		});
+
+		test('should extract skills from {skillId: level} format', async () => {
+			const data = {
+				'1': {
+					id: 1, name: 'Galahad', level: 130, star: 6, color: 18, power: 198000,
+					skills: { 2: 130, 3: 120, 4: 110, 5: 100 },
+				},
+			};
+
+			await tracker.trackHeroesData(data);
+
+			// Skills sorted descending → skillLevel1=130, skillLevel2=120, etc.
+			expect(mockStorage.add).toHaveBeenCalledWith(
+				'heroes',
+				expect.objectContaining({
+					skillLevel1: 130,
+					skillLevel2: 120,
+					skillLevel3: 110,
+					skillLevel4: 100,
+				}),
+			);
+		});
+
+		test('should store rawSkills as JSON-stringified skills object', async () => {
+			const skills = { 2: 130, 3: 120, 4: 110, 5: 100 };
+			const data = {
+				'1': { id: 1, level: 130, star: 6, color: 18, power: 198000, skills },
+			};
+
+			await tracker.trackHeroesData(data);
+
+			const savedHero = mockStorage.add.mock.calls.find(
+				(c) => c[0] === 'heroes'
+			)?.[1];
+			expect(JSON.parse(savedHero.rawSkills)).toEqual(skills);
+		});
+
+		test('should count skins from {skinId: level} object', async () => {
+			const data = {
+				'1': {
+					id: 1, level: 100, star: 5, color: 15, power: 150000,
+					skins: { 1: 60, 54: 40, 95: 20 },
+				},
+			};
+
+			await tracker.trackHeroesData(data);
+
+			// 3 skins in the object → skins field = 3
+			expect(mockStorage.add).toHaveBeenCalledWith(
+				'heroes',
+				expect.objectContaining({ skins: 3 }),
+			);
+		});
+
+		test('should store rawSkins as JSON-stringified skins object', async () => {
+			const skinsObj = { 1: 60, 54: 40, 95: 20 };
+			const data = {
+				'1': { id: 1, level: 100, star: 5, color: 15, power: 150000, skins: skinsObj },
+			};
+
+			await tracker.trackHeroesData(data);
+
+			const savedHero = mockStorage.add.mock.calls.find(
+				(c) => c[0] === 'heroes'
+			)?.[1];
+			expect(JSON.parse(savedHero.rawSkins)).toEqual(skinsObj);
+		});
+
+		test('should store artifact levels from artifacts array', async () => {
+			const data = {
+				'1': {
+					id: 1, level: 130, star: 6, color: 18, power: 198000,
+					artifacts: [
+						{ level: 100, star: 5 },
+						{ level: 80, star: 4 },
+						{ level: 60, star: 3 },
+					],
+				},
+			};
+
+			await tracker.trackHeroesData(data);
+
+			const savedHero = mockStorage.add.mock.calls.find(
+				(c) => c[0] === 'heroes'
+			)?.[1];
+			expect(savedHero.artifactWeapon).toBe(5);
+			expect(savedHero.artifactBook).toBe(4);
+			expect(savedHero.artifactRing).toBe(3);
+			expect(JSON.parse(savedHero.artifactLevels)).toEqual([100, 80, 60]);
+		});
+
+		test('should store runes, titanGiftLevel, ascensions, and petId', async () => {
+			const runesArr = [43750, 30000, 25000, 20000, 15000];
+			const ascObj = { 1: [0, 1, 2], 2: [0, 1] };
+			const data = {
+				'1': {
+					id: 1, level: 130, star: 6, color: 18, power: 198000,
+					runes: runesArr,
+					titanGiftLevel: 25,
+					ascensions: ascObj,
+					petId: 6001,
+				},
+			};
+
+			await tracker.trackHeroesData(data);
+
+			const savedHero = mockStorage.add.mock.calls.find(
+				(c) => c[0] === 'heroes'
+			)?.[1];
+			expect(JSON.parse(savedHero.runes)).toEqual(runesArr);
+			expect(savedHero.titanGiftLevel).toBe(25);
+			expect(JSON.parse(savedHero.ascensions)).toEqual(ascObj);
+			expect(savedHero.petId).toBe(6001);
+		});
+
+		test('should cache heroes in metadata for fast UI access', async () => {
+			const data = {
+				'1': { id: 1, name: 'Galahad', level: 120, star: 6, color: 15, power: 50000 },
+			};
+
+			await tracker.trackHeroesData(data);
+
+			expect(mockStorage.setMetadata).toHaveBeenCalledWith(
+				'heroesData',
+				expect.arrayContaining([
+					expect.objectContaining({ heroId: 1, heroName: 'Galahad' }),
+				]),
+			);
+		});
+
+		test('should include new fields in dedup fingerprint', async () => {
+			const data1 = {
+				'1': {
+					id: 1, level: 100, star: 5, color: 15, power: 50000,
+					skills: { 2: 100 },
+					runes: [10000, 10000, 10000, 10000, 10000],
+				},
+			};
+			const data2 = {
+				'1': {
+					id: 1, level: 100, star: 5, color: 15, power: 50000,
+					skills: { 2: 101 },  // skill upgraded
+					runes: [10000, 10000, 10000, 10000, 10000],
+				},
+			};
+
+			await tracker.trackHeroesData(data1);
+			await tracker.trackHeroesData(data2);
+
+			// Both should be written (not deduped) because skills changed
+			// 2 hero snapshots + 2 activity events = 4 add calls
+			expect(mockStorage.add).toHaveBeenCalledTimes(4);
+		});
+
+		test('should handle hero with no optional fields gracefully', async () => {
+			const data = {
+				'1': { id: 1, level: 50, star: 2, color: 5, power: 10000 },
+			};
+
+			await tracker.trackHeroesData(data);
+
+			const savedHero = mockStorage.add.mock.calls.find(
+				(c) => c[0] === 'heroes'
+			)?.[1];
+			expect(savedHero.skins).toBe(0);
+			expect(savedHero.skillLevel1).toBe(0);
+			expect(savedHero.titanGiftLevel).toBe(0);
+			expect(savedHero.petId).toBe(0);
+			expect(JSON.parse(savedHero.rawSkills)).toEqual({});
+			expect(JSON.parse(savedHero.rawSkins)).toEqual({});
+			expect(JSON.parse(savedHero.runes)).toEqual([]);
+			expect(JSON.parse(savedHero.ascensions)).toEqual({});
+		});
 	});
 
 	// ─── Error Handling ──────────────────────────────────────────────────

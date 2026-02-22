@@ -702,16 +702,20 @@ class GameTracker {
 	}
 
 	/**
-	 * Track heroes from heroGetAll API call
-	 * Stores complete hero snapshots in IndexedDB (matches C# Hero entity)
+	 * Track heroes from heroGetAll API call.
+	 * Stores complete hero snapshots in IndexedDB with full data for
+	 * completion-percentage analysis.
 	 *
-	 * Entity Structure (19 properties):
-	 * - Identity: HeroId, HeroName
-	 * - Stats: Level, Stars, Color (rank), Power, Skins
-	 * - Skills: SkillLevel1-4 (individual levels)
-	 * - Artifacts: ArtifactWeapon, ArtifactBook, ArtifactRing (individual star levels)
-	 * - Advanced: GlyphData (JSON)
-	 * - Tracking: PlayerId, Timestamp
+	 * Game API hero object shape (heroGetAll response values):
+	 *   id, level, star, color, power, xp,
+	 *   skills: { skillId: level, ... },
+	 *   artifacts: [ { level, star }, ... ],  (3 entries: weapon, book, ring)
+	 *   runes: [ value, value, value, value, value ],  (5 glyphs)
+	 *   skins: { skinId: level, ... },
+	 *   titanGiftLevel,
+	 *   ascensions: { tier: [nodeIndex, ...], ... },
+	 *   slots: [0/1, ...],  (6 equipment slots)
+	 *   petId, favorPetId, perks
 	 *
 	 * @param {Object} data - Response from heroGetAll (object with hero IDs as keys)
 	 * @private
@@ -723,8 +727,14 @@ class GameTracker {
 		// ── Deduplication: skip if hero roster hasn't changed ────────────
 		// heroGetAll fires frequently; writing 50+ rows each time is
 		// expensive when nothing has actually been upgraded.
+		// Include skills/runes/skins/artifacts in fingerprint so upgrades
+		// within a session are captured.
 		const heroFingerprint = this._computeDataFingerprint(
-			Object.values(data).map((h) => [h.id, h.level, h.star, h.color, h.power])
+			Object.values(data).map((h) => [
+				h.id, h.level, h.star, h.color, h.power,
+				h.skills, h.runes, h.skins, h.titanGiftLevel,
+				h.artifacts?.map((a) => [a?.level, a?.star]),
+			])
 		);
 		if (heroFingerprint === this._lastHeroHash) {
 			console.log('[OrganizedJihad] Heroes unchanged — skipping snapshot');
@@ -732,33 +742,74 @@ class GameTracker {
 		}
 		this._lastHeroHash = heroFingerprint;
 
-		const heroes = Object.values(data).map((hero) => ({
-			heroId: hero.id,
-			heroName: hero.name || `Hero_${hero.id}`,
-			level: hero.level || 0,
-			stars: hero.star || 0,
-			color: hero.color || 0, // Rank/promotion (0=gray, 1=green, 2=blue, 3=blue+1, 4=blue+2, 5=violet, 6=violet+1, etc.)
-			power: hero.power || 0,
-			skins: hero.skins || 0, // Total skins unlocked
-			// Individual skill levels (Hero Wars has 4 skills per hero)
-			skillLevel1: hero.skills?.skill1?.level || hero.skills?.[0]?.level || 0,
-			skillLevel2: hero.skills?.skill2?.level || hero.skills?.[1]?.level || 0,
-			skillLevel3: hero.skills?.skill3?.level || hero.skills?.[2]?.level || 0,
-			skillLevel4: hero.skills?.skill4?.level || hero.skills?.[3]?.level || 0,
-			// Individual artifact star levels (0-6 stars each)
-			artifactWeapon: hero.artifacts?.[0]?.star || hero.artifacts?.[0]?.level || 0,
-			artifactBook: hero.artifacts?.[1]?.star || hero.artifacts?.[1]?.level || 0,
-			artifactRing: hero.artifacts?.[2]?.star || hero.artifacts?.[2]?.level || 0,
-			// Glyph data (complex nested structure - store as JSON)
-			glyphData: JSON.stringify(hero.glyphs || {}),
-			playerId: playerId,
-			timestamp: timestamp,
-		}));
+		const heroes = Object.values(data).map((hero) => {
+			// ── Skills: API uses { skillId: level } object ──────────────
+			const skillEntries = hero.skills && typeof hero.skills === 'object'
+				? Object.values(hero.skills) : [];
+			// Sort descending so skill slots 1-4 get the highest-leveled
+			// skills (the core 4); extra skills (ascension) are tracked
+			// in rawSkills.
+			const sortedSkills = [...skillEntries]
+				.filter((v) => typeof v === 'number')
+				.sort((a, b) => b - a);
+
+			// ── Skins: API returns { skinId: level } ────────────────────
+			const skinObj = hero.skins && typeof hero.skins === 'object' ? hero.skins : {};
+			const skinCount = Object.keys(skinObj).length;
+
+			// ── Artifacts: array of { level, star } ─────────────────────
+			const arts = Array.isArray(hero.artifacts) ? hero.artifacts : [];
+
+			return {
+				heroId: hero.id,
+				heroName: hero.name || `Hero_${hero.id}`,
+				level: hero.level || 0,
+				stars: hero.star || 0,
+				color: hero.color || 0,
+				power: hero.power || 0,
+
+				// Skin count (backward compat with C# model int field)
+				skins: skinCount,
+
+				// Individual skill levels (backward compat with C# model)
+				skillLevel1: sortedSkills[0] || 0,
+				skillLevel2: sortedSkills[1] || 0,
+				skillLevel3: sortedSkills[2] || 0,
+				skillLevel4: sortedSkills[3] || 0,
+
+				// Individual artifact star levels (backward compat)
+				artifactWeapon: arts[0]?.star || 0,
+				artifactBook: arts[1]?.star || 0,
+				artifactRing: arts[2]?.star || 0,
+
+				// ── New fields for completion % calculation ──────────────
+				// Raw skills object — preserves all skill IDs and levels
+				rawSkills: JSON.stringify(hero.skills || {}),
+				// Raw skins object — preserves skin IDs and levels
+				rawSkins: JSON.stringify(skinObj),
+				// Artifact levels (stars are in the backward-compat fields)
+				artifactLevels: JSON.stringify(arts.map((a) => a?.level || 0)),
+				// Glyph/rune levels (array of 5 values, max 43750 each)
+				runes: JSON.stringify(hero.runes || []),
+				// Titan spark gift level (max 30)
+				titanGiftLevel: hero.titanGiftLevel || 0,
+				// Ascension data (tiers → node arrays)
+				ascensions: JSON.stringify(hero.ascensions || {}),
+				// Pet assignment
+				petId: hero.petId || 0,
+
+				playerId: playerId,
+				timestamp: timestamp,
+			};
+		});
 
 		// Store each hero snapshot in IndexedDB heroes store
 		for (const hero of heroes) {
 			await this.storage.add('heroes', hero);
 		}
+
+		// Also cache in metadata for fast UI access (latest snapshot only)
+		await this.storage.setMetadata('heroesData', heroes);
 
 		console.log(`[OrganizedJihad] Heroes tracked: ${heroes.length} heroes stored as snapshots`);
 

@@ -28,6 +28,7 @@ import GoalsManager from './modules/goalsManager.js';
 import CalendarManager from './modules/calendarManager.js';
 import SuggestionsEngine from './modules/suggestionsEngine.js';
 import APIMonitor from './modules/apiMonitor.js';
+import GameOverlay from './modules/gameOverlay.js';
 import './styles/main.css';
 
 (async function () {
@@ -249,6 +250,10 @@ import './styles/main.css';
 	const suggestionsEngine = new SuggestionsEngine(prefStorage, gameTracker, goalsManager);
 	const uiManager = new UIManager(prefStorage, idbStorage, gameTracker, goalsManager, calendarManager, suggestionsEngine);
 
+	// Initialize game overlay (floating hero completion panel, toggle via Alt+H)
+	const gameOverlay = new GameOverlay(idbStorage, prefStorage);
+	gameOverlay.init();
+
 	// Initialize API Monitor for comprehensive API call logging
 	const apiMonitor = new APIMonitor(idbStorage);
 	await apiMonitor.init();
@@ -262,7 +267,10 @@ import './styles/main.css';
 	gameTracker.processAPIResponse = async function (request, response) {
 		apiCallCount++;
 		updateBadge(statusBadge, apiCallCount);
-		return originalProcessAPI(request, response);
+		const result = await originalProcessAPI(request, response);
+		// Notify game overlay when hero data may have changed
+		await gameOverlay.onHeroDataUpdated();
+		return result;
 	};
 
 	// Click badge → toggle overlay
