@@ -34,6 +34,22 @@ class UIManager {
 		this._savedPos = this.prefStorage.get('overlayPosition', null);
 		this._savedSize = this.prefStorage.get('overlaySize', null);
 		this._isMinimized = this.prefStorage.get('overlayMinimized', false);
+
+		// ── Pagination / sort / filter state for data-browser views ──
+		/** @type {number} Default page size for paginated tables */
+		this.PAGE_SIZE = 25;
+
+		/**
+		 * Per-view state: { page, sortField, sortDir, filter, subTab }
+		 * @type {Record<string, object>}
+		 */
+		this._viewState = {
+			heroes:    { page: 0, sortField: 'power', sortDir: 'desc', filter: '' },
+			titans:    { page: 0, sortField: 'power', sortDir: 'desc', filter: '' },
+			battles:   { page: 0, sortField: 'timestamp', sortDir: 'desc', filter: '', subTab: 'all' },
+			chests:    { page: 0, sortField: 'timestamp', sortDir: 'desc', filter: '' },
+			inventory: { page: 0, sortField: 'name', sortDir: 'asc', filter: '' },
+		};
 	}
 
 	/**
@@ -99,7 +115,10 @@ class UIManager {
 					<button class="oj-nav-btn active" data-view="dashboard">Dashboard</button>
 					<button class="oj-nav-btn" data-view="activity">Activity</button>
 					<button class="oj-nav-btn" data-view="heroes">Heroes</button>
+					<button class="oj-nav-btn" data-view="titans">Titans</button>
 					<button class="oj-nav-btn" data-view="battles">Battles</button>
+					<button class="oj-nav-btn" data-view="chests">Chests</button>
+					<button class="oj-nav-btn" data-view="inventory">Inventory</button>
 					<button class="oj-nav-btn" data-view="resources">Resources</button>
 					<button class="oj-nav-btn" data-view="settings">Settings</button>
 				</div>
@@ -354,9 +373,23 @@ class UIManager {
 					break;
 				case 'heroes':
 					content.innerHTML = await this.renderHeroes();
+					this._attachDataBrowserListeners('heroes');
+					break;
+				case 'titans':
+					content.innerHTML = await this.renderTitans();
+					this._attachDataBrowserListeners('titans');
 					break;
 				case 'battles':
 					content.innerHTML = await this.renderBattles();
+					this._attachDataBrowserListeners('battles');
+					break;
+				case 'chests':
+					content.innerHTML = await this.renderChests();
+					this._attachDataBrowserListeners('chests');
+					break;
+				case 'inventory':
+					content.innerHTML = await this.renderInventory();
+					this._attachDataBrowserListeners('inventory');
 					break;
 				case 'resources':
 					content.innerHTML = await this.renderResources();
@@ -482,7 +515,7 @@ class UIManager {
 						${errorCount > 0 ? `<div class="oj-status-row"><span>Errors</span><span class="oj-status-err">${errorCount}</span></div>` : ''}
 						<div class="oj-status-row">
 							<span>Version</span>
-							<span>3.1.0</span>
+							<span>0.9.0</span>
 						</div>
 					</div>
 				</div>
@@ -588,8 +621,8 @@ class UIManager {
 	}
 
 	/**
-	 * Heroes — display current hero roster from metadata cache.
-	 * Falls back to the `heroes` IDB store if metadata is empty.
+	 * Heroes — sortable, filterable, paginated hero roster.
+	 * Pulls from metadata `heroesData` with IDB fallback + dedup by heroId.
 	 *
 	 * Hero Wars color/rank names for readability:
 	 *  0=Gray, 1=Green, 2=Green+1, 3=Blue, 4=Blue+1, 5=Blue+2,
@@ -600,6 +633,8 @@ class UIManager {
 	 * @returns {Promise<string>} HTML content
 	 */
 	async renderHeroes() {
+		const vs = this._viewState.heroes;
+
 		// Prefer the metadata cache (latest roster, one row per hero)
 		let heroes = [];
 		try {
@@ -614,7 +649,6 @@ class UIManager {
 			try {
 				const all = await this.idbStorage.getAll('heroes', 5000);
 				if (all.length > 0) {
-					// Keep only the latest record per heroId
 					const byId = {};
 					for (const h of all) {
 						const key = h.heroId || h.id;
@@ -636,13 +670,28 @@ class UIManager {
 			`;
 		}
 
-		// Sort by power descending
-		heroes.sort((a, b) => (b.power || 0) - (a.power || 0));
+		// Filter
+		if (vs.filter) {
+			const q = vs.filter.toLowerCase();
+			heroes = heroes.filter((h) => {
+				const name = (h.heroName || h.name || '').toLowerCase();
+				return name.includes(q);
+			});
+		}
 
-		// Total team power
+		// Sort
+		heroes = this._sortData(heroes, vs.sortField, vs.sortDir);
+
+		// Total power (post-filter for accuracy)
 		const totalPower = heroes.reduce((s, h) => s + (h.power || 0), 0);
 
-		const rows = heroes.map((h) => {
+		// Paginate
+		const totalCount = heroes.length;
+		const totalPages = Math.max(1, Math.ceil(totalCount / this.PAGE_SIZE));
+		vs.page = Math.min(vs.page, totalPages - 1);
+		const pageItems = heroes.slice(vs.page * this.PAGE_SIZE, (vs.page + 1) * this.PAGE_SIZE);
+
+		const rows = pageItems.map((h) => {
 			const name = this._escapeHtml(h.heroName || h.name || `Hero #${h.heroId || h.id}`);
 			const colorName = this._colorRankName(h.color);
 			const colorClass = this._colorRankClass(h.color);
@@ -657,29 +706,41 @@ class UIManager {
 			`;
 		}).join('');
 
+		const sortInd = (field) => this._sortIndicator(vs.sortField, vs.sortDir, field);
+
 		return `
-			<div class="oj-heroes">
-				<h3>\uD83E\uDDB8 Heroes <span class="oj-muted">(${heroes.length} \u2022 ${totalPower.toLocaleString()} total power)</span></h3>
-				<table class="oj-table">
+			<div class="oj-heroes" data-browser="heroes">
+				<h3>\uD83E\uDDB8 Heroes <span class="oj-muted">(${totalCount} \u2022 ${totalPower.toLocaleString()} total power)</span></h3>
+				${this._renderSearchBar(vs.filter)}
+				<table class="oj-table oj-sortable">
 					<thead>
-						<tr><th>Name</th><th>Lvl</th><th>Stars</th><th>Rank</th><th>Power</th></tr>
+						<tr>
+							<th data-sort="name" class="oj-sort-header">Name ${sortInd('name')}</th>
+							<th data-sort="level" class="oj-sort-header">Lvl ${sortInd('level')}</th>
+							<th data-sort="stars" class="oj-sort-header">Stars ${sortInd('stars')}</th>
+							<th data-sort="color" class="oj-sort-header">Rank ${sortInd('color')}</th>
+							<th data-sort="power" class="oj-sort-header">Power ${sortInd('power')}</th>
+						</tr>
 					</thead>
 					<tbody>${rows}</tbody>
 				</table>
+				${this._renderPagination(vs.page, totalPages, totalCount)}
 			</div>
 		`;
 	}
 
 	/**
-	 * Battles — display battle history from the unified `battles` IDB store.
+	 * Battles — paginated battle history with sub-tab filtering by type.
 	 * All battle types (Arena, GrandArena, TitanArena, GuildWar) are stored in
-	 * a single store with a `battleType` field and `isWin` boolean.
+	 * a single `battles` store with a `battleType` field and `isWin` boolean.
 	 * @returns {Promise<string>} HTML content
 	 */
 	async renderBattles() {
+		const vs = this._viewState.battles;
+
 		let allBattles = [];
 		try {
-			allBattles = await this.idbStorage.getAll('battles', 200);
+			allBattles = await this.idbStorage.getAll('battles', 5000);
 		} catch { /* empty */ }
 
 		// Sort newest first
@@ -699,40 +760,64 @@ class UIManager {
 		}
 
 		// Overall stats
-		const wins = allBattles.filter((b) => b.isWin === true).length;
-		const losses = allBattles.length - wins;
-		const winRate = ((wins / allBattles.length) * 100).toFixed(1);
+		const totalWins = allBattles.filter((b) => b.isWin === true).length;
+		const totalLosses = allBattles.length - totalWins;
+		const overallWinRate = ((totalWins / allBattles.length) * 100).toFixed(1);
 
-		// Per-type breakdown
+		// Per-type counts for sub-tab pills
 		const types = ['Arena', 'GrandArena', 'TitanArena', 'GuildWar'];
 		const typeLabels = { Arena: 'Arena', GrandArena: 'Grand Arena', TitanArena: 'Titan Arena', GuildWar: 'Guild War' };
 		const typeIcons = { Arena: '\uD83C\uDFC6', GrandArena: '\uD83C\uDFDF\uFE0F', TitanArena: '\uD83D\uDCA0', GuildWar: '\u2694\uFE0F' };
+
+		/** @type {Record<string, {count: number, wins: number}>} */
 		const byType = {};
-		for (const t of types) {
-			const group = allBattles.filter((b) => b.battleType === t);
-			if (group.length > 0) {
-				const w = group.filter((b) => b.isWin === true).length;
-				byType[t] = { battles: group, wins: w, losses: group.length - w };
-			}
-		}
-		// Catch any unlabelled battles
-		const knownTypes = new Set(types);
-		const otherBattles = allBattles.filter((b) => !knownTypes.has(b.battleType));
-		if (otherBattles.length > 0) {
-			const w = otherBattles.filter((b) => b.isWin === true).length;
-			byType['Other'] = { battles: otherBattles, wins: w, losses: otherBattles.length - w };
+		for (const b of allBattles) {
+			const t = b.battleType || 'Other';
+			if (!byType[t]) byType[t] = { count: 0, wins: 0 };
+			byType[t].count++;
+			if (b.isWin === true) byType[t].wins++;
 		}
 
-		// Type summary pills
-		const pills = Object.entries(byType).map(([t, d]) => {
+		// Sub-tab pills (All + each type with counts)
+		const subTabs = ['all', ...types.filter((t) => byType[t])];
+		const pills = subTabs.map((t) => {
+			const active = vs.subTab === t ? 'oj-pill-active' : '';
+			if (t === 'all') {
+				return `<button class="oj-pill oj-pill-btn ${active}" data-subtab="all">\uD83D\uDCCA All (${allBattles.length})</button>`;
+			}
+			const d = byType[t];
 			const label = typeLabels[t] || t;
 			const icon = typeIcons[t] || '\u2753';
-			const wr = ((d.wins / d.battles.length) * 100).toFixed(0);
-			return `<span class="oj-pill" title="${label}: ${d.wins}W / ${d.losses}L">${icon} ${label} ${d.battles.length} (${wr}%)</span>`;
+			const wr = d.count > 0 ? ((d.wins / d.count) * 100).toFixed(0) : 0;
+			return `<button class="oj-pill oj-pill-btn ${active}" data-subtab="${t}">${icon} ${label} ${d.count} (${wr}%)</button>`;
 		}).join(' ');
 
-		// Recent battles table (last 40)
-		const rows = allBattles.slice(0, 40).map((b) => {
+		// Filter battles by selected sub-tab
+		let filtered = vs.subTab === 'all'
+			? allBattles
+			: allBattles.filter((b) => b.battleType === vs.subTab);
+
+		// Text filter (opponent name)
+		if (vs.filter) {
+			const q = vs.filter.toLowerCase();
+			filtered = filtered.filter((b) => {
+				const opp = (b.opponentName || b.defenderId || b.opponentId || '').toString().toLowerCase();
+				return opp.includes(q);
+			});
+		}
+
+		// Filtered stats
+		const fWins = filtered.filter((b) => b.isWin === true).length;
+		const fLosses = filtered.length - fWins;
+		const fWinRate = filtered.length > 0 ? ((fWins / filtered.length) * 100).toFixed(1) : '0.0';
+
+		// Paginate
+		const totalCount = filtered.length;
+		const totalPages = Math.max(1, Math.ceil(totalCount / this.PAGE_SIZE));
+		vs.page = Math.min(vs.page, totalPages - 1);
+		const pageItems = filtered.slice(vs.page * this.PAGE_SIZE, (vs.page + 1) * this.PAGE_SIZE);
+
+		const rows = pageItems.map((b) => {
 			const time = b.timestamp ? new Date(b.timestamp).toLocaleString() : '\u2014';
 			const result = b.isWin === true
 				? '<span class="oj-win">WIN</span>'
@@ -750,20 +835,326 @@ class UIManager {
 		}).join('');
 
 		return `
-			<div class="oj-battles">
+			<div class="oj-battles" data-browser="battles">
 				<h3>\u2694\uFE0F Battles <span class="oj-muted">(${allBattles.length} total)</span></h3>
 				<div class="oj-stats-grid oj-stats-sm">
-					${this._statCard(wins, 'Wins', '#4CAF50')}
-					${this._statCard(losses, 'Losses', '#f44336')}
-					${this._statCard(winRate + '%', 'Win Rate', '#2196F3')}
+					${this._statCard(fWins, 'Wins', '#4CAF50')}
+					${this._statCard(fLosses, 'Losses', '#f44336')}
+					${this._statCard(fWinRate + '%', 'Win Rate', '#2196F3')}
 				</div>
-				<div class="oj-pills">${pills}</div>
+				<div class="oj-sub-tabs">${pills}</div>
+				${this._renderSearchBar(vs.filter, 'Search opponent...')}
 				<table class="oj-table">
 					<thead>
 						<tr><th>Time</th><th>Type</th><th>Opponent</th><th>Result</th></tr>
 					</thead>
 					<tbody>${rows}</tbody>
 				</table>
+				${this._renderPagination(vs.page, totalPages, totalCount)}
+			</div>
+		`;
+	}
+
+	/**
+	 * Titans — sortable, filterable, paginated titan roster.
+	 * Pulls from metadata `titansData` with IDB `titans` store fallback.
+	 * Deduplicates by titanId, keeping only the latest snapshot.
+	 * @returns {Promise<string>} HTML content
+	 */
+	async renderTitans() {
+		const vs = this._viewState.titans;
+
+		let titans = [];
+		try {
+			const cached = await this.idbStorage.getMetadata('titansData', null);
+			if (Array.isArray(cached) && cached.length > 0) {
+				titans = cached;
+			}
+		} catch { /* empty */ }
+
+		// Fallback: read from the titans IDB store and deduplicate by titanId
+		if (titans.length === 0) {
+			try {
+				const all = await this.idbStorage.getAll('titans', 5000);
+				if (all.length > 0) {
+					const byId = {};
+					for (const t of all) {
+						const key = t.titanId || t.id;
+						if (!byId[key] || (t.timestamp || '') > (byId[key].timestamp || '')) {
+							byId[key] = t;
+						}
+					}
+					titans = Object.values(byId);
+				}
+			} catch { /* empty */ }
+		}
+
+		if (titans.length === 0) {
+			return `
+				<div class="oj-titans">
+					<h3>\uD83D\uDCA0 Titans</h3>
+					<p class="oj-empty">No titan data captured yet. Open your titan roster in the game to trigger data capture.</p>
+				</div>
+			`;
+		}
+
+		// Filter by name
+		if (vs.filter) {
+			const q = vs.filter.toLowerCase();
+			titans = titans.filter((t) => {
+				const name = (t.titanName || t.name || '').toLowerCase();
+				return name.includes(q);
+			});
+		}
+
+		// Sort
+		titans = this._sortData(titans, vs.sortField, vs.sortDir);
+
+		const totalPower = titans.reduce((s, t) => s + (t.power || 0), 0);
+
+		// Paginate
+		const totalCount = titans.length;
+		const totalPages = Math.max(1, Math.ceil(totalCount / this.PAGE_SIZE));
+		vs.page = Math.min(vs.page, totalPages - 1);
+		const pageItems = titans.slice(vs.page * this.PAGE_SIZE, (vs.page + 1) * this.PAGE_SIZE);
+
+		const rows = pageItems.map((t) => {
+			const name = this._escapeHtml(t.titanName || t.name || `Titan #${t.titanId || t.id}`);
+			const element = this._escapeHtml(t.element || '\u2014');
+			return `
+				<tr>
+					<td><strong>${name}</strong></td>
+					<td>${t.level || '\u2014'}</td>
+					<td>${'\u2B50'.repeat(Math.min(t.stars || 0, 6)) || '\u2014'}</td>
+					<td>${element}</td>
+					<td class="oj-num">${t.power ? t.power.toLocaleString() : '\u2014'}</td>
+				</tr>
+			`;
+		}).join('');
+
+		const sortInd = (field) => this._sortIndicator(vs.sortField, vs.sortDir, field);
+
+		return `
+			<div class="oj-titans" data-browser="titans">
+				<h3>\uD83D\uDCA0 Titans <span class="oj-muted">(${totalCount} \u2022 ${totalPower.toLocaleString()} total power)</span></h3>
+				${this._renderSearchBar(vs.filter)}
+				<table class="oj-table oj-sortable">
+					<thead>
+						<tr>
+							<th data-sort="name" class="oj-sort-header">Name ${sortInd('name')}</th>
+							<th data-sort="level" class="oj-sort-header">Lvl ${sortInd('level')}</th>
+							<th data-sort="stars" class="oj-sort-header">Stars ${sortInd('stars')}</th>
+							<th data-sort="element" class="oj-sort-header">Element ${sortInd('element')}</th>
+							<th data-sort="power" class="oj-sort-header">Power ${sortInd('power')}</th>
+						</tr>
+					</thead>
+					<tbody>${rows}</tbody>
+				</table>
+				${this._renderPagination(vs.page, totalPages, totalCount)}
+			</div>
+		`;
+	}
+
+	/**
+	 * Chests — paginated log of chest openings with drop details.
+	 * Reads from metadata `chestOpeningHistory` and/or the `chests` IDB store.
+	 * @returns {Promise<string>} HTML content
+	 */
+	async renderChests() {
+		const vs = this._viewState.chests;
+
+		let chests = [];
+		try {
+			const cached = await this.idbStorage.getMetadata('chestOpeningHistory', null);
+			if (Array.isArray(cached) && cached.length > 0) {
+				chests = cached;
+			}
+		} catch { /* empty */ }
+
+		// Fallback: read from chests IDB store
+		if (chests.length === 0) {
+			try {
+				chests = await this.idbStorage.getAll('chests', 5000);
+			} catch { /* empty */ }
+		}
+
+		if (chests.length === 0) {
+			return `
+				<div class="oj-chests">
+					<h3>\uD83C\uDF81 Chests</h3>
+					<p class="oj-empty">No chest data captured yet. Open some chests in the game to start tracking!</p>
+				</div>
+			`;
+		}
+
+		// Sort newest first by default
+		chests.sort((a, b) => {
+			const ta = a.timestamp ? new Date(a.timestamp).getTime() : 0;
+			const tb = b.timestamp ? new Date(b.timestamp).getTime() : 0;
+			return tb - ta;
+		});
+
+		// Summary stats: count by type
+		const byType = {};
+		for (const c of chests) {
+			const type = c.chestType || c.type || 'Unknown';
+			byType[type] = (byType[type] || 0) + 1;
+		}
+
+		const typePills = Object.entries(byType).map(([type, count]) =>
+			`<span class="oj-pill">\uD83C\uDF81 ${this._escapeHtml(type)}: ${count}</span>`
+		).join(' ');
+
+		// Filter
+		if (vs.filter) {
+			const q = vs.filter.toLowerCase();
+			chests = chests.filter((c) => {
+				const type = (c.chestType || c.type || '').toLowerCase();
+				return type.includes(q);
+			});
+		}
+
+		// Paginate
+		const totalCount = chests.length;
+		const totalPages = Math.max(1, Math.ceil(totalCount / this.PAGE_SIZE));
+		vs.page = Math.min(vs.page, totalPages - 1);
+		const pageItems = chests.slice(vs.page * this.PAGE_SIZE, (vs.page + 1) * this.PAGE_SIZE);
+
+		const rows = pageItems.map((c) => {
+			const time = c.timestamp ? new Date(c.timestamp).toLocaleString() : '\u2014';
+			const type = this._escapeHtml(c.chestType || c.type || 'Unknown');
+			const drops = Array.isArray(c.drops) ? c.drops.length : (c.dropCount || '\u2014');
+			const notable = Array.isArray(c.drops)
+				? c.drops.filter((d) => d.rare || d.epic || d.legendary || (d.stars && d.stars >= 3))
+					.map((d) => this._escapeHtml(d.name || d.itemName || 'rare item'))
+					.slice(0, 3).join(', ') || '\u2014'
+				: '\u2014';
+			return `
+				<tr>
+					<td class="oj-mono">${time}</td>
+					<td>${type}</td>
+					<td class="oj-num">${drops}</td>
+					<td>${notable}</td>
+				</tr>
+			`;
+		}).join('');
+
+		return `
+			<div class="oj-chests" data-browser="chests">
+				<h3>\uD83C\uDF81 Chests <span class="oj-muted">(${chests.length} total openings)</span></h3>
+				<div class="oj-pills">${typePills}</div>
+				${this._renderSearchBar(vs.filter, 'Filter by chest type...')}
+				<table class="oj-table">
+					<thead>
+						<tr><th>Time</th><th>Type</th><th>Drops</th><th>Notable</th></tr>
+					</thead>
+					<tbody>${rows}</tbody>
+				</table>
+				${this._renderPagination(vs.page, totalPages, totalCount)}
+			</div>
+		`;
+	}
+
+	/**
+	 * Inventory — display current inventory grouped by category.
+	 * Reads from metadata `inventoryData` or the `inventory` IDB store.
+	 * @returns {Promise<string>} HTML content
+	 */
+	async renderInventory() {
+		const vs = this._viewState.inventory;
+
+		let items = [];
+		try {
+			const cached = await this.idbStorage.getMetadata('inventoryData', null);
+			if (cached) {
+				// inventoryData might be a keyed object or an array
+				if (Array.isArray(cached)) {
+					items = cached;
+				} else if (typeof cached === 'object') {
+					// Convert { id: {...}, ... } to array
+					items = Object.values(cached).map((v) =>
+						typeof v === 'object' && v !== null ? v : { id: v }
+					);
+				}
+			}
+		} catch { /* empty */ }
+
+		// Fallback: read from inventory IDB store
+		if (items.length === 0) {
+			try {
+				const all = await this.idbStorage.getAll('inventory', 5000);
+				if (all.length > 0) {
+					// Keep only the latest record per item
+					const byId = {};
+					for (const it of all) {
+						const key = it.itemId || it.id;
+						if (!byId[key] || (it.timestamp || '') > (byId[key].timestamp || '')) {
+							byId[key] = it;
+						}
+					}
+					items = Object.values(byId);
+				}
+			} catch { /* empty */ }
+		}
+
+		if (items.length === 0) {
+			return `
+				<div class="oj-inventory">
+					<h3>\uD83C\uDF92 Inventory</h3>
+					<p class="oj-empty">No inventory data captured yet. Open your bag in the game to trigger data capture.</p>
+				</div>
+			`;
+		}
+
+		// Filter
+		if (vs.filter) {
+			const q = vs.filter.toLowerCase();
+			items = items.filter((it) => {
+				const name = (it.name || it.itemName || '').toLowerCase();
+				const cat = (it.category || it.type || '').toLowerCase();
+				return name.includes(q) || cat.includes(q);
+			});
+		}
+
+		// Sort
+		items = this._sortData(items, vs.sortField, vs.sortDir);
+
+		// Paginate
+		const totalCount = items.length;
+		const totalPages = Math.max(1, Math.ceil(totalCount / this.PAGE_SIZE));
+		vs.page = Math.min(vs.page, totalPages - 1);
+		const pageItems = items.slice(vs.page * this.PAGE_SIZE, (vs.page + 1) * this.PAGE_SIZE);
+
+		const rows = pageItems.map((it) => {
+			const name = this._escapeHtml(it.name || it.itemName || `Item #${it.itemId || it.id}`);
+			const qty = it.count ?? it.quantity ?? '\u2014';
+			const category = this._escapeHtml(it.category || it.type || '\u2014');
+			return `
+				<tr>
+					<td><strong>${name}</strong></td>
+					<td>${category}</td>
+					<td class="oj-num">${typeof qty === 'number' ? qty.toLocaleString() : qty}</td>
+				</tr>
+			`;
+		}).join('');
+
+		const sortInd = (field) => this._sortIndicator(vs.sortField, vs.sortDir, field);
+
+		return `
+			<div class="oj-inventory" data-browser="inventory">
+				<h3>\uD83C\uDF92 Inventory <span class="oj-muted">(${totalCount} items)</span></h3>
+				${this._renderSearchBar(vs.filter, 'Search items...')}
+				<table class="oj-table oj-sortable">
+					<thead>
+						<tr>
+							<th data-sort="name" class="oj-sort-header">Name ${sortInd('name')}</th>
+							<th data-sort="category" class="oj-sort-header">Category ${sortInd('category')}</th>
+							<th data-sort="count" class="oj-sort-header">Qty ${sortInd('count')}</th>
+						</tr>
+					</thead>
+					<tbody>${rows}</tbody>
+				</table>
+				${this._renderPagination(vs.page, totalPages, totalCount)}
 			</div>
 		`;
 	}
@@ -919,7 +1310,7 @@ class UIManager {
 
 				<div class="oj-settings-group">
 					<h4>About</h4>
-					<p>OrganizedJihad \u2014 Hero Wars Tracker v3.1.0</p>
+					<p>OrganizedJihad \u2014 Hero Wars Tracker v0.9.0</p>
 					<p class="oj-muted">Tracks gameplay data locally via IndexedDB. Optional C# API sync.</p>
 				</div>
 			</div>
@@ -1027,6 +1418,168 @@ class UIManager {
 		} else {
 			this.show();
 		}
+	}
+
+	// =====================================================================
+	// Data Browser Shared Components
+	// =====================================================================
+
+	/**
+	 * Render a search/filter input bar.
+	 *
+	 * @param {string} currentFilter - Current filter text
+	 * @param {string} [placeholder='Search...'] - Placeholder text
+	 * @returns {string} HTML
+	 */
+	_renderSearchBar(currentFilter, placeholder = 'Search...') {
+		const val = this._escapeHtml(currentFilter || '');
+		return `
+			<div class="oj-search-bar">
+				<input type="text" class="oj-search-input" placeholder="${placeholder}"
+				       value="${val}" aria-label="${placeholder}">
+			</div>
+		`;
+	}
+
+	/**
+	 * Render pagination controls (Prev / Page X of Y / Next).
+	 *
+	 * @param {number} currentPage - Zero-based current page
+	 * @param {number} totalPages  - Total number of pages
+	 * @param {number} totalItems  - Total number of items
+	 * @returns {string} HTML
+	 */
+	_renderPagination(currentPage, totalPages, totalItems) {
+		if (totalPages <= 1) {
+			return `<div class="oj-pagination"><span class="oj-muted">${totalItems} items</span></div>`;
+		}
+		const prevDisabled = currentPage <= 0 ? 'disabled' : '';
+		const nextDisabled = currentPage >= totalPages - 1 ? 'disabled' : '';
+		return `
+			<div class="oj-pagination">
+				<button class="oj-btn oj-btn-sm oj-page-prev" ${prevDisabled}>\u25C0 Prev</button>
+				<span class="oj-page-info">Page ${currentPage + 1} of ${totalPages} <span class="oj-muted">(${totalItems} items)</span></span>
+				<button class="oj-btn oj-btn-sm oj-page-next" ${nextDisabled}>Next \u25B6</button>
+			</div>
+		`;
+	}
+
+	/**
+	 * Return a sort direction indicator arrow for a column header.
+	 *
+	 * @param {string} activeField - Currently active sort field
+	 * @param {string} activeDir   - Current sort direction ('asc'|'desc')
+	 * @param {string} field       - The field this header represents
+	 * @returns {string} Unicode arrow or empty string
+	 */
+	_sortIndicator(activeField, activeDir, field) {
+		if (activeField !== field) return '';
+		return activeDir === 'asc' ? '\u25B2' : '\u25BC';
+	}
+
+	/**
+	 * Generic client-side sort for an array of objects.
+	 * Handles string and numeric fields automatically.
+	 *
+	 * @param {Array<object>} data - Array to sort (mutated in-place)
+	 * @param {string} field     - Field name to sort by
+	 * @param {string} dir       - 'asc' or 'desc'
+	 * @returns {Array<object>} Sorted array
+	 */
+	_sortData(data, field, dir) {
+		const mul = dir === 'asc' ? 1 : -1;
+		// Map common aliases for hero/titan fields
+		const fieldMap = {
+			name: (obj) => (obj.heroName || obj.titanName || obj.name || obj.itemName || '').toLowerCase(),
+			level: (obj) => obj.level || 0,
+			stars: (obj) => obj.stars || 0,
+			power: (obj) => obj.power || 0,
+			color: (obj) => typeof obj.color === 'number' ? obj.color : parseInt(obj.color, 10) || 0,
+			element: (obj) => (obj.element || '').toLowerCase(),
+			count: (obj) => obj.count ?? obj.quantity ?? 0,
+			category: (obj) => (obj.category || obj.type || '').toLowerCase(),
+			timestamp: (obj) => obj.timestamp ? new Date(obj.timestamp).getTime() : 0,
+		};
+		const getter = fieldMap[field] || ((obj) => obj[field] ?? '');
+		return data.sort((a, b) => {
+			const va = getter(a);
+			const vb = getter(b);
+			if (typeof va === 'number' && typeof vb === 'number') return (va - vb) * mul;
+			return String(va).localeCompare(String(vb)) * mul;
+		});
+	}
+
+	/**
+	 * Attach interactive event listeners for data-browser views.
+	 * Handles: sort headers, search input, pagination buttons, sub-tab pills.
+	 * Re-renders the current view on any state change.
+	 *
+	 * @param {string} viewName - The view name (heroes/titans/battles/chests/inventory)
+	 */
+	_attachDataBrowserListeners(viewName) {
+		const content = this.overlay.querySelector('#oj-content');
+		if (!content) return;
+		const vs = this._viewState[viewName];
+		if (!vs) return;
+
+		// Sort headers
+		content.querySelectorAll('.oj-sort-header[data-sort]').forEach((th) => {
+			th.addEventListener('click', () => {
+				const field = th.dataset.sort;
+				if (vs.sortField === field) {
+					vs.sortDir = vs.sortDir === 'asc' ? 'desc' : 'asc';
+				} else {
+					vs.sortField = field;
+					vs.sortDir = 'desc';
+				}
+				vs.page = 0;
+				this.renderView(viewName);
+			});
+		});
+
+		// Search input (debounced)
+		const searchInput = content.querySelector('.oj-search-input');
+		if (searchInput) {
+			let debounceTimer = null;
+			searchInput.addEventListener('input', (e) => {
+				clearTimeout(debounceTimer);
+				debounceTimer = setTimeout(() => {
+					vs.filter = e.target.value.trim();
+					vs.page = 0;
+					this.renderView(viewName);
+				}, 250);
+			});
+			// Restore focus & cursor position after re-render
+			searchInput.focus();
+			searchInput.setSelectionRange(searchInput.value.length, searchInput.value.length);
+		}
+
+		// Pagination buttons
+		const prevBtn = content.querySelector('.oj-page-prev');
+		if (prevBtn) {
+			prevBtn.addEventListener('click', () => {
+				if (vs.page > 0) {
+					vs.page--;
+					this.renderView(viewName);
+				}
+			});
+		}
+		const nextBtn = content.querySelector('.oj-page-next');
+		if (nextBtn) {
+			nextBtn.addEventListener('click', () => {
+				vs.page++;
+				this.renderView(viewName);
+			});
+		}
+
+		// Sub-tab pills (battles view)
+		content.querySelectorAll('.oj-pill-btn[data-subtab]').forEach((pill) => {
+			pill.addEventListener('click', () => {
+				vs.subTab = pill.dataset.subtab;
+				vs.page = 0;
+				this.renderView(viewName);
+			});
+		});
 	}
 
 	// =====================================================================

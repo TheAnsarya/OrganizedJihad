@@ -257,4 +257,47 @@ describe('IndexedDBStorage', () => {
 			expect(all).toHaveLength(0);
 		});
 	});
+
+	// ─── Pagination (getPage) ────────────────────────────────────────────
+
+	describe('Pagination', () => {
+		beforeEach(async () => {
+			// Seed 10 hero records with incrementing timestamps
+			for (let i = 1; i <= 10; i++) {
+				await storage.add('heroes', {
+					heroId: i,
+					heroName: `Hero ${i}`,
+					playerId: 100,
+					timestamp: new Date(2025, 0, i).toISOString(),
+					power: i * 100,
+				});
+			}
+		});
+
+		test('should return first page of records', async () => {
+			const page = await storage.getPage('heroes', { limit: 3, offset: 0, direction: 'next' });
+			expect(page).toHaveLength(3);
+		});
+
+		test('should skip records with offset', async () => {
+			const page = await storage.getPage('heroes', { limit: 3, offset: 5, direction: 'next' });
+			expect(page).toHaveLength(3);
+		});
+
+		test('should return remaining records on last page', async () => {
+			const page = await storage.getPage('heroes', { limit: 4, offset: 8, direction: 'next' });
+			expect(page).toHaveLength(2);
+		});
+
+		test('should return empty array when offset exceeds count', async () => {
+			const page = await storage.getPage('heroes', { limit: 5, offset: 100, direction: 'next' });
+			expect(page).toHaveLength(0);
+		});
+
+		test('should default to limit 25 and direction prev', async () => {
+			const page = await storage.getPage('heroes');
+			// All 10 fit in default page size of 25
+			expect(page).toHaveLength(10);
+		});
+	});
 });

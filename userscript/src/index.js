@@ -5,7 +5,7 @@
 // ==UserScript==  (informational — webpack banner is authoritative)
 // @name         OrganizedJihad - Hero Wars Tracker
 // @namespace    http://tampermonkey.net/
-// @version      3.1.0
+// @version      0.9.0
 // @description  Track and manage Hero Wars game data with IndexedDB storage and in-game UI
 // @author       Andy Hubbard <me@ansarya.com>
 // @match        https://i-heroes-fb.nextersglobal.com/*
@@ -45,7 +45,7 @@ import './styles/main.css';
 	}
 
 	console.log(
-		'%c[OrganizedJihad]%c Hero Wars Tracker v3.1.0 Loaded',
+		'%c[OrganizedJihad]%c Hero Wars Tracker v0.9.0 Loaded',
 		'color: #4CAF50; font-weight: bold; font-size: 14px;',
 		'color: #2196F3; font-size: 14px;'
 	);

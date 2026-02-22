@@ -549,3 +549,104 @@
 		grid-template-columns: repeat(2, 1fr);
 	}
 }
+
+/* ── Data Browser: Search Bar ─────────────────────────────────────── */
+
+.oj-search-bar {
+	margin: 6px 0 10px;
+}
+
+.oj-search-input {
+	width: 100%;
+	padding: 6px 10px;
+	border: 1px solid rgba(255, 255, 255, 0.2);
+	border-radius: 6px;
+	background: rgba(0, 0, 0, 0.25);
+	color: #fff;
+	font-size: 12px;
+	outline: none;
+	box-sizing: border-box;
+}
+
+.oj-search-input::placeholder {
+	color: rgba(255, 255, 255, 0.4);
+}
+
+.oj-search-input:focus {
+	border-color: #4fc3f7;
+	box-shadow: 0 0 0 2px rgba(79, 195, 247, 0.2);
+}
+
+/* ── Data Browser: Pagination ─────────────────────────────────────── */
+
+.oj-pagination {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	gap: 12px;
+	padding: 10px 0 4px;
+	font-size: 12px;
+}
+
+.oj-page-info {
+	color: #b0bec5;
+}
+
+.oj-btn-sm {
+	padding: 3px 10px;
+	font-size: 11px;
+	border-radius: 4px;
+}
+
+.oj-btn-sm:disabled,
+.oj-btn-sm[disabled] {
+	opacity: 0.3;
+	cursor: not-allowed;
+	pointer-events: none;
+}
+
+/* ── Data Browser: Sortable Headers ───────────────────────────────── */
+
+.oj-sort-header {
+	cursor: pointer;
+	user-select: none;
+	white-space: nowrap;
+}
+
+.oj-sort-header:hover {
+	color: #4fc3f7;
+}
+
+/* ── Data Browser: Sub-Tab Pills (interactive) ────────────────────── */
+
+.oj-sub-tabs {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 6px;
+	margin: 8px 0 10px;
+}
+
+.oj-pill-btn {
+	display: inline-block;
+	padding: 3px 10px;
+	background: rgba(255, 255, 255, 0.08);
+	border: 1px solid rgba(255, 255, 255, 0.15);
+	border-radius: 12px;
+	font-size: 11px;
+	color: #ccc;
+	white-space: nowrap;
+	cursor: pointer;
+	transition: background 0.15s, border-color 0.15s;
+}
+
+.oj-pill-btn:hover {
+	background: rgba(255, 255, 255, 0.15);
+	border-color: rgba(255, 255, 255, 0.3);
+}
+
+.oj-pill-active {
+	background: rgba(79, 195, 247, 0.25);
+	border-color: #4fc3f7;
+	color: #4fc3f7;
+	font-weight: 600;
+}

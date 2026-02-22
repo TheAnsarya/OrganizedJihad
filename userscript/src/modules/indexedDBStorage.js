@@ -476,6 +476,54 @@ class IndexedDBStorage {
 	}
 
 	/**
+	 * Get a paginated slice of records from a store, optionally via an index.
+	 *
+	 * Uses a cursor internally so only the requested page is materialised,
+	 * keeping memory usage bounded regardless of total store size.
+	 *
+	 * @param {string} storeName  - Object store name
+	 * @param {object} [opts]     - Pagination options
+	 * @param {number} [opts.offset=0]    - Records to skip
+	 * @param {number} [opts.limit=25]    - Max records to return
+	 * @param {string} [opts.indexName]   - Optional index to iterate
+	 * @param {string} [opts.direction='prev'] - Cursor direction ('next'|'prev')
+	 * @returns {Promise<Array>} - Page of records
+	 */
+	async getPage(storeName, opts = {}) {
+		await this.initPromise;
+		const { offset = 0, limit = 25, indexName = null, direction = 'prev' } = opts;
+
+		return new Promise((resolve, reject) => {
+			const transaction = this.db.transaction([storeName], 'readonly');
+			const store = transaction.objectStore(storeName);
+			const source = indexName ? store.index(indexName) : store;
+			const request = source.openCursor(null, direction);
+			const results = [];
+			let skipped = 0;
+
+			request.onsuccess = (event) => {
+				const cursor = event.target.result;
+				if (!cursor) {
+					resolve(results);
+					return;
+				}
+				if (skipped < offset) {
+					skipped++;
+					cursor.continue();
+					return;
+				}
+				if (results.length < limit) {
+					results.push(cursor.value);
+					cursor.continue();
+				} else {
+					resolve(results);
+				}
+			};
+			request.onerror = () => reject(request.error);
+		});
+	}
+
+	/**
 	 * Delete a record
 	 * @param {string} storeName - Object store name
 	 * @param {any} key - Record key
