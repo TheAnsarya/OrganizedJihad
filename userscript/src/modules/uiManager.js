@@ -1714,6 +1714,7 @@ class UIManager {
 	 */
 	renderSettings() {
 		const autoShow = this.prefStorage.get('uiVisible', false);
+		const autoHideBattle = this.prefStorage.get('autoHideBattle', true);
 		const trackingPrefs = this.gameTracker.getTrackingPrefs();
 		const opacity = this.prefStorage.get('overlayOpacity', 95);
 		const defaultTab = this.prefStorage.get('defaultTab', 'dashboard');
@@ -1753,6 +1754,10 @@ class UIManager {
 					<label class="oj-checkbox-label">
 						<input type="checkbox" id="oj-auto-show" ${autoShow ? 'checked' : ''}>
 						Show overlay automatically on page load
+					</label>
+					<label class="oj-checkbox-label">
+						<input type="checkbox" id="oj-auto-hide-battle" ${autoHideBattle ? 'checked' : ''}>
+						Auto-hide during battles
 					</label>
 					<div style="margin-top:6px">
 						<label style="display:flex;align-items:center;gap:8px;font-size:12px">
@@ -1922,6 +1927,14 @@ class UIManager {
 		if (autoShowCb) {
 			autoShowCb.addEventListener('change', (e) => {
 				this.prefStorage.set('uiVisible', e.target.checked);
+			});
+		}
+
+		// ── Auto-hide during battles checkbox (#50) ─────────────────────
+		const autoHideCb = this.overlay.querySelector('#oj-auto-hide-battle');
+		if (autoHideCb) {
+			autoHideCb.addEventListener('change', (e) => {
+				this.prefStorage.set('autoHideBattle', e.target.checked);
 			});
 		}
 

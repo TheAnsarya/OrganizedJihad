@@ -32,6 +32,7 @@ import CalendarManager from './modules/calendarManager.js';
 import SuggestionsEngine from './modules/suggestionsEngine.js';
 import APIMonitor from './modules/apiMonitor.js';
 import GameOverlay from './modules/gameOverlay.js';
+import DomTargeting from './modules/domTargeting.js';
 import './styles/main.css';
 
 (async function () {
@@ -249,6 +250,22 @@ import './styles/main.css';
 	const gameOverlay = new GameOverlay(idbStorage, prefStorage);
 	gameOverlay.init();
 
+	// Initialize DOM targeting for game-aware positioning (#50)
+	// Detects game canvas/container, tracks battle state from API,
+	// and auto-hides OJ elements during battles.
+	const domTargeting = new DomTargeting({
+		prefStorage,
+		onStateChange: (newState, oldState) => {
+			console.log(`[OrganizedJihad] Game state changed: ${oldState} → ${newState}`);
+		},
+	});
+	domTargeting.init();
+
+	// Register OJ elements for auto-hide during battles
+	domTargeting.registerElement(statusBadge);
+	if (uiManager.overlay) domTargeting.registerElement(uiManager.overlay);
+	if (gameOverlay.panel) domTargeting.registerElement(gameOverlay.panel);
+
 	// NOTE: APIMonitor is initialized AFTER gameTracker.init() (below)
 	// to avoid double-proxying XMLHttpRequest. GameTracker's XHR proxy
 	// handles API interception; APIMonitor only stores endpoints/stats.
@@ -262,6 +279,10 @@ import './styles/main.css';
 	gameTracker.processAPIResponse = async function (request, response) {
 		apiCallCount++;
 		updateBadge(statusBadge, apiCallCount);
+
+		// Notify DOM targeting about API calls for battle state detection (#50)
+		if (request?.name) domTargeting.onApiCall(request.name);
+
 		const result = await originalProcessAPI(request, response);
 		// Notify game overlay when hero data may have changed
 		await gameOverlay.onHeroDataUpdated();
@@ -329,5 +350,6 @@ import './styles/main.css';
 		if (window.organizedJihadSyncInterval) {
 			clearInterval(window.organizedJihadSyncInterval);
 		}
+		domTargeting.destroy();
 	});
 })();
