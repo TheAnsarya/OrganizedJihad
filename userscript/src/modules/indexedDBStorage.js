@@ -46,7 +46,7 @@
 class IndexedDBStorage {
 	constructor() {
 		this.dbName = 'OrganizedJihad';
-		this.version = 8; // v8: Added consumableRewards store for drop-rate analysis
+		this.version = 9; // v9: Added errorLog store for dedicated error tracking (#28)
 		this.db = null;
 		/** @type {Promise<IDBDatabase>} Resolves once the DB is open and upgraded. */
 		this.initPromise = this._openDatabase();
@@ -398,6 +398,19 @@ class IndexedDBStorage {
 					rewardStore.createIndex('itemType', 'itemType', { unique: false });   // 'consumable', 'gear', 'gold', 'starmoney', 'fragmentHero', 'fragmentTitan', 'coin', 'petCard', etc.
 					rewardStore.createIndex('itemId', 'itemId', { unique: false });       // Specific item ID within the type
 					rewardStore.createIndex('openingId', 'openingId', { unique: false }); // FK to chests store id
+				}
+
+				// === Phase 11: Dedicated Error Log Store (#28) ===
+
+				// Structured error records with context, stack traces, and
+				// timestamps. Replaces the old metadata-based error log which
+				// was limited to 50 entries in a single JSON blob. The dedicated
+				// store enables indexed queries, proper purge via retention
+				// policies, and larger capacity (200 entries).
+				if (!db.objectStoreNames.contains('errorLog')) {
+					const errorStore = db.createObjectStore('errorLog', { keyPath: 'id', autoIncrement: true });
+					errorStore.createIndex('timestamp', 'timestamp', { unique: false });
+					errorStore.createIndex('context', 'context', { unique: false });
 				}
 			};
 		});
@@ -863,6 +876,9 @@ class IndexedDBStorage {
 
 		// API logs — 7 days
 		apiLogs: 7,
+
+		// Error log — 30 days
+		errorLog: 30,
 	};
 
 	/**

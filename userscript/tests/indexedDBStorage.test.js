@@ -7,8 +7,8 @@
  *
  * Actual IndexedDBStorage key facts:
  *   - DB name: 'OrganizedJihad'
- *   - Version: 8
- *   - 35 object stores (snapshots, battles, heroes, titans, consumableRewards, etc.)
+ *   - Version: 9
+ *   - 36 object stores (snapshots, battles, heroes, titans, consumableRewards, errorLog, etc.)
  *   - Methods: add, put, get, getAll, getByIndex, delete, clear, ensureDB
  *   - init() is idempotent — returns the single initPromise
  */
@@ -46,7 +46,7 @@ describe('IndexedDBStorage', () => {
 		test('should initialize database successfully', async () => {
 			expect(storage.db).toBeDefined();
 			expect(storage.db.name).toBe('OrganizedJihad');
-			expect(storage.db.version).toBe(8);
+			expect(storage.db.version).toBe(9);
 		});
 
 		test('should create core object stores', async () => {
@@ -122,6 +122,17 @@ describe('IndexedDBStorage', () => {
 			expect(indexNames).toContain('itemType');
 			expect(indexNames).toContain('itemId');
 			expect(indexNames).toContain('openingId');
+		});
+
+		test('should create Phase 11 errorLog store with indexes (#28)', async () => {
+			const names = Array.from(storage.db.objectStoreNames);
+			expect(names).toContain('errorLog');
+
+			const tx = storage.db.transaction('errorLog', 'readonly');
+			const store = tx.objectStore('errorLog');
+			const indexNames = Array.from(store.indexNames);
+			expect(indexNames).toContain('timestamp');
+			expect(indexNames).toContain('context');
 		});
 
 		test('init() should be idempotent (calling multiple times returns same db)', async () => {

@@ -63,6 +63,17 @@ class GameTracker {
 		/** @type {number} Count of blocked requests this session */
 		this._blockedRequestCount = 0;
 
+		// ── Snapshot debounce (#28) ────────────────────────────────────────
+		// Coalesces rapid API response bursts into a single snapshot write.
+		// When processAPIResponse triggers updateSnapshot, instead of writing
+		// immediately we start a 5-second debounce timer. If another trigger
+		// arrives within 5s, the timer restarts. The snapshot is written only
+		// once the burst settles.
+		/** @type {number|null} Debounce timer ID for snapshot coalescing */
+		this._snapshotDebounceTimer = null;
+		/** @type {number} Debounce delay in milliseconds */
+		this._snapshotDebounceDelay = 5000;
+
 		// Dedicated trackers for complex event categories
 		this.upgradeTracker = new UpgradeTracker(this.storage);
 
@@ -267,20 +278,24 @@ class GameTracker {
 		}
 
 		try {
-			const errorLog = await this.storage.getMetadata('errorLog', []);
-			errorLog.push({
+			// Write to dedicated errorLog IDB store (#28)
+			await this.storage.add('errorLog', {
 				context,
 				message: error?.message || String(error),
 				stack: error?.stack?.substring(0, 500) || null,
 				timestamp: Date.now(),
 			});
 
-			// Keep only the 50 most-recent errors
-			if (errorLog.length > 50) {
-				errorLog.splice(0, errorLog.length - 50);
+			// Cap at 200 entries — prune oldest
+			const all = await this.storage.getAll('errorLog');
+			if (all.length > 200) {
+				const toDelete = all
+					.sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0))
+					.slice(0, all.length - 200);
+				for (const old of toDelete) {
+					await this.storage.delete('errorLog', old.id);
+				}
 			}
-
-			await this.storage.setMetadata('errorLog', errorLog);
 		} catch {
 			// Error logging itself failed — nothing more we can do
 		}
@@ -556,6 +571,10 @@ class GameTracker {
 		if (this._pushdTimerId) {
 			clearTimeout(this._pushdTimerId);
 			this._pushdTimerId = null;
+		}
+		if (this._snapshotDebounceTimer) {
+			clearTimeout(this._snapshotDebounceTimer);
+			this._snapshotDebounceTimer = null;
 		}
 		if (this.originalXHR) {
 			XMLHttpRequest.prototype.open = this.originalXHR.open;
@@ -1104,13 +1123,10 @@ class GameTracker {
 			: `Unhandled: ${unhandled.join(', ') || 'none'}`;
 		this._pushApiLog(allCallNames, status, detail, errors.length > 0 ? errors.join('; ') : null, this._lastInterceptedUrl);
 
-		// Trigger periodic data snapshot
-		try {
-			await this.updateSnapshot();
-		} catch (error) {
-			console.error('[OrganizedJihad] Error in updateSnapshot:', error);
-			await this._logError('updateSnapshot', error);
-		}
+		// Trigger debounced data snapshot (#28)
+		// Uses a 5-second coalescing window so rapid API bursts produce
+		// only a single snapshot write instead of one per response.
+		this._debouncedSnapshot();
 	}
 
 	// =====================================================================
@@ -3897,6 +3913,36 @@ class GameTracker {
 	async getStoredGuildId() {
 		const guildData = await this.storage.getMetadata('guildData', {});
 		return guildData.id || 0;
+	}
+
+	/**
+	 * Debounced snapshot trigger (#28).
+	 *
+	 * Called after every processAPIResponse dispatch cycle. Instead of
+	 * writing the snapshot immediately, starts (or restarts) a 5-second
+	 * timer. When the timer fires, `updateSnapshot()` is called once.
+	 *
+	 * This coalesces rapid API bursts — the game often sends 5-15 API calls
+	 * in a single batch, each dispatched sequentially. Without debounce,
+	 * `updateSnapshot` would be called once per batch anyway (60s throttle)
+	 * but the debounce avoids unnecessary throttle checks and makes the
+	 * intent explicit.
+	 *
+	 * @private
+	 */
+	_debouncedSnapshot() {
+		if (this._snapshotDebounceTimer !== null) {
+			clearTimeout(this._snapshotDebounceTimer);
+		}
+		this._snapshotDebounceTimer = setTimeout(async () => {
+			this._snapshotDebounceTimer = null;
+			try {
+				await this.updateSnapshot();
+			} catch (error) {
+				console.error('[OrganizedJihad] Error in updateSnapshot:', error);
+				await this._logError('updateSnapshot', error);
+			}
+		}, this._snapshotDebounceDelay);
 	}
 
 	/**

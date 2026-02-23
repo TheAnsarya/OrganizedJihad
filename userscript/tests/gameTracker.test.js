@@ -394,43 +394,38 @@ describe('GameTracker', () => {
 			const onErrorSpy = jest.fn();
 			tracker.onError = onErrorSpy;
 
-			// getMetadata needs to return an array for the errorLog key
-			mockStorage.getMetadata.mockResolvedValue([]);
-
 			await tracker._logError('testContext', new Error('boom'));
 
 			expect(tracker.errorCount).toBe(1);
 			expect(onErrorSpy).toHaveBeenCalledWith(1);
-			expect(mockStorage.setMetadata).toHaveBeenCalledWith(
+			expect(mockStorage.add).toHaveBeenCalledWith(
 				'errorLog',
-				expect.arrayContaining([
-					expect.objectContaining({
-						context: 'testContext',
-						message: 'boom',
-					}),
-				]),
+				expect.objectContaining({
+					context: 'testContext',
+					message: 'boom',
+				}),
 			);
 		});
 
-		test('should keep only last 50 errors in log', async () => {
-			// Pre-fill with 55 existing entries
-			const existing = Array.from({ length: 55 }, (_, i) => ({
+		test('should keep only last 200 errors in errorLog store', async () => {
+			// Pre-fill with 205 existing entries
+			const existing = Array.from({ length: 205 }, (_, i) => ({
+				id: i + 1,
 				context: `old_${i}`,
 				message: `error ${i}`,
 				stack: null,
 				timestamp: i,
 			}));
-			mockStorage.getMetadata.mockResolvedValue(existing);
+			mockStorage.getAll.mockResolvedValue(existing);
 
 			await tracker._logError('new_error', new Error('newest'));
 
-			const savedLog = mockStorage.setMetadata.mock.calls[0][1];
-			expect(savedLog.length).toBe(50);
-			expect(savedLog[savedLog.length - 1].context).toBe('new_error');
+			// Should delete the 5 oldest entries (205 > 200)
+			expect(mockStorage.delete).toHaveBeenCalledTimes(5);
 		});
 
 		test('should not throw if _logError itself fails', async () => {
-			mockStorage.getMetadata.mockRejectedValue(new Error('IDB dead'));
+			mockStorage.add.mockRejectedValue(new Error('IDB dead'));
 
 			await expect(tracker._logError('ctx', new Error('x'))).resolves.not.toThrow();
 			expect(tracker.errorCount).toBe(1);
@@ -1400,6 +1395,126 @@ describe('GameTracker', () => {
 				totalWins: 0,
 				totalLosses: 1,
 			}));
+		});
+	});
+
+	// ─── Error Logging (#28) ─────────────────────────────────────────────
+
+	describe('Error Logging', () => {
+		test('_logError should write to errorLog IDB store', async () => {
+			await tracker._logError('testContext', new Error('test error'));
+			expect(mockStorage.add).toHaveBeenCalledWith('errorLog', expect.objectContaining({
+				context: 'testContext',
+				message: 'test error',
+				timestamp: expect.any(Number),
+			}));
+		});
+
+		test('_logError should increment errorCount', async () => {
+			expect(tracker.errorCount).toBe(0);
+			await tracker._logError('ctx1', new Error('err1'));
+			expect(tracker.errorCount).toBe(1);
+			await tracker._logError('ctx2', new Error('err2'));
+			expect(tracker.errorCount).toBe(2);
+		});
+
+		test('_logError should call onError callback when set', async () => {
+			const onError = jest.fn();
+			tracker.onError = onError;
+			await tracker._logError('ctx', new Error('test'));
+			expect(onError).toHaveBeenCalledWith(1);
+		});
+
+		test('_logError should include stack trace (capped at 500 chars)', async () => {
+			const err = new Error('test');
+			err.stack = 'A'.repeat(600);
+			await tracker._logError('ctx', err);
+			const record = mockStorage.add.mock.calls.find((c) => c[0] === 'errorLog');
+			expect(record[1].stack).toHaveLength(500);
+		});
+
+		test('_logError should prune to 200 entries when exceeded', async () => {
+			const oldEntries = Array.from({ length: 205 }, (_, i) => ({
+				id: i + 1,
+				timestamp: i * 1000,
+				context: 'old',
+				message: 'err',
+			}));
+			mockStorage.getAll.mockResolvedValue(oldEntries);
+
+			await tracker._logError('ctx', new Error('new'));
+
+			// Should delete the 5 oldest entries (205 > 200)
+			// delete is called for each excess entry
+			expect(mockStorage.delete).toHaveBeenCalledTimes(5);
+			expect(mockStorage.delete).toHaveBeenCalledWith('errorLog', 1);
+			expect(mockStorage.delete).toHaveBeenCalledWith('errorLog', 5);
+		});
+
+		test('_logError should not throw if storage fails', async () => {
+			mockStorage.add.mockRejectedValue(new Error('IDB full'));
+			await expect(tracker._logError('ctx', new Error('test'))).resolves.not.toThrow();
+		});
+	});
+
+	// ─── Snapshot Debounce (#28) ─────────────────────────────────────────
+
+	describe('Snapshot Debounce', () => {
+		test('constructor should initialize debounce fields', () => {
+			expect(tracker._snapshotDebounceTimer).toBeNull();
+			expect(tracker._snapshotDebounceDelay).toBe(5000);
+		});
+
+		test('_debouncedSnapshot should schedule a timer', () => {
+			jest.useFakeTimers();
+			tracker._debouncedSnapshot();
+			expect(tracker._snapshotDebounceTimer).not.toBeNull();
+			clearTimeout(tracker._snapshotDebounceTimer);
+			jest.useRealTimers();
+		});
+
+		test('_debouncedSnapshot should restart timer on rapid calls', () => {
+			jest.useFakeTimers();
+			const spy = jest.spyOn(tracker, 'updateSnapshot').mockResolvedValue();
+
+			tracker._debouncedSnapshot();
+			const firstTimer = tracker._snapshotDebounceTimer;
+
+			// Call again before timer fires
+			tracker._debouncedSnapshot();
+			expect(tracker._snapshotDebounceTimer).not.toBe(firstTimer);
+
+			// Only after full delay should it fire
+			jest.advanceTimersByTime(5000);
+			expect(spy).toHaveBeenCalledTimes(1);
+
+			spy.mockRestore();
+			jest.useRealTimers();
+		});
+
+		test('_debouncedSnapshot should call updateSnapshot after delay', () => {
+			jest.useFakeTimers();
+			const spy = jest.spyOn(tracker, 'updateSnapshot').mockResolvedValue();
+
+			tracker._debouncedSnapshot();
+			expect(spy).not.toHaveBeenCalled();
+
+			jest.advanceTimersByTime(5000);
+			expect(spy).toHaveBeenCalledTimes(1);
+
+			spy.mockRestore();
+			jest.useRealTimers();
+		});
+
+		test('destroy should clear snapshot debounce timer', () => {
+			jest.useFakeTimers();
+			tracker._debouncedSnapshot();
+			expect(tracker._snapshotDebounceTimer).not.toBeNull();
+
+			tracker.destroy();
+			expect(tracker._snapshotDebounceTimer).toBeNull();
+
+			jest.useRealTimers();
 		});
 	});
 });
