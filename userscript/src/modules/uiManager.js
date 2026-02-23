@@ -142,10 +142,18 @@ class UIManager {
 
 		document.body.appendChild(this.overlay);
 
-		// Restore saved position if any
+		// Restore saved position if any, clamped to current viewport (#49)
 		if (this._savedPos) {
-			this.overlay.style.left = this._savedPos.x + 'px';
-			this.overlay.style.top = this._savedPos.y + 'px';
+			const vw = window.innerWidth;
+			const vh = window.innerHeight;
+			const minVisible = 40;
+			const w = this.overlay.offsetWidth;
+
+			const x = Math.max(-w + minVisible, Math.min(this._savedPos.x, vw - minVisible));
+			const y = Math.max(0, Math.min(this._savedPos.y, vh - minVisible));
+
+			this.overlay.style.left = x + 'px';
+			this.overlay.style.top = y + 'px';
 			this.overlay.style.right = 'auto';
 		}
 
@@ -230,6 +238,8 @@ class UIManager {
 	/**
 	 * Make the overlay draggable by its header bar.
 	 * Clears CSS "right" on first drag so "left" takes effect.
+	 * Clamps position to viewport boundaries so the panel can't be
+	 * dragged off-screen (#49).
 	 */
 	makeDraggable() {
 		const header = this.overlay.querySelector('.oj-header');
@@ -266,8 +276,23 @@ class UIManager {
 			const dx = e.clientX - startX;
 			const dy = e.clientY - startY;
 
-			this.overlay.style.left = (startLeft + dx) + 'px';
-			this.overlay.style.top = (startTop + dy) + 'px';
+			// Clamp to viewport boundaries (#49)
+			// Ensure at least 40px of the header stays visible so the user
+			// can always grab it to drag it back.
+			const w = this.overlay.offsetWidth;
+			const h = this.overlay.offsetHeight;
+			const vw = window.innerWidth;
+			const vh = window.innerHeight;
+			const minVisible = 40;
+
+			let newLeft = startLeft + dx;
+			let newTop = startTop + dy;
+
+			newLeft = Math.max(-w + minVisible, Math.min(newLeft, vw - minVisible));
+			newTop = Math.max(0, Math.min(newTop, vh - minVisible));
+
+			this.overlay.style.left = newLeft + 'px';
+			this.overlay.style.top = newTop + 'px';
 		});
 
 		document.addEventListener('mouseup', () => {
@@ -286,7 +311,8 @@ class UIManager {
 
 	/**
 	 * Make the overlay resizable via a bottom-right drag handle.
-	 * Enforces minimum size of 400×300 and persists size in localStorage.
+	 * Enforces minimum size of 400×300, maximum constrained by viewport,
+	 * and persists size in localStorage. (#49 — viewport clamping)
 	 */
 	makeResizable() {
 		const handle = this.overlay.querySelector('#oj-resize-handle');
@@ -321,8 +347,14 @@ class UIManager {
 			if (!isResizing) return;
 			e.preventDefault();
 
-			const newW = Math.max(MIN_WIDTH, startW + (e.clientX - startX));
-			const newH = Math.max(MIN_HEIGHT, startH + (e.clientY - startY));
+			// Clamp max size to viewport from current position (#49)
+			const left = parseInt(this.overlay.style.left, 10) || 0;
+			const top = parseInt(this.overlay.style.top, 10) || 0;
+			const maxW = window.innerWidth - left;
+			const maxH = window.innerHeight - top;
+
+			const newW = Math.max(MIN_WIDTH, Math.min(startW + (e.clientX - startX), maxW));
+			const newH = Math.max(MIN_HEIGHT, Math.min(startH + (e.clientY - startY), maxH));
 
 			this.overlay.style.width = newW + 'px';
 			this.overlay.style.height = newH + 'px';

@@ -1082,4 +1082,324 @@ describe('GameTracker', () => {
 			tracker._purgeIntervalId = null;
 		});
 	});
+
+	// ─── Pushd Hook (#38) ────────────────────────────────────────────────
+
+	describe('Pushd Hook', () => {
+		test('constructor should initialize pushd fields', () => {
+			expect(tracker._pushdModule).toBeNull();
+			expect(tracker._pushdRetryCount).toBe(0);
+			expect(tracker._pushdTimerId).toBeNull();
+			expect(tracker.pushEventCount).toBe(0);
+		});
+
+		test('_startPushdPolling should schedule a timer', () => {
+			jest.useFakeTimers();
+			tracker._startPushdPolling();
+			expect(tracker._pushdTimerId).not.toBeNull();
+			clearTimeout(tracker._pushdTimerId);
+			jest.useRealTimers();
+		});
+
+		test('_tryHookPushd should retry up to 10 times when nxg is unavailable', () => {
+			jest.useFakeTimers();
+			tracker._tryHookPushd();
+			expect(tracker._pushdRetryCount).toBe(1);
+			expect(tracker._pushdTimerId).not.toBeNull();
+
+			// Run through all retries
+			for (let i = 1; i < 10; i++) {
+				jest.advanceTimersByTime(10_000);
+			}
+			expect(tracker._pushdRetryCount).toBe(10);
+			expect(tracker._pushdTimerId).toBeNull();
+
+			jest.useRealTimers();
+		});
+
+		test('_tryHookPushd should hook pushd module when nxg is available', () => {
+			const mockPushd = {
+				on: jest.fn(),
+			};
+			// Simulate window.nxg
+			const origNxg = window.nxg;
+			window.nxg = {
+				getModule: (name) => (name === 'pushd' ? mockPushd : null),
+			};
+
+			tracker._tryHookPushd();
+
+			expect(tracker._pushdModule).toBe(mockPushd);
+			expect(mockPushd.on).toHaveBeenCalledWith('message', expect.any(Function));
+			expect(tracker._pushdTimerId).toBeNull(); // No retry scheduled
+
+			// Cleanup
+			window.nxg = origNxg;
+		});
+
+		test('_handlePushEvent should increment pushEventCount', async () => {
+			await tracker._handlePushEvent({ type: 'chatMessage', data: {} });
+			expect(tracker.pushEventCount).toBe(1);
+			await tracker._handlePushEvent({ action: 'test', data: {} });
+			expect(tracker.pushEventCount).toBe(2);
+		});
+
+		test('_handlePushEvent should dispatch to registered push handlers', async () => {
+			const handler = jest.fn().mockResolvedValue();
+			tracker.registerHandler('push:chatMessage', handler, 'testPushHandler');
+
+			await tracker._handlePushEvent({ type: 'chatMessage', data: { msg: 'hello' } });
+
+			expect(handler).toHaveBeenCalledWith('push:chatMessage', {}, { msg: 'hello' });
+		});
+
+		test('_handlePushEvent should log activity for significant events', async () => {
+			const spy = jest.spyOn(tracker, '_logActivity').mockResolvedValue();
+			await tracker._handlePushEvent({ type: 'chatMessage', data: {} });
+			expect(spy).toHaveBeenCalledWith('push', expect.stringContaining('chatMessage'), expect.any(Object));
+		});
+
+		test('destroy should clear pushd timer', async () => {
+			jest.useFakeTimers();
+			tracker._startPushdPolling();
+			expect(tracker._pushdTimerId).not.toBeNull();
+
+			tracker.destroy();
+			expect(tracker._pushdTimerId).toBeNull();
+
+			jest.useRealTimers();
+		});
+	});
+
+	// ─── WebSocket Proxy (#39) ───────────────────────────────────────────
+
+	describe('WebSocket Proxy', () => {
+		test('constructor should initialize _originalWsSend as null', () => {
+			expect(tracker._originalWsSend).toBeNull();
+		});
+
+		test('proxyWebSocket should replace WebSocket.prototype.send', () => {
+			const originalSend = WebSocket.prototype.send;
+			tracker.proxyWebSocket();
+			expect(WebSocket.prototype.send).not.toBe(originalSend);
+			expect(tracker._originalWsSend).toBe(originalSend);
+			// Cleanup
+			WebSocket.prototype.send = originalSend;
+		});
+
+		test('destroy should restore original WebSocket.prototype.send', async () => {
+			const originalSend = WebSocket.prototype.send;
+			tracker.proxyWebSocket();
+			expect(WebSocket.prototype.send).not.toBe(originalSend);
+
+			tracker.destroy();
+			expect(WebSocket.prototype.send).toBe(originalSend);
+		});
+	});
+
+	// ─── Handler Dependencies (#47) ──────────────────────────────────────
+
+	describe('Handler Dependencies', () => {
+		test('registerHandler should accept dependsOn option', () => {
+			const handler = jest.fn();
+			tracker.registerHandler('testMethod', handler, 'testLabel', { dependsOn: ['userGetInfo'] });
+			const entries = tracker._handlerRegistry.get('testMethod');
+			expect(entries).toHaveLength(1);
+			expect(entries[0].dependsOn).toEqual(['userGetInfo']);
+		});
+
+		test('registerHandler should warn on self-dependency', () => {
+			const spy = jest.spyOn(console, 'warn').mockImplementation(() => {});
+			const handler = jest.fn();
+			tracker.registerHandler('selfDep', handler, 'selfLabel', { dependsOn: ['selfDep'] });
+			expect(spy).toHaveBeenCalledWith(expect.stringContaining('circular self-dependency'));
+			spy.mockRestore();
+		});
+
+		test('_topologicalSortMethods should return original order for no deps', () => {
+			// Register handlers without dependencies
+			tracker._handlerRegistry.set('a', [{ handler: jest.fn(), label: 'a', dependsOn: [] }]);
+			tracker._handlerRegistry.set('b', [{ handler: jest.fn(), label: 'b', dependsOn: [] }]);
+			tracker._handlerRegistry.set('c', [{ handler: jest.fn(), label: 'c', dependsOn: [] }]);
+
+			const sorted = tracker._topologicalSortMethods(['a', 'b', 'c']);
+			expect(sorted).toEqual(['a', 'b', 'c']);
+		});
+
+		test('_topologicalSortMethods should sort deps before dependents', () => {
+			tracker._handlerRegistry.set('heroGetAll', [{
+				handler: jest.fn(), label: 'hero', dependsOn: ['userGetInfo'],
+			}]);
+			tracker._handlerRegistry.set('userGetInfo', [{
+				handler: jest.fn(), label: 'user', dependsOn: [],
+			}]);
+
+			// Even if heroGetAll comes first in the input, userGetInfo should come first
+			const sorted = tracker._topologicalSortMethods(['heroGetAll', 'userGetInfo']);
+			expect(sorted.indexOf('userGetInfo')).toBeLessThan(sorted.indexOf('heroGetAll'));
+		});
+
+		test('_topologicalSortMethods should handle circular deps gracefully', () => {
+			const spy = jest.spyOn(console, 'warn').mockImplementation(() => {});
+			tracker._handlerRegistry.set('a', [{ handler: jest.fn(), label: 'a', dependsOn: ['b'] }]);
+			tracker._handlerRegistry.set('b', [{ handler: jest.fn(), label: 'b', dependsOn: ['a'] }]);
+
+			const sorted = tracker._topologicalSortMethods(['a', 'b']);
+			// Both should still appear, warn should fire
+			expect(sorted).toHaveLength(2);
+			expect(spy).toHaveBeenCalledWith(expect.stringContaining('Circular'));
+			spy.mockRestore();
+		});
+
+		test('processAPIResponse should process deps before dependents', async () => {
+			const callOrder = [];
+
+			// Clear existing handlers and register fresh ones
+			tracker._handlerRegistry.clear();
+			tracker.registerHandler('heroGetAll', async () => {
+				callOrder.push('hero');
+			}, 'hero', { dependsOn: ['userGetInfo'] });
+			tracker.registerHandler('userGetInfo', async () => {
+				callOrder.push('user');
+			}, 'user');
+
+			// Response has heroGetAll BEFORE userGetInfo
+			const request = {
+				calls: [
+					{ name: 'heroGetAll', ident: 'hero', args: {} },
+					{ name: 'userGetInfo', ident: 'user', args: {} },
+				],
+			};
+			const response = {
+				results: [
+					{ ident: 'hero', result: { response: {} } },
+					{ ident: 'user', result: { response: {} } },
+				],
+			};
+
+			await tracker.processAPIResponse(request, response);
+
+			// userGetInfo should execute before heroGetAll despite order in response
+			expect(callOrder).toEqual(['user', 'hero']);
+		});
+	});
+
+	// ─── Opponent Tracking (#51) ─────────────────────────────────────────
+
+	describe('Opponent Tracking', () => {
+		test('updateOpponentRecord should create new record in opponents store', async () => {
+			mockStorage.get.mockResolvedValue(null);
+
+			await tracker.updateOpponentRecord('Arena', '12345', true, { name: 'Player1', power: 50000 });
+
+			expect(mockStorage.put).toHaveBeenCalledWith('opponents', expect.objectContaining({
+				opponentId: '12345',
+				opponentName: 'Player1',
+				totalWins: 1,
+				totalLosses: 0,
+				battleTypes: { Arena: { wins: 1, losses: 0 } },
+			}));
+		});
+
+		test('updateOpponentRecord should update existing record', async () => {
+			mockStorage.get.mockResolvedValue({
+				opponentId: '12345',
+				opponentName: 'Player1',
+				totalWins: 3,
+				totalLosses: 1,
+				battleTypes: { Arena: { wins: 3, losses: 1 } },
+				powerHistory: [],
+				firstSeen: Date.now() - 86400000,
+				lastSeen: Date.now() - 3600000,
+			});
+
+			await tracker.updateOpponentRecord('Arena', '12345', false, { power: 55000 });
+
+			expect(mockStorage.put).toHaveBeenCalledWith('opponents', expect.objectContaining({
+				opponentId: '12345',
+				totalWins: 3,
+				totalLosses: 2,
+				battleTypes: { Arena: { wins: 3, losses: 2 } },
+			}));
+		});
+
+		test('updateOpponentRecord should track different battle types separately', async () => {
+			mockStorage.get.mockResolvedValue({
+				opponentId: '12345',
+				opponentName: 'Player1',
+				totalWins: 1,
+				totalLosses: 0,
+				battleTypes: { Arena: { wins: 1, losses: 0 } },
+				powerHistory: [],
+				firstSeen: Date.now(),
+				lastSeen: Date.now(),
+			});
+
+			await tracker.updateOpponentRecord('GrandArena', '12345', true);
+
+			expect(mockStorage.put).toHaveBeenCalledWith('opponents', expect.objectContaining({
+				totalWins: 2,
+				totalLosses: 0,
+				battleTypes: {
+					Arena: { wins: 1, losses: 0 },
+					GrandArena: { wins: 1, losses: 0 },
+				},
+			}));
+		});
+
+		test('updateOpponentRecord should track power history (bounded to 50)', async () => {
+			const existingHistory = Array.from({ length: 49 }, (_, i) => ({
+				power: 40000 + i * 100,
+				timestamp: Date.now() - i * 3600000,
+				battleType: 'Arena',
+			}));
+			mockStorage.get.mockResolvedValue({
+				opponentId: '12345',
+				opponentName: 'Player1',
+				totalWins: 0,
+				totalLosses: 0,
+				battleTypes: {},
+				powerHistory: existingHistory,
+				firstSeen: Date.now(),
+				lastSeen: Date.now(),
+			});
+
+			await tracker.updateOpponentRecord('Arena', '12345', true, { power: 60000 });
+
+			const savedRecord = mockStorage.put.mock.calls[0][1];
+			expect(savedRecord.powerHistory).toHaveLength(50);
+			expect(savedRecord.powerHistory[49].power).toBe(60000);
+
+			// Add one more — should still be 50
+			mockStorage.get.mockResolvedValue(savedRecord);
+			await tracker.updateOpponentRecord('Arena', '12345', true, { power: 61000 });
+
+			const savedRecord2 = mockStorage.put.mock.calls[1][1];
+			expect(savedRecord2.powerHistory).toHaveLength(50);
+			expect(savedRecord2.powerHistory[49].power).toBe(61000);
+		});
+
+		test('updateOpponentRecord should skip if no opponentId', async () => {
+			await tracker.updateOpponentRecord('Arena', null, true);
+			await tracker.updateOpponentRecord('Arena', '', true);
+			expect(mockStorage.put).not.toHaveBeenCalled();
+		});
+
+		test('updateOpponentRecord should accept boolean isWin (true/false)', async () => {
+			mockStorage.get.mockResolvedValue(null);
+
+			await tracker.updateOpponentRecord('Arena', '100', true);
+			expect(mockStorage.put).toHaveBeenCalledWith('opponents', expect.objectContaining({
+				totalWins: 1,
+				totalLosses: 0,
+			}));
+
+			mockStorage.get.mockResolvedValue(null);
+			await tracker.updateOpponentRecord('Arena', '200', false);
+			expect(mockStorage.put).toHaveBeenCalledWith('opponents', expect.objectContaining({
+				totalWins: 0,
+				totalLosses: 1,
+			}));
+		});
+	});
 });

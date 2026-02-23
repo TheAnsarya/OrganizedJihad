@@ -115,6 +115,18 @@ class GameTracker {
 		/** @type {string} Hostname where the script is running */
 		this._pageHost = window.location.hostname;
 
+		// ── Pushd / WebSocket (#38, #39) ────────────────────────────────────
+		/** @type {object|null} Reference to the game's pushd module once found */
+		this._pushdModule = null;
+		/** @type {number} How many times we've attempted to find window.nxg */
+		this._pushdRetryCount = 0;
+		/** @type {number|null} setTimeout ID for pushd polling */
+		this._pushdTimerId = null;
+		/** @type {number} Count of push events received this session */
+		this.pushEventCount = 0;
+		/** @type {Function|null} Saved original WebSocket.prototype.send */
+		this._originalWsSend = null;
+
 		// ── Handler Registry (#46) ─────────────────────────────────────────
 		// Build the dispatch map: API method name → handler function(s).
 		// Called at construction so all handlers are ready before init().
@@ -477,10 +489,14 @@ class GameTracker {
 		try {
 			await this.storage.init();
 			this.proxyAPIRequests();
+			this.proxyWebSocket();
 			this.isTracking = true;
 
 			// Run initial data purge on startup (#45)
 			this._schedulePurge();
+
+			// Start polling for pushd module (#38)
+			this._startPushdPolling();
 
 			console.log('[OrganizedJihad] GameTracker initialized - monitoring Hero Wars API');
 		} catch (error) {
@@ -537,12 +553,178 @@ class GameTracker {
 			clearInterval(this._purgeIntervalId);
 			this._purgeIntervalId = null;
 		}
+		if (this._pushdTimerId) {
+			clearTimeout(this._pushdTimerId);
+			this._pushdTimerId = null;
+		}
 		if (this.originalXHR) {
 			XMLHttpRequest.prototype.open = this.originalXHR.open;
 			XMLHttpRequest.prototype.send = this.originalXHR.send;
 			XMLHttpRequest.prototype.setRequestHeader = this.originalXHR.setRequestHeader;
 		}
+		if (this._originalWsSend) {
+			WebSocket.prototype.send = this._originalWsSend;
+			this._originalWsSend = null;
+		}
 		this.isTracking = false;
+	}
+
+	// =====================================================================
+	// Pushd Hook (#38) — Real-time server push events
+	// =====================================================================
+
+	/**
+	 * Start polling for the game's `window.nxg` framework object.
+	 *
+	 * HeroWars exposes a global `window.nxg` object once the game engine
+	 * loads. `nxg.getModule('pushd')` returns the push-notification daemon
+	 * which has an EventEmitter-like `.on('message', cb)` API.
+	 *
+	 * We retry up to 10 times at 10-second intervals (matching HWA's
+	 * strategy), starting 10 seconds after init.
+	 *
+	 * @private
+	 */
+	_startPushdPolling() {
+		this._pushdRetryCount = 0;
+		this._pushdTimerId = setTimeout(() => this._tryHookPushd(), 10_000);
+	}
+
+	/**
+	 * Attempt to hook into the game's pushd module.
+	 *
+	 * @private
+	 */
+	_tryHookPushd() {
+		this._pushdTimerId = null;
+
+		try {
+			if (typeof window !== 'undefined' && window.nxg && typeof window.nxg.getModule === 'function') {
+				const pushd = window.nxg.getModule('pushd');
+				if (pushd && typeof pushd.on === 'function') {
+					this._pushdModule = pushd;
+					pushd.on('message', (event) => this._handlePushEvent(event));
+					console.log('[OrganizedJihad] Successfully hooked pushd module — real-time events active');
+					return; // success, no more retries
+				}
+			}
+		} catch (err) {
+			console.warn('[OrganizedJihad] pushd hook attempt failed:', err);
+		}
+
+		// Retry
+		this._pushdRetryCount++;
+		if (this._pushdRetryCount < 10) {
+			console.log(`[OrganizedJihad] pushd not available yet (attempt ${this._pushdRetryCount}/10), retrying in 10s`);
+			this._pushdTimerId = setTimeout(() => this._tryHookPushd(), 10_000);
+		} else {
+			console.log('[OrganizedJihad] pushd hook: gave up after 10 attempts — push events unavailable');
+		}
+	}
+
+	/**
+	 * Handle a push event received from the game's pushd module.
+	 *
+	 * Push events are real-time server notifications about game state
+	 * changes — new mail, chat messages, guild war updates, arena results,
+	 * etc. The exact event shape varies by type.
+	 *
+	 * @param {Object} event - Push event payload from the game server
+	 * @private
+	 */
+	async _handlePushEvent(event) {
+		this.pushEventCount++;
+
+		try {
+			const eventType = event?.type || event?.action || event?.name || 'unknown';
+			const eventData = event?.data || event;
+
+			// Log to API call log with 'push' status for visibility
+			this._pushApiLog([`push:${eventType}`], 'push', `Push event: ${eventType}`, null, 'pushd');
+
+			// Dispatch to handler registry if a handler is registered for the push event type
+			const handlers = this._handlerRegistry.get(`push:${eventType}`);
+			if (handlers && handlers.length > 0) {
+				for (const entry of handlers) {
+					try {
+						await entry.handler.call(this, `push:${eventType}`, {}, eventData);
+					} catch (err) {
+						console.error(`[OrganizedJihad] Error in push handler "${entry.label}" for ${eventType}:`, err);
+						await this._logError(`pushHandler:${eventType}:${entry.label}`, err);
+					}
+				}
+			}
+
+			// Log a live activity event for significant push types
+			const significantEvents = [
+				'chatMessage', 'updateMail', 'guildWarPointsChanged',
+				'arenaBattleResult', 'guildRaidDamage', 'dailyBonusReady',
+			];
+			if (significantEvents.includes(eventType)) {
+				await this._logActivity('push', `Server push: ${eventType}`, { pushType: eventType });
+			}
+		} catch (error) {
+			console.error('[OrganizedJihad] Error processing push event:', error);
+			await this._logError('handlePushEvent', error);
+		}
+	}
+
+	// =====================================================================
+	// WebSocket Proxy (#39) — Login dedup
+	// =====================================================================
+
+	/**
+	 * Proxy `WebSocket.prototype.send` to intercept WebSocket traffic.
+	 *
+	 * Based on HWA's hwh2.js pattern: wraps the `onmessage` handler on
+	 * first `send()` call per WS instance to filter duplicate
+	 * `iframeEvent.login` messages from the game's iframe communication.
+	 *
+	 * This is a complementary approach to the pushd hook — it doesn't
+	 * capture push events directly (the pushd module handles that) but
+	 * prevents duplicate login noise in the event stream.
+	 *
+	 * @private
+	 */
+	proxyWebSocket() {
+		const self = this;
+
+		// Save original for cleanup
+		this._originalWsSend = WebSocket.prototype.send;
+		const originalSend = this._originalWsSend;
+
+		WebSocket.prototype.send = function (data) {
+			// On first send, wrap onmessage to filter duplicate login events
+			if (!this._ojPatched) {
+				const originalOnMessage = this.onmessage;
+
+				this.onmessage = function (msgEvent) {
+					try {
+						const parsed = JSON.parse(msgEvent.data);
+						// Filter duplicate iframeEvent.login messages
+						if (parsed?.result?.type === 'iframeEvent.login') {
+							if (this._ojSeenLogin) {
+								return; // suppress duplicate
+							}
+							this._ojSeenLogin = true;
+						}
+					} catch {
+						// Not JSON — pass through
+					}
+
+					if (originalOnMessage) {
+						return originalOnMessage.apply(this, arguments);
+					}
+				};
+
+				this._ojPatched = true;
+			}
+
+			// Call original send
+			return originalSend.call(this, data);
+		};
+
+		console.log('[OrganizedJihad] WebSocket proxy installed — login dedup active');
 	}
 
 	/**
@@ -853,8 +1035,37 @@ class GameTracker {
 		const unhandled = [];
 		const errors = [];
 
-		// Process each result using the handler registry (#46)
+		// Topologically sort results so dependencies process first (#47)
+		const resultsByIdent = new Map();
 		for (const result of response.results) {
+			resultsByIdent.set(result.ident, result);
+		}
+		const identOrder = response.results.map((r) => r.ident);
+		const methodOrder = identOrder.map((ident) => callMap[ident]).filter(Boolean);
+		const uniqueMethods = [...new Set(methodOrder)];
+		const sortedMethods = this._topologicalSortMethods(uniqueMethods);
+
+		// Build sorted results list: dependency-ordered methods first,
+		// then any results without a mapped method name
+		const sortedResults = [];
+		for (const method of sortedMethods) {
+			// Find all results that map to this method (in original order)
+			for (const ident of identOrder) {
+				if (callMap[ident] === method && resultsByIdent.has(ident)) {
+					sortedResults.push(resultsByIdent.get(ident));
+					resultsByIdent.delete(ident);
+				}
+			}
+		}
+		// Append any unmapped results at the end
+		for (const ident of identOrder) {
+			if (resultsByIdent.has(ident)) {
+				sortedResults.push(resultsByIdent.get(ident));
+			}
+		}
+
+		// Process each result using the handler registry (#46)
+		for (const result of sortedResults) {
 			const callName = callMap[result.ident];
 			const args = callArgs[result.ident];
 			const responseData = result.result?.response;
@@ -911,20 +1122,125 @@ class GameTracker {
 	 *
 	 * Handlers are called with `(callName, args, responseData)` and bound
 	 * to `this` (the GameTracker instance). Multiple handlers can be
-	 * registered for the same method — they execute in registration order.
+	 * registered for the same method — they execute in registration order
+	 * (or dependency order if `dependsOn` is specified).
 	 *
 	 * @param {string|string[]} methods - API method name(s) to handle
 	 * @param {Function} handler - `async (callName, args, responseData) => void`
 	 * @param {string} [label] - Human-readable label for error logging
+	 * @param {Object} [options] - Optional configuration
+	 * @param {string[]} [options.dependsOn] - API method names that should
+	 *     be processed before this handler runs (within a single batch
+	 *     response). Used to topologically sort result processing order.
 	 */
-	registerHandler(methods, handler, label = handler.name || '(anonymous)') {
+	registerHandler(methods, handler, label = handler.name || '(anonymous)', options = {}) {
 		const methodList = Array.isArray(methods) ? methods : [methods];
+		const dependsOn = options.dependsOn || [];
+
+		// Validate: detect obviously circular self-dependencies
+		for (const method of methodList) {
+			if (dependsOn.includes(method)) {
+				console.warn(`[OrganizedJihad] Handler "${label}" has circular self-dependency on "${method}" — ignoring dependency`);
+				dependsOn.splice(dependsOn.indexOf(method), 1);
+			}
+		}
+
 		for (const method of methodList) {
 			if (!this._handlerRegistry.has(method)) {
 				this._handlerRegistry.set(method, []);
 			}
-			this._handlerRegistry.get(method).push({ handler, label });
+			this._handlerRegistry.get(method).push({ handler, label, dependsOn });
 		}
+	}
+
+	/**
+	 * Topologically sort API method names so that dependencies are
+	 * processed before dependents within a single batch response.
+	 *
+	 * Uses Kahn's algorithm. Methods without declared dependencies
+	 * retain their original order. Any cycles are detected and logged
+	 * as warnings — cycled nodes are appended at the end.
+	 *
+	 * @param {string[]} methodNames - Unordered method names from the response
+	 * @returns {string[]} Topologically sorted method names
+	 * @private
+	 */
+	_topologicalSortMethods(methodNames) {
+		const nameSet = new Set(methodNames);
+
+		// Build dependency graph: method → set of methods it depends on
+		// (only include deps that are actually in this batch)
+		/** @type {Map<string, Set<string>>} */
+		const deps = new Map();
+		/** @type {Map<string, number>} */
+		const inDegree = new Map();
+
+		for (const name of methodNames) {
+			deps.set(name, new Set());
+			inDegree.set(name, 0);
+		}
+
+		for (const name of methodNames) {
+			const handlers = this._handlerRegistry.get(name) || [];
+			for (const entry of handlers) {
+				for (const dep of entry.dependsOn || []) {
+					if (nameSet.has(dep) && dep !== name) {
+						deps.get(name).add(dep);
+					}
+				}
+			}
+		}
+
+		// Compute in-degrees
+		for (const [name, depSet] of deps) {
+			for (const dep of depSet) {
+				inDegree.set(dep, (inDegree.get(dep) || 0)); // ensure dep exists
+				// name depends on dep → dep must come first → name has in-degree from dep
+			}
+		}
+
+		// Invert: for each name, count how many others depend on it
+		// Actually, Kahn's works on in-degree of the node itself.
+		// Edge: dep → name (dep must come before name).
+		// in-degree of name = number of deps it has (in this batch).
+		for (const [name, depSet] of deps) {
+			inDegree.set(name, depSet.size);
+		}
+
+		// Kahn's algorithm
+		const queue = [];
+		for (const [name, degree] of inDegree) {
+			if (degree === 0) {
+				queue.push(name);
+			}
+		}
+
+		const sorted = [];
+		while (queue.length > 0) {
+			const current = queue.shift();
+			sorted.push(current);
+
+			// For each method that depends on `current`, decrement its in-degree
+			for (const [name, depSet] of deps) {
+				if (depSet.has(current)) {
+					depSet.delete(current);
+					const newDegree = depSet.size;
+					inDegree.set(name, newDegree);
+					if (newDegree === 0 && !sorted.includes(name)) {
+						queue.push(name);
+					}
+				}
+			}
+		}
+
+		// Detect cycles: any remaining methods not in sorted
+		const remaining = methodNames.filter((n) => !sorted.includes(n));
+		if (remaining.length > 0) {
+			console.warn(`[OrganizedJihad] Circular handler dependencies detected: ${remaining.join(', ')} — appending in original order`);
+			sorted.push(...remaining);
+		}
+
+		return sorted;
 	}
 
 	/**
@@ -945,11 +1261,11 @@ class GameTracker {
 
 		this.registerHandler('heroGetAll', async (_call, _args, data) => {
 			await this.trackHeroesData(data);
-		}, 'trackHeroesData');
+		}, 'trackHeroesData', { dependsOn: ['userGetInfo'] });
 
 		this.registerHandler('inventoryGet', async (_call, _args, data) => {
 			await this.trackInventoryData(data);
-		}, 'trackInventoryData');
+		}, 'trackInventoryData', { dependsOn: ['userGetInfo'] });
 
 		// ── Battle systems ──────────────────────────────────────────────
 		this.registerHandler('missionEnd', async (callName, args, data) => {
@@ -1614,8 +1930,11 @@ class GameTracker {
 		// Live activity event
 		await this._logActivity('battle', `Arena ${battle.isWin ? 'WIN' : 'LOSS'} vs opponent #${battle.opponentId || '?'}`, { isWin: battle.isWin });
 
-		// Update opponent record
-		await this.updateOpponentRecord(args.enemyUserId, 'Arena', battle.isWin);
+		// Update opponent record (#51 — fixed param order, boolean→string, use IDB store)
+		await this.updateOpponentRecord('Arena', args.enemyUserId, battle.isWin, {
+			name: data.response?.user?.name,
+			power: data.response?.user?.power || battle.opponentPower,
+		});
 
 		// Track resource rewards from arena battle
 		// Hero Wars arena rewards: gold, arena tokens, and sometimes emeralds
@@ -1689,7 +2008,11 @@ class GameTracker {
 		}
 
 		await this.storage.add('battles', battle);
-		await this.updateOpponentRecord(args.enemyUserId, 'TitanArena', battle.isWin);
+		// #51 — fixed param order, boolean→string, use IDB store
+		await this.updateOpponentRecord('TitanArena', args.enemyUserId, battle.isWin, {
+			name: data.response?.user?.name,
+			power: data.response?.user?.power || battle.opponentPower,
+		});
 
 		// Live activity event
 		await this._logActivity('battle', `Titan Arena ${battle.isWin ? 'WIN' : 'LOSS'} vs opponent #${battle.opponentId || '?'}`, { isWin: battle.isWin });
@@ -1773,7 +2096,11 @@ class GameTracker {
 		}
 
 		await this.storage.add('battles', battle);
-		await this.updateOpponentRecord(args.enemyUserId, 'GrandArena', battle.isWin);
+		// #51 — fixed param order, boolean→string, use IDB store
+		await this.updateOpponentRecord('GrandArena', args.enemyUserId, battle.isWin, {
+			name: data.response?.user?.name,
+			power: data.response?.user?.power || battle.opponentPower,
+		});
 
 		// Live activity event
 		await this._logActivity('battle', `Grand Arena ${battle.isWin ? 'WIN' : 'LOSS'} vs opponent #${battle.opponentId || '?'}`, { isWin: battle.isWin });
@@ -2643,36 +2970,82 @@ class GameTracker {
 	}
 
 	/**
-	 * Update win/loss record against specific opponents
+	 * Update win/loss record against a specific opponent.
 	 *
-	 * @param {string} battleType - Type of battle (arena, titanArena, etc)
-	 * @param {string} opponentId - Opponent user ID
-	 * @param {string} result - 'victory' or 'defeat'
+	 * Stores opponent intelligence in the dedicated `opponents` IDB object
+	 * store (previously written to metadata which was incorrect — #51).
+	 *
+	 * Tracks per-battleType win/loss counts, overall totals, opponent name,
+	 * and a bounded power-history array (last 50 observations).
+	 *
+	 * @param {string}  battleType - 'Arena', 'TitanArena', 'GrandArena', etc.
+	 * @param {string}  opponentId - Opponent user ID
+	 * @param {boolean} isWin      - true for victory, false for defeat
+	 * @param {Object}  [extra]    - Optional extra data { name, power }
 	 * @private
 	 */
-	async updateOpponentRecord(battleType, opponentId, result) {
-		const opponentRecords = await this.storage.getMetadata('opponentRecords', {});
-		const key = `${battleType}_${opponentId}`;
+	async updateOpponentRecord(battleType, opponentId, isWin, extra = {}) {
+		if (!opponentId) {
+			return; // no opponent to track
+		}
 
-		if (!opponentRecords[key]) {
-			opponentRecords[key] = {
-				battleType,
-				opponentId,
-				wins: 0,
-				losses: 0,
-				lastBattle: Date.now(),
+		const opponentIdStr = String(opponentId);
+
+		// Read existing record from IDB opponents store (or create new)
+		let record;
+		try {
+			record = await this.storage.get('opponents', opponentIdStr);
+		} catch {
+			record = null;
+		}
+
+		if (!record) {
+			record = {
+				opponentId: opponentIdStr,
+				opponentName: extra.name || null,
+				totalWins: 0,
+				totalLosses: 0,
+				battleTypes: {},
+				powerHistory: [],
+				firstSeen: Date.now(),
+				lastSeen: Date.now(),
 			};
 		}
 
-		if (result === 'victory') {
-			opponentRecords[key].wins++;
-		} else {
-			opponentRecords[key].losses++;
+		// Update name if provided
+		if (extra.name) {
+			record.opponentName = extra.name;
 		}
 
-		opponentRecords[key].lastBattle = Date.now();
+		// Update per-battleType stats
+		if (!record.battleTypes[battleType]) {
+			record.battleTypes[battleType] = { wins: 0, losses: 0 };
+		}
+		if (isWin) {
+			record.battleTypes[battleType].wins++;
+			record.totalWins++;
+		} else {
+			record.battleTypes[battleType].losses++;
+			record.totalLosses++;
+		}
 
-		await this.storage.setMetadata('opponentRecords', opponentRecords);
+		// Track power history (bounded to last 50 observations)
+		if (extra.power && extra.power > 0) {
+			record.powerHistory.push({
+				power: extra.power,
+				timestamp: Date.now(),
+				battleType,
+			});
+			// Keep only last 50 entries
+			if (record.powerHistory.length > 50) {
+				record.powerHistory = record.powerHistory.slice(-50);
+			}
+		}
+
+		record.lastSeen = Date.now();
+
+		// Upsert to IDB opponents store
+		await this.storage.put('opponents', record);
 	}
 
 	/**

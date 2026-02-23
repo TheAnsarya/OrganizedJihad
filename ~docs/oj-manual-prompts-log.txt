@@ -76,6 +76,9 @@ api call log says `⏭️ 3:05:36 AM [www.hero-wars.com] #5 → https://heroes-w
 
 Analyze the HeroWarsHelper script to see how it has installed itself and also how it tracks api calls and gathers data and displays ui; we have an example of how to do everything, use it; make issues, and plans and code-plans and chat/session logs and docs and epics/issues for all the work; continue;
 
+work issues and continue!
+
+work issues and continue!
 
 
 
