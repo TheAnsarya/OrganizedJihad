@@ -41,6 +41,28 @@ class GameTracker {
 		this.apiUrl = '';
 		this.requestHistory = {};
 
+		// ── Auth credentials captured from request headers (#36) ─────────
+		// Captured via setRequestHeader proxy. Enables future active API
+		// calls (opponent lookup, guild war scouting, etc.).
+		/** @type {{ authToken: string|null, sessionId: string|null, requestId: string|null }} */
+		this.capturedAuth = {
+			authToken: null,
+			sessionId: null,
+			requestId: null,
+		};
+
+		// ── Request history cleanup interval (#37) ────────────────────────
+		/** @type {number} Max age in ms before request history entries are pruned */
+		this._requestHistoryMaxAge = 60_000; // 60 seconds
+		/** @type {number|null} Interval ID for periodic cleanup */
+		this._cleanupIntervalId = null;
+
+		// ── Sentry / analytics blocking (#53) ─────────────────────────────
+		/** @type {boolean} Whether to block Sentry/analytics requests */
+		this.blockSentry = true;
+		/** @type {number} Count of blocked requests this session */
+		this._blockedRequestCount = 0;
+
 		// Dedicated trackers for complex event categories
 		this.upgradeTracker = new UpgradeTracker(this.storage);
 
@@ -92,6 +114,11 @@ class GameTracker {
 		this._apiCallLogMax = 100;
 		/** @type {string} Hostname where the script is running */
 		this._pageHost = window.location.hostname;
+
+		// ── Handler Registry (#46) ─────────────────────────────────────────
+		// Build the dispatch map: API method name → handler function(s).
+		// Called at construction so all handlers are ready before init().
+		this._buildHandlerRegistry();
 	}
 
 	/**
@@ -266,6 +293,39 @@ class GameTracker {
 	static _METHOD_PREFIX_RE = /^(user|hero|titan|clan|arena|guild|quest|pet|shop|tower|expedition|mission|inventory|chat|mail|dungeon|raid|artifact|skin|rune|boss|chest|consumable|campaign|adventure|offer|daily|grand|pet_|quest_|titanArena)/;
 
 	/**
+	 * URL patterns to block when Sentry/analytics blocking is enabled (#53).
+	 * Prevents error reporting from leaking info about our extension.
+	 *
+	 * @type {RegExp}
+	 * @private
+	 */
+	static _BLOCKED_URL_RE = /sentry\.io|bugsnag\.com|rollbar\.com|loggly\.com|errorception\.com/i;
+
+	/**
+	 * Prune stale entries from requestHistory to prevent memory leaks (#37).
+	 * Called periodically (every 30s) and after response processing.
+	 * Removes entries older than {@link _requestHistoryMaxAge} (60s default).
+	 *
+	 * Pattern from HeroWarsHelper hwh2.js requestHistory cleanup.
+	 *
+	 * @private
+	 */
+	_pruneRequestHistory() {
+		const now = Date.now();
+		const cutoff = now - this._requestHistoryMaxAge;
+		let pruned = 0;
+		for (const [id, entry] of Object.entries(this.requestHistory)) {
+			if (entry.timestamp < cutoff) {
+				delete this.requestHistory[id];
+				pruned++;
+			}
+		}
+		if (pruned > 0) {
+			console.debug(`[OrganizedJihad] Pruned ${pruned} stale request history entries`);
+		}
+	}
+
+	/**
 	 * Extract the calls array from a request object, handling both standard
 	 * (key = "calls") and minified/shortened property names produced by the
 	 * game's webpack bundle (e.g. "MPm" instead of "calls").
@@ -425,6 +485,23 @@ class GameTracker {
 	}
 
 	/**
+	 * Clean up timers and restore original XHR methods.
+	 * Call this if the tracker needs to be torn down gracefully.
+	 */
+	destroy() {
+		if (this._cleanupIntervalId) {
+			clearInterval(this._cleanupIntervalId);
+			this._cleanupIntervalId = null;
+		}
+		if (this.originalXHR) {
+			XMLHttpRequest.prototype.open = this.originalXHR.open;
+			XMLHttpRequest.prototype.send = this.originalXHR.send;
+			XMLHttpRequest.prototype.setRequestHeader = this.originalXHR.setRequestHeader;
+		}
+		this.isTracking = false;
+	}
+
+	/**
 	 * Proxy XMLHttpRequest to intercept Hero Wars API calls
 	 *
 	 * Implementation pattern from HeroWarsHelper:
@@ -448,8 +525,16 @@ class GameTracker {
 			setRequestHeader: XMLHttpRequest.prototype.setRequestHeader,
 		};
 
+		// ── Start request history cleanup timer (#37) ────────────────────
+		// Prune entries older than 60s every 30s to prevent memory leaks
+		// during long play sessions.
+		this._cleanupIntervalId = setInterval(() => {
+			self._pruneRequestHistory();
+		}, 30_000);
+
 		/**
-		 * Proxy XMLHttpRequest.open() to detect API calls
+		 * Proxy XMLHttpRequest.open() to detect API calls.
+		 * Also detects and optionally blocks Sentry/analytics requests (#53).
 		 * Hero Wars uses POST requests to *.nextersglobal.com/api/
 		 */
 		XMLHttpRequest.prototype.open = function (method, url, async, user, password) {
@@ -458,6 +543,7 @@ class GameTracker {
 				url,
 				timestamp: Date.now(),
 				requestId: `${Date.now()}_${Math.random()}`,
+				headers: {},
 			};
 
 			// Detect Hero Wars API URL pattern
@@ -469,7 +555,41 @@ class GameTracker {
 				}
 			}
 
+			// Detect Sentry / analytics endpoints (#53)
+			if (self.blockSentry && GameTracker._BLOCKED_URL_RE.test(url)) {
+				this._ojTracking.blocked = true;
+			}
+
 			return self.originalXHR.open.call(this, method, url, async, user, password);
+		};
+
+		/**
+		 * Proxy XMLHttpRequest.setRequestHeader() to capture auth headers (#36).
+		 * The game sets X-Auth-Token, X-Auth-Session-Id, X-Request-Id on every
+		 * API call. Capturing these enables future active API calls.
+		 *
+		 * Pattern from HeroWarsHelper hwh2.js setRequestHeader proxy.
+		 */
+		XMLHttpRequest.prototype.setRequestHeader = function (name, value) {
+			// Store all headers on the tracking object for this XHR
+			if (this._ojTracking) {
+				this._ojTracking.headers[name] = value;
+
+				// Capture auth-related headers specifically
+				switch (name) {
+					case 'X-Auth-Token':
+						self.capturedAuth.authToken = value;
+						break;
+					case 'X-Auth-Session-Id':
+						self.capturedAuth.sessionId = value;
+						break;
+					case 'X-Request-Id':
+						self.capturedAuth.requestId = value;
+						break;
+				}
+			}
+
+			return self.originalXHR.setRequestHeader.call(this, name, value);
 		};
 
 		/**
@@ -483,6 +603,24 @@ class GameTracker {
 		 * }
 		 */
 		XMLHttpRequest.prototype.send = function (data) {
+			// ── Block Sentry / analytics requests (#53) ──────────────────
+			// Silently abort blocked requests to prevent error reporting
+			// from leaking info about our extension's presence.
+			if (this._ojTracking?.blocked) {
+				self._blockedRequestCount++;
+				// Fake a successful response so callers don't retry
+				Object.defineProperty(this, 'status', { get: () => 200, configurable: true });
+				Object.defineProperty(this, 'readyState', { get: () => 4, configurable: true });
+				Object.defineProperty(this, 'responseText', { get: () => '{}', configurable: true });
+				Object.defineProperty(this, 'response', { get: () => '{}', configurable: true });
+				// Fire readystatechange so any listeners see completion
+				try {
+					this.dispatchEvent(new Event('readystatechange'));
+					this.dispatchEvent(new Event('load'));
+				} catch { /* ignore */ }
+				return; // Don't actually send
+			}
+
 			if (this._ojTracking?.isHeroWarsAPI && data) {
 				try {
 					// Decode request body to a string, then JSON.parse it.
@@ -567,6 +705,9 @@ class GameTracker {
 									err?.message || String(err),
 									self.requestHistory[requestId]?.url
 								);
+							}).finally(() => {
+								// Clean up processed entry immediately (#37)
+								delete self.requestHistory[requestId];
 							});
 						}
 					} catch (error) {
@@ -668,7 +809,7 @@ class GameTracker {
 		const unhandled = [];
 		const errors = [];
 
-		// Process each result
+		// Process each result using the handler registry (#46)
 		for (const result of response.results) {
 			const callName = callMap[result.ident];
 			const args = callArgs[result.ident];
@@ -679,219 +820,25 @@ class GameTracker {
 				continue;
 			}
 
-			try {
-				switch (callName) {
-					// Core player data
-					case 'userGetInfo':
-						await this.trackPlayerData(responseData);
-						break;
-					case 'heroGetAll':
-						await this.trackHeroesData(responseData);
-						break;
-					case 'inventoryGet':
-						await this.trackInventoryData(responseData);
-						break;
+			// Look up handlers in the registry
+			const handlers = this._handlerRegistry.get(callName);
+			if (!handlers || handlers.length === 0) {
+				if (callName) unhandled.push(callName);
+				continue;
+			}
 
-					// Battle systems
-					case 'missionEnd':
-						await this.trackMissionProgress(args, responseData);
-						await this.trackBattleResult(callName, args, responseData); // Still track as battle
-						break;
-					case 'towerEnd':
-						await this.trackTowerProgress(args, responseData);
-						await this.trackBattleResult(callName, args, responseData); // Still track as battle
-						break;
-					case 'bossEnd':
-						await this.trackBattleResult(callName, args, responseData);
-						break;
-
-					// Arena tracking
-					case 'arenaGetEnemies':
-						await this.trackArenaEnemies(responseData);
-						break;
-					case 'arenaAttack':
-					case 'arenaEnd':
-						await this.trackArenaBattle(args, responseData);
-						break;
-
-					// Titan Arena
-					case 'titanArenaGetEnemies':
-						await this.trackTitanArenaEnemies(responseData);
-						break;
-					case 'titanArenaAttack':
-						await this.trackTitanArenaBattle(args, responseData);
-						break;
-
-					// Grand Arena
-					case 'grandArenaGetEnemies':
-						await this.trackGrandArenaEnemies(responseData);
-						break;
-					case 'grandArenaAttack':
-						await this.trackGrandArenaBattle(args, responseData);
-						break;
-
-					// Guild War
-					case 'clanWarAttack':
-						await this.trackGuildWarBattle(args, responseData);
-						break;
-
-					// Guild Raid
-					case 'bossRaidAttack':
-						await this.trackRaidBossAttack(args, responseData);
-						break;
-
-					// Loot and rewards
-					case 'chestOpen':
-						await this.trackChestOpening(args, responseData);
-						break;
-					case 'shopBuy':
-						await this.trackShopPurchase(args, responseData);
-						break;
-					case 'questComplete':
-						await this.trackQuestComplete(args, responseData);
-						break;
-
-					// Other data
-					case 'questGetAll':
-						await this.trackQuestsData(responseData);
-						break;
-					case 'clanGetInfo':
-						await this.trackGuildData(responseData);
-						await this.trackGuildMembers(responseData); // Track fellow guild members
-						break;
-					case 'clanWarGetInfo':
-					case 'clanWarUserGetInfo':
-						await this.trackGuildWarInfo(responseData);
-						await this.trackGuildWarParticipation(responseData); // Track member participation
-						break;
-					case 'bossRaidGetInfo':
-						await this.trackRaidBossInfo(responseData);
-						await this.trackGuildRaidParticipation(responseData); // Track member raid stats
-						break;
-					case 'dungeonGetState':
-					case 'titanDungeonGetInfo':
-						await this.trackGuildDungeonParticipation(responseData); // Track dungeon progress
-						break;
-					case 'expeditionGetState':
-						await this.trackExpeditionState(responseData);
-						break;
-					case 'expeditionBattle':
-						await this.trackExpeditionBattle(args, responseData);
-						break;
-					case 'titanGetAll':
-						await this.trackTitansData(responseData);
-						break;
-					case 'petGetAll':
-						await this.trackPetsData(responseData);
-						break;
-
-					// Chat and communication
-					case 'chatGetDialog':
-					case 'chatGetNewMessages':
-						await this.trackChatMessages(args, responseData, callName);
-						break;
-					case 'chatSendMessage':
-						await this.trackOutgoingMessage(args, responseData);
-						break;
-
-					// === Phase 8: Hero Upgrade Events ===
-					// Reference: data/Models/HeroUpgradeModels.cs
-					case 'heroUpgradeSkill':
-						await this.upgradeTracker.trackHeroSkillUpgrade(args, responseData, await this._getPlayerId());
-						break;
-					case 'heroArtifactLevelUp':
-						await this.upgradeTracker.trackHeroArtifactUpgrade(args, responseData, await this._getPlayerId());
-						break;
-					case 'heroSkinUpgrade':
-						await this.upgradeTracker.trackHeroSkinUpgrade(args, responseData, await this._getPlayerId());
-						break;
-					case 'heroEnchantRune':
-						await this.upgradeTracker.trackHeroGlyphUpgrade(args, responseData, await this._getPlayerId());
-						break;
-					case 'consumableUseHeroXp':
-						await this.upgradeTracker.trackHeroLevelUpgrade(args, responseData, await this._getPlayerId());
-						// Also track as inventory item usage (XP potion consumed)
-						await this.trackInventoryItemUsage(args, responseData, 'potion', 'hero_level');
-						break;
-					case 'heroLevelUp':
-						await this.upgradeTracker.trackHeroGoldLevelUpgrade(args, responseData, await this._getPlayerId());
-						break;
-					case 'heroEvolve':
-					case 'heroPromote':
-						await this.upgradeTracker.trackHeroStarUpgrade(args, responseData, await this._getPlayerId());
-						break;
-					case 'heroColorEvolve':
-						await this.upgradeTracker.trackHeroColorUpgrade(args, responseData, await this._getPlayerId());
-						break;
-					case 'heroEquip':
-						await this.upgradeTracker.trackEquipmentChange(args, responseData, await this._getPlayerId(), 'equipped');
-						break;
-
-					// === Phase 8: Titan Upgrade Events ===
-					// Reference: data/Models/TitanUpgradeModels.cs
-					case 'titanArtifactLevelUp':
-						await this.upgradeTracker.trackTitanArtifactUpgrade(args, responseData, await this._getPlayerId());
-						break;
-					case 'titanUsePotions':
-						await this.upgradeTracker.trackTitanLevelUpgrade(args, responseData, await this._getPlayerId());
-						break;
-					case 'titanEvolve':
-					case 'titanStarUp':
-						await this.upgradeTracker.trackTitanStarUpgrade(args, responseData, await this._getPlayerId());
-						break;
-					case 'titanUpgradeSkill':
-						await this.upgradeTracker.trackTitanSkillUpgrade(args, responseData, await this._getPlayerId());
-						break;
-					case 'titanSkinUpgrade':
-						await this.upgradeTracker.trackTitanSkinUpgrade(args, responseData, await this._getPlayerId());
-						break;
-
-					// === Phase 8: Daily Activity Events ===
-					// Reference: data/Models/DailyActivityModels.cs
-					case 'questFarm':
-						await this.trackDailyQuestFarm(args, responseData);
-						break;
-					case 'quest_questsFarm':
-						await this.trackBatchQuestFarm(args, responseData);
-						break;
-					case 'dailyBonusFarm':
-						await this.trackLoginReward(args, responseData);
-						break;
-					case 'dailyBonusGetInfo':
-						await this.trackDailyBonusInfo(responseData);
-						break;
-
-					// === Phase 10: Consumable Reward / Drop-Rate Tracking ===
-					// Track rewards from opening all chest/consumable types so we can
-					// compute empirical drop-rate percentages per item per source.
-					case 'artifactChestOpen':
-						await this.trackConsumableOpening(args, responseData, 'artifactChest');
-						break;
-					case 'titanArtifactChestOpen':
-						await this.trackConsumableOpening(args, responseData, 'titanArtifactChest');
-						break;
-					case 'pet_chestOpen':
-						await this.trackConsumableOpening(args, responseData, 'petChest');
-						break;
-					case 'consumableUseLootBox':
-						await this.trackConsumableOpening(args, responseData, 'lootBox');
-						break;
-					case 'towerOpenChest':
-						await this.trackConsumableOpening(args, responseData, 'towerChest');
-						break;
-					case 'bossOpenChestPay':
-						await this.trackConsumableOpening(args, responseData, 'outlandChest');
-						break;
-
-					default:
-						if (callName) unhandled.push(callName);
-						continue; // Skip the dispatched.push below
+			// Execute all registered handlers for this API method
+			for (const entry of handlers) {
+				try {
+					await entry.handler.call(this, callName, args, responseData);
+					if (!dispatched.includes(callName)) {
+						dispatched.push(callName);
+					}
+				} catch (error) {
+					console.error(`[OrganizedJihad] Error in handler "${entry.label}" for ${callName}:`, error);
+					errors.push(`${callName}/${entry.label}: ${error?.message || String(error)}`);
+					await this._logError(`processAPIResponse:${callName}:${entry.label}`, error);
 				}
-				dispatched.push(callName);
-			} catch (error) {
-				console.error(`[OrganizedJihad] Error processing ${callName}:`, error);
-				errors.push(`${callName}: ${error?.message || String(error)}`);
-				await this._logError(`processAPIResponse:${callName}`, error);
 			}
 		}
 
@@ -909,6 +856,271 @@ class GameTracker {
 			console.error('[OrganizedJihad] Error in updateSnapshot:', error);
 			await this._logError('updateSnapshot', error);
 		}
+	}
+
+	// =====================================================================
+	// Handler Registry (#46)
+	// =====================================================================
+
+	/**
+	 * Register a handler for one or more API method names.
+	 *
+	 * Handlers are called with `(callName, args, responseData)` and bound
+	 * to `this` (the GameTracker instance). Multiple handlers can be
+	 * registered for the same method — they execute in registration order.
+	 *
+	 * @param {string|string[]} methods - API method name(s) to handle
+	 * @param {Function} handler - `async (callName, args, responseData) => void`
+	 * @param {string} [label] - Human-readable label for error logging
+	 */
+	registerHandler(methods, handler, label = handler.name || '(anonymous)') {
+		const methodList = Array.isArray(methods) ? methods : [methods];
+		for (const method of methodList) {
+			if (!this._handlerRegistry.has(method)) {
+				this._handlerRegistry.set(method, []);
+			}
+			this._handlerRegistry.get(method).push({ handler, label });
+		}
+	}
+
+	/**
+	 * Build the handler registry. Called once during construction.
+	 * Each entry maps an API method name to one or more handler functions.
+	 *
+	 * Pattern inspired by HeroWarsHelper's handler array dispatch.
+	 * @private
+	 */
+	_buildHandlerRegistry() {
+		/** @type {Map<string, Array<{handler: Function, label: string}>>} */
+		this._handlerRegistry = new Map();
+
+		// ── Core player data ───────────────────────────────────────────
+		this.registerHandler('userGetInfo', async (_call, _args, data) => {
+			await this.trackPlayerData(data);
+		}, 'trackPlayerData');
+
+		this.registerHandler('heroGetAll', async (_call, _args, data) => {
+			await this.trackHeroesData(data);
+		}, 'trackHeroesData');
+
+		this.registerHandler('inventoryGet', async (_call, _args, data) => {
+			await this.trackInventoryData(data);
+		}, 'trackInventoryData');
+
+		// ── Battle systems ──────────────────────────────────────────────
+		this.registerHandler('missionEnd', async (callName, args, data) => {
+			await this.trackMissionProgress(args, data);
+			await this.trackBattleResult(callName, args, data);
+		}, 'trackMission');
+
+		this.registerHandler('towerEnd', async (callName, args, data) => {
+			await this.trackTowerProgress(args, data);
+			await this.trackBattleResult(callName, args, data);
+		}, 'trackTower');
+
+		this.registerHandler('bossEnd', async (callName, args, data) => {
+			await this.trackBattleResult(callName, args, data);
+		}, 'trackBossEnd');
+
+		// ── Arena ───────────────────────────────────────────────────────
+		this.registerHandler('arenaGetEnemies', async (_call, _args, data) => {
+			await this.trackArenaEnemies(data);
+		}, 'trackArenaEnemies');
+
+		this.registerHandler(['arenaAttack', 'arenaEnd'], async (_call, args, data) => {
+			await this.trackArenaBattle(args, data);
+		}, 'trackArenaBattle');
+
+		// ── Titan Arena ─────────────────────────────────────────────────
+		this.registerHandler('titanArenaGetEnemies', async (_call, _args, data) => {
+			await this.trackTitanArenaEnemies(data);
+		}, 'trackTitanArenaEnemies');
+
+		this.registerHandler('titanArenaAttack', async (_call, args, data) => {
+			await this.trackTitanArenaBattle(args, data);
+		}, 'trackTitanArenaBattle');
+
+		// ── Grand Arena ─────────────────────────────────────────────────
+		this.registerHandler('grandArenaGetEnemies', async (_call, _args, data) => {
+			await this.trackGrandArenaEnemies(data);
+		}, 'trackGrandArenaEnemies');
+
+		this.registerHandler('grandArenaAttack', async (_call, args, data) => {
+			await this.trackGrandArenaBattle(args, data);
+		}, 'trackGrandArenaBattle');
+
+		// ── Guild War ───────────────────────────────────────────────────
+		this.registerHandler('clanWarAttack', async (_call, args, data) => {
+			await this.trackGuildWarBattle(args, data);
+		}, 'trackGuildWarBattle');
+
+		// ── Guild Raid ──────────────────────────────────────────────────
+		this.registerHandler('bossRaidAttack', async (_call, args, data) => {
+			await this.trackRaidBossAttack(args, data);
+		}, 'trackRaidBossAttack');
+
+		// ── Loot and rewards ────────────────────────────────────────────
+		this.registerHandler('chestOpen', async (_call, args, data) => {
+			await this.trackChestOpening(args, data);
+		}, 'trackChestOpening');
+
+		this.registerHandler('shopBuy', async (_call, args, data) => {
+			await this.trackShopPurchase(args, data);
+		}, 'trackShopPurchase');
+
+		this.registerHandler('questComplete', async (_call, args, data) => {
+			await this.trackQuestComplete(args, data);
+		}, 'trackQuestComplete');
+
+		// ── Other data ──────────────────────────────────────────────────
+		this.registerHandler('questGetAll', async (_call, _args, data) => {
+			await this.trackQuestsData(data);
+		}, 'trackQuestsData');
+
+		this.registerHandler('clanGetInfo', async (_call, _args, data) => {
+			await this.trackGuildData(data);
+			await this.trackGuildMembers(data);
+		}, 'trackGuildData');
+
+		this.registerHandler(['clanWarGetInfo', 'clanWarUserGetInfo'], async (_call, _args, data) => {
+			await this.trackGuildWarInfo(data);
+			await this.trackGuildWarParticipation(data);
+		}, 'trackGuildWarInfo');
+
+		this.registerHandler('bossRaidGetInfo', async (_call, _args, data) => {
+			await this.trackRaidBossInfo(data);
+			await this.trackGuildRaidParticipation(data);
+		}, 'trackRaidBossInfo');
+
+		this.registerHandler(['dungeonGetState', 'titanDungeonGetInfo'], async (_call, _args, data) => {
+			await this.trackGuildDungeonParticipation(data);
+		}, 'trackGuildDungeon');
+
+		this.registerHandler('expeditionGetState', async (_call, _args, data) => {
+			await this.trackExpeditionState(data);
+		}, 'trackExpeditionState');
+
+		this.registerHandler('expeditionBattle', async (_call, args, data) => {
+			await this.trackExpeditionBattle(args, data);
+		}, 'trackExpeditionBattle');
+
+		this.registerHandler('titanGetAll', async (_call, _args, data) => {
+			await this.trackTitansData(data);
+		}, 'trackTitansData');
+
+		this.registerHandler('petGetAll', async (_call, _args, data) => {
+			await this.trackPetsData(data);
+		}, 'trackPetsData');
+
+		// ── Chat and communication ──────────────────────────────────────
+		this.registerHandler(['chatGetDialog', 'chatGetNewMessages'], async (callName, args, data) => {
+			await this.trackChatMessages(args, data, callName);
+		}, 'trackChatMessages');
+
+		this.registerHandler('chatSendMessage', async (_call, args, data) => {
+			await this.trackOutgoingMessage(args, data);
+		}, 'trackOutgoingMessage');
+
+		// ── Hero Upgrade Events (Phase 8) ───────────────────────────────
+		this.registerHandler('heroUpgradeSkill', async (_call, args, data) => {
+			await this.upgradeTracker.trackHeroSkillUpgrade(args, data, await this._getPlayerId());
+		}, 'heroSkillUpgrade');
+
+		this.registerHandler('heroArtifactLevelUp', async (_call, args, data) => {
+			await this.upgradeTracker.trackHeroArtifactUpgrade(args, data, await this._getPlayerId());
+		}, 'heroArtifactUpgrade');
+
+		this.registerHandler('heroSkinUpgrade', async (_call, args, data) => {
+			await this.upgradeTracker.trackHeroSkinUpgrade(args, data, await this._getPlayerId());
+		}, 'heroSkinUpgrade');
+
+		this.registerHandler('heroEnchantRune', async (_call, args, data) => {
+			await this.upgradeTracker.trackHeroGlyphUpgrade(args, data, await this._getPlayerId());
+		}, 'heroGlyphUpgrade');
+
+		this.registerHandler('consumableUseHeroXp', async (_call, args, data) => {
+			await this.upgradeTracker.trackHeroLevelUpgrade(args, data, await this._getPlayerId());
+			await this.trackInventoryItemUsage(args, data, 'potion', 'hero_level');
+		}, 'heroLevelUpgrade');
+
+		this.registerHandler('heroLevelUp', async (_call, args, data) => {
+			await this.upgradeTracker.trackHeroGoldLevelUpgrade(args, data, await this._getPlayerId());
+		}, 'heroGoldLevelUpgrade');
+
+		this.registerHandler(['heroEvolve', 'heroPromote'], async (_call, args, data) => {
+			await this.upgradeTracker.trackHeroStarUpgrade(args, data, await this._getPlayerId());
+		}, 'heroStarUpgrade');
+
+		this.registerHandler('heroColorEvolve', async (_call, args, data) => {
+			await this.upgradeTracker.trackHeroColorUpgrade(args, data, await this._getPlayerId());
+		}, 'heroColorUpgrade');
+
+		this.registerHandler('heroEquip', async (_call, args, data) => {
+			await this.upgradeTracker.trackEquipmentChange(args, data, await this._getPlayerId(), 'equipped');
+		}, 'heroEquip');
+
+		// ── Titan Upgrade Events (Phase 8) ──────────────────────────────
+		this.registerHandler('titanArtifactLevelUp', async (_call, args, data) => {
+			await this.upgradeTracker.trackTitanArtifactUpgrade(args, data, await this._getPlayerId());
+		}, 'titanArtifactUpgrade');
+
+		this.registerHandler('titanUsePotions', async (_call, args, data) => {
+			await this.upgradeTracker.trackTitanLevelUpgrade(args, data, await this._getPlayerId());
+		}, 'titanLevelUpgrade');
+
+		this.registerHandler(['titanEvolve', 'titanStarUp'], async (_call, args, data) => {
+			await this.upgradeTracker.trackTitanStarUpgrade(args, data, await this._getPlayerId());
+		}, 'titanStarUpgrade');
+
+		this.registerHandler('titanUpgradeSkill', async (_call, args, data) => {
+			await this.upgradeTracker.trackTitanSkillUpgrade(args, data, await this._getPlayerId());
+		}, 'titanSkillUpgrade');
+
+		this.registerHandler('titanSkinUpgrade', async (_call, args, data) => {
+			await this.upgradeTracker.trackTitanSkinUpgrade(args, data, await this._getPlayerId());
+		}, 'titanSkinUpgrade');
+
+		// ── Daily Activity Events (Phase 8) ─────────────────────────────
+		this.registerHandler('questFarm', async (_call, args, data) => {
+			await this.trackDailyQuestFarm(args, data);
+		}, 'trackDailyQuestFarm');
+
+		this.registerHandler('quest_questsFarm', async (_call, args, data) => {
+			await this.trackBatchQuestFarm(args, data);
+		}, 'trackBatchQuestFarm');
+
+		this.registerHandler('dailyBonusFarm', async (_call, args, data) => {
+			await this.trackLoginReward(args, data);
+		}, 'trackLoginReward');
+
+		this.registerHandler('dailyBonusGetInfo', async (_call, _args, data) => {
+			await this.trackDailyBonusInfo(data);
+		}, 'trackDailyBonusInfo');
+
+		// ── Consumable Reward / Drop-Rate Tracking (Phase 10) ───────────
+		this.registerHandler('artifactChestOpen', async (_call, args, data) => {
+			await this.trackConsumableOpening(args, data, 'artifactChest');
+		}, 'consumable:artifactChest');
+
+		this.registerHandler('titanArtifactChestOpen', async (_call, args, data) => {
+			await this.trackConsumableOpening(args, data, 'titanArtifactChest');
+		}, 'consumable:titanArtifactChest');
+
+		this.registerHandler('pet_chestOpen', async (_call, args, data) => {
+			await this.trackConsumableOpening(args, data, 'petChest');
+		}, 'consumable:petChest');
+
+		this.registerHandler('consumableUseLootBox', async (_call, args, data) => {
+			await this.trackConsumableOpening(args, data, 'lootBox');
+		}, 'consumable:lootBox');
+
+		this.registerHandler('towerOpenChest', async (_call, args, data) => {
+			await this.trackConsumableOpening(args, data, 'towerChest');
+		}, 'consumable:towerChest');
+
+		this.registerHandler('bossOpenChestPay', async (_call, args, data) => {
+			await this.trackConsumableOpening(args, data, 'outlandChest');
+		}, 'consumable:outlandChest');
 	}
 
 	/**
@@ -3564,19 +3776,6 @@ class GameTracker {
 		console.log(`[OrganizedJihad] Inventory item used: ${record.itemId} x${record.quantityUsed} for ${usageContext}`);
 	}
 
-	/**
-	 * Stop tracking and restore original methods
-	 */
-	destroy() {
-		if (this.originalXHR) {
-			XMLHttpRequest.prototype.open = this.originalXHR.open;
-			XMLHttpRequest.prototype.send = this.originalXHR.send;
-			XMLHttpRequest.prototype.setRequestHeader = this.originalXHR.setRequestHeader;
-		}
-
-		this.isTracking = false;
-		console.log('[OrganizedJihad] GameTracker destroyed - API monitoring stopped');
-	}
 }
 
 export default GameTracker;

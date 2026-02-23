@@ -685,4 +685,142 @@ describe('GameTracker', () => {
 			}
 		});
 	});
+
+	// ─── Handler Registry (#46) ──────────────────────────────────────────
+
+	describe('Handler Registry', () => {
+		test('should have _handlerRegistry Map populated on construction', () => {
+			expect(tracker._handlerRegistry).toBeInstanceOf(Map);
+			expect(tracker._handlerRegistry.size).toBeGreaterThan(0);
+		});
+
+		test('should have handlers registered for core API methods', () => {
+			const coreMethods = [
+				'userGetInfo', 'heroGetAll', 'inventoryGet',
+				'arenaAttack', 'arenaEnd', 'titanArenaAttack',
+				'grandArenaAttack', 'clanWarAttack', 'bossRaidAttack',
+				'chestOpen', 'shopBuy', 'questComplete',
+				'titanGetAll', 'petGetAll',
+			];
+			for (const method of coreMethods) {
+				expect(tracker._handlerRegistry.has(method)).toBe(true);
+			}
+		});
+
+		test('registerHandler should add a new handler', () => {
+			const spy = jest.fn();
+			tracker.registerHandler('testMethod', spy, 'testLabel');
+			const handlers = tracker._handlerRegistry.get('testMethod');
+			expect(handlers).toHaveLength(1);
+			expect(handlers[0].handler).toBe(spy);
+			expect(handlers[0].label).toBe('testLabel');
+		});
+
+		test('registerHandler should allow multiple handlers for same method', () => {
+			const spy1 = jest.fn();
+			const spy2 = jest.fn();
+			tracker.registerHandler('multiTest', spy1, 'first');
+			tracker.registerHandler('multiTest', spy2, 'second');
+			const handlers = tracker._handlerRegistry.get('multiTest');
+			expect(handlers).toHaveLength(2);
+		});
+
+		test('registerHandler should accept array of method names', () => {
+			const spy = jest.fn();
+			tracker.registerHandler(['methodA', 'methodB'], spy, 'multi');
+			expect(tracker._handlerRegistry.has('methodA')).toBe(true);
+			expect(tracker._handlerRegistry.has('methodB')).toBe(true);
+		});
+
+		test('should dispatch to custom registered handler via processAPIResponse', async () => {
+			const spy = jest.fn().mockResolvedValue(undefined);
+			tracker.registerHandler('customMethod', spy, 'custom');
+
+			const request = {
+				calls: [{ name: 'customMethod', ident: 'body', args: { x: 1 } }],
+			};
+			const response = {
+				results: [{ ident: 'body', result: { response: { data: 'test' } } }],
+			};
+
+			await tracker.processAPIResponse(request, response);
+			expect(spy).toHaveBeenCalledWith('customMethod', { x: 1 }, { data: 'test' });
+		});
+	});
+
+	// ─── Request History Cleanup (#37) ───────────────────────────────────
+
+	describe('Request History Cleanup', () => {
+		test('should have _requestHistoryMaxAge set to 60 seconds', () => {
+			expect(tracker._requestHistoryMaxAge).toBe(60_000);
+		});
+
+		test('_pruneRequestHistory should remove entries older than maxAge', () => {
+			const now = Date.now();
+			tracker.requestHistory = {
+				'old_1': { timestamp: now - 120_000, request: {}, response: {} },
+				'old_2': { timestamp: now - 90_000, request: {}, response: {} },
+				'recent': { timestamp: now - 10_000, request: {}, response: {} },
+			};
+
+			tracker._pruneRequestHistory();
+
+			expect(tracker.requestHistory).not.toHaveProperty('old_1');
+			expect(tracker.requestHistory).not.toHaveProperty('old_2');
+			expect(tracker.requestHistory).toHaveProperty('recent');
+		});
+
+		test('_pruneRequestHistory should handle empty history', () => {
+			tracker.requestHistory = {};
+			expect(() => tracker._pruneRequestHistory()).not.toThrow();
+		});
+	});
+
+	// ─── Auth Header Capture (#36) ──────────────────────────────────────
+
+	describe('Auth Header Capture', () => {
+		test('should have capturedAuth object with null initial values', () => {
+			expect(tracker.capturedAuth).toEqual({
+				authToken: null,
+				sessionId: null,
+				requestId: null,
+			});
+		});
+	});
+
+	// ─── Sentry Blocking (#53) ──────────────────────────────────────────
+
+	describe('Sentry Blocking', () => {
+		test('should have blockSentry enabled by default', () => {
+			expect(tracker.blockSentry).toBe(true);
+		});
+
+		test('should have _BLOCKED_URL_RE matching sentry.io', () => {
+			expect(GameTracker._BLOCKED_URL_RE.test('https://o123.ingest.sentry.io/api/456/envelope/')).toBe(true);
+			expect(GameTracker._BLOCKED_URL_RE.test('https://bugsnag.com/report')).toBe(true);
+			expect(GameTracker._BLOCKED_URL_RE.test('https://heroes-wb.nextersglobal.com/api/')).toBe(false);
+		});
+
+		test('_blockedRequestCount should start at 0', () => {
+			expect(tracker._blockedRequestCount).toBe(0);
+		});
+	});
+
+	// ─── Destroy / Cleanup ──────────────────────────────────────────────
+
+	describe('Destroy', () => {
+		test('should set isTracking to false', () => {
+			tracker.isTracking = true;
+			tracker.destroy();
+			expect(tracker.isTracking).toBe(false);
+		});
+
+		test('should clear cleanup interval', () => {
+			// Set a real interval so clearInterval has something to clear
+			tracker._cleanupIntervalId = setInterval(() => {}, 999999);
+			expect(tracker._cleanupIntervalId).not.toBeNull();
+			tracker.destroy();
+			expect(tracker._cleanupIntervalId).toBeNull();
+		});
+	});
 });

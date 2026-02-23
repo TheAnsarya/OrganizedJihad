@@ -66,9 +66,9 @@ class UIManager {
 			this.show();
 		}
 
-		// Keyboard shortcut: Ctrl+Shift+H
+		// Keyboard shortcut: Ctrl+Shift+O (or Ctrl+Shift+H) (#48)
 		document.addEventListener('keydown', (e) => {
-			if (e.ctrlKey && e.shiftKey && e.key === 'H') {
+			if (e.ctrlKey && e.shiftKey && (e.key === 'H' || e.key === 'O')) {
 				e.preventDefault();
 				this.toggle();
 			}
@@ -1514,10 +1514,15 @@ class UIManager {
 			`;
 		}).join('');
 
+		const blockedCount = this.gameTracker?._blockedRequestCount || 0;
+		const hasAuth = this.gameTracker?.capturedAuth?.authToken ? '\u2705' : '\u274C';
+		const historySize = Object.keys(this.gameTracker?.requestHistory || {}).length;
+
 		return `
 			<div class="oj-apilog">
 				<h3>\uD83D\uDCE1 API Call Log <span class="oj-muted">(${log.length} calls)</span></h3>
-				<p class="oj-muted" style="margin:0 0 8px">Auto-refreshes. Newest first. Last ${this.gameTracker._apiCallLogMax} kept.</p>
+				<p class="oj-muted" style="margin:0 0 4px">Auto-refreshes. Newest first. Last ${this.gameTracker._apiCallLogMax} kept.</p>
+				<p class="oj-muted" style="margin:0 0 8px">Auth captured: ${hasAuth} | Pending requests: ${historySize} | Blocked (Sentry): ${blockedCount}</p>
 				<div class="oj-log-list">${rows}</div>
 			</div>
 		`;
@@ -1554,8 +1559,12 @@ class UIManager {
 					<h4>Keyboard Shortcuts</h4>
 					<div class="oj-shortcut-list">
 						<div class="oj-shortcut-row">
-							<kbd>Ctrl+Shift+H</kbd>
+							<kbd>Ctrl+Shift+O</kbd>
 							<span>Toggle overlay visibility</span>
+						</div>
+						<div class="oj-shortcut-row">
+							<kbd>Ctrl+Shift+H</kbd>
+							<span>Toggle overlay visibility (alias)</span>
 						</div>
 					</div>
 				</div>
