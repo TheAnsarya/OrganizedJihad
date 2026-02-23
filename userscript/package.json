@@ -7,6 +7,7 @@
 	"scripts": {
 		"build": "webpack --mode production",
 		"dev": "webpack --mode development --watch",
+		"dev:serve": "node serve-dev.cjs",
 		"lint": "eslint src/**/*.js",
 		"format": "prettier --write \"src/**/*.{js,css,json}\"",
 		"format:check": "prettier --check \"src/**/*.{js,css,json}\"",

@@ -41,23 +41,40 @@ keep the version low, we're already showing `3.1.0` and we haven't even have an 
 
 add tracking for rewards from opening various consumable items in the inventory; we want to figure out the percentages for each item you can get from chests and such; continue;
 
+figure out how to add a percentage bar and a percentage number (format: `62.38%`) on top of each Hero in the game's Heroes dialog (the Manage Team window) claculated by how much of each system (ascension, items, skills, glyphs, artifacts, etc) make plans, issues, docs, chat/session logs, etc.;  Yes, add it to our UI, but also figure out how to add an overlay to the real UI of the game; continue;
 
+build the user script and then give me instructions on how to install it in Opera and run it as `dev` si every code change and the script is reloaded everytime we refresh the tab; continue;
 
+rebuild
 
+The user script installed didn't have a name, fix that, fix everything, I installed the live updator and ran `yarn dev` and yet there is nothing on Hero Wars, so it is installed wrong; make it work, tell me what to do to make it work; continue;
 
+there is an error when I follow your directions: Error: listen EADDRINUSE: address already in use 127.0.0.1:8765
+------- Get-Process -Id (Get-NetTCPConnection -LocalPort 8765).OwningProcess | Stop-Process -Force
 
+OJ is not installed, only the boot loader, it is not working; make it work god damnit; set it up to automaticallly install and update; when I open `https://www.hero-wars.com` I want to see our userscript UI; continue;
 
+It is saying in the console `[OrganizedJihad] Skipping — not in the game iframe` which means the script is not running, it used to run just fine, why not now, fix this; continue;
 
+You said `Find the setting Inject Mode and set it to "Instant"` but there is not an `Inject Mode` setting that I can find, where is it, and this "all frames" nonsense do these things exist? please figure this out NOW, stop wasting resources. We had a working script that had functioning windows before now, it used to work well, why doe sit not now; make this shit work! ; continue;
 
+I followed the directions, and the console log says `[OrganizedJihad] Waiting on outer page — script will activate inside the game iframe (www.hero-wars.com)` but nothing else from OJ and there is no badge or any visual indication on the website. This used to work, so please make it work. If there is a way to let you see the Opera browser instance with the game and script I'll allow it (is their an MCP or something that enables a connection to the browser?); continue;
 
+The script isn't running or something? No UI, no console messages at all, i checked every iframe' console log on the the main page, this used to work, we cannot advance until the script actually runs; continue;
 
+I see in the console `[OrganizedJihad] On outer page (www.hero-wars.com) — watching for game iframe...` followed by `lib connect` and then nothing else; and it doesn't work; there are 3 iframes with a url of `about:blank` 1 iframe url of `https://www.recaptcha.net/recaptcha/enterprise/anchor?ar=1&k=6LfVj3spAAAAAKDBueUxzQsDDsVsRFYiiYEuweN6&co=aHR0cHM6Ly93d3cuaGVyby13YXJzLmNvbTo0NDM.&hl=en&v=vUgXt_KV952_-5BB2jjloYzl&size=invisible&anchor-ms=20000&execute-ms=30000&cb=z9tbayzhdyfi` and 1 iframe url of `https://14283401.fls.doubleclick.net/activityi;dc_pre=COe4rt727pIDFaIIVgUdxWMwtA;src=14283401;type=cweb;cat=login0;ord=1450454334245;npa=0;auiddc=882798035.1767636118;gclgs=1;gclst=6653;gcllp=245626269;gclaw=EAIaIQobChMI1qfCj4ySkAMVyw-zAB04pjsVEAAYASAAEgIotvD_BwE;gac=UA-74588006-8%3AEAIaIQobChMI1qfCj4ySkAMVyw-zAB04pjsVEAAYASAAEgIotvD_BwE;u2=106912669;uaa=x86;uab=64;uafvl=Opera%2520GX%3B127.0.5778.75%7CChromium%3B143.0.7499.194%7CNot%2520A(Brand%3B24.0.0.0;uamb=0;uam=;uap=Windows;uapv=10.0.0;uaw=0;pscdl=noapi;frm=0;_tu=KFA;gtm=45fe62i1v9179318577z8810313577za20gzb810313577zd810313577xea;gcs=G111;gcd=13t3t3t3t5l1;dma=0;dc_fmt=2;tag_exp=103116026~103200004~104527906~104528501~104684208~104684211~115616986~115938465~115938469~117455676~117455678;epver=2;dc_random=1771826142_hB8qQaFWOcsA9HdemduuFisEdOkYcG2UJw;_dc_test=1;~oref=https%3A%2F%2Fwww.hero-wars.com%2F%3Fhl%3Den%26delayedsignup%3Dtrue%26nx_source%3Dadx_adwordssearch.hw_wb_uu_-.cc-us.g-m.au-brand.opt-25m_p.com-newac.lp-delayed.cr-aitext.dt-search.kw-hero%2520wars.mT-e.cid-18372845914.agId-145114688767.csd-190922.-%26cp%3D.aid-622733362540%26gad_source%3D1%26gad_campaignid%3D18372845914%26gclid%3DEAIaIQobChMI1qfCj4ySkAMVyw-zAB04pjsVEAAYASAAEgIotvD_BwE?`
 
+I have logged into the game and it has loaded everytime I am testing your changes; can i give you my login credentials or make new credentials for a new account  so you can see the loaded game? This workled a few days ago, after commit `c4ecc065e36368f99fa1837152e04d14386ecf70`; continue;
 
+The UI is working now, and the `calls` count goes up when I click things in the game, please add an api queue and UI that shows the last 100 calls so we can debug what's happening; None of the data is updating, like if I open the Heroes UI in the game, we get an api call, but nothing shows up in the Heros UI of the the script; continue;
 
+I open the Heroes game-dialog and get the api log message of `No calls or results in payload` and no data in the script-UI 
 
+So I've only got 1 API call entry although the count says 6, and the one api log entry is: `✅ 2:40:30 AM [www.hero-wars.com] #1 → https://heroes-wb.nextersglobal.com/api/ userGetInfo, clanWarGetInfo, titanArenaGetStatus, quest_completeEasterEggQuest Dispatched: userGetInfo, clanWarGetInfo | Unhandled: titanArenaGetStatus, quest_completeEasterEggQuest(no data)`; continue;
 
+api call log says `⏭️ 3:05:36 AM [www.hero-wars.com] #5 → https://heroes-wb.nextersglobal.com/api/ (none) No .calls/.results | req keys=[MPm, Lj] res keys=[results, date] ⚠️ req: (unstringifiable: object) | res: {"results":[{"ident":"body","result":{"response":[true]}}],"date":1771833935}` and so fix it; continue;
 
-
+Analyze the HeroWarsHelper script to see how it has installed itself and also how it tracks api calls and gathers data and displays ui; we have an example of how to do everything, use it; make issues, and plans and code-plans and chat/session logs and docs and epics/issues for all the work; continue;
 
 
 

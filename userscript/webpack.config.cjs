@@ -16,9 +16,11 @@ const webpack = require('webpack');
 const userscriptBanner = `// ==UserScript==
 // @name         OrganizedJihad - Hero Wars Tracker
 // @namespace    http://tampermonkey.net/
-// @version      0.9.0
+// @version      0.9.2
 // @description  Track and manage Hero Wars game data with IndexedDB storage and in-game UI
 // @author       Andy Hubbard <me@ansarya.com>
+// @match        https://www.hero-wars.com/*
+// @match        https://*.hero-wars.com/*
 // @match        https://i-heroes-fb.nextersglobal.com/*
 // @match        https://i.hero-wars-fb.com/*
 // @match        https://i-heroes-vk.nextersglobal.com/*
@@ -26,6 +28,7 @@ const userscriptBanner = `// ==UserScript==
 // @match        https://i-heroes-mm.nextersglobal.com/*
 // @match        https://i-heroes-wb.nextersglobal.com/*
 // @match        https://i-heroes-mg.nextersglobal.com/*
+// @match        https://apps-1701433570146040.apps.fbsbx.com/*
 // @grant        GM_addStyle
 // @run-at       document-end
 // ==/UserScript==`;

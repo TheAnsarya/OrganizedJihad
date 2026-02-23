@@ -82,6 +82,12 @@ class UIManager {
 					this.renderView('activity');
 				}
 			});
+			// Auto-refresh API Log tab when new calls arrive
+			this.gameTracker.on('apiLog', () => {
+				if (this.isVisible && this.currentView === 'apilog') {
+					this.renderView('apilog');
+				}
+			});
 		}
 	}
 
@@ -121,6 +127,7 @@ class UIManager {
 					<button class="oj-nav-btn" data-view="battles">Battles</button>
 					<button class="oj-nav-btn" data-view="chests">Chests</button>
 					<button class="oj-nav-btn" data-view="inventory">Inventory</button>
+					<button class="oj-nav-btn" data-view="apilog">API Log</button>
 					<button class="oj-nav-btn" data-view="resources">Resources</button>
 					<button class="oj-nav-btn" data-view="settings">Settings</button>
 				</div>
@@ -392,6 +399,9 @@ class UIManager {
 				case 'inventory':
 					content.innerHTML = await this.renderInventory();
 					this._attachDataBrowserListeners('inventory');
+					break;
+				case 'apilog':
+					content.innerHTML = this.renderApiLog();
 					break;
 				case 'resources':
 					content.innerHTML = await this.renderResources();
@@ -1438,6 +1448,77 @@ class UIManager {
 				${cardsHtml}
 				${txHtml}
 				${!cardsHtml && !txHtml ? '<p class="oj-empty">No recognizable resource data found.</p>' : ''}
+			</div>
+		`;
+	}
+
+	// =====================================================================
+	// API Log (Debug View)
+	// =====================================================================
+
+	/**
+	 * Render the API call log from GameTracker's in-memory ring buffer.
+	 * Shows the last 100 intercepted API calls with timestamps, method
+	 * names, dispatch status, and any errors encountered.
+	 *
+	 * @returns {string} HTML content
+	 */
+	renderApiLog() {
+		const log = this.gameTracker?._apiCallLog || [];
+
+		if (log.length === 0) {
+			return `
+				<div class="oj-apilog">
+					<h3>\uD83D\uDCE1 API Call Log</h3>
+					<p class="oj-empty">No API calls captured yet. Play the game — calls appear here in real time.</p>
+				</div>
+			`;
+		}
+
+		// Newest first
+		const entries = [...log].reverse();
+
+		const rows = entries.map((entry, i) => {
+			const time = new Date(entry.ts).toLocaleTimeString();
+			const names = (entry.callNames || []).join(', ') || '(none)';
+			const statusIcon = entry.status === 'ok' ? '\u2705'
+				: entry.status === 'error' ? '\u274C'
+				: entry.status === 'skipped' ? '\u23ED\uFE0F'
+				: '\u2753'; // no-match
+			const statusClass = entry.status === 'ok' ? 'oj-log-ok'
+				: entry.status === 'error' ? 'oj-log-error'
+				: 'oj-log-skip';
+			const errorInfo = entry.error
+				? `<div class="oj-log-err-detail">\u26A0\uFE0F ${this._escapeHtml(entry.error)}</div>`
+				: '';
+			const urlInfo = entry.url
+				? `<div class="oj-log-url">\u2192 ${this._escapeHtml(entry.url)}</div>`
+				: '';
+			const pageInfo = entry.page
+				? `<span class="oj-log-page">[${this._escapeHtml(entry.page)}]</span>`
+				: '';
+
+			return `
+				<div class="oj-log-entry ${statusClass}">
+					<div class="oj-log-header">
+						<span class="oj-log-status">${statusIcon}</span>
+						<span class="oj-log-time">${time}</span>
+						${pageInfo}
+						<span class="oj-log-num">#${log.length - i}</span>
+					</div>
+					${urlInfo}
+					<div class="oj-log-calls">${this._escapeHtml(names)}</div>
+					<div class="oj-log-detail">${this._escapeHtml(entry.detail || '')}</div>
+					${errorInfo}
+				</div>
+			`;
+		}).join('');
+
+		return `
+			<div class="oj-apilog">
+				<h3>\uD83D\uDCE1 API Call Log <span class="oj-muted">(${log.length} calls)</span></h3>
+				<p class="oj-muted" style="margin:0 0 8px">Auto-refreshes. Newest first. Last ${this.gameTracker._apiCallLogMax} kept.</p>
+				<div class="oj-log-list">${rows}</div>
 			</div>
 		`;
 	}

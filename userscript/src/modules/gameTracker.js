@@ -82,6 +82,16 @@ class GameTracker {
 		// Listeners subscribe via on(event, handler) and are notified with _emit().
 		/** @type {Map<string, Set<Function>>} */
 		this._eventListeners = new Map();
+
+		// ── API Call Log (debug ring buffer) ──────────────────────────────
+		// Keeps the last 100 API calls with request/response summaries,
+		// dispatched call names, and any errors. Used by the "API Log" UI tab.
+		/** @type {Array<{ts: number, callNames: string[], status: string, detail: string, error: string|null, url: string|null}>} */
+		this._apiCallLog = [];
+		/** @type {number} Max entries in the API call log */
+		this._apiCallLogMax = 100;
+		/** @type {string} Hostname where the script is running */
+		this._pageHost = window.location.hostname;
 	}
 
 	/**
@@ -247,6 +257,150 @@ class GameTracker {
 	}
 
 	/**
+	 * Known API method-name prefixes used to identify call names inside
+	 * minified/shortened request objects.
+	 *
+	 * @type {RegExp}
+	 * @private
+	 */
+	static _METHOD_PREFIX_RE = /^(user|hero|titan|clan|arena|guild|quest|pet|shop|tower|expedition|mission|inventory|chat|mail|dungeon|raid|artifact|skin|rune|boss|chest|consumable|campaign|adventure|offer|daily|grand|pet_|quest_|titanArena)/;
+
+	/**
+	 * Extract the calls array from a request object, handling both standard
+	 * (key = "calls") and minified/shortened property names produced by the
+	 * game's webpack bundle (e.g. "MPm" instead of "calls").
+	 *
+	 * Strategy:
+	 * 1. If `request.calls` exists → fast path, use it directly.
+	 * 2. Otherwise scan every value in the request for an Array of Objects.
+	 *    The first such array is assumed to be the calls array.
+	 * 3. For each element, discover `name` / `ident` / `args` by:
+	 *    a. Using standard keys if present.
+	 *    b. Matching string values against known API method prefixes → name.
+	 *    c. Matching string values against response.results[].ident → ident.
+	 *    d. Any remaining plain-object value → args.
+	 *
+	 * @param {Object} request  – The request payload (possibly minified)
+	 * @param {Object} response – The response payload (always standard format)
+	 * @returns {{ calls: Array, callMap: Object<string,string>, callArgs: Object<string,Object> } | null}
+	 * @private
+	 */
+	_extractCalls(request, response) {
+		// ── Fast path: standard format ──
+		if (request?.calls) {
+			const callMap = {};
+			const callArgs = {};
+			request.calls.forEach((call) => {
+				callMap[call.ident] = call.name;
+				callArgs[call.ident] = call.args || {};
+			});
+			return { calls: request.calls, callMap, callArgs };
+		}
+
+		if (!request || typeof request !== 'object' || !response?.results) return null;
+
+		// ── Minified path: find the calls array among request values ──
+		let callsArray = null;
+		try {
+			for (const val of Object.values(request)) {
+				if (Array.isArray(val) && val.length > 0 && val[0] && typeof val[0] === 'object') {
+					callsArray = val;
+					break;
+				}
+			}
+		} catch {
+			// Object.values may throw on exotic objects
+			return null;
+		}
+		if (!callsArray) return null;
+
+		// Collect known response idents for cross-referencing
+		const responseIdents = new Set(response.results.map((r) => r.ident));
+
+		const callMap = {};
+		const callArgs = {};
+		const normalizedCalls = [];
+
+		for (const callObj of callsArray) {
+			let name = callObj.name || null;
+			let ident = callObj.ident || null;
+			let args = callObj.args || null;
+
+			if (!name || !ident) {
+				// Scan values to classify them
+				const stringVals = [];
+				let objectVal = null;
+
+				try {
+					for (const val of Object.values(callObj)) {
+						if (typeof val === 'string') {
+							stringVals.push(val);
+						} else if (typeof val === 'object' && val !== null && !Array.isArray(val)) {
+							objectVal = val;
+						}
+					}
+				} catch { /* ignore exotic objects */ }
+
+				// A string matching a known API prefix → method name
+				// A string matching a response ident → call ident
+				for (const sv of stringVals) {
+					if (!name && GameTracker._METHOD_PREFIX_RE.test(sv)) {
+						name = sv;
+					} else if (!ident && responseIdents.has(sv)) {
+						ident = sv;
+					}
+				}
+
+				// Fallback: shortest remaining string as ident
+				if (!ident) {
+					const remaining = stringVals.filter((s) => s !== name).sort((a, b) => a.length - b.length);
+					if (remaining.length > 0) ident = remaining[0];
+				}
+
+				if (!args) args = objectVal || {};
+			}
+
+			normalizedCalls.push({ name: name || '(unknown)', ident: ident || '(unknown)', args: args || {} });
+			if (ident) {
+				callMap[ident] = name || '(unknown)';
+				callArgs[ident] = args || {};
+			}
+		}
+
+		if (normalizedCalls.length > 0) {
+			console.info('[OrganizedJihad] Extracted calls from minified request:', normalizedCalls.map((c) => c.name).join(', '));
+		}
+		return { calls: normalizedCalls, callMap, callArgs };
+	}
+
+	/**
+	 * Push an entry to the in-memory API call log ring buffer.
+	 * Keeps the most recent {@link _apiCallLogMax} entries.
+	 *
+	 * @param {string[]} callNames - API method names from request.calls
+	 * @param {'ok'|'error'|'skipped'|'no-match'} status - Outcome
+	 * @param {string} detail - Human-readable description
+	 * @param {string|null} error - Error message(s), if any
+	 * @private
+	 */
+	_pushApiLog(callNames, status, detail, error, url) {
+		this._apiCallLog.push({
+			ts: Date.now(),
+			callNames,
+			status,
+			detail,
+			error,
+			url: url || null,
+			page: this._pageHost,
+		});
+		if (this._apiCallLog.length > this._apiCallLogMax) {
+			this._apiCallLog.shift();
+		}
+		// Emit event so UI can auto-refresh if the API Log tab is visible
+		this._emit('apiLog', this._apiCallLog.length);
+	}
+
+	/**
 	 * Initialize game tracking by proxying API requests
 	 * Sets up interception of XMLHttpRequest and fetch calls
 	 *
@@ -331,8 +485,34 @@ class GameTracker {
 		XMLHttpRequest.prototype.send = function (data) {
 			if (this._ojTracking?.isHeroWarsAPI && data) {
 				try {
-					// Parse request data
-					const requestData = typeof data === 'string' ? JSON.parse(data) : data;
+					// Decode request body to a string, then JSON.parse it.
+					// The game sends the body as an ArrayBuffer (binary UTF-8
+					// encoded JSON), NOT as a plain JS object. If we skip the
+					// decode step we get the raw buffer/object with webpack-
+					// minified property names instead of proper {calls, ident,
+					// name} keys.
+					//
+					// Pattern from HeroWarsHelper injected.js & hwh2.js:
+					//   ArrayBuffer  → TextDecoder.decode → string → JSON.parse
+					//   string       → JSON.parse directly
+					//   obj.bytes    → TextDecoder.decode(obj.bytes) (fallback)
+					let bodyStr;
+					if (typeof data === 'string') {
+						bodyStr = data;
+					} else if (data instanceof ArrayBuffer) {
+						bodyStr = new TextDecoder('utf-8').decode(data);
+					} else if (ArrayBuffer.isView(data)) {
+						// TypedArray or DataView (Uint8Array, etc.)
+						bodyStr = new TextDecoder('utf-8').decode(data);
+					} else if (data?.bytes instanceof ArrayBuffer || ArrayBuffer.isView(data?.bytes)) {
+						// Some builds wrap the buffer in {bytes: ArrayBuffer}
+						bodyStr = new TextDecoder('utf-8').decode(data.bytes);
+					} else {
+						// Last resort: try stringifying/parsing as-is
+						bodyStr = typeof data === 'object' ? JSON.stringify(data) : String(data);
+					}
+
+					const requestData = JSON.parse(bodyStr);
 					this._ojTracking.requestData = requestData;
 
 					// Store request for later processing
@@ -340,35 +520,70 @@ class GameTracker {
 						request: requestData,
 						response: null,
 						timestamp: this._ojTracking.timestamp,
+						url: this._ojTracking.url,
 					};
 				} catch (error) {
 					console.warn('[OrganizedJihad] Failed to parse request data:', error);
 				}
 
-				// Proxy the onreadystatechange to capture response
-				const originalOnReadyStateChange = this.onreadystatechange;
-				this.onreadystatechange = function () {
-					// Capture response when request completes
-					if (this.readyState === 4 && this.status === 200) {
-						try {
-							const responseData = JSON.parse(this.responseText);
-							const requestId = this._ojTracking.requestId;
+				// Use addEventListener instead of wrapping onreadystatechange.
+				// addEventListener can't be overwritten by the game setting
+				// xhr.onreadystatechange after send(), which would clobber our
+				// wrapper and silently drop all interception.
+				const xhrRef = this;
+				this.addEventListener('readystatechange', function () {
+					if (xhrRef.readyState !== 4 || xhrRef.status !== 200) return;
 
-							if (self.requestHistory[requestId]) {
-								self.requestHistory[requestId].response = responseData;
-								// Process the captured data
-								self.processAPIResponse(self.requestHistory[requestId].request, responseData);
-							}
-						} catch (error) {
-							console.warn('[OrganizedJihad] Failed to parse response:', error);
+					try {
+						// Handle both text and json responseType.
+						// If responseType is "json", responseText throws InvalidStateError;
+						// use this.response (already parsed) instead.
+						let responseData;
+						const isText = xhrRef.responseType === '' || xhrRef.responseType === 'text';
+						if (isText) {
+							responseData = JSON.parse(xhrRef.responseText);
+						} else {
+							responseData = xhrRef.response;
 						}
-					}
 
-					// Call original handler
-					if (originalOnReadyStateChange) {
-						return originalOnReadyStateChange.apply(this, arguments);
+						const requestId = xhrRef._ojTracking?.requestId;
+
+						if (requestId && self.requestHistory[requestId]) {
+							self.requestHistory[requestId].response = responseData;
+							// Stash URL for log
+							self._lastInterceptedUrl = self.requestHistory[requestId].url;
+
+							// processAPIResponse is async — use Promise.resolve().catch()
+							// to properly handle rejections (instead of uncaught async in
+							// sync callback which silently swallows errors after count++).
+							Promise.resolve(
+								self.processAPIResponse(self.requestHistory[requestId].request, responseData)
+							).catch((err) => {
+								console.error('[OrganizedJihad] processAPIResponse error:', err);
+								self._pushApiLog(
+									[],
+									'error',
+									'processAPIResponse threw',
+									err?.message || String(err),
+									self.requestHistory[requestId]?.url
+								);
+							});
+						}
+					} catch (error) {
+						console.warn('[OrganizedJihad] Failed to parse response:', error);
+						const reqId = xhrRef._ojTracking?.requestId;
+						const callNames = reqId && self.requestHistory[reqId]?.request?.calls
+							? self.requestHistory[reqId].request.calls.map((c) => c.name)
+							: [];
+						self._pushApiLog(
+							callNames,
+							'error',
+							'XHR response parse failed',
+							error?.message || String(error),
+							xhrRef._ojTracking?.url
+						);
 					}
-				};
+				});
 			}
 
 			return self.originalXHR.send.call(this, data);
@@ -406,15 +621,52 @@ class GameTracker {
 	 * @private
 	 */
 	async processAPIResponse(request, response) {
-		if (!request?.calls || !response?.results) return;
+		// Try to extract calls — handles both standard and minified keys
+		const extracted = this._extractCalls(request, response);
 
-		// Map requests to responses by ident
-		const callMap = {};
-		const callArgs = {};
-		request.calls.forEach((call) => {
-			callMap[call.ident] = call.name;
-			callArgs[call.ident] = call.args || {};
-		});
+		if (!extracted) {
+			// Diagnostic logging: show what we actually received.
+			// Wrap JSON.stringify in try/catch because non-serializable data
+			// (BigInt, circular refs, etc.) would throw and silently kill the
+			// entire function before we ever push to the API log.
+			let reqKeys = '(null)';
+			let resKeys = '(null)';
+			let reqSnippet = '(null)';
+			let resSnippet = '(null)';
+			try {
+				reqKeys = request ? Object.keys(request).join(', ') : '(null)';
+				resKeys = response ? Object.keys(response).join(', ') : '(null)';
+			} catch { /* ignore */ }
+			try {
+				reqSnippet = JSON.stringify(request)?.substring(0, 200) || '(null)';
+			} catch {
+				reqSnippet = `(unstringifiable: ${typeof request})`;
+			}
+			try {
+				resSnippet = JSON.stringify(response)?.substring(0, 200) || '(null)';
+			} catch {
+				resSnippet = `(unstringifiable: ${typeof response})`;
+			}
+			const detail = `No .calls/.results | req keys=[${reqKeys}] res keys=[${resKeys}]`;
+			console.warn('[OrganizedJihad] processAPIResponse: unexpected format', {
+				requestKeys: reqKeys,
+				responseKeys: resKeys,
+				requestSnippet: reqSnippet,
+				responseSnippet: resSnippet,
+				page: this._pageHost,
+			});
+			this._pushApiLog([], 'skipped', detail, `req: ${reqSnippet} | res: ${resSnippet}`, this._lastInterceptedUrl);
+			return;
+		}
+
+		// Destructure the normalized calls info
+		const { calls: extractedCalls, callMap, callArgs } = extracted;
+		const allCallNames = extractedCalls.map((c) => c.name);
+
+		// Track which calls were dispatched vs unhandled
+		const dispatched = [];
+		const unhandled = [];
+		const errors = [];
 
 		// Process each result
 		for (const result of response.results) {
@@ -422,7 +674,10 @@ class GameTracker {
 			const args = callArgs[result.ident];
 			const responseData = result.result?.response;
 
-			if (!responseData) continue;
+			if (!responseData) {
+				if (callName) unhandled.push(callName + '(no data)');
+				continue;
+			}
 
 			try {
 				switch (callName) {
@@ -627,12 +882,25 @@ class GameTracker {
 					case 'bossOpenChestPay':
 						await this.trackConsumableOpening(args, responseData, 'outlandChest');
 						break;
+
+					default:
+						if (callName) unhandled.push(callName);
+						continue; // Skip the dispatched.push below
 				}
+				dispatched.push(callName);
 			} catch (error) {
 				console.error(`[OrganizedJihad] Error processing ${callName}:`, error);
+				errors.push(`${callName}: ${error?.message || String(error)}`);
 				await this._logError(`processAPIResponse:${callName}`, error);
 			}
 		}
+
+		// Push to API call log ring buffer
+		const status = errors.length > 0 ? 'error' : (dispatched.length > 0 ? 'ok' : 'no-match');
+		const detail = dispatched.length > 0
+			? `Dispatched: ${dispatched.join(', ')}` + (unhandled.length > 0 ? ` | Unhandled: ${unhandled.join(', ')}` : '')
+			: `Unhandled: ${unhandled.join(', ') || 'none'}`;
+		this._pushApiLog(allCallNames, status, detail, errors.length > 0 ? errors.join('; ') : null, this._lastInterceptedUrl);
 
 		// Trigger periodic data snapshot
 		try {

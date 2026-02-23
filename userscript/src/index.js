@@ -5,9 +5,11 @@
 // ==UserScript==  (informational — webpack banner is authoritative)
 // @name         OrganizedJihad - Hero Wars Tracker
 // @namespace    http://tampermonkey.net/
-// @version      0.9.0
+// @version      0.9.2
 // @description  Track and manage Hero Wars game data with IndexedDB storage and in-game UI
 // @author       Andy Hubbard <me@ansarya.com>
+// @match        https://www.hero-wars.com/*
+// @match        https://*.hero-wars.com/*
 // @match        https://i-heroes-fb.nextersglobal.com/*
 // @match        https://i.hero-wars-fb.com/*
 // @match        https://i-heroes-vk.nextersglobal.com/*
@@ -15,6 +17,7 @@
 // @match        https://i-heroes-mm.nextersglobal.com/*
 // @match        https://i-heroes-wb.nextersglobal.com/*
 // @match        https://i-heroes-mg.nextersglobal.com/*
+// @match        https://apps-1701433570146040.apps.fbsbx.com/*
 // @grant        GM_addStyle
 // @run-at       document-end
 // ==/UserScript==
@@ -34,19 +37,8 @@ import './styles/main.css';
 (async function () {
 	'use strict';
 
-	// ─── Guard: only run inside the game iframe ────────────────────────
-	// The outer hero-wars.com page is just a shell; the real game and its
-	// API traffic live inside an iframe on nextersglobal.com (or
-	// hero-wars-fb.com).  Running the tracker on the outer page would
-	// create a second badge, double-patch XHR, etc.
-	const host = window.location.hostname;
-	if (!host.includes('nextersglobal.com') && !host.includes('hero-wars-fb.com')) {
-		console.log('[OrganizedJihad] Skipping — not in the game iframe (' + host + ')');
-		return;
-	}
-
 	console.log(
-		'%c[OrganizedJihad]%c Hero Wars Tracker v0.9.0 Loaded',
+		'%c[OrganizedJihad]%c Hero Wars Tracker v0.9.2 Loaded',
 		'color: #4CAF50; font-weight: bold; font-size: 14px;',
 		'color: #2196F3; font-size: 14px;'
 	);
@@ -254,10 +246,10 @@ import './styles/main.css';
 	const gameOverlay = new GameOverlay(idbStorage, prefStorage);
 	gameOverlay.init();
 
-	// Initialize API Monitor for comprehensive API call logging
+	// NOTE: APIMonitor is initialized AFTER gameTracker.init() (below)
+	// to avoid double-proxying XMLHttpRequest. GameTracker's XHR proxy
+	// handles API interception; APIMonitor only stores endpoints/stats.
 	const apiMonitor = new APIMonitor(idbStorage);
-	await apiMonitor.init();
-	console.log('[OrganizedJihad] ✅ API Monitor initialized');
 
 	// ─── Wire Status Badge ──────────────────────────────────────────────
 
@@ -291,8 +283,14 @@ import './styles/main.css';
 	async function initialize() {
 		console.log('[OrganizedJihad] Initializing tracker...');
 
-		// Set up API interception (XHR proxy)
+		// Set up API interception (XHR proxy) — must run FIRST before any
+		// other module that touches XMLHttpRequest
 		await gameTracker.init();
+
+		// Initialize API Monitor AFTER gameTracker so its XHR proxy layers
+		// correctly on top (apiMonitor ← gameTracker ← real XHR)
+		await apiMonitor.init();
+		console.log('[OrganizedJihad] ✅ API Monitor initialized');
 
 		// Initialize UI overlay (hidden by default until badge is clicked)
 		await uiManager.init();
