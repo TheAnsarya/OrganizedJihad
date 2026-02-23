@@ -510,6 +510,12 @@ class UIManager {
 			? new Date(player.timestamp).toLocaleString()
 			: 'None yet';
 
+		// ── Win Rate Statistics (#26) ─────────────────────────────────
+		const winRateSection = await this._renderWinRateCards();
+
+		// ── Daily Summary (#26) ──────────────────────────────────────
+		const dailySummary = await this._renderDailySummary();
+
 		// Player info section
 		const playerSection = playerName
 			? `<div class="oj-section">
@@ -527,6 +533,10 @@ class UIManager {
 		return `
 			<div class="oj-dashboard">
 				${playerSection}
+
+				${winRateSection}
+
+				${dailySummary}
 
 				<div class="oj-section">
 					<h3>\uD83D\uDCCA Tracked Data</h3>
@@ -560,7 +570,7 @@ class UIManager {
 						${errorCount > 0 ? `<div class="oj-status-row"><span>Errors</span><span class="oj-status-err">${errorCount}</span></div>` : ''}
 						<div class="oj-status-row">
 							<span>Version</span>
-							<span>0.9.0</span>
+							<span>0.9.2</span>
 						</div>
 					</div>
 				</div>
@@ -573,6 +583,138 @@ class UIManager {
 						<li>Check the <strong>Activity</strong> tab to see intercepted calls in real-time</li>
 						<li>Press <kbd>Ctrl+Shift+H</kbd> to toggle this panel</li>
 					</ul>
+				</div>
+			</div>
+		`;
+	}
+
+	/**
+	 * Render win rate cards for arena, grand arena, and titan arena (#26).
+	 * Shows all-time and last-7-day win percentages with visual bars.
+	 *
+	 * @returns {Promise<string>} HTML section
+	 * @private
+	 */
+	async _renderWinRateCards() {
+		let battles = [];
+		try {
+			battles = await this.idbStorage.getAll('battles');
+		} catch { return ''; }
+
+		if (battles.length === 0) return '';
+
+		const now = Date.now();
+		const sevenDaysAgo = now - 7 * 24 * 60 * 60 * 1000;
+
+		// Group by type and calculate win rates
+		const types = [
+			{ key: 'arena', label: '\u2694\uFE0F Arena', color: '#4fc3f7' },
+			{ key: 'titanArena', label: '\uD83D\uDEE1\uFE0F Titan Arena', color: '#ce93d8' },
+			{ key: 'grandArena', label: '\uD83C\uDFC6 Grand Arena', color: '#ffb74d' },
+		];
+
+		const cards = types.map(({ key, label, color }) => {
+			const all = battles.filter((b) => b.type === key);
+			const recent = all.filter((b) => {
+				const ts = b.timestamp ? new Date(b.timestamp).getTime() : 0;
+				return ts >= sevenDaysAgo;
+			});
+
+			if (all.length === 0) return '';
+
+			const allWins = all.filter((b) => b.isWin).length;
+			const allPct = Math.round((allWins / all.length) * 100);
+			const recentWins = recent.filter((b) => b.isWin).length;
+			const recentPct = recent.length > 0 ? Math.round((recentWins / recent.length) * 100) : 0;
+
+			return `
+				<div style="flex:1;min-width:140px;background:#2a2a2e;border-radius:6px;padding:8px">
+					<div style="font-size:12px;font-weight:600;margin-bottom:4px">${label}</div>
+					<div style="font-size:20px;font-weight:700;color:${color}">${allPct}%</div>
+					<div style="background:#444;border-radius:3px;height:6px;margin:4px 0">
+						<div style="background:${color};height:100%;border-radius:3px;width:${allPct}%"></div>
+					</div>
+					<div style="font-size:10px;color:#aaa">
+						${allWins}W / ${all.length - allWins}L all time
+						${recent.length > 0 ? `\u00B7 ${recentPct}% last 7d (${recentWins}/${recent.length})` : ''}
+					</div>
+				</div>`;
+		}).filter(Boolean);
+
+		if (cards.length === 0) return '';
+
+		return `
+			<div class="oj-section">
+				<h3>\uD83C\uDFC5 Win Rates</h3>
+				<div style="display:flex;gap:8px;flex-wrap:wrap">
+					${cards.join('')}
+				</div>
+			</div>
+		`;
+	}
+
+	/**
+	 * Render a daily summary showing today's activity (#26).
+	 * Counts battles, quests, chests, and resource changes since midnight.
+	 *
+	 * @returns {Promise<string>} HTML section
+	 * @private
+	 */
+	async _renderDailySummary() {
+		const todayStart = new Date();
+		todayStart.setHours(0, 0, 0, 0);
+		const todayISO = todayStart.toISOString();
+
+		let todayBattles = 0;
+		let todayWins = 0;
+		let todayChests = 0;
+		let todayQuests = 0;
+		let todayUpgrades = 0;
+
+		try {
+			const battles = await this.idbStorage.getAll('battles');
+			const todayB = battles.filter((b) => b.timestamp >= todayISO);
+			todayBattles = todayB.length;
+			todayWins = todayB.filter((b) => b.isWin).length;
+		} catch { /* empty */ }
+
+		try {
+			const chests = await this.idbStorage.getAll('chests');
+			todayChests = chests.filter((c) => c.openedAt >= todayISO || c.timestamp >= todayISO).length;
+		} catch { /* empty */ }
+
+		try {
+			const quests = await this.idbStorage.getAll('dailyQuestCompletions');
+			const guildQ = await this.idbStorage.getAll('guildQuestCompletions');
+			todayQuests = quests.filter((q) => q.completedAt >= todayISO).length
+				+ guildQ.filter((q) => q.completedAt >= todayISO).length;
+		} catch { /* empty */ }
+
+		try {
+			const upgrades = await this.idbStorage.getAll('heroUpgrades');
+			const titanUp = await this.idbStorage.getAll('titanUpgrades');
+			todayUpgrades = upgrades.filter((u) => u.timestamp >= todayISO).length
+				+ titanUp.filter((u) => u.timestamp >= todayISO).length;
+		} catch { /* empty */ }
+
+		if (todayBattles + todayChests + todayQuests + todayUpgrades === 0) return '';
+
+		return `
+			<div class="oj-section">
+				<h3>\uD83D\uDCC5 Today's Activity</h3>
+				<div style="display:flex;gap:8px;flex-wrap:wrap">
+					${todayBattles > 0 ? `<div style="background:#2a2a2e;border-radius:6px;padding:6px 10px;font-size:12px">
+						\u2694\uFE0F <strong>${todayBattles}</strong> battles (${todayWins}W / ${todayBattles - todayWins}L)
+					</div>` : ''}
+					${todayChests > 0 ? `<div style="background:#2a2a2e;border-radius:6px;padding:6px 10px;font-size:12px">
+						\uD83C\uDF81 <strong>${todayChests}</strong> chests opened
+					</div>` : ''}
+					${todayQuests > 0 ? `<div style="background:#2a2a2e;border-radius:6px;padding:6px 10px;font-size:12px">
+						\u2705 <strong>${todayQuests}</strong> quests completed
+					</div>` : ''}
+					${todayUpgrades > 0 ? `<div style="background:#2a2a2e;border-radius:6px;padding:6px 10px;font-size:12px">
+						\u2B06\uFE0F <strong>${todayUpgrades}</strong> upgrades
+					</div>` : ''}
 				</div>
 			</div>
 		`;
