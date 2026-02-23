@@ -16,6 +16,26 @@
  */
 
 import GameTracker from '../src/modules/gameTracker.js';
+import { decompressHeroBatch } from '../src/modules/heroCompression.js';
+
+/**
+ * Extract the first hero from the compressed batch stored via mockStorage.add('heroes', ...).
+ * With #43 compression, heroes are stored as a single batch record instead of individual rows.
+ *
+ * @param {jest.Mock} addMock - mockStorage.add mock
+ * @param {number} [heroIndex=0] - Index within the batch's heroes array
+ * @returns {Object|undefined} The decompressed hero record
+ */
+function extractHeroFromBatch(addMock, heroIndex = 0) {
+	const call = addMock.mock.calls.find((c) => c[0] === 'heroes');
+	if (!call) return undefined;
+	const batch = call[1];
+	if (batch._compressed) {
+		const heroes = decompressHeroBatch(batch);
+		return heroes[heroIndex];
+	}
+	return batch; // legacy individual record
+}
 
 describe('GameTracker', () => {
 	let tracker;
@@ -164,7 +184,7 @@ describe('GameTracker', () => {
 	// ─── trackHeroesData ─────────────────────────────────────────────────
 
 	describe('trackHeroesData', () => {
-		test('should save each hero as a separate snapshot', async () => {
+		test('should save heroes as a compressed batch', async () => {
 			const data = {
 				'101': { id: 101, name: 'Galahad', level: 120, star: 6, color: 15, power: 50000 },
 				'102': { id: 102, name: 'Astaroth', level: 115, star: 5, color: 12, power: 48000 },
@@ -172,16 +192,18 @@ describe('GameTracker', () => {
 
 			await tracker.trackHeroesData(data);
 
-			// 2 heroes + 1 activity event = 3 add calls
-			expect(mockStorage.add).toHaveBeenCalledTimes(3);
+			// 1 compressed batch + 1 activity event = 2 add calls
+			expect(mockStorage.add).toHaveBeenCalledTimes(2);
 			expect(mockStorage.add).toHaveBeenCalledWith(
 				'heroes',
-				expect.objectContaining({ heroId: 101, heroName: 'Galahad', level: 120 }),
+				expect.objectContaining({ _compressed: 1 }),
 			);
-			expect(mockStorage.add).toHaveBeenCalledWith(
-				'heroes',
-				expect.objectContaining({ heroId: 102, heroName: 'Astaroth', level: 115 }),
-			);
+			// Verify both heroes are in the batch
+			const batch = mockStorage.add.mock.calls.find((c) => c[0] === 'heroes')?.[1];
+			const heroes = decompressHeroBatch(batch);
+			expect(heroes).toHaveLength(2);
+			expect(heroes.find((h) => h.heroId === 101).heroName).toBe('Galahad');
+			expect(heroes.find((h) => h.heroId === 102).heroName).toBe('Astaroth');
 		});
 
 		test('should extract skills from {skillId: level} format', async () => {
@@ -195,15 +217,11 @@ describe('GameTracker', () => {
 			await tracker.trackHeroesData(data);
 
 			// Skills sorted descending → skillLevel1=130, skillLevel2=120, etc.
-			expect(mockStorage.add).toHaveBeenCalledWith(
-				'heroes',
-				expect.objectContaining({
-					skillLevel1: 130,
-					skillLevel2: 120,
-					skillLevel3: 110,
-					skillLevel4: 100,
-				}),
-			);
+			const savedHero = extractHeroFromBatch(mockStorage.add);
+			expect(savedHero.skillLevel1).toBe(130);
+			expect(savedHero.skillLevel2).toBe(120);
+			expect(savedHero.skillLevel3).toBe(110);
+			expect(savedHero.skillLevel4).toBe(100);
 		});
 
 		test('should store rawSkills as JSON-stringified skills object', async () => {
@@ -214,9 +232,7 @@ describe('GameTracker', () => {
 
 			await tracker.trackHeroesData(data);
 
-			const savedHero = mockStorage.add.mock.calls.find(
-				(c) => c[0] === 'heroes'
-			)?.[1];
+			const savedHero = extractHeroFromBatch(mockStorage.add);
 			expect(JSON.parse(savedHero.rawSkills)).toEqual(skills);
 		});
 
@@ -230,11 +246,9 @@ describe('GameTracker', () => {
 
 			await tracker.trackHeroesData(data);
 
-			// 3 skins in the object → skins field = 3
-			expect(mockStorage.add).toHaveBeenCalledWith(
-				'heroes',
-				expect.objectContaining({ skins: 3 }),
-			);
+			// 3 skins in the object → skins field = 3 (stored in compressed batch)
+			const savedHero = extractHeroFromBatch(mockStorage.add);
+			expect(savedHero.skins).toBe(3);
 		});
 
 		test('should store rawSkins as JSON-stringified skins object', async () => {
@@ -245,9 +259,7 @@ describe('GameTracker', () => {
 
 			await tracker.trackHeroesData(data);
 
-			const savedHero = mockStorage.add.mock.calls.find(
-				(c) => c[0] === 'heroes'
-			)?.[1];
+			const savedHero = extractHeroFromBatch(mockStorage.add);
 			expect(JSON.parse(savedHero.rawSkins)).toEqual(skinsObj);
 		});
 
@@ -265,9 +277,7 @@ describe('GameTracker', () => {
 
 			await tracker.trackHeroesData(data);
 
-			const savedHero = mockStorage.add.mock.calls.find(
-				(c) => c[0] === 'heroes'
-			)?.[1];
+			const savedHero = extractHeroFromBatch(mockStorage.add);
 			expect(savedHero.artifactWeapon).toBe(5);
 			expect(savedHero.artifactBook).toBe(4);
 			expect(savedHero.artifactRing).toBe(3);
@@ -289,9 +299,7 @@ describe('GameTracker', () => {
 
 			await tracker.trackHeroesData(data);
 
-			const savedHero = mockStorage.add.mock.calls.find(
-				(c) => c[0] === 'heroes'
-			)?.[1];
+			const savedHero = extractHeroFromBatch(mockStorage.add);
 			expect(JSON.parse(savedHero.runes)).toEqual(runesArr);
 			expect(savedHero.titanGiftLevel).toBe(25);
 			expect(JSON.parse(savedHero.ascensions)).toEqual(ascObj);
@@ -333,7 +341,7 @@ describe('GameTracker', () => {
 			await tracker.trackHeroesData(data2);
 
 			// Both should be written (not deduped) because skills changed
-			// 2 hero snapshots + 2 activity events = 4 add calls
+			// 2 compressed batches + 2 activity events = 4 add calls
 			expect(mockStorage.add).toHaveBeenCalledTimes(4);
 		});
 
@@ -344,9 +352,8 @@ describe('GameTracker', () => {
 
 			await tracker.trackHeroesData(data);
 
-			const savedHero = mockStorage.add.mock.calls.find(
-				(c) => c[0] === 'heroes'
-			)?.[1];
+			// Decompressed from batch — defaults restored by decompression
+			const savedHero = extractHeroFromBatch(mockStorage.add);
 			expect(savedHero.skins).toBe(0);
 			expect(savedHero.skillLevel1).toBe(0);
 			expect(savedHero.titanGiftLevel).toBe(0);
@@ -465,8 +472,8 @@ describe('GameTracker', () => {
 			await tracker.trackHeroesData(data);
 			await tracker.trackHeroesData(data);
 
-			// 2 heroes + 1 activity on first call, 0 on second (deduped) = 3
-			expect(mockStorage.add).toHaveBeenCalledTimes(3);
+			// 1 compressed batch + 1 activity on first call, 0 on second (deduped) = 2
+			expect(mockStorage.add).toHaveBeenCalledTimes(2);
 		});
 
 		test('should write hero snapshots when power changes', async () => {
@@ -480,7 +487,7 @@ describe('GameTracker', () => {
 			await tracker.trackHeroesData(data1);
 			await tracker.trackHeroesData(data2);
 
-			// 1 hero + 1 activity on each call = 4
+			// 1 compressed batch + 1 activity on each call = 4
 			expect(mockStorage.add).toHaveBeenCalledTimes(4);
 		});
 

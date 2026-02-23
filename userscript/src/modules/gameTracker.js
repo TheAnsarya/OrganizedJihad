@@ -24,6 +24,7 @@
 
 import IndexedDBStorage from './indexedDBStorage.js';
 import UpgradeTracker from './trackers/UpgradeTracker.js';
+import { compressHeroBatch, compressTitanBatch } from './heroCompression.js';
 
 /**
  * Tracking categories used for per-category enable/disable toggles (#27).
@@ -1725,15 +1726,20 @@ class GameTracker {
 			};
 		});
 
-		// Store each hero snapshot in IndexedDB heroes store
-		for (const hero of heroes) {
-			await this.storage.add('heroes', hero);
+		// ── Compressed batch storage (#43) ──────────────────────────────
+		// Instead of 100+ individual rows, store a single compressed
+		// batch record with shared playerId/timestamp and per-hero deltas
+		// (only non-default fields).  Reduces IndexedDB size ~60-80%.
+		const batch = compressHeroBatch(heroes);
+		if (batch) {
+			await this.storage.add('heroes', batch);
 		}
 
-		// Also cache in metadata for fast UI access (latest snapshot only)
+		// Also cache full (uncompressed) records in metadata for fast UI
+		// access — the primary read path uses this, not the store.
 		await this.storage.setMetadata('heroesData', heroes);
 
-		console.log(`[OrganizedJihad] Heroes tracked: ${heroes.length} heroes stored as snapshots`);
+		console.log(`[OrganizedJihad] Heroes tracked: ${heroes.length} heroes stored as compressed batch`);
 
 		// Live activity event
 		const topHero = heroes.reduce((best, h) => (h.power > (best?.power || 0) ? h : best), null);
@@ -1828,6 +1834,16 @@ class GameTracker {
 		const playerId = (await this.storage.getMetadata('currentPlayerId')) || 'unknown';
 		const timestamp = new Date().toISOString();
 
+		// ── Deduplication: skip if titan roster hasn't changed ───────────
+		const titanFingerprint = this._computeDataFingerprint(
+			Object.values(data).map((t) => [t.id, t.level, t.star, t.power])
+		);
+		if (titanFingerprint === this._lastTitanHash) {
+			console.log('[OrganizedJihad] Titans unchanged — skipping snapshot');
+			return;
+		}
+		this._lastTitanHash = titanFingerprint;
+
 		const titans = Object.values(data).map((titan) => ({
 			titanId: titan.id,
 			titanName: titan.name || `Titan_${titan.id}`,
@@ -1843,12 +1859,16 @@ class GameTracker {
 			timestamp: timestamp,
 		}));
 
-		// Store each titan snapshot in IndexedDB titans store
-		for (const titan of titans) {
-			await this.storage.add('titans', titan);
+		// ── Compressed batch storage (#43) ──────────────────────────────
+		const batch = compressTitanBatch(titans);
+		if (batch) {
+			await this.storage.add('titans', batch);
 		}
 
-		console.log(`[OrganizedJihad] Titans tracked: ${titans.length} titans stored as snapshots`);
+		// Cache full records in metadata for fast UI access
+		await this.storage.setMetadata('titansData', titans);
+
+		console.log(`[OrganizedJihad] Titans tracked: ${titans.length} titans stored as compressed batch`);
 	}
 
 	/**
@@ -2968,36 +2988,6 @@ class GameTracker {
 
 		await this.storage.add('guildActivities', activity);
 		console.log(`[OrganizedJihad] Guild activity tracked: ${activity.activityType} in ${activity.guildName}`);
-	}
-
-	/**
-	 * Track titans data (metadata summary — called from titanGetAll)
-	 * NOTE: The earlier IDB-store version of this method is overridden by
-	 * this definition (same method name, last-wins in ES6 classes).
-	 *
-	 * @param {Object} data - Titans data
-	 * @private
-	 */
-	async trackTitansData(data) {
-		const titans = Object.values(data).map((titan) => ({
-			id: titan.id,
-			level: titan.level || 0,
-			stars: titan.star || 0,
-			power: titan.power || 0,
-			skills: titan.skills || {},
-			artifacts: titan.artifacts || [],
-		}));
-
-		// ── Deduplication: skip if titan roster hasn't changed ───────────
-		const titanFingerprint = this._computeDataFingerprint(
-			titans.map((t) => [t.id, t.level, t.stars, t.power])
-		);
-		if (titanFingerprint === this._lastTitanHash) {
-			return;
-		}
-		this._lastTitanHash = titanFingerprint;
-
-		await this.storage.setMetadata('titansData', titans);
 	}
 
 	/**

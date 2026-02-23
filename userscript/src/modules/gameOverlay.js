@@ -16,6 +16,7 @@
  */
 
 import HeroCompletionCalculator from './helpers/HeroCompletionCalculator.js';
+import { decompressHeroStore } from './heroCompression.js';
 
 /**
  * Floating game overlay panel for hero completion percentages.
@@ -244,9 +245,10 @@ class GameOverlay {
 			}
 		} catch { /* empty */ }
 
-		// Fallback: deduplicate from heroes store
+		// Fallback: deduplicate from heroes store (handles compressed batches #43)
 		try {
-			const all = await this.idbStorage.getAll('heroes', 5000);
+			const raw = await this.idbStorage.getAll('heroes', 5000);
+			const all = decompressHeroStore(raw);
 			if (all.length > 0) {
 				const byId = {};
 				for (const h of all) {

@@ -11,6 +11,7 @@
 
 import HeroCompletionCalculator from './helpers/HeroCompletionCalculator.js';
 import { TRACKING_CATEGORIES } from './gameTracker.js';
+import { decompressHeroStore, decompressTitanStore } from './heroCompression.js';
 
 class UIManager {
 	/**
@@ -833,9 +834,11 @@ class UIManager {
 		} catch { /* empty */ }
 
 		// Fallback: read from the heroes IDB store and deduplicate by heroId
+		// Handles both legacy individual records and compressed batches (#43)
 		if (heroes.length === 0) {
 			try {
-				const all = await this.idbStorage.getAll('heroes', 5000);
+				const raw = await this.idbStorage.getAll('heroes', 5000);
+				const all = decompressHeroStore(raw);
 				if (all.length > 0) {
 					const byId = {};
 					for (const h of all) {
@@ -1101,9 +1104,11 @@ class UIManager {
 		} catch { /* empty */ }
 
 		// Fallback: read from the titans IDB store and deduplicate by titanId
+		// Handles both legacy individual records and compressed batches (#43)
 		if (titans.length === 0) {
 			try {
-				const all = await this.idbStorage.getAll('titans', 5000);
+				const raw = await this.idbStorage.getAll('titans', 5000);
+				const all = decompressTitanStore(raw);
 				if (all.length > 0) {
 					const byId = {};
 					for (const t of all) {

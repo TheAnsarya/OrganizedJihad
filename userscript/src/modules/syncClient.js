@@ -10,6 +10,8 @@
  * - GET /api/sync/stats - Database statistics
  */
 
+import { decompressHeroStore, decompressTitanStore } from './heroCompression.js';
+
 class SyncClient {
 	constructor(apiUrl = 'http://localhost:5124') {
 		this.apiUrl = apiUrl;
@@ -122,8 +124,11 @@ class SyncClient {
 					: null;
 
 			// Get all new entity types added in Phase 7
-			const heroes = await storage.getAll('heroes');
-			const titans = await storage.getAll('titans');
+			// Decompress hero/titan compressed batch records (#43)
+			const heroesRaw = await storage.getAll('heroes');
+			const heroes = decompressHeroStore(heroesRaw);
+			const titansRaw = await storage.getAll('titans');
+			const titans = decompressTitanStore(titansRaw);
 			const pets = await storage.getAll('pets');
 			const inventorySnapshots = await storage.getAll('inventory');
 			const currentInventory =
