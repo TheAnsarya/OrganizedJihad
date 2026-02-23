@@ -815,6 +815,169 @@ class IndexedDBStorage {
 			return 0;
 		}
 	}
+
+	// =====================================================================
+	// Automatic Data Purge (#45)
+	// =====================================================================
+
+	/**
+	 * Default retention periods (in days) per store type.
+	 * Can be overridden via the `retentionOverrides` parameter.
+	 *
+	 * @static
+	 * @type {Object<string, number>}
+	 */
+	static DEFAULT_RETENTION = {
+		// Battles, replays, expeditions — 90 days
+		battles: 90,
+		expeditionBattles: 90,
+
+		// Snapshots — 30 days
+		snapshots: 30,
+		heroes: 30,
+		titans: 30,
+		pets: 30,
+		inventory: 30,
+		guildMemberSnapshots: 30,
+
+		// Activity logs — 30 days
+		chatMessages: 30,
+		activityEvents: 30,
+		resourceTransactions: 30,
+		guildActivities: 30,
+		questCompletions: 30,
+		shopPurchases: 30,
+		chests: 30,
+		consumableRewards: 30,
+		dailyQuestCompletions: 30,
+		guildQuestCompletions: 30,
+		loginRewards: 30,
+		inventoryItemUsages: 30,
+		equipmentChanges: 30,
+		heroUpgrades: 90,
+		titanUpgrades: 90,
+		guildWarParticipations: 90,
+		guildRaidParticipations: 90,
+		guildDungeonParticipations: 90,
+		titaniteTransactions: 30,
+
+		// API logs — 7 days
+		apiLogs: 7,
+	};
+
+	/**
+	 * Purge records older than the configured retention period from all stores.
+	 *
+	 * Iterates each store that has a `timestamp` index, opens a cursor over
+	 * records older than the cutoff, and deletes them. Returns a summary
+	 * of how many records were removed per store.
+	 *
+	 * @param {Object<string, number>} [retentionOverrides] - Per-store retention
+	 *   overrides in days. Keys are store names, values are day counts.
+	 * @returns {Promise<Object<string, number>>} Map of storeName → deletedCount
+	 */
+	async purgeOldRecords(retentionOverrides = {}) {
+		await this.initPromise;
+		const retention = { ...IndexedDBStorage.DEFAULT_RETENTION, ...retentionOverrides };
+		const summary = {};
+		const now = Date.now();
+
+		for (const [storeName, days] of Object.entries(retention)) {
+			if (!this.db.objectStoreNames.contains(storeName)) continue;
+
+			const cutoffMs = now - days * 24 * 60 * 60 * 1000;
+			const cutoffISO = new Date(cutoffMs).toISOString();
+
+			try {
+				const deleted = await this._purgeStoreBefore(storeName, cutoffMs, cutoffISO);
+				if (deleted > 0) {
+					summary[storeName] = deleted;
+				}
+			} catch (error) {
+				console.error(`[IndexedDBStorage] purge failed for ${storeName}:`, error);
+			}
+		}
+
+		const total = Object.values(summary).reduce((a, b) => a + b, 0);
+		if (total > 0) {
+			console.log(`[IndexedDBStorage] Purged ${total} old record(s):`, summary);
+		}
+		return summary;
+	}
+
+	/**
+	 * Delete all records in a store whose timestamp is older than the cutoff.
+	 *
+	 * Supports both ISO string timestamps and numeric (epoch-ms) timestamps
+	 * by checking each record.
+	 *
+	 * @param {string} storeName - Object store name
+	 * @param {number} cutoffMs - Cutoff as epoch-ms
+	 * @param {string} cutoffISO - Cutoff as ISO string (for string comparison)
+	 * @returns {Promise<number>} Number of deleted records
+	 * @private
+	 */
+	async _purgeStoreBefore(storeName, cutoffMs, cutoffISO) {
+		return new Promise((resolve, reject) => {
+			const tx = this.db.transaction([storeName], 'readwrite');
+			const store = tx.objectStore(storeName);
+			const request = store.openCursor();
+			let deleted = 0;
+
+			request.onsuccess = (event) => {
+				const cursor = event.target.result;
+				if (!cursor) {
+					resolve(deleted);
+					return;
+				}
+
+				const record = cursor.value;
+				const ts = record.timestamp;
+
+				let isOld = false;
+				if (typeof ts === 'number') {
+					isOld = ts < cutoffMs;
+				} else if (typeof ts === 'string') {
+					isOld = ts < cutoffISO;
+				} else if (record.savedAt && typeof record.savedAt === 'number') {
+					// apiLogs use savedAt instead of timestamp
+					isOld = record.savedAt < cutoffMs;
+				}
+
+				if (isOld) {
+					cursor.delete();
+					deleted++;
+				}
+
+				cursor.continue();
+			};
+
+			request.onerror = () => reject(request.error);
+			tx.onerror = () => reject(tx.error);
+		});
+	}
+
+	/**
+	 * Get current storage usage statistics.
+	 * Returns record counts per store for display in debug/settings UI.
+	 *
+	 * @returns {Promise<Object<string, number>>} Map of storeName → recordCount
+	 */
+	async getStorageStats() {
+		await this.initPromise;
+		const stats = {};
+		const storeNames = Array.from(this.db.objectStoreNames);
+
+		for (const name of storeNames) {
+			try {
+				stats[name] = await this.count(name);
+			} catch {
+				stats[name] = -1;
+			}
+		}
+
+		return stats;
+	}
 }
 
 export default IndexedDBStorage;

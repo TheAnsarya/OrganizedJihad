@@ -822,5 +822,264 @@ describe('GameTracker', () => {
 			tracker.destroy();
 			expect(tracker._cleanupIntervalId).toBeNull();
 		});
+
+		test('should clear purge interval', () => {
+			tracker._purgeIntervalId = setInterval(() => {}, 999999);
+			expect(tracker._purgeIntervalId).not.toBeNull();
+			tracker.destroy();
+			expect(tracker._purgeIntervalId).toBeNull();
+		});
+	});
+
+	// =================================================================
+	// Battle Fingerprinting & Deduplication (#44)
+	// =================================================================
+
+	describe('Battle Deduplication', () => {
+		test('_battleFingerprint should produce consistent fingerprints', () => {
+			const battle = {
+				battleType: 'Arena',
+				opponentId: '123',
+				timestamp: '2025-01-01T12:00:00.000Z',
+				isWin: true,
+			};
+			const fp1 = tracker._battleFingerprint(battle);
+			const fp2 = tracker._battleFingerprint(battle);
+			expect(fp1).toBe(fp2);
+		});
+
+		test('_battleFingerprint should differ for different opponents', () => {
+			const base = { battleType: 'Arena', timestamp: '2025-01-01T12:00:00.000Z', isWin: true };
+			const fp1 = tracker._battleFingerprint({ ...base, opponentId: '100' });
+			const fp2 = tracker._battleFingerprint({ ...base, opponentId: '200' });
+			expect(fp1).not.toBe(fp2);
+		});
+
+		test('_isBattleDuplicate should return false for first occurrence', () => {
+			const battle = {
+				battleType: 'Arena',
+				opponentId: '123',
+				timestamp: '2025-01-01T12:00:00.000Z',
+				isWin: true,
+			};
+			expect(tracker._isBattleDuplicate(battle)).toBe(false);
+		});
+
+		test('_isBattleDuplicate should return true for second occurrence', () => {
+			const battle = {
+				battleType: 'Arena',
+				opponentId: '123',
+				timestamp: '2025-01-01T12:00:00.000Z',
+				isWin: true,
+			};
+			tracker._isBattleDuplicate(battle); // first call
+			expect(tracker._isBattleDuplicate(battle)).toBe(true);
+		});
+
+		test('_isBattleDuplicate should cap fingerprint set at 2000', () => {
+			for (let i = 0; i < 2100; i++) {
+				tracker._isBattleDuplicate({
+					battleType: 'Arena',
+					opponentId: String(i),
+					timestamp: Date.now(),
+					isWin: true,
+				});
+			}
+			expect(tracker._battleFingerprintSet.size).toBeLessThanOrEqual(2000);
+		});
+	});
+
+	// =================================================================
+	// Replay Tracking (#42, #41)
+	// =================================================================
+
+	describe('Replay Tracking', () => {
+		test('trackArenaReplay should store to battles store', async () => {
+			const data = {
+				result: { win: true },
+				attackers: [{ id: 1, power: 100 }],
+				defenders: [{ id: 2, power: 200 }],
+			};
+			await tracker.trackArenaReplay('arenaGetReplay', { enemyUserId: '42' }, data);
+			expect(mockStorage.add).toHaveBeenCalledWith(
+				'battles',
+				expect.objectContaining({
+					battleType: 'ArenaReplay',
+					opponentId: '42',
+					isWin: true,
+				})
+			);
+		});
+
+		test('trackArenaReplay should skip duplicates', async () => {
+			const data = {
+				result: { win: false },
+				attackers: [{ id: 1, power: 100 }],
+				defenders: [{ id: 2, power: 200 }],
+			};
+			await tracker.trackArenaReplay('arenaGetReplay', { enemyUserId: '42' }, data);
+			mockStorage.add.mockClear();
+			await tracker.trackArenaReplay('arenaGetReplay', { enemyUserId: '42' }, data);
+			expect(mockStorage.add).not.toHaveBeenCalled();
+		});
+
+		test('trackArenaReplay should handle grand arena replays', async () => {
+			const data = {
+				result: { win: true },
+				battles: [
+					{ result: { win: true }, attackers: [{ id: 1 }], defenders: [{ id: 2 }] },
+					{ result: { win: false }, attackers: [{ id: 3 }], defenders: [{ id: 4 }] },
+				],
+			};
+			await tracker.trackArenaReplay('grandGetReplay', { enemyUserId: '99' }, data);
+			// Should store once per round
+			const battleCalls = mockStorage.add.mock.calls.filter(([store]) => store === 'battles');
+			expect(battleCalls.length).toBe(2);
+			expect(battleCalls[0][1].battleType).toBe('GrandArenaReplay');
+		});
+
+		test('trackAdventureReplay should store to battles store', async () => {
+			const data = {
+				result: { win: true },
+				attackers: [{ id: 1, power: 500 }],
+				defenders: [{ id: 10, power: 300 }],
+			};
+			await tracker.trackAdventureReplay('adventureGetReplay', { missionId: 'M5' }, data);
+			expect(mockStorage.add).toHaveBeenCalledWith(
+				'battles',
+				expect.objectContaining({
+					battleType: 'AdventureReplay',
+					opponentId: 'M5',
+				})
+			);
+		});
+
+		test('trackAdventureReplay should handle boss replays', async () => {
+			const data = {
+				result: { win: false },
+				attackers: [{ id: 1 }],
+				defenders: [{ id: 99 }],
+			};
+			await tracker.trackAdventureReplay('bossGetReplay', { bossId: 'B7' }, data);
+			expect(mockStorage.add).toHaveBeenCalledWith(
+				'battles',
+				expect.objectContaining({
+					battleType: 'BossReplay',
+					opponentId: 'B7',
+				})
+			);
+		});
+	});
+
+	// =================================================================
+	// Cross-Server War Tracking (#40)
+	// =================================================================
+
+	describe('Cross-Server War', () => {
+		test('trackCrossServerWarResults should store battles', async () => {
+			const data = {
+				battles: [
+					{
+						defenderId: 'D1',
+						result: { win: true },
+						attackers: [{ id: 1 }],
+						defenders: [{ id: 2 }],
+						fortId: 'F3',
+						warId: 'W1',
+					},
+				],
+			};
+			await tracker.trackCrossServerWarResults({}, data);
+			expect(mockStorage.add).toHaveBeenCalledWith(
+				'battles',
+				expect.objectContaining({
+					battleType: 'CrossServerWar',
+					opponentId: 'D1',
+					isWin: true,
+					fortId: 'F3',
+					warId: 'W1',
+				})
+			);
+		});
+
+		test('trackCrossServerWarResults should skip duplicates', async () => {
+			const data = {
+				battles: [
+					{
+						defenderId: 'D1',
+						result: { win: true },
+						attackers: [],
+						defenders: [],
+						fortId: 'F3',
+						warId: 'W1',
+					},
+				],
+			};
+			await tracker.trackCrossServerWarResults({}, data);
+			mockStorage.add.mockClear();
+			await tracker.trackCrossServerWarResults({}, data);
+			// Should be deduped
+			const battleCalls = mockStorage.add.mock.calls.filter(([store]) => store === 'battles');
+			expect(battleCalls.length).toBe(0);
+		});
+
+		test('trackCrossServerWarInfo should store metadata', async () => {
+			const data = {
+				warId: 'W99',
+				enemy: { id: 'G123', name: 'EnemyGuild', serverId: 'S5' },
+				myScore: 10,
+				enemyScore: 8,
+				state: 'active',
+			};
+			await tracker.trackCrossServerWarInfo(data);
+			expect(mockStorage.setMetadata).toHaveBeenCalledWith(
+				'currentCrossServerWar',
+				expect.objectContaining({
+					warId: 'W99',
+					isCrossServer: true,
+					enemyGuildName: 'EnemyGuild',
+					enemyServer: 'S5',
+				})
+			);
+		});
+
+		test('handler registry should contain new handlers', () => {
+			expect(tracker._handlerRegistry.has('clanWarGetBattleResults')).toBe(true);
+			expect(tracker._handlerRegistry.has('arenaGetReplay')).toBe(true);
+			expect(tracker._handlerRegistry.has('grandGetReplay')).toBe(true);
+			expect(tracker._handlerRegistry.has('adventureGetReplay')).toBe(true);
+			expect(tracker._handlerRegistry.has('bossGetReplay')).toBe(true);
+			expect(tracker._handlerRegistry.has('arenaFindEnemies')).toBe(true);
+		});
+	});
+
+	// =================================================================
+	// Auto Data Purge (#45)
+	// =================================================================
+
+	describe('Auto Data Purge', () => {
+		test('_runPurge should call storage.purgeOldRecords', async () => {
+			mockStorage.purgeOldRecords = jest.fn().mockResolvedValue({ battles: 5 });
+			await tracker._runPurge();
+			expect(mockStorage.purgeOldRecords).toHaveBeenCalled();
+		});
+
+		test('_runPurge should pass user overrides from metadata', async () => {
+			mockStorage.getMetadata.mockImplementation((key, def) => {
+				if (key === 'purgeRetention') return { battles: 180 };
+				return def;
+			});
+			mockStorage.purgeOldRecords = jest.fn().mockResolvedValue({});
+			await tracker._runPurge();
+			expect(mockStorage.purgeOldRecords).toHaveBeenCalledWith({ battles: 180 });
+		});
+
+		test('_schedulePurge should set _purgeIntervalId', () => {
+			tracker._schedulePurge();
+			expect(tracker._purgeIntervalId).not.toBeNull();
+			// Clean up
+			clearInterval(tracker._purgeIntervalId);
+			tracker._purgeIntervalId = null;
+		});
 	});
 });

@@ -316,4 +316,83 @@ describe('IndexedDBStorage', () => {
 			expect(page).toHaveLength(10);
 		});
 	});
+
+	// ─── Purge Old Records (#45) ─────────────────────────────────────────
+
+	describe('purgeOldRecords', () => {
+		test('should delete records older than retention period', async () => {
+			const now = Date.now();
+			const oldTimestamp = new Date(now - 100 * 24 * 60 * 60 * 1000).toISOString(); // 100 days ago
+			const recentTimestamp = new Date(now - 5 * 24 * 60 * 60 * 1000).toISOString(); // 5 days ago
+
+			await storage.add('battles', { battleType: 'Arena', timestamp: oldTimestamp, isWin: true });
+			await storage.add('battles', { battleType: 'Arena', timestamp: recentTimestamp, isWin: false });
+
+			// Default retention for battles is 90 days
+			const summary = await storage.purgeOldRecords();
+			expect(summary.battles).toBe(1);
+
+			const remaining = await storage.getAll('battles');
+			expect(remaining).toHaveLength(1);
+			expect(remaining[0].timestamp).toBe(recentTimestamp);
+		});
+
+		test('should handle numeric timestamps', async () => {
+			const now = Date.now();
+			const oldTs = now - 100 * 24 * 60 * 60 * 1000; // 100 days ago
+			const newTs = now - 1 * 24 * 60 * 60 * 1000;   // 1 day ago
+
+			await storage.add('activityEvents', { type: 'test', timestamp: oldTs });
+			await storage.add('activityEvents', { type: 'test', timestamp: newTs });
+
+			const summary = await storage.purgeOldRecords();
+			expect(summary.activityEvents).toBe(1);
+
+			const remaining = await storage.getAll('activityEvents');
+			expect(remaining).toHaveLength(1);
+		});
+
+		test('should respect retention overrides', async () => {
+			const now = Date.now();
+			const ts = new Date(now - 10 * 24 * 60 * 60 * 1000).toISOString(); // 10 days ago
+
+			await storage.add('battles', { battleType: 'Arena', timestamp: ts, isWin: true });
+
+			// With default 90-day retention, this should NOT be purged
+			const summary1 = await storage.purgeOldRecords();
+			expect(summary1.battles).toBeUndefined();
+
+			// With override of 5 days, it SHOULD be purged
+			const summary2 = await storage.purgeOldRecords({ battles: 5 });
+			expect(summary2.battles).toBe(1);
+		});
+
+		test('should return empty summary when nothing to purge', async () => {
+			const summary = await storage.purgeOldRecords();
+			expect(Object.keys(summary)).toHaveLength(0);
+		});
+	});
+
+	// ─── Storage Stats (#45) ─────────────────────────────────────────────
+
+	describe('getStorageStats', () => {
+		test('should return record counts per store', async () => {
+			await storage.add('battles', { battleType: 'Arena', timestamp: new Date().toISOString(), isWin: true });
+			await storage.add('battles', { battleType: 'Arena', timestamp: new Date().toISOString(), isWin: false });
+			await storage.add('snapshots', { playerId: '1', timestamp: new Date().toISOString() });
+
+			const stats = await storage.getStorageStats();
+			expect(stats.battles).toBe(2);
+			expect(stats.snapshots).toBe(1);
+			expect(stats.heroes).toBe(0);
+		});
+
+		test('should include all store names', async () => {
+			const stats = await storage.getStorageStats();
+			expect(stats).toHaveProperty('battles');
+			expect(stats).toHaveProperty('snapshots');
+			expect(stats).toHaveProperty('heroes');
+			expect(stats).toHaveProperty('apiLogs');
+		});
+	});
 });

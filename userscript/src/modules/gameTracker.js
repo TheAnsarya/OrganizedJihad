@@ -478,9 +478,49 @@ class GameTracker {
 			await this.storage.init();
 			this.proxyAPIRequests();
 			this.isTracking = true;
+
+			// Run initial data purge on startup (#45)
+			this._schedulePurge();
+
 			console.log('[OrganizedJihad] GameTracker initialized - monitoring Hero Wars API');
 		} catch (error) {
 			console.error('[OrganizedJihad] Failed to initialize GameTracker:', error);
+		}
+	}
+
+	/**
+	 * Schedule an automatic data purge on startup and then every 6 hours.
+	 *
+	 * Retention periods are defined in `IndexedDBStorage.DEFAULT_RETENTION`.
+	 * The user can override them via the settings UI (stored in metadata key
+	 * `'purgeRetention'`).
+	 *
+	 * @private
+	 */
+	_schedulePurge() {
+		// Fire-and-forget initial purge (don't block init)
+		this._runPurge();
+
+		// Repeat every 6 hours (21 600 000 ms)
+		this._purgeIntervalId = setInterval(() => this._runPurge(), 6 * 60 * 60 * 1000);
+	}
+
+	/**
+	 * Execute a single purge cycle. Reads optional user overrides from
+	 * metadata and delegates to `storage.purgeOldRecords()`.
+	 *
+	 * @private
+	 */
+	async _runPurge() {
+		try {
+			const overrides = await this.storage.getMetadata('purgeRetention', {});
+			const summary = await this.storage.purgeOldRecords(overrides);
+			const total = Object.values(summary).reduce((a, b) => a + b, 0);
+			if (total > 0) {
+				await this._logActivity('system', `Auto-purge removed ${total} old record(s)`);
+			}
+		} catch (error) {
+			console.error('[OrganizedJihad] Auto-purge failed:', error);
 		}
 	}
 
@@ -492,6 +532,10 @@ class GameTracker {
 		if (this._cleanupIntervalId) {
 			clearInterval(this._cleanupIntervalId);
 			this._cleanupIntervalId = null;
+		}
+		if (this._purgeIntervalId) {
+			clearInterval(this._purgeIntervalId);
+			this._purgeIntervalId = null;
 		}
 		if (this.originalXHR) {
 			XMLHttpRequest.prototype.open = this.originalXHR.open;
@@ -953,6 +997,29 @@ class GameTracker {
 		this.registerHandler('clanWarAttack', async (_call, args, data) => {
 			await this.trackGuildWarBattle(args, data);
 		}, 'trackGuildWarBattle');
+
+		// ── Cross-Server War (#40) ──────────────────────────────────────
+		this.registerHandler('clanWarGetBattleResults', async (_call, args, data) => {
+			await this.trackCrossServerWarResults(args, data);
+		}, 'trackCrossServerWarResults');
+
+		// ── Arena / Grand Arena Replays (#42) ───────────────────────────
+		this.registerHandler('arenaGetReplay', async (callName, args, data) => {
+			await this.trackArenaReplay(callName, args, data);
+		}, 'trackArenaReplay');
+
+		this.registerHandler('grandGetReplay', async (callName, args, data) => {
+			await this.trackArenaReplay(callName, args, data);
+		}, 'trackGrandArenaReplay');
+
+		this.registerHandler('arenaFindEnemies', async (_call, _args, data) => {
+			await this.trackArenaEnemies(data);
+		}, 'trackArenaFindEnemies');
+
+		// ── Adventure / Boss Replays (#41) ──────────────────────────────
+		this.registerHandler(['adventureGetReplay', 'bossGetReplay'], async (callName, args, data) => {
+			await this.trackAdventureReplay(callName, args, data);
+		}, 'trackAdventureReplay');
 
 		// ── Guild Raid ──────────────────────────────────────────────────
 		this.registerHandler('bossRaidAttack', async (_call, args, data) => {
@@ -1536,6 +1603,12 @@ class GameTracker {
 			timestamp: new Date().toISOString(),
 		};
 
+		// Deduplication check (#44)
+		if (this._isBattleDuplicate(battle)) {
+			console.log('[OrganizedJihad] Skipping duplicate Arena battle');
+			return;
+		}
+
 		await this.storage.add('battles', battle);
 
 		// Live activity event
@@ -1608,6 +1681,12 @@ class GameTracker {
 			rewards: data.reward ? JSON.stringify(data.reward) : null,
 			timestamp: new Date().toISOString(),
 		};
+
+		// Deduplication check (#44)
+		if (this._isBattleDuplicate(battle)) {
+			console.log('[OrganizedJihad] Skipping duplicate TitanArena battle');
+			return;
+		}
 
 		await this.storage.add('battles', battle);
 		await this.updateOpponentRecord(args.enemyUserId, 'TitanArena', battle.isWin);
@@ -1686,6 +1765,12 @@ class GameTracker {
 			rewards: data.reward ? JSON.stringify(data.reward) : null,
 			timestamp: new Date().toISOString(),
 		};
+
+		// Deduplication check (#44)
+		if (this._isBattleDuplicate(battle)) {
+			console.log('[OrganizedJihad] Skipping duplicate GrandArena battle');
+			return;
+		}
 
 		await this.storage.add('battles', battle);
 		await this.updateOpponentRecord(args.enemyUserId, 'GrandArena', battle.isWin);
@@ -2635,6 +2720,223 @@ class GameTracker {
 			defenders: this.compressHeroTeam(replay.defenders),
 			// Omit full battle progress to save space
 		};
+	}
+
+	// =====================================================================
+	// Battle Fingerprinting & Deduplication (#44)
+	// =====================================================================
+
+	/**
+	 * Generate a stable fingerprint for a battle record to prevent duplicates.
+	 *
+	 * The fingerprint is built from: battleType + opponentId + timestamp (rounded
+	 * to the nearest 10 seconds) + isWin. This catches replays viewed multiple
+	 * times while still allowing legitimately distinct battles.
+	 *
+	 * @param {Object} battle - Battle record with battleType, opponentId, timestamp, isWin
+	 * @returns {string} A fingerprint string
+	 * @private
+	 */
+	_battleFingerprint(battle) {
+		// Round timestamp to 10-second window to catch replays of the same battle
+		const ts = typeof battle.timestamp === 'string'
+			? new Date(battle.timestamp).getTime()
+			: (battle.timestamp || 0);
+		const bucket = Math.floor(ts / 10000);
+		return `${battle.battleType || battle.type || '?'}|${battle.opponentId || battle.defenderId || '?'}|${bucket}|${battle.isWin ?? battle.result ?? '?'}`;
+	}
+
+	/**
+	 * Check whether a battle record is a duplicate and, if not, record its
+	 * fingerprint so future duplicates are caught.
+	 *
+	 * Fingerprints are stored in a bounded Set (max 2000) on `this._battleFingerprintSet`.
+	 *
+	 * @param {Object} battle - Battle record
+	 * @returns {boolean} `true` if the battle is a duplicate
+	 * @private
+	 */
+	_isBattleDuplicate(battle) {
+		if (!this._battleFingerprintSet) {
+			/** @type {Set<string>} */
+			this._battleFingerprintSet = new Set();
+		}
+		const fp = this._battleFingerprint(battle);
+		if (this._battleFingerprintSet.has(fp)) {
+			return true;
+		}
+		this._battleFingerprintSet.add(fp);
+		// Cap the set so it doesn't grow unbounded
+		if (this._battleFingerprintSet.size > 2000) {
+			const first = this._battleFingerprintSet.values().next().value;
+			this._battleFingerprintSet.delete(first);
+		}
+		return false;
+	}
+
+	// =====================================================================
+	// Replay Tracking (#42, #41)
+	// =====================================================================
+
+	/**
+	 * Track an arena or grand arena battle replay.
+	 *
+	 * API methods: arenaGetReplay, grandGetReplay
+	 *
+	 * Stores a compressed copy of the replay in the `battles` IndexedDB store
+	 * with `battleType` set to `'ArenaReplay'` / `'GrandArenaReplay'`.
+	 * Dedup via `_isBattleDuplicate`.
+	 *
+	 * @param {string} callName - 'arenaGetReplay' or 'grandGetReplay'
+	 * @param {Object} args - Request arguments (may contain battleId, opponentId, etc.)
+	 * @param {Object} data - Replay response data (result, attackers, defenders, battles, etc.)
+	 * @private
+	 */
+	async trackArenaReplay(callName, args, data) {
+		const isGrand = callName.startsWith('grand');
+		const battleType = isGrand ? 'GrandArenaReplay' : 'ArenaReplay';
+
+		// Grand Arena replays may have multiple rounds in `data.battles`
+		const rounds = isGrand && Array.isArray(data.battles)
+			? data.battles
+			: [data];
+
+		for (const round of rounds) {
+			const battle = {
+				battleType,
+				opponentId: args.enemyUserId || args.opponentId || args.userId || null,
+				opponentName: null,
+				isWin: round.result?.win ?? data.result?.win ?? false,
+				playerPower: round.attackers ? this.calculateTeamPower(round.attackers) : 0,
+				opponentPower: round.defenders ? this.calculateTeamPower(round.defenders) : 0,
+				playerHeroes: round.attackers ? JSON.stringify(this.compressHeroTeam(round.attackers)) : null,
+				opponentHeroes: round.defenders ? JSON.stringify(this.compressHeroTeam(round.defenders)) : null,
+				replayData: JSON.stringify(this.compressReplay(round)),
+				rewards: data.reward ? JSON.stringify(data.reward) : null,
+				timestamp: new Date().toISOString(),
+			};
+
+			if (this._isBattleDuplicate(battle)) {
+				console.log(`[OrganizedJihad] Skipping duplicate ${battleType} replay`);
+				continue;
+			}
+
+			await this.storage.add('battles', battle);
+		}
+
+		console.log(`[OrganizedJihad] ${battleType} tracked from ${callName}`);
+	}
+
+	/**
+	 * Track an adventure (campaign / expedition boss) battle replay.
+	 *
+	 * API methods: adventureGetReplay, bossGetReplay
+	 *
+	 * @param {string} callName - 'adventureGetReplay' or 'bossGetReplay'
+	 * @param {Object} args - Request arguments (missionId, bossId, etc.)
+	 * @param {Object} data - Replay response data
+	 * @private
+	 */
+	async trackAdventureReplay(callName, args, data) {
+		const battleType = callName === 'bossGetReplay' ? 'BossReplay' : 'AdventureReplay';
+
+		const battle = {
+			battleType,
+			opponentId: args.missionId || args.bossId || args.id || null,
+			opponentName: null,
+			isWin: data.result?.win ?? false,
+			playerPower: data.attackers ? this.calculateTeamPower(data.attackers) : 0,
+			opponentPower: data.defenders ? this.calculateTeamPower(data.defenders) : 0,
+			playerHeroes: data.attackers ? JSON.stringify(this.compressHeroTeam(data.attackers)) : null,
+			opponentHeroes: data.defenders ? JSON.stringify(this.compressHeroTeam(data.defenders)) : null,
+			replayData: JSON.stringify(this.compressReplay(data)),
+			rewards: data.reward ? JSON.stringify(data.reward) : null,
+			timestamp: new Date().toISOString(),
+		};
+
+		if (this._isBattleDuplicate(battle)) {
+			console.log(`[OrganizedJihad] Skipping duplicate ${battleType} replay`);
+			return;
+		}
+
+		await this.storage.add('battles', battle);
+		console.log(`[OrganizedJihad] ${battleType} tracked from ${callName}`);
+	}
+
+	// =====================================================================
+	// Cross-Server War Tracking (#40)
+	// =====================================================================
+
+	/**
+	 * Track cross-server (CoW) war battle results.
+	 *
+	 * API method: clanWarGetBattleResults
+	 *
+	 * Cross-server wars use a different API surface from regular guild wars.
+	 * Results are stored in the `battles` store with `battleType: 'CrossServerWar'`.
+	 *
+	 * @param {Object} args - Request arguments
+	 * @param {Object} data - Battle results response (may contain multiple battles)
+	 * @private
+	 */
+	async trackCrossServerWarResults(args, data) {
+		const battles = Array.isArray(data.battles) ? data.battles : (data.results || [data]);
+
+		for (const result of battles) {
+			const battle = {
+				battleType: 'CrossServerWar',
+				opponentId: result.defenderId || result.opponentId || args.defenderId || null,
+				opponentName: result.defenderName || null,
+				isWin: result.result?.win ?? result.win ?? false,
+				playerPower: result.attackers ? this.calculateTeamPower(result.attackers) : 0,
+				opponentPower: result.defenders ? this.calculateTeamPower(result.defenders) : 0,
+				playerHeroes: result.attackers ? JSON.stringify(this.compressHeroTeam(result.attackers)) : null,
+				opponentHeroes: result.defenders ? JSON.stringify(this.compressHeroTeam(result.defenders)) : null,
+				rewards: result.reward ? JSON.stringify(result.reward) : null,
+				fortId: result.fortId || args.fortId || null,
+				warId: result.warId || args.warId || null,
+				timestamp: new Date().toISOString(),
+			};
+
+			if (this._isBattleDuplicate(battle)) {
+				console.log('[OrganizedJihad] Skipping duplicate CrossServerWar battle');
+				continue;
+			}
+
+			await this.storage.add('battles', battle);
+		}
+
+		await this._logActivity('battle', `Cross-server war results tracked (${battles.length} battle(s))`);
+		console.log(`[OrganizedJihad] Cross-server war: ${battles.length} battle result(s) tracked`);
+	}
+
+	/**
+	 * Track cross-server war state / matchup info.
+	 *
+	 * API method: clanWarGetInfo (when cross-server context detected)
+	 *
+	 * Note: The regular clanWarGetInfo handler already processes guild war info.
+	 * This method specifically handles cross-server war metadata when the
+	 * response contains cross-server markers.
+	 *
+	 * @param {Object} data - War info response
+	 * @private
+	 */
+	async trackCrossServerWarInfo(data) {
+		const warData = {
+			warId: data.warId || data.id,
+			isCrossServer: true,
+			enemyGuildId: data.enemy?.id || data.enemyClanId,
+			enemyGuildName: data.enemy?.name || data.enemyClanName || 'Unknown',
+			enemyServer: data.enemy?.serverId || data.enemyServerId || null,
+			myScore: data.myScore ?? data.score ?? 0,
+			enemyScore: data.enemyScore ?? data.enemy?.score ?? 0,
+			state: data.state || data.phase,
+			timestamp: Date.now(),
+		};
+
+		await this.storage.setMetadata('currentCrossServerWar', warData);
+		console.log(`[OrganizedJihad] Cross-server war info tracked: vs ${warData.enemyGuildName} (server ${warData.enemyServer || '?'})`);
 	}
 
 	/**
