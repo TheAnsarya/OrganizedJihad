@@ -30,6 +30,7 @@ const userscriptBanner = `// ==UserScript==
 // @match        https://i-heroes-mg.nextersglobal.com/*
 // @match        https://apps-1701433570146040.apps.fbsbx.com/*
 // @grant        GM_addStyle
+// @grant        GM_notification
 // @run-at       document-end
 // ==/UserScript==`;
 

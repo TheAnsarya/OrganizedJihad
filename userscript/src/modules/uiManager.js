@@ -12,6 +12,7 @@
 import HeroCompletionCalculator from './helpers/HeroCompletionCalculator.js';
 import { TRACKING_CATEGORIES } from './gameTracker.js';
 import { decompressHeroStore, decompressTitanStore } from './heroCompression.js';
+import { NOTIFICATION_TYPES } from './notificationManager.js';
 
 class UIManager {
 	/**
@@ -1719,6 +1720,23 @@ class UIManager {
 		const opacity = this.prefStorage.get('overlayOpacity', 95);
 		const defaultTab = this.prefStorage.get('defaultTab', 'dashboard');
 
+		// Notification settings (#52)
+		const nm = this.notificationManager;
+		const notifyEnabled = nm ? nm.enabled : false;
+		const notifyPermission = nm ? nm.permission : 'denied';
+		const notifyTypeStates = nm ? nm.getTypeStates() : {};
+		const quietHours = nm ? nm.getQuietHours() : { start: '', end: '' };
+
+		// Build notification type toggle rows
+		const notifyToggleRows = Object.entries(NOTIFICATION_TYPES).map(([key, meta]) => {
+			const checked = notifyTypeStates[key] !== false ? 'checked' : '';
+			return `
+				<label class="oj-checkbox-label">
+					<input type="checkbox" data-notify-type="${key}" ${checked} ${notifyEnabled ? '' : 'disabled'}>
+					${meta.icon} ${meta.label}
+				</label>`;
+		}).join('');
+
 		// Build tracking toggle checkboxes
 		const toggleRows = Object.entries(TRACKING_CATEGORIES).map(([key, label]) => {
 			const checked = trackingPrefs[key] !== false ? 'checked' : '';
@@ -1779,6 +1797,28 @@ class UIManager {
 					<h4>Tracking Categories</h4>
 					<p class="oj-muted" style="margin:0 0 4px;font-size:11px">Disable categories to stop tracking that data type.</p>
 					${toggleRows}
+				</div>
+
+				<div class="oj-settings-group">
+					<h4>\uD83D\uDD14 Notifications</h4>
+					<label class="oj-checkbox-label">
+						<input type="checkbox" id="oj-notify-master" ${notifyEnabled ? 'checked' : ''}>
+						Enable desktop notifications
+					</label>
+					<p class="oj-muted" style="margin:2px 0 4px;font-size:11px">
+						Permission: <strong>${notifyPermission}</strong>
+						${notifyPermission !== 'granted' ? ' — <a href="#" id="oj-notify-request" style="color:#4fa3ff">Request</a>' : ''}
+					</p>
+					${notifyToggleRows}
+					<div style="margin-top:6px">
+						<label style="display:flex;align-items:center;gap:8px;font-size:12px">
+							Quiet hours:
+							<input type="time" id="oj-quiet-start" value="${quietHours.start}" style="background:#2a2a2e;color:#ddd;border:1px solid #555;border-radius:3px;padding:2px 4px;width:80px" ${notifyEnabled ? '' : 'disabled'}>
+							to
+							<input type="time" id="oj-quiet-end" value="${quietHours.end}" style="background:#2a2a2e;color:#ddd;border:1px solid #555;border-radius:3px;padding:2px 4px;width:80px" ${notifyEnabled ? '' : 'disabled'}>
+						</label>
+						<p class="oj-muted" style="margin:2px 0 0;font-size:10px">Leave empty to disable quiet hours.</p>
+					</div>
 				</div>
 
 				<div class="oj-settings-group">
@@ -1969,6 +2009,53 @@ class UIManager {
 				const cat = e.target.dataset.trackCat;
 				this.gameTracker.setTrackingCategory(cat, e.target.checked);
 			});
+		}
+
+		// ── Notification settings (#52) ─────────────────────────────────
+		if (this.notificationManager) {
+			const nm = this.notificationManager;
+
+			// Master toggle
+			const masterCb = this.overlay.querySelector('#oj-notify-master');
+			if (masterCb) {
+				masterCb.addEventListener('change', (e) => {
+					nm.enabled = e.target.checked;
+					// Enable/disable child controls
+					const typeCbs = this.overlay.querySelectorAll('[data-notify-type]');
+					for (const cb of typeCbs) cb.disabled = !e.target.checked;
+					const quietStart = this.overlay.querySelector('#oj-quiet-start');
+					const quietEnd = this.overlay.querySelector('#oj-quiet-end');
+					if (quietStart) quietStart.disabled = !e.target.checked;
+					if (quietEnd) quietEnd.disabled = !e.target.checked;
+				});
+			}
+
+			// Request permission link
+			const requestLink = this.overlay.querySelector('#oj-notify-request');
+			if (requestLink) {
+				requestLink.addEventListener('click', async (e) => {
+					e.preventDefault();
+					const result = await nm.requestPermission();
+					requestLink.textContent = result === 'granted' ? '\u2705 Granted' : `\u274C ${result}`;
+				});
+			}
+
+			// Per-type toggles
+			const typeCbs = this.overlay.querySelectorAll('[data-notify-type]');
+			for (const cb of typeCbs) {
+				cb.addEventListener('change', (e) => {
+					nm.setTypeEnabled(e.target.dataset.notifyType, e.target.checked);
+				});
+			}
+
+			// Quiet hours inputs
+			const quietStart = this.overlay.querySelector('#oj-quiet-start');
+			const quietEnd = this.overlay.querySelector('#oj-quiet-end');
+			if (quietStart && quietEnd) {
+				const saveQuiet = () => nm.setQuietHours(quietStart.value, quietEnd.value);
+				quietStart.addEventListener('change', saveQuiet);
+				quietEnd.addEventListener('change', saveQuiet);
+			}
 		}
 
 		// ── Load storage stats asynchronously ───────────────────────────

@@ -19,6 +19,7 @@
 // @match        https://i-heroes-mg.nextersglobal.com/*
 // @match        https://apps-1701433570146040.apps.fbsbx.com/*
 // @grant        GM_addStyle
+// @grant        GM_notification
 // @run-at       document-end
 // ==/UserScript==
 
@@ -33,6 +34,7 @@ import SuggestionsEngine from './modules/suggestionsEngine.js';
 import APIMonitor from './modules/apiMonitor.js';
 import GameOverlay from './modules/gameOverlay.js';
 import DomTargeting from './modules/domTargeting.js';
+import NotificationManager from './modules/notificationManager.js';
 import './styles/main.css';
 
 (async function () {
@@ -266,6 +268,35 @@ import './styles/main.css';
 	if (uiManager.overlay) domTargeting.registerElement(uiManager.overlay);
 	if (gameOverlay.panel) domTargeting.registerElement(gameOverlay.panel);
 
+	// Initialize notification manager for game event alerts (#52)
+	// Sends desktop notifications for arena defense, guild war changes,
+	// daily reset, new mail, and low energy warnings.
+	const notificationManager = new NotificationManager(prefStorage);
+	// Request permission upfront (no-op if already granted/denied)
+	notificationManager.requestPermission();
+	// Start periodic daily-reset check (fires once at midnight UTC)
+	notificationManager.startDailyResetCheck();
+	// Expose to UIManager for settings panel
+	uiManager.notificationManager = notificationManager;
+
+	// Register push event handlers for notifications (#52)
+	// Push events arrive via the game's WebSocket and are dispatched by
+	// gameTracker._handlePushEvent using the 'push:<type>' key format.
+	gameTracker.registerHandler('push:arenaBattleResult', (_call, _args, data) => {
+		notificationManager.notifyArenaDefense({
+			attacker: data?.attackerName || data?.name,
+			result: data?.win === false ? 'You lost' : data?.win === true ? 'You won' : undefined,
+		});
+	}, 'notifyArenaDefense');
+
+	gameTracker.registerHandler('push:guildWarPointsChanged', (_call, _args, data) => {
+		notificationManager.notifyGuildWar({ phase: data?.phase || data?.status });
+	}, 'notifyGuildWarChange');
+
+	gameTracker.registerHandler('push:updateMail', (_call, _args, data) => {
+		notificationManager.notifyMail({ count: data?.count });
+	}, 'notifyMail');
+
 	// NOTE: APIMonitor is initialized AFTER gameTracker.init() (below)
 	// to avoid double-proxying XMLHttpRequest. GameTracker's XHR proxy
 	// handles API interception; APIMonitor only stores endpoints/stats.
@@ -286,6 +317,15 @@ import './styles/main.css';
 		const result = await originalProcessAPI(request, response);
 		// Notify game overlay when hero data may have changed
 		await gameOverlay.onHeroDataUpdated();
+
+		// Trigger notifications for relevant API responses (#52)
+		if (request?.name) {
+			// Check energy from userGetInfo responses
+			if (request.name === 'userGetInfo' && response?.energy !== undefined) {
+				notificationManager.checkEnergy(response.energy);
+			}
+		}
+
 		return result;
 	};
 
@@ -351,5 +391,6 @@ import './styles/main.css';
 			clearInterval(window.organizedJihadSyncInterval);
 		}
 		domTargeting.destroy();
+		notificationManager.destroy();
 	});
 })();
