@@ -994,6 +994,101 @@ class IndexedDBStorage {
 
 		return stats;
 	}
+
+	/**
+	 * Export all data from all IndexedDB stores as a raw dump.
+	 * Each store's records are returned as an array under its name.
+	 *
+	 * @param {string[]} [storeNames] - Specific stores to export (default: all)
+	 * @returns {Promise<Object>} { storeName: [...records], _meta: { exportedAt, version } }
+	 */
+	async exportAllStores(storeNames) {
+		await this.initPromise;
+		const names = storeNames || Array.from(this.db.objectStoreNames);
+		const result = {
+			_meta: {
+				exportedAt: new Date().toISOString(),
+				version: this.db.version,
+				storeCount: names.length,
+			},
+		};
+
+		for (const name of names) {
+			try {
+				result[name] = await this.getAll(name);
+			} catch (err) {
+				console.warn(`[OrganizedJihad] Failed to export store "${name}":`, err);
+				result[name] = [];
+			}
+		}
+
+		return result;
+	}
+
+	/**
+	 * Import data into IndexedDB stores from a raw dump.
+	 * Skips records that already exist (by key) to avoid duplicates.
+	 *
+	 * @param {Object} data - Object with store names as keys and record arrays as values
+	 * @param {Object} [options] - Import options
+	 * @param {boolean} [options.overwrite=false] - If true, overwrite existing records via put()
+	 * @returns {Promise<Object>} Summary { imported: { storeName: count }, errors: [...] }
+	 */
+	async importStores(data, options = {}) {
+		await this.initPromise;
+		const { overwrite = false } = options;
+		const validStores = Array.from(this.db.objectStoreNames);
+		const summary = { imported: {}, skipped: {}, errors: [] };
+
+		for (const [storeName, records] of Object.entries(data)) {
+			if (storeName === '_meta') continue;
+			if (!validStores.includes(storeName)) {
+				summary.errors.push(`Unknown store: ${storeName}`);
+				continue;
+			}
+			if (!Array.isArray(records)) {
+				summary.errors.push(`Invalid data for store: ${storeName} (expected array)`);
+				continue;
+			}
+
+			let imported = 0;
+			let skipped = 0;
+
+			for (const record of records) {
+				try {
+					if (overwrite) {
+						await this.put(storeName, record);
+						imported++;
+					} else {
+						await this.add(storeName, record);
+						imported++;
+					}
+				} catch (err) {
+					// ConstraintError means key already exists — skip
+					if (err?.name === 'ConstraintError') {
+						skipped++;
+					} else {
+						summary.errors.push(`${storeName}: ${err?.message || String(err)}`);
+					}
+				}
+			}
+
+			summary.imported[storeName] = imported;
+			summary.skipped[storeName] = skipped;
+		}
+
+		return summary;
+	}
+
+	/**
+	 * Get list of all object store names.
+	 *
+	 * @returns {Promise<string[]>} Array of store names
+	 */
+	async getStoreNames() {
+		await this.initPromise;
+		return Array.from(this.db.objectStoreNames);
+	}
 }
 
 export default IndexedDBStorage;

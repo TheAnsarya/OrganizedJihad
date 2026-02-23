@@ -26,6 +26,23 @@ import IndexedDBStorage from './indexedDBStorage.js';
 import UpgradeTracker from './trackers/UpgradeTracker.js';
 
 /**
+ * Tracking categories used for per-category enable/disable toggles (#27).
+ * Each key is a category slug; the value is the human-readable label.
+ * Handler registrations specify a category; the dispatch code skips
+ * handlers whose category is disabled in preferences.
+ *
+ * @type {Object<string, string>}
+ */
+const TRACKING_CATEGORIES = {
+	player: 'Player & Inventory',
+	battles: 'Battles & Arena',
+	chests: 'Chests & Drops',
+	guild: 'Guild & Chat',
+	quests: 'Quests & Daily',
+	upgrades: 'Hero/Titan Upgrades',
+};
+
+/**
  * Game data tracking via API interception
  * Monitors Hero Wars API requests for legitimate data tracking
  *
@@ -40,6 +57,21 @@ class GameTracker {
 		this.originalFetch = null;
 		this.apiUrl = '';
 		this.requestHistory = {};
+
+		// ── Tracking category toggles (#27) ──────────────────────────────
+		// Per-category enable/disable. Default: all enabled.
+		// Populated from prefStorage during init() via loadTrackingPrefs().
+		/** @type {Object<string, boolean>} */
+		this._trackingPrefs = {};
+		for (const cat of Object.keys(TRACKING_CATEGORIES)) {
+			this._trackingPrefs[cat] = true;
+		}
+		/**
+		 * Optional reference to the preference storage.
+		 * Set by the host (index.js) after construction.
+		 * @type {Object|null}
+		 */
+		this.prefStorage = null;
 
 		// ── Auth credentials captured from request headers (#36) ─────────
 		// Captured via setRequestHeader proxy. Enables future active API
@@ -665,6 +697,10 @@ class GameTracker {
 			const handlers = this._handlerRegistry.get(`push:${eventType}`);
 			if (handlers && handlers.length > 0) {
 				for (const entry of handlers) {
+					// Skip handlers whose tracking category is disabled (#27)
+					if (entry.category && !this._trackingPrefs[entry.category]) {
+						continue;
+					}
 					try {
 						await entry.handler.call(this, `push:${eventType}`, {}, eventData);
 					} catch (err) {
@@ -1103,6 +1139,10 @@ class GameTracker {
 
 			// Execute all registered handlers for this API method
 			for (const entry of handlers) {
+				// Skip handlers whose tracking category is disabled (#27)
+				if (entry.category && !this._trackingPrefs[entry.category]) {
+					continue;
+				}
 				try {
 					await entry.handler.call(this, callName, args, responseData);
 					if (!dispatched.includes(callName)) {
@@ -1148,10 +1188,13 @@ class GameTracker {
 	 * @param {string[]} [options.dependsOn] - API method names that should
 	 *     be processed before this handler runs (within a single batch
 	 *     response). Used to topologically sort result processing order.
+	 * @param {string} [options.category] - Tracking category for toggle support (#27).
+	 *     One of: player, battles, chests, guild, quests, upgrades.
 	 */
 	registerHandler(methods, handler, label = handler.name || '(anonymous)', options = {}) {
 		const methodList = Array.isArray(methods) ? methods : [methods];
 		const dependsOn = options.dependsOn || [];
+		const category = options.category || null;
 
 		// Validate: detect obviously circular self-dependencies
 		for (const method of methodList) {
@@ -1165,7 +1208,7 @@ class GameTracker {
 			if (!this._handlerRegistry.has(method)) {
 				this._handlerRegistry.set(method, []);
 			}
-			this._handlerRegistry.get(method).push({ handler, label, dependsOn });
+			this._handlerRegistry.get(method).push({ handler, label, dependsOn, category });
 		}
 	}
 
@@ -1273,253 +1316,253 @@ class GameTracker {
 		// ── Core player data ───────────────────────────────────────────
 		this.registerHandler('userGetInfo', async (_call, _args, data) => {
 			await this.trackPlayerData(data);
-		}, 'trackPlayerData');
+		}, 'trackPlayerData', { category: 'player' });
 
 		this.registerHandler('heroGetAll', async (_call, _args, data) => {
 			await this.trackHeroesData(data);
-		}, 'trackHeroesData', { dependsOn: ['userGetInfo'] });
+		}, 'trackHeroesData', { dependsOn: ['userGetInfo'], category: 'player' });
 
 		this.registerHandler('inventoryGet', async (_call, _args, data) => {
 			await this.trackInventoryData(data);
-		}, 'trackInventoryData', { dependsOn: ['userGetInfo'] });
+		}, 'trackInventoryData', { dependsOn: ['userGetInfo'], category: 'player' });
 
 		// ── Battle systems ──────────────────────────────────────────────
 		this.registerHandler('missionEnd', async (callName, args, data) => {
 			await this.trackMissionProgress(args, data);
 			await this.trackBattleResult(callName, args, data);
-		}, 'trackMission');
+		}, 'trackMission', { category: 'battles' });
 
 		this.registerHandler('towerEnd', async (callName, args, data) => {
 			await this.trackTowerProgress(args, data);
 			await this.trackBattleResult(callName, args, data);
-		}, 'trackTower');
+		}, 'trackTower', { category: 'battles' });
 
 		this.registerHandler('bossEnd', async (callName, args, data) => {
 			await this.trackBattleResult(callName, args, data);
-		}, 'trackBossEnd');
+		}, 'trackBossEnd', { category: 'battles' });
 
 		// ── Arena ───────────────────────────────────────────────────────
 		this.registerHandler('arenaGetEnemies', async (_call, _args, data) => {
 			await this.trackArenaEnemies(data);
-		}, 'trackArenaEnemies');
+		}, 'trackArenaEnemies', { category: 'battles' });
 
 		this.registerHandler(['arenaAttack', 'arenaEnd'], async (_call, args, data) => {
 			await this.trackArenaBattle(args, data);
-		}, 'trackArenaBattle');
+		}, 'trackArenaBattle', { category: 'battles' });
 
 		// ── Titan Arena ─────────────────────────────────────────────────
 		this.registerHandler('titanArenaGetEnemies', async (_call, _args, data) => {
 			await this.trackTitanArenaEnemies(data);
-		}, 'trackTitanArenaEnemies');
+		}, 'trackTitanArenaEnemies', { category: 'battles' });
 
 		this.registerHandler('titanArenaAttack', async (_call, args, data) => {
 			await this.trackTitanArenaBattle(args, data);
-		}, 'trackTitanArenaBattle');
+		}, 'trackTitanArenaBattle', { category: 'battles' });
 
 		// ── Grand Arena ─────────────────────────────────────────────────
 		this.registerHandler('grandArenaGetEnemies', async (_call, _args, data) => {
 			await this.trackGrandArenaEnemies(data);
-		}, 'trackGrandArenaEnemies');
+		}, 'trackGrandArenaEnemies', { category: 'battles' });
 
 		this.registerHandler('grandArenaAttack', async (_call, args, data) => {
 			await this.trackGrandArenaBattle(args, data);
-		}, 'trackGrandArenaBattle');
+		}, 'trackGrandArenaBattle', { category: 'battles' });
 
 		// ── Guild War ───────────────────────────────────────────────────
 		this.registerHandler('clanWarAttack', async (_call, args, data) => {
 			await this.trackGuildWarBattle(args, data);
-		}, 'trackGuildWarBattle');
+		}, 'trackGuildWarBattle', { category: 'battles' });
 
 		// ── Cross-Server War (#40) ──────────────────────────────────────
 		this.registerHandler('clanWarGetBattleResults', async (_call, args, data) => {
 			await this.trackCrossServerWarResults(args, data);
-		}, 'trackCrossServerWarResults');
+		}, 'trackCrossServerWarResults', { category: 'battles' });
 
 		// ── Arena / Grand Arena Replays (#42) ───────────────────────────
 		this.registerHandler('arenaGetReplay', async (callName, args, data) => {
 			await this.trackArenaReplay(callName, args, data);
-		}, 'trackArenaReplay');
+		}, 'trackArenaReplay', { category: 'battles' });
 
 		this.registerHandler('grandGetReplay', async (callName, args, data) => {
 			await this.trackArenaReplay(callName, args, data);
-		}, 'trackGrandArenaReplay');
+		}, 'trackGrandArenaReplay', { category: 'battles' });
 
 		this.registerHandler('arenaFindEnemies', async (_call, _args, data) => {
 			await this.trackArenaEnemies(data);
-		}, 'trackArenaFindEnemies');
+		}, 'trackArenaFindEnemies', { category: 'battles' });
 
 		// ── Adventure / Boss Replays (#41) ──────────────────────────────
 		this.registerHandler(['adventureGetReplay', 'bossGetReplay'], async (callName, args, data) => {
 			await this.trackAdventureReplay(callName, args, data);
-		}, 'trackAdventureReplay');
+		}, 'trackAdventureReplay', { category: 'battles' });
 
 		// ── Guild Raid ──────────────────────────────────────────────────
 		this.registerHandler('bossRaidAttack', async (_call, args, data) => {
 			await this.trackRaidBossAttack(args, data);
-		}, 'trackRaidBossAttack');
+		}, 'trackRaidBossAttack', { category: 'battles' });
 
 		// ── Loot and rewards ────────────────────────────────────────────
 		this.registerHandler('chestOpen', async (_call, args, data) => {
 			await this.trackChestOpening(args, data);
-		}, 'trackChestOpening');
+		}, 'trackChestOpening', { category: 'chests' });
 
 		this.registerHandler('shopBuy', async (_call, args, data) => {
 			await this.trackShopPurchase(args, data);
-		}, 'trackShopPurchase');
+		}, 'trackShopPurchase', { category: 'chests' });
 
 		this.registerHandler('questComplete', async (_call, args, data) => {
 			await this.trackQuestComplete(args, data);
-		}, 'trackQuestComplete');
+		}, 'trackQuestComplete', { category: 'quests' });
 
 		// ── Other data ──────────────────────────────────────────────────
 		this.registerHandler('questGetAll', async (_call, _args, data) => {
 			await this.trackQuestsData(data);
-		}, 'trackQuestsData');
+		}, 'trackQuestsData', { category: 'quests' });
 
 		this.registerHandler('clanGetInfo', async (_call, _args, data) => {
 			await this.trackGuildData(data);
 			await this.trackGuildMembers(data);
-		}, 'trackGuildData');
+		}, 'trackGuildData', { category: 'guild' });
 
 		this.registerHandler(['clanWarGetInfo', 'clanWarUserGetInfo'], async (_call, _args, data) => {
 			await this.trackGuildWarInfo(data);
 			await this.trackGuildWarParticipation(data);
-		}, 'trackGuildWarInfo');
+		}, 'trackGuildWarInfo', { category: 'guild' });
 
 		this.registerHandler('bossRaidGetInfo', async (_call, _args, data) => {
 			await this.trackRaidBossInfo(data);
 			await this.trackGuildRaidParticipation(data);
-		}, 'trackRaidBossInfo');
+		}, 'trackRaidBossInfo', { category: 'guild' });
 
 		this.registerHandler(['dungeonGetState', 'titanDungeonGetInfo'], async (_call, _args, data) => {
 			await this.trackGuildDungeonParticipation(data);
-		}, 'trackGuildDungeon');
+		}, 'trackGuildDungeon', { category: 'guild' });
 
 		this.registerHandler('expeditionGetState', async (_call, _args, data) => {
 			await this.trackExpeditionState(data);
-		}, 'trackExpeditionState');
+		}, 'trackExpeditionState', { category: 'battles' });
 
 		this.registerHandler('expeditionBattle', async (_call, args, data) => {
 			await this.trackExpeditionBattle(args, data);
-		}, 'trackExpeditionBattle');
+		}, 'trackExpeditionBattle', { category: 'battles' });
 
 		this.registerHandler('titanGetAll', async (_call, _args, data) => {
 			await this.trackTitansData(data);
-		}, 'trackTitansData');
+		}, 'trackTitansData', { category: 'player' });
 
 		this.registerHandler('petGetAll', async (_call, _args, data) => {
 			await this.trackPetsData(data);
-		}, 'trackPetsData');
+		}, 'trackPetsData', { category: 'player' });
 
 		// ── Chat and communication ──────────────────────────────────────
 		this.registerHandler(['chatGetDialog', 'chatGetNewMessages'], async (callName, args, data) => {
 			await this.trackChatMessages(args, data, callName);
-		}, 'trackChatMessages');
+		}, 'trackChatMessages', { category: 'guild' });
 
 		this.registerHandler('chatSendMessage', async (_call, args, data) => {
 			await this.trackOutgoingMessage(args, data);
-		}, 'trackOutgoingMessage');
+		}, 'trackOutgoingMessage', { category: 'guild' });
 
 		// ── Hero Upgrade Events (Phase 8) ───────────────────────────────
 		this.registerHandler('heroUpgradeSkill', async (_call, args, data) => {
 			await this.upgradeTracker.trackHeroSkillUpgrade(args, data, await this._getPlayerId());
-		}, 'heroSkillUpgrade');
+		}, 'heroSkillUpgrade', { category: 'upgrades' });
 
 		this.registerHandler('heroArtifactLevelUp', async (_call, args, data) => {
 			await this.upgradeTracker.trackHeroArtifactUpgrade(args, data, await this._getPlayerId());
-		}, 'heroArtifactUpgrade');
+		}, 'heroArtifactUpgrade', { category: 'upgrades' });
 
 		this.registerHandler('heroSkinUpgrade', async (_call, args, data) => {
 			await this.upgradeTracker.trackHeroSkinUpgrade(args, data, await this._getPlayerId());
-		}, 'heroSkinUpgrade');
+		}, 'heroSkinUpgrade', { category: 'upgrades' });
 
 		this.registerHandler('heroEnchantRune', async (_call, args, data) => {
 			await this.upgradeTracker.trackHeroGlyphUpgrade(args, data, await this._getPlayerId());
-		}, 'heroGlyphUpgrade');
+		}, 'heroGlyphUpgrade', { category: 'upgrades' });
 
 		this.registerHandler('consumableUseHeroXp', async (_call, args, data) => {
 			await this.upgradeTracker.trackHeroLevelUpgrade(args, data, await this._getPlayerId());
 			await this.trackInventoryItemUsage(args, data, 'potion', 'hero_level');
-		}, 'heroLevelUpgrade');
+		}, 'heroLevelUpgrade', { category: 'upgrades' });
 
 		this.registerHandler('heroLevelUp', async (_call, args, data) => {
 			await this.upgradeTracker.trackHeroGoldLevelUpgrade(args, data, await this._getPlayerId());
-		}, 'heroGoldLevelUpgrade');
+		}, 'heroGoldLevelUpgrade', { category: 'upgrades' });
 
 		this.registerHandler(['heroEvolve', 'heroPromote'], async (_call, args, data) => {
 			await this.upgradeTracker.trackHeroStarUpgrade(args, data, await this._getPlayerId());
-		}, 'heroStarUpgrade');
+		}, 'heroStarUpgrade', { category: 'upgrades' });
 
 		this.registerHandler('heroColorEvolve', async (_call, args, data) => {
 			await this.upgradeTracker.trackHeroColorUpgrade(args, data, await this._getPlayerId());
-		}, 'heroColorUpgrade');
+		}, 'heroColorUpgrade', { category: 'upgrades' });
 
 		this.registerHandler('heroEquip', async (_call, args, data) => {
 			await this.upgradeTracker.trackEquipmentChange(args, data, await this._getPlayerId(), 'equipped');
-		}, 'heroEquip');
+		}, 'heroEquip', { category: 'upgrades' });
 
 		// ── Titan Upgrade Events (Phase 8) ──────────────────────────────
 		this.registerHandler('titanArtifactLevelUp', async (_call, args, data) => {
 			await this.upgradeTracker.trackTitanArtifactUpgrade(args, data, await this._getPlayerId());
-		}, 'titanArtifactUpgrade');
+		}, 'titanArtifactUpgrade', { category: 'upgrades' });
 
 		this.registerHandler('titanUsePotions', async (_call, args, data) => {
 			await this.upgradeTracker.trackTitanLevelUpgrade(args, data, await this._getPlayerId());
-		}, 'titanLevelUpgrade');
+		}, 'titanLevelUpgrade', { category: 'upgrades' });
 
 		this.registerHandler(['titanEvolve', 'titanStarUp'], async (_call, args, data) => {
 			await this.upgradeTracker.trackTitanStarUpgrade(args, data, await this._getPlayerId());
-		}, 'titanStarUpgrade');
+		}, 'titanStarUpgrade', { category: 'upgrades' });
 
 		this.registerHandler('titanUpgradeSkill', async (_call, args, data) => {
 			await this.upgradeTracker.trackTitanSkillUpgrade(args, data, await this._getPlayerId());
-		}, 'titanSkillUpgrade');
+		}, 'titanSkillUpgrade', { category: 'upgrades' });
 
 		this.registerHandler('titanSkinUpgrade', async (_call, args, data) => {
 			await this.upgradeTracker.trackTitanSkinUpgrade(args, data, await this._getPlayerId());
-		}, 'titanSkinUpgrade');
+		}, 'titanSkinUpgrade', { category: 'upgrades' });
 
 		// ── Daily Activity Events (Phase 8) ─────────────────────────────
 		this.registerHandler('questFarm', async (_call, args, data) => {
 			await this.trackDailyQuestFarm(args, data);
-		}, 'trackDailyQuestFarm');
+		}, 'trackDailyQuestFarm', { category: 'quests' });
 
 		this.registerHandler('quest_questsFarm', async (_call, args, data) => {
 			await this.trackBatchQuestFarm(args, data);
-		}, 'trackBatchQuestFarm');
+		}, 'trackBatchQuestFarm', { category: 'quests' });
 
 		this.registerHandler('dailyBonusFarm', async (_call, args, data) => {
 			await this.trackLoginReward(args, data);
-		}, 'trackLoginReward');
+		}, 'trackLoginReward', { category: 'quests' });
 
 		this.registerHandler('dailyBonusGetInfo', async (_call, _args, data) => {
 			await this.trackDailyBonusInfo(data);
-		}, 'trackDailyBonusInfo');
+		}, 'trackDailyBonusInfo', { category: 'quests' });
 
 		// ── Consumable Reward / Drop-Rate Tracking (Phase 10) ───────────
 		this.registerHandler('artifactChestOpen', async (_call, args, data) => {
 			await this.trackConsumableOpening(args, data, 'artifactChest');
-		}, 'consumable:artifactChest');
+		}, 'consumable:artifactChest', { category: 'chests' });
 
 		this.registerHandler('titanArtifactChestOpen', async (_call, args, data) => {
 			await this.trackConsumableOpening(args, data, 'titanArtifactChest');
-		}, 'consumable:titanArtifactChest');
+		}, 'consumable:titanArtifactChest', { category: 'chests' });
 
 		this.registerHandler('pet_chestOpen', async (_call, args, data) => {
 			await this.trackConsumableOpening(args, data, 'petChest');
-		}, 'consumable:petChest');
+		}, 'consumable:petChest', { category: 'chests' });
 
 		this.registerHandler('consumableUseLootBox', async (_call, args, data) => {
 			await this.trackConsumableOpening(args, data, 'lootBox');
-		}, 'consumable:lootBox');
+		}, 'consumable:lootBox', { category: 'chests' });
 
 		this.registerHandler('towerOpenChest', async (_call, args, data) => {
 			await this.trackConsumableOpening(args, data, 'towerChest');
-		}, 'consumable:towerChest');
+		}, 'consumable:towerChest', { category: 'chests' });
 
 		this.registerHandler('bossOpenChestPay', async (_call, args, data) => {
 			await this.trackConsumableOpening(args, data, 'outlandChest');
-		}, 'consumable:outlandChest');
+		}, 'consumable:outlandChest', { category: 'chests' });
 	}
 
 	/**
@@ -4316,6 +4359,71 @@ class GameTracker {
 		};
 	}
 
+	/**
+	 * Export raw IndexedDB data for all (or specific) stores.
+	 * Unlike exportAllData() which returns curated/transformed data,
+	 * this returns the raw IDB records exactly as stored.
+	 *
+	 * @param {string[]} [storeNames] - Specific stores to export (default: all)
+	 * @returns {Promise<Object>} Raw store data with _meta header
+	 */
+	async exportRawData(storeNames) {
+		return this.storage.exportAllStores(storeNames);
+	}
+
+	/**
+	 * Import raw data from a previously exported JSON dump.
+	 *
+	 * @param {Object} data - Exported data object (from exportRawData)
+	 * @param {Object} [options] - Import options passed to storage.importStores
+	 * @returns {Promise<Object>} Import summary
+	 */
+	async importRawData(data, options) {
+		return this.storage.importStores(data, options);
+	}
+
+	/**
+	 * Load tracking preferences from prefStorage.
+	 * Called during initialization to restore per-category toggles.
+	 *
+	 * @param {Object} prefStorage - The preference storage instance
+	 */
+	loadTrackingPrefs(prefStorage) {
+		this.prefStorage = prefStorage;
+		const saved = prefStorage.get('trackingPrefs', null);
+		if (saved && typeof saved === 'object') {
+			for (const cat of Object.keys(TRACKING_CATEGORIES)) {
+				if (typeof saved[cat] === 'boolean') {
+					this._trackingPrefs[cat] = saved[cat];
+				}
+			}
+		}
+	}
+
+	/**
+	 * Update a tracking category toggle and persist to preferences.
+	 *
+	 * @param {string} category - Category key (e.g. 'battles', 'chests')
+	 * @param {boolean} enabled - Whether tracking is enabled
+	 */
+	setTrackingCategory(category, enabled) {
+		if (category in this._trackingPrefs) {
+			this._trackingPrefs[category] = enabled;
+			if (this.prefStorage) {
+				this.prefStorage.set('trackingPrefs', { ...this._trackingPrefs });
+			}
+		}
+	}
+
+	/**
+	 * Get all tracking category states.
+	 *
+	 * @returns {Object<string, boolean>} Map of category → enabled
+	 */
+	getTrackingPrefs() {
+		return { ...this._trackingPrefs };
+	}
+
 	// ========================================================================
 	// Phase 8: Daily Activity & Inventory Tracking Methods
 	// ========================================================================
@@ -4500,3 +4608,4 @@ class GameTracker {
 }
 
 export default GameTracker;
+export { TRACKING_CATEGORIES };

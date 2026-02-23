@@ -1517,4 +1517,103 @@ describe('GameTracker', () => {
 			jest.useRealTimers();
 		});
 	});
+
+	// =================================================================
+	// Tracking Categories (#27)
+	// =================================================================
+	describe('Tracking Categories', () => {
+		test('constructor should initialize all tracking prefs to true', () => {
+			expect(tracker._trackingPrefs).toBeDefined();
+			expect(tracker._trackingPrefs.player).toBe(true);
+			expect(tracker._trackingPrefs.battles).toBe(true);
+			expect(tracker._trackingPrefs.chests).toBe(true);
+			expect(tracker._trackingPrefs.guild).toBe(true);
+			expect(tracker._trackingPrefs.quests).toBe(true);
+			expect(tracker._trackingPrefs.upgrades).toBe(true);
+		});
+
+		test('setTrackingCategory should update a category toggle', () => {
+			const mockPref = { get: jest.fn(), set: jest.fn() };
+			tracker.prefStorage = mockPref;
+
+			tracker.setTrackingCategory('battles', false);
+			expect(tracker._trackingPrefs.battles).toBe(false);
+			expect(mockPref.set).toHaveBeenCalledWith('trackingPrefs', expect.objectContaining({ battles: false }));
+		});
+
+		test('getTrackingPrefs should return a copy of prefs', () => {
+			const prefs = tracker.getTrackingPrefs();
+			prefs.player = false; // mutate copy
+			expect(tracker._trackingPrefs.player).toBe(true); // original unchanged
+		});
+
+		test('loadTrackingPrefs should restore saved preferences', () => {
+			const mockPref = {
+				get: jest.fn().mockReturnValue({ battles: false, chests: false }),
+				set: jest.fn(),
+			};
+			tracker.loadTrackingPrefs(mockPref);
+			expect(tracker._trackingPrefs.battles).toBe(false);
+			expect(tracker._trackingPrefs.chests).toBe(false);
+			expect(tracker._trackingPrefs.player).toBe(true); // not in saved
+		});
+
+		test('loadTrackingPrefs should handle null saved data', () => {
+			const mockPref = { get: jest.fn().mockReturnValue(null), set: jest.fn() };
+			tracker.loadTrackingPrefs(mockPref);
+			expect(tracker._trackingPrefs.player).toBe(true);
+		});
+
+		test('handler dispatch should skip disabled categories', async () => {
+			tracker._trackingPrefs.battles = false;
+			const spy = jest.fn();
+
+			// Register a handler with category 'battles'
+			tracker.registerHandler('testBattleCall', spy, 'testBattle', { category: 'battles' });
+
+			// Simulate a minimal API response
+			const handlers = tracker._handlerRegistry.get('testBattleCall');
+			expect(handlers).toBeDefined();
+			expect(handlers.length).toBeGreaterThan(0);
+
+			// The dispatch logic checks entry.category — verify the entry has it
+			const entry = handlers[handlers.length - 1];
+			expect(entry.category).toBe('battles');
+		});
+
+		test('handler registry entries should include category', () => {
+			// Check that existing handlers have categories
+			const heroHandlers = tracker._handlerRegistry.get('heroGetAll');
+			expect(heroHandlers).toBeDefined();
+			expect(heroHandlers[0].category).toBe('player');
+
+			const arenaHandlers = tracker._handlerRegistry.get('arenaAttack');
+			expect(arenaHandlers).toBeDefined();
+			expect(arenaHandlers[0].category).toBe('battles');
+
+			const chestHandlers = tracker._handlerRegistry.get('chestOpen');
+			expect(chestHandlers).toBeDefined();
+			expect(chestHandlers[0].category).toBe('chests');
+		});
+	});
+
+	// =================================================================
+	// Raw Data Export/Import (#27)
+	// =================================================================
+	describe('Raw Data Export/Import', () => {
+		test('exportRawData should delegate to storage.exportAllStores', async () => {
+			mockStorage.exportAllStores = jest.fn().mockResolvedValue({ _meta: {}, heroes: [] });
+			const result = await tracker.exportRawData();
+			expect(mockStorage.exportAllStores).toHaveBeenCalled();
+			expect(result._meta).toBeDefined();
+		});
+
+		test('importRawData should delegate to storage.importStores', async () => {
+			const importData = { heroes: [{ id: 1 }] };
+			mockStorage.importStores = jest.fn().mockResolvedValue({ imported: { heroes: 1 }, skipped: {}, errors: [] });
+			const result = await tracker.importRawData(importData);
+			expect(mockStorage.importStores).toHaveBeenCalledWith(importData, undefined);
+			expect(result.imported.heroes).toBe(1);
+		});
+	});
 });

@@ -406,4 +406,85 @@ describe('IndexedDBStorage', () => {
 			expect(stats).toHaveProperty('apiLogs');
 		});
 	});
+
+	// =================================================================
+	// Export / Import (#27)
+	// =================================================================
+	describe('exportAllStores', () => {
+		test('should export all stores with _meta header', async () => {
+			await storage.add('battles', {
+				timestamp: '2025-01-01', type: 'arena', isWin: true,
+				attackTeam: '[]', defenseTeam: '[]',
+			});
+
+			const result = await storage.exportAllStores();
+
+			expect(result._meta).toBeDefined();
+			expect(result._meta.exportedAt).toBeDefined();
+			expect(result._meta.version).toBe(9);
+			expect(result.battles).toHaveLength(1);
+			expect(result.battles[0].type).toBe('arena');
+		});
+
+		test('should export specific stores only', async () => {
+			await storage.add('battles', {
+				timestamp: '2025-01-01', type: 'arena', isWin: true,
+				attackTeam: '[]', defenseTeam: '[]',
+			});
+
+			const result = await storage.exportAllStores(['battles']);
+
+			expect(result.battles).toBeDefined();
+			expect(result.heroes).toBeUndefined();
+			expect(result._meta.storeCount).toBe(1);
+		});
+	});
+
+	describe('importStores', () => {
+		test('should import records into stores', async () => {
+			const data = {
+				battles: [{
+					timestamp: '2025-01-01', type: 'arena', isWin: true,
+					attackTeam: '[]', defenseTeam: '[]',
+				}],
+			};
+
+			const summary = await storage.importStores(data);
+			expect(summary.imported.battles).toBe(1);
+
+			const count = await storage.count('battles');
+			expect(count).toBe(1);
+		});
+
+		test('should skip _meta key during import', async () => {
+			const data = {
+				_meta: { version: 9 },
+				battles: [{
+					timestamp: '2025-01-01', type: 'arena', isWin: true,
+					attackTeam: '[]', defenseTeam: '[]',
+				}],
+			};
+
+			const summary = await storage.importStores(data);
+			expect(summary.imported._meta).toBeUndefined();
+			expect(summary.imported.battles).toBe(1);
+		});
+
+		test('should report errors for unknown stores', async () => {
+			const data = { nonExistentStore: [{ id: 1 }] };
+			const summary = await storage.importStores(data);
+			expect(summary.errors).toContain('Unknown store: nonExistentStore');
+		});
+	});
+
+	describe('getStoreNames', () => {
+		test('should return array of all store names', async () => {
+			const names = await storage.getStoreNames();
+			expect(Array.isArray(names)).toBe(true);
+			expect(names).toContain('battles');
+			expect(names).toContain('heroes');
+			expect(names).toContain('errorLog');
+			expect(names.length).toBe(36);
+		});
+	});
 });

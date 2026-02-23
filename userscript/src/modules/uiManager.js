@@ -10,6 +10,7 @@
  */
 
 import HeroCompletionCalculator from './helpers/HeroCompletionCalculator.js';
+import { TRACKING_CATEGORIES } from './gameTracker.js';
 
 class UIManager {
 	/**
@@ -29,7 +30,7 @@ class UIManager {
 		this.suggestionsEngine = suggestionsEngine;
 
 		this.isVisible = this.prefStorage.get('uiVisible', false);
-		this.currentView = 'dashboard';
+		this.currentView = this.prefStorage.get('defaultTab', 'dashboard');
 		this.overlay = null;
 
 		// Saved position/size from last session (null = use CSS default)
@@ -1566,6 +1567,35 @@ class UIManager {
 	 */
 	renderSettings() {
 		const autoShow = this.prefStorage.get('uiVisible', false);
+		const trackingPrefs = this.gameTracker.getTrackingPrefs();
+		const opacity = this.prefStorage.get('overlayOpacity', 95);
+		const defaultTab = this.prefStorage.get('defaultTab', 'dashboard');
+
+		// Build tracking toggle checkboxes
+		const toggleRows = Object.entries(TRACKING_CATEGORIES).map(([key, label]) => {
+			const checked = trackingPrefs[key] !== false ? 'checked' : '';
+			return `
+				<label class="oj-checkbox-label">
+					<input type="checkbox" data-track-cat="${key}" ${checked}>
+					${label}
+				</label>`;
+		}).join('');
+
+		// Build default tab selector options
+		const tabOptions = [
+			['dashboard', 'Dashboard'],
+			['activity', 'Activity'],
+			['heroes', 'Heroes'],
+			['titans', 'Titans'],
+			['battles', 'Battles'],
+			['chests', 'Chests'],
+			['inventory', 'Inventory'],
+			['resources', 'Resources'],
+			['apilog', 'API Log'],
+		].map(([val, label]) => {
+			const sel = val === defaultTab ? 'selected' : '';
+			return `<option value="${val}" ${sel}>${label}</option>`;
+		}).join('');
 
 		return `
 			<div class="oj-settings">
@@ -1577,14 +1607,42 @@ class UIManager {
 						<input type="checkbox" id="oj-auto-show" ${autoShow ? 'checked' : ''}>
 						Show overlay automatically on page load
 					</label>
+					<div style="margin-top:6px">
+						<label style="display:flex;align-items:center;gap:8px;font-size:12px">
+							Opacity: <input type="range" id="oj-opacity" min="30" max="100" value="${opacity}" style="flex:1">
+							<span id="oj-opacity-val">${opacity}%</span>
+						</label>
+					</div>
+					<div style="margin-top:6px">
+						<label style="display:flex;align-items:center;gap:8px;font-size:12px">
+							Default tab:
+							<select id="oj-default-tab" style="background:#2a2a2e;color:#ddd;border:1px solid #555;border-radius:3px;padding:2px 4px">
+								${tabOptions}
+							</select>
+						</label>
+					</div>
+				</div>
+
+				<div class="oj-settings-group">
+					<h4>Tracking Categories</h4>
+					<p class="oj-muted" style="margin:0 0 4px;font-size:11px">Disable categories to stop tracking that data type.</p>
+					${toggleRows}
 				</div>
 
 				<div class="oj-settings-group">
 					<h4>Data Management</h4>
 					<div class="oj-btn-row">
-						<button class="oj-btn" id="oj-export-data">\uD83D\uDCE5 Export All Data</button>
-						<button class="oj-btn oj-btn-danger" id="oj-clear-data">\uD83D\uDDD1\uFE0F Clear All Data</button>
+						<button class="oj-btn" id="oj-export-data">\uD83D\uDCE5 Export All</button>
+						<button class="oj-btn" id="oj-export-raw">\uD83D\uDCBE Export Raw</button>
+						<button class="oj-btn" id="oj-import-data">\uD83D\uDCE4 Import</button>
+						<button class="oj-btn oj-btn-danger" id="oj-clear-data">\uD83D\uDDD1\uFE0F Clear All</button>
 					</div>
+					<input type="file" id="oj-import-file" accept=".json" style="display:none">
+				</div>
+
+				<div class="oj-settings-group">
+					<h4>Storage Usage</h4>
+					<div id="oj-storage-stats" style="font-size:11px;color:#aaa">Loading...</div>
 				</div>
 
 				<div class="oj-settings-group">
@@ -1603,7 +1661,7 @@ class UIManager {
 
 				<div class="oj-settings-group">
 					<h4>About</h4>
-					<p>OrganizedJihad \u2014 Hero Wars Tracker v0.9.0</p>
+					<p>OrganizedJihad \u2014 Hero Wars Tracker v0.9.2</p>
 					<p class="oj-muted">Tracks gameplay data locally via IndexedDB. Optional C# API sync.</p>
 				</div>
 			</div>
@@ -1614,19 +1672,13 @@ class UIManager {
 	 * Attach event listeners for the Settings view.
 	 */
 	attachSettingsEventListeners() {
-		// Export data
+		// ── Export curated data ──────────────────────────────────────────
 		const exportBtn = this.overlay.querySelector('#oj-export-data');
 		if (exportBtn) {
 			exportBtn.addEventListener('click', async () => {
 				try {
 					const data = await this.gameTracker.exportAllData();
-					const blob = new Blob([JSON.stringify(data, null, '\t')], { type: 'application/json' });
-					const url = URL.createObjectURL(blob);
-					const a = document.createElement('a');
-					a.href = url;
-					a.download = 'organized-jihad-export-' + new Date().toISOString().slice(0, 10) + '.json';
-					a.click();
-					URL.revokeObjectURL(url);
+					this._downloadJson(data, 'organized-jihad-export');
 				} catch (err) {
 					console.error('[OrganizedJihad] Export failed:', err);
 					alert('Export failed \u2014 check console for details.');
@@ -1634,7 +1686,65 @@ class UIManager {
 			});
 		}
 
-		// Clear all data
+		// ── Export raw IDB dump ──────────────────────────────────────────
+		const exportRawBtn = this.overlay.querySelector('#oj-export-raw');
+		if (exportRawBtn) {
+			exportRawBtn.addEventListener('click', async () => {
+				try {
+					exportRawBtn.textContent = '\u23F3 Exporting...';
+					exportRawBtn.disabled = true;
+					const data = await this.gameTracker.exportRawData();
+					this._downloadJson(data, 'organized-jihad-raw-export');
+				} catch (err) {
+					console.error('[OrganizedJihad] Raw export failed:', err);
+					alert('Raw export failed \u2014 check console.');
+				} finally {
+					exportRawBtn.textContent = '\uD83D\uDCBE Export Raw';
+					exportRawBtn.disabled = false;
+				}
+			});
+		}
+
+		// ── Import data ─────────────────────────────────────────────────
+		const importBtn = this.overlay.querySelector('#oj-import-data');
+		const importFile = this.overlay.querySelector('#oj-import-file');
+		if (importBtn && importFile) {
+			importBtn.addEventListener('click', () => importFile.click());
+			importFile.addEventListener('change', async (e) => {
+				const file = e.target.files?.[0];
+				if (!file) return;
+
+				if (!confirm(`Import data from "${file.name}"?\n\nExisting records with the same keys will be skipped (not overwritten).`)) {
+					importFile.value = '';
+					return;
+				}
+
+				try {
+					importBtn.textContent = '\u23F3 Importing...';
+					importBtn.disabled = true;
+					const text = await file.text();
+					const data = JSON.parse(text);
+					const summary = await this.gameTracker.importRawData(data);
+
+					const imported = Object.values(summary.imported).reduce((a, b) => a + b, 0);
+					const skipped = Object.values(summary.skipped).reduce((a, b) => a + b, 0);
+					const errors = summary.errors.length;
+					alert(`Import complete!\n\n\u2705 ${imported} records imported\n\u23E9 ${skipped} duplicates skipped\n${errors > 0 ? `\u274C ${errors} errors` : ''}`);
+
+					// Refresh storage stats
+					this._loadStorageStats();
+				} catch (err) {
+					console.error('[OrganizedJihad] Import failed:', err);
+					alert('Import failed \u2014 check console. File may be invalid JSON.');
+				} finally {
+					importBtn.textContent = '\uD83D\uDCE4 Import';
+					importBtn.disabled = false;
+					importFile.value = '';
+				}
+			});
+		}
+
+		// ── Clear all data ──────────────────────────────────────────────
 		const clearBtn = this.overlay.querySelector('#oj-clear-data');
 		if (clearBtn) {
 			clearBtn.addEventListener('click', async () => {
@@ -1660,12 +1770,95 @@ class UIManager {
 			});
 		}
 
-		// Auto-show checkbox
+		// ── Auto-show checkbox ──────────────────────────────────────────
 		const autoShowCb = this.overlay.querySelector('#oj-auto-show');
 		if (autoShowCb) {
 			autoShowCb.addEventListener('change', (e) => {
 				this.prefStorage.set('uiVisible', e.target.checked);
 			});
+		}
+
+		// ── Opacity slider ──────────────────────────────────────────────
+		const opacitySlider = this.overlay.querySelector('#oj-opacity');
+		const opacityVal = this.overlay.querySelector('#oj-opacity-val');
+		if (opacitySlider) {
+			opacitySlider.addEventListener('input', (e) => {
+				const val = parseInt(e.target.value, 10);
+				if (opacityVal) opacityVal.textContent = `${val}%`;
+				if (this.overlay) {
+					this.overlay.style.opacity = val / 100;
+				}
+			});
+			opacitySlider.addEventListener('change', (e) => {
+				this.prefStorage.set('overlayOpacity', parseInt(e.target.value, 10));
+			});
+		}
+
+		// ── Default tab selector ────────────────────────────────────────
+		const defaultTabSel = this.overlay.querySelector('#oj-default-tab');
+		if (defaultTabSel) {
+			defaultTabSel.addEventListener('change', (e) => {
+				this.prefStorage.set('defaultTab', e.target.value);
+			});
+		}
+
+		// ── Tracking category toggles ───────────────────────────────────
+		const catCheckboxes = this.overlay.querySelectorAll('[data-track-cat]');
+		for (const cb of catCheckboxes) {
+			cb.addEventListener('change', (e) => {
+				const cat = e.target.dataset.trackCat;
+				this.gameTracker.setTrackingCategory(cat, e.target.checked);
+			});
+		}
+
+		// ── Load storage stats asynchronously ───────────────────────────
+		this._loadStorageStats();
+	}
+
+	/**
+	 * Download a JSON object as a file.
+	 * @param {Object} data - Data to export
+	 * @param {string} prefix - Filename prefix
+	 * @private
+	 */
+	_downloadJson(data, prefix) {
+		const blob = new Blob([JSON.stringify(data, null, '\t')], { type: 'application/json' });
+		const url = URL.createObjectURL(blob);
+		const a = document.createElement('a');
+		a.href = url;
+		a.download = `${prefix}-${new Date().toISOString().slice(0, 10)}.json`;
+		a.click();
+		URL.revokeObjectURL(url);
+	}
+
+	/**
+	 * Load and display per-store record counts in the settings panel.
+	 * @private
+	 */
+	async _loadStorageStats() {
+		const el = this.overlay?.querySelector('#oj-storage-stats');
+		if (!el) return;
+
+		try {
+			const stats = await this.idbStorage.getStorageStats();
+			const total = Object.values(stats).reduce((a, b) => a + Math.max(b, 0), 0);
+
+			const rows = Object.entries(stats)
+				.sort(([, a], [, b]) => b - a)
+				.filter(([, count]) => count > 0)
+				.map(([name, count]) => `
+					<div style="display:flex;justify-content:space-between;padding:1px 0">
+						<span>${name}</span>
+						<span style="color:#8cf">${count.toLocaleString()}</span>
+					</div>`)
+				.join('');
+
+			el.innerHTML = `
+				<div style="margin-bottom:4px"><strong>${total.toLocaleString()}</strong> total records across ${Object.keys(stats).length} stores</div>
+				<div style="max-height:150px;overflow-y:auto">${rows || '<span class="oj-muted">No data stored yet</span>'}</div>
+			`;
+		} catch (err) {
+			el.textContent = 'Failed to load stats';
 		}
 	}
 
@@ -1680,6 +1873,9 @@ class UIManager {
 		if (this.overlay) {
 			this.overlay.style.display = 'block';
 			this.isVisible = true;
+			// Apply saved opacity (#27)
+			const opacity = this.prefStorage.get('overlayOpacity', 95);
+			this.overlay.style.opacity = opacity / 100;
 			// Restore max-height if it was overridden by resize
 			if (this._savedSize) {
 				this.overlay.style.maxHeight = 'none';

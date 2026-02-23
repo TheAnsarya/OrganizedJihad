@@ -231,6 +231,9 @@ import './styles/main.css';
 	// GoalsManager, CalendarManager, SuggestionsEngine use localStorage for preferences
 	const gameTracker = new GameTracker(idbStorage);
 
+	// Load per-category tracking toggles from preferences (#27)
+	gameTracker.loadTrackingPrefs(prefStorage);
+
 	// Wire tracker-level error reporting to the badge
 	gameTracker.onError = (count) => {
 		errorCount = Math.max(errorCount, count); // Keep the higher count
