@@ -16,7 +16,7 @@ const webpack = require('webpack');
 const userscriptBanner = `// ==UserScript==
 // @name         OrganizedJihad - Hero Wars Tracker
 // @namespace    http://tampermonkey.net/
-// @version      0.9.2
+// @version      0.9.3
 // @description  Track and manage Hero Wars game data with IndexedDB storage and in-game UI
 // @author       Andy Hubbard <me@ansarya.com>
 // @match        https://www.hero-wars.com/*
@@ -31,7 +31,7 @@ const userscriptBanner = `// ==UserScript==
 // @match        https://apps-1701433570146040.apps.fbsbx.com/*
 // @grant        GM_addStyle
 // @grant        GM_notification
-// @run-at       document-end
+// @run-at       document-start
 // ==/UserScript==`;
 
 module.exports = {
@@ -80,9 +80,28 @@ module.exports = {
 			// CSS files - inject into DOM via style-loader
 			// @see https://webpack.js.org/loaders/style-loader/
 			// @see https://webpack.js.org/loaders/css-loader/
+			// Custom insert function defers style injection if <head>
+			// doesn't exist yet (@run-at document-start).
 			{
 				test: /\.css$/,
-				use: ['style-loader', 'css-loader'],
+				use: [
+					{
+						loader: 'style-loader',
+						options: {
+							insert: function insertStyleDeferred(element) {
+								var head = document.head || document.querySelector('head');
+								if (head) {
+									head.appendChild(element);
+								} else {
+									document.addEventListener('DOMContentLoaded', function() {
+										document.head.appendChild(element);
+									});
+								}
+							},
+						},
+					},
+					'css-loader',
+				],
 			},
 		],
 	},

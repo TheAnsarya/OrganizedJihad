@@ -5,7 +5,7 @@
 // ==UserScript==  (informational — webpack banner is authoritative)
 // @name         OrganizedJihad - Hero Wars Tracker
 // @namespace    http://tampermonkey.net/
-// @version      0.9.2
+// @version      0.9.3
 // @description  Track and manage Hero Wars game data with IndexedDB storage and in-game UI
 // @author       Andy Hubbard <me@ansarya.com>
 // @match        https://www.hero-wars.com/*
@@ -20,7 +20,7 @@
 // @match        https://apps-1701433570146040.apps.fbsbx.com/*
 // @grant        GM_addStyle
 // @grant        GM_notification
-// @run-at       document-end
+// @run-at       document-start
 // ==/UserScript==
 
 import GameTracker from './modules/gameTracker.js';
@@ -41,322 +41,348 @@ import './styles/main.css';
 	'use strict';
 
 	console.log(
-		'%c[OrganizedJihad]%c Hero Wars Tracker v0.9.2 Loaded',
+		'%c[OrganizedJihad]%c Hero Wars Tracker v0.9.3 Loaded',
 		'color: #4CAF50; font-weight: bold; font-size: 14px;',
 		'color: #2196F3; font-size: 14px;'
 	);
 
-	// ─── Status Badge ───────────────────────────────────────────────────
-	// Floating indicator showing the script is active and counting API calls.
-	// Appears immediately so the user knows the script loaded, even before
-	// any API calls are intercepted.
+	// ═══════════════════════════════════════════════════════════════════
+	// PHASE 1 — Immediate  (@run-at document-start safe)
+	//
+	// No DOM operations here.  Set up the XHR / WebSocket proxy as
+	// early as possible so we capture the initial login API batch
+	// that fires before the DOM is ready.  IndexedDB operations
+	// internally await their initPromise, so writes that arrive
+	// before the DB opens are safely queued.  (#55)
+	// ═══════════════════════════════════════════════════════════════════
 
 	/** @type {number} Running count of intercepted API calls */
 	let apiCallCount = 0;
-
-	/**
-	 * Creates the floating status badge element.
-	 * The badge is a small pill in the bottom-right corner of the game.
-	 * States:
-	 *   - Yellow "Listening..." — waiting for first API interception
-	 *   - Green "N calls" — actively tracking
-	 * Click opens the full overlay panel.
-	 *
-	 * @returns {HTMLDivElement} The badge DOM element
-	 */
-	function createStatusBadge() {
-		const badge = document.createElement('div');
-		badge.id = 'oj-status-badge';
-		badge.innerHTML = `
-			<span class="oj-badge-dot"></span>
-			<span class="oj-badge-text">OJ: Listening...</span>
-		`;
-		badge.title = 'OrganizedJihad Tracker — Click to open panel';
-		document.body.appendChild(badge);
-		return badge;
-	}
-
-	/**
-	 * Updates the status badge with the current API call count.
-	 * Transitions from yellow "Listening" to green "N calls" state.
-	 *
-	 * @param {HTMLDivElement} badge - The badge element
-	 * @param {number} count - Current intercepted call count
-	 */
-	function updateBadge(badge, count) {
-		const dot = badge.querySelector('.oj-badge-dot');
-		const text = badge.querySelector('.oj-badge-text');
-
-		if (count > 0) {
-			badge.classList.add('oj-badge-active');
-			dot.classList.add('oj-badge-dot-active');
-			text.textContent = `OJ: ${count} call${count !== 1 ? 's' : ''}`;
-		}
-	}
-
-	// Inject badge styles directly (works before CSS bundle loads)
-	const badgeStyles = document.createElement('style');
-	badgeStyles.textContent = `
-		#oj-status-badge {
-			position: fixed;
-			bottom: 16px;
-			right: 16px;
-			display: flex;
-			align-items: center;
-			gap: 6px;
-			padding: 6px 14px;
-			background: rgba(30, 58, 95, 0.92);
-			border: 1px solid rgba(255, 255, 255, 0.15);
-			border-radius: 20px;
-			color: #fff;
-			font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-			font-size: 12px;
-			font-weight: 500;
-			cursor: pointer;
-			z-index: 999998;
-			backdrop-filter: blur(8px);
-			transition: all 0.3s ease;
-			user-select: none;
-			box-shadow: 0 2px 12px rgba(0, 0, 0, 0.3);
-		}
-		#oj-status-badge:hover {
-			background: rgba(30, 58, 95, 1);
-			box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
-			transform: translateY(-1px);
-		}
-		.oj-badge-dot {
-			width: 8px;
-			height: 8px;
-			border-radius: 50%;
-			background: #FFC107;
-			animation: oj-pulse 2s infinite;
-		}
-		.oj-badge-dot-active {
-			background: #4CAF50 !important;
-		}
-		.oj-badge-dot-error {
-			background: #F44336 !important;
-			animation: oj-pulse 1s infinite !important;
-		}
-		.oj-badge-active {
-			border-color: rgba(76, 175, 80, 0.4);
-		}
-		@keyframes oj-pulse {
-			0%, 100% { opacity: 1; }
-			50% { opacity: 0.5; }
-		}
-	`;
-	document.head.appendChild(badgeStyles);
-
-	const statusBadge = createStatusBadge();
-
-	// ─── Global Error Handlers ──────────────────────────────────────────
-	// Catch any uncaught errors/rejections from our code and surface them
-	// on the badge as a red indicator so the user knows something is off.
 
 	/** @type {number} Running count of uncaught errors */
 	let errorCount = 0;
 
 	/**
-	 * Show the error state on the status badge.
-	 * Changes the dot to red and appends the error count.
+	 * Callback invoked after each processAPIResponse dispatch cycle.
+	 * Initially null; set in PHASE 2 once DOM is ready and UI elements
+	 * exist.  This lets the counter run from the first API call while
+	 * badge / overlay updates wait for the DOM.
 	 *
-	 * @param {number} count - Current error count
+	 * @type {Function|null}
 	 */
-	function showBadgeError(count) {
-		const dot = statusBadge.querySelector('.oj-badge-dot');
-		if (dot) {
-			dot.classList.add('oj-badge-dot-error');
-		}
-		statusBadge.title = `OrganizedJihad Tracker — ${count} error${count !== 1 ? 's' : ''} logged`;
-	}
+	let onApiProcessed = null;
 
 	/**
-	 * Shared error handler for window.onerror and unhandledrejection.
-	 * Only counts errors that originate from our own code.
-	 *
-	 * @param {string} source - Error origin description
-	 * @param {Error|string} error - The error
+	 * Badge-error callback.  Set in PHASE 2.
+	 * @type {Function|null}
 	 */
-	function handleGlobalError(source, error) {
-		// Only count errors likely from our code (stack mentions OrganizedJihad or our bundle)
-		const msg = String(error?.message || error || '');
-		const stack = String(error?.stack || '');
-		const isOurs = msg.includes('OrganizedJihad') ||
-			stack.includes('organized-jihad') ||
-			stack.includes('OrganizedJihad');
+	let showBadgeError = null;
 
-		if (!isOurs) return;
-
-		errorCount++;
-		console.error(`[OrganizedJihad] Uncaught ${source}:`, error);
-		showBadgeError(errorCount);
-	}
-
-	// Catch synchronous errors
-	window.addEventListener('error', (event) => {
-		handleGlobalError('error', event.error || event.message);
-	});
-
-	// Catch unhandled promise rejections
-	window.addEventListener('unhandledrejection', (event) => {
-		handleGlobalError('rejection', event.reason);
-	});
-
-	// ─── Core Initialization ────────────────────────────────────────────
-
-	// Initialize IndexedDB storage (for game data — heroes, battles, etc.)
-	// The constructor starts init(); await it here so the DB is ready.
+	// ── Storage ──────────────────────────────────────────────────────
+	// IndexedDB constructor starts the DB open asynchronously.
+	// StorageManager uses localStorage (available at document-start).
 	const idbStorage = new IndexedDBStorage();
-	await idbStorage.initPromise;
-	console.log('[OrganizedJihad] IndexedDB storage initialized');
-
-	// Initialize StorageManager (for preferences, goals, calendar — synchronous localStorage)
 	const prefStorage = new StorageManager();
 
-	// Initialize sync client (optional — only works if C# server is running)
-	const syncClient = new SyncClient('http://localhost:5124');
-	let apiAvailable = false;
-	try {
-		apiAvailable = await syncClient.checkHealth();
-		if (apiAvailable) {
-			console.log('[OrganizedJihad] ✅ API server connected at http://localhost:5124');
-		}
-	} catch {
-		// Silently continue — API server is optional
-	}
-	if (!apiAvailable) {
-		console.log('[OrganizedJihad] API server not available — storing data locally only');
-	}
-
-	// Initialize core modules
-	// GameTracker and APIMonitor use IndexedDB for large game data
-	// GoalsManager, CalendarManager, SuggestionsEngine use localStorage for preferences
+	// ── GameTracker construction ─────────────────────────────────────
 	const gameTracker = new GameTracker(idbStorage);
-
-	// Load per-category tracking toggles from preferences (#27)
 	gameTracker.loadTrackingPrefs(prefStorage);
 
-	// Wire tracker-level error reporting to the badge
+	// Wire error reporting (badge callback set later in PHASE 2)
 	gameTracker.onError = (count) => {
-		errorCount = Math.max(errorCount, count); // Keep the higher count
-		showBadgeError(errorCount);
+		errorCount = Math.max(errorCount, count);
+		if (showBadgeError) showBadgeError(errorCount);
 	};
 
-	const goalsManager = new GoalsManager(prefStorage);
-	const calendarManager = new CalendarManager(prefStorage);
-	const suggestionsEngine = new SuggestionsEngine(prefStorage, gameTracker, goalsManager);
-	const uiManager = new UIManager(prefStorage, idbStorage, gameTracker, goalsManager, calendarManager, suggestionsEngine);
-
-	// Initialize game overlay (floating hero completion panel, toggle via Alt+H)
-	const gameOverlay = new GameOverlay(idbStorage, prefStorage);
-	gameOverlay.init();
-
-	// Initialize DOM targeting for game-aware positioning (#50)
-	// Detects game canvas/container, tracks battle state from API,
-	// and auto-hides OJ elements during battles.
-	const domTargeting = new DomTargeting({
-		prefStorage,
-		onStateChange: (newState, oldState) => {
-			console.log(`[OrganizedJihad] Game state changed: ${oldState} → ${newState}`);
-		},
-	});
-	domTargeting.init();
-
-	// Register OJ elements for auto-hide during battles
-	domTargeting.registerElement(statusBadge);
-	if (uiManager.overlay) domTargeting.registerElement(uiManager.overlay);
-	if (gameOverlay.panel) domTargeting.registerElement(gameOverlay.panel);
-
-	// Initialize notification manager for game event alerts (#52)
-	// Sends desktop notifications for arena defense, guild war changes,
-	// daily reset, new mail, and low energy warnings.
-	const notificationManager = new NotificationManager(prefStorage);
-	// Request permission upfront (no-op if already granted/denied)
-	notificationManager.requestPermission();
-	// Start periodic daily-reset check (fires once at midnight UTC)
-	notificationManager.startDailyResetCheck();
-	// Expose to UIManager for settings panel
-	uiManager.notificationManager = notificationManager;
-
-	// Register push event handlers for notifications (#52)
-	// Push events arrive via the game's WebSocket and are dispatched by
-	// gameTracker._handlePushEvent using the 'push:<type>' key format.
-	gameTracker.registerHandler('push:arenaBattleResult', (_call, _args, data) => {
-		notificationManager.notifyArenaDefense({
-			attacker: data?.attackerName || data?.name,
-			result: data?.win === false ? 'You lost' : data?.win === true ? 'You won' : undefined,
-		});
-	}, 'notifyArenaDefense');
-
-	gameTracker.registerHandler('push:guildWarPointsChanged', (_call, _args, data) => {
-		notificationManager.notifyGuildWar({ phase: data?.phase || data?.status });
-	}, 'notifyGuildWarChange');
-
-	gameTracker.registerHandler('push:updateMail', (_call, _args, data) => {
-		notificationManager.notifyMail({ count: data?.count });
-	}, 'notifyMail');
-
-	// NOTE: APIMonitor is initialized AFTER gameTracker.init() (below)
-	// to avoid double-proxying XMLHttpRequest. GameTracker's XHR proxy
-	// handles API interception; APIMonitor only stores endpoints/stats.
-	const apiMonitor = new APIMonitor(idbStorage);
-
-	// ─── Wire Status Badge ──────────────────────────────────────────────
-
-	// Hook into GameTracker to count API calls and update the badge.
-	// GameTracker.processAPIResponse is called for every Hero Wars API response.
+	// ── processAPIResponse wrapper ───────────────────────────────────
+	// Wrap BEFORE init() so the counter starts from the very first
+	// intercepted API call (even those that arrive while IDB opens).
 	const originalProcessAPI = gameTracker.processAPIResponse.bind(gameTracker);
 	gameTracker.processAPIResponse = async function (request, response) {
 		apiCallCount++;
-		updateBadge(statusBadge, apiCallCount);
 
-		// Notify DOM targeting about API calls for battle state detection (#50)
-		if (request?.name) domTargeting.onApiCall(request.name);
-
+		// Core processing (writes to IDB, dispatches handlers)
 		const result = await originalProcessAPI(request, response);
-		// Notify game overlay when hero data may have changed
-		await gameOverlay.onHeroDataUpdated();
 
-		// Trigger notifications for relevant API responses (#52)
-		if (request?.name) {
-			// Check energy from userGetInfo responses
-			if (request.name === 'userGetInfo' && response?.energy !== undefined) {
-				notificationManager.checkEnergy(response.energy);
+		// Delegate to PHASE 2 UI callback (badge, overlay, etc.)
+		if (onApiProcessed) {
+			try {
+				await onApiProcessed(request, response, apiCallCount);
+			} catch (e) {
+				console.warn('[OrganizedJihad] onApiProcessed callback error:', e);
 			}
 		}
 
 		return result;
 	};
 
-	// Click badge → toggle overlay
-	statusBadge.addEventListener('click', () => {
-		if (uiManager.isVisible) {
-			uiManager.hide();
-		} else {
-			uiManager.show();
-		}
-	});
+	// ── Start interception ───────────────────────────────────────────
+	// gameTracker.init() installs the XHR/WS proxy synchronously, then
+	// awaits IDB.  The proxy is active after the first two sync calls
+	// inside init(), so API traffic captured during the IDB open is
+	// queued by IndexedDBStorage (every write awaits initPromise).
+	await gameTracker.init();
+	console.log('[OrganizedJihad] PHASE 1 complete — XHR/WS proxy active, IDB ready');
 
-	// ─── Start Tracking ─────────────────────────────────────────────────
+	// ═══════════════════════════════════════════════════════════════════
+	// PHASE 2 — DOM Ready
+	//
+	// All badge creation, style injection, overlay init, and DOM
+	// manipulation happens here.  At @run-at document-start the DOM
+	// may not exist yet, so we defer to DOMContentLoaded.
+	// ═══════════════════════════════════════════════════════════════════
 
 	/**
-	 * Main initialization — called once the page DOM is ready.
-	 * Sets up API interception, UI, and optional server sync.
+	 * Set up all DOM-dependent modules, UI elements, and post-init
+	 * wiring.  Called once the document is interactive.
 	 */
-	async function initialize() {
-		console.log('[OrganizedJihad] Initializing tracker...');
+	async function setupUI() {
+		console.log('[OrganizedJihad] PHASE 2 — Setting up UI...');
 
-		// Set up API interception (XHR proxy) — must run FIRST before any
-		// other module that touches XMLHttpRequest
-		await gameTracker.init();
+		// ─── Status Badge ───────────────────────────────────────────
+		// Floating indicator showing the script is active and counting
+		// API calls.  Appears immediately so the user knows the script
+		// loaded, even before any API calls are intercepted.
+
+		/**
+		 * Creates the floating status badge element.
+		 * The badge is a small pill in the bottom-right corner of the game.
+		 * States:
+		 *   - Yellow "Listening..." — waiting for first API interception
+		 *   - Green "N calls" — actively tracking
+		 * Click opens the full overlay panel.
+		 *
+		 * @returns {HTMLDivElement} The badge DOM element
+		 */
+		function createStatusBadge() {
+			const badge = document.createElement('div');
+			badge.id = 'oj-status-badge';
+			badge.innerHTML = `
+				<span class="oj-badge-dot"></span>
+				<span class="oj-badge-text">OJ: Listening...</span>
+			`;
+			badge.title = 'OrganizedJihad Tracker — Click to open panel';
+			document.body.appendChild(badge);
+			return badge;
+		}
+
+		/**
+		 * Updates the status badge with the current API call count.
+		 * Transitions from yellow "Listening" to green "N calls" state.
+		 *
+		 * @param {HTMLDivElement} badge - The badge element
+		 * @param {number} count - Current intercepted call count
+		 */
+		function updateBadge(badge, count) {
+			const dot = badge.querySelector('.oj-badge-dot');
+			const text = badge.querySelector('.oj-badge-text');
+
+			if (count > 0) {
+				badge.classList.add('oj-badge-active');
+				dot.classList.add('oj-badge-dot-active');
+				text.textContent = `OJ: ${count} call${count !== 1 ? 's' : ''}`;
+			}
+		}
+
+		// Inject badge styles directly (works before CSS bundle loads)
+		const badgeStyles = document.createElement('style');
+		badgeStyles.textContent = `
+			#oj-status-badge {
+				position: fixed;
+				bottom: 16px;
+				right: 16px;
+				display: flex;
+				align-items: center;
+				gap: 6px;
+				padding: 6px 14px;
+				background: rgba(30, 58, 95, 0.92);
+				border: 1px solid rgba(255, 255, 255, 0.15);
+				border-radius: 20px;
+				color: #fff;
+				font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+				font-size: 12px;
+				font-weight: 500;
+				cursor: pointer;
+				z-index: 999998;
+				backdrop-filter: blur(8px);
+				transition: all 0.3s ease;
+				user-select: none;
+				box-shadow: 0 2px 12px rgba(0, 0, 0, 0.3);
+			}
+			#oj-status-badge:hover {
+				background: rgba(30, 58, 95, 1);
+				box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+				transform: translateY(-1px);
+			}
+			.oj-badge-dot {
+				width: 8px;
+				height: 8px;
+				border-radius: 50%;
+				background: #FFC107;
+				animation: oj-pulse 2s infinite;
+			}
+			.oj-badge-dot-active {
+				background: #4CAF50 !important;
+			}
+			.oj-badge-dot-error {
+				background: #F44336 !important;
+				animation: oj-pulse 1s infinite !important;
+			}
+			.oj-badge-active {
+				border-color: rgba(76, 175, 80, 0.4);
+			}
+			@keyframes oj-pulse {
+				0%, 100% { opacity: 1; }
+				50% { opacity: 0.5; }
+			}
+		`;
+		document.head.appendChild(badgeStyles);
+
+		const statusBadge = createStatusBadge();
+
+		// ─── Global Error Handlers ──────────────────────────────────
+		// Catch any uncaught errors/rejections from our code and
+		// surface them on the badge as a red indicator.
+
+		/**
+		 * Show the error state on the status badge.
+		 * Changes the dot to red and appends the error count.
+		 *
+		 * @param {number} count - Current error count
+		 */
+		showBadgeError = function (count) {
+			const dot = statusBadge.querySelector('.oj-badge-dot');
+			if (dot) {
+				dot.classList.add('oj-badge-dot-error');
+			}
+			statusBadge.title = `OrganizedJihad Tracker — ${count} error${count !== 1 ? 's' : ''} logged`;
+		};
+
+		/**
+		 * Shared error handler for window.onerror and unhandledrejection.
+		 * Only counts errors that originate from our own code.
+		 *
+		 * @param {string} source - Error origin description
+		 * @param {Error|string} error - The error
+		 */
+		function handleGlobalError(source, error) {
+			const msg = String(error?.message || error || '');
+			const stack = String(error?.stack || '');
+			const isOurs = msg.includes('OrganizedJihad') ||
+				stack.includes('organized-jihad') ||
+				stack.includes('OrganizedJihad');
+
+			if (!isOurs) return;
+
+			errorCount++;
+			console.error(`[OrganizedJihad] Uncaught ${source}:`, error);
+			showBadgeError(errorCount);
+		}
+
+		window.addEventListener('error', (event) => {
+			handleGlobalError('error', event.error || event.message);
+		});
+
+		window.addEventListener('unhandledrejection', (event) => {
+			handleGlobalError('rejection', event.reason);
+		});
+
+		// ─── Initialize sync client (optional) ──────────────────────
+		const syncClient = new SyncClient('http://localhost:5124');
+		let apiAvailable = false;
+		try {
+			apiAvailable = await syncClient.checkHealth();
+			if (apiAvailable) {
+				console.log('[OrganizedJihad] ✅ API server connected at http://localhost:5124');
+			}
+		} catch {
+			// Silently continue — API server is optional
+		}
+		if (!apiAvailable) {
+			console.log('[OrganizedJihad] API server not available — storing data locally only');
+		}
+
+		// ─── Module construction ────────────────────────────────────
+		const goalsManager = new GoalsManager(prefStorage);
+		const calendarManager = new CalendarManager(prefStorage);
+		const suggestionsEngine = new SuggestionsEngine(prefStorage, gameTracker, goalsManager);
+		const uiManager = new UIManager(prefStorage, idbStorage, gameTracker, goalsManager, calendarManager, suggestionsEngine);
+
+		// Initialize game overlay (floating hero completion panel, toggle via Alt+H)
+		const gameOverlay = new GameOverlay(idbStorage, prefStorage);
+		gameOverlay.init();
+
+		// Initialize DOM targeting for game-aware positioning (#50)
+		const domTargeting = new DomTargeting({
+			prefStorage,
+			onStateChange: (newState, oldState) => {
+				console.log(`[OrganizedJihad] Game state changed: ${oldState} → ${newState}`);
+			},
+		});
+		domTargeting.init();
+
+		// Register OJ elements for auto-hide during battles
+		domTargeting.registerElement(statusBadge);
+		if (uiManager.overlay) domTargeting.registerElement(uiManager.overlay);
+		if (gameOverlay.panel) domTargeting.registerElement(gameOverlay.panel);
+
+		// Initialize notification manager for game event alerts (#52)
+		const notificationManager = new NotificationManager(prefStorage);
+		notificationManager.requestPermission();
+		notificationManager.startDailyResetCheck();
+		uiManager.notificationManager = notificationManager;
+
+		// Register push event handlers for notifications (#52)
+		gameTracker.registerHandler('push:arenaBattleResult', (_call, _args, data) => {
+			notificationManager.notifyArenaDefense({
+				attacker: data?.attackerName || data?.name,
+				result: data?.win === false ? 'You lost' : data?.win === true ? 'You won' : undefined,
+			});
+		}, 'notifyArenaDefense');
+
+		gameTracker.registerHandler('push:guildWarPointsChanged', (_call, _args, data) => {
+			notificationManager.notifyGuildWar({ phase: data?.phase || data?.status });
+		}, 'notifyGuildWarChange');
+
+		gameTracker.registerHandler('push:updateMail', (_call, _args, data) => {
+			notificationManager.notifyMail({ count: data?.count });
+		}, 'notifyMail');
 
 		// Initialize API Monitor AFTER gameTracker so its XHR proxy layers
 		// correctly on top (apiMonitor ← gameTracker ← real XHR)
+		const apiMonitor = new APIMonitor(idbStorage);
+
+		// ─── Wire PHASE 2 UI Callbacks ──────────────────────────────
+		// Now that all DOM-dependent modules exist, wire the callback
+		// so future processAPIResponse calls update badge + overlay.
+		onApiProcessed = async (_request, _response, count) => {
+			updateBadge(statusBadge, count);
+			// NOTE: request contains the full batch {calls:[...]},
+			// not individual call objects, so request.name is always
+			// undefined.  domTargeting and energy checks are handled
+			// per-call inside the handler registry instead.
+			await gameOverlay.onHeroDataUpdated();
+		};
+
+		// Catch up the badge with API calls captured during PHASE 1
+		if (apiCallCount > 0) {
+			updateBadge(statusBadge, apiCallCount);
+		}
+
+		// Click badge → toggle overlay
+		statusBadge.addEventListener('click', () => {
+			if (uiManager.isVisible) {
+				uiManager.hide();
+			} else {
+				uiManager.show();
+			}
+		});
+
+		// ─── Finish Initialization ──────────────────────────────────
+		// apiMonitor and uiManager need their own async init().
 		await apiMonitor.init();
 		console.log('[OrganizedJihad] ✅ API Monitor initialized');
 
-		// Initialize UI overlay (hidden by default until badge is clicked)
 		await uiManager.init();
 
 		// Start auto-sync if API server is available (every 15 minutes)
@@ -375,14 +401,16 @@ import './styles/main.css';
 			}
 		}, 60000);
 
-		console.log('[OrganizedJihad] ✅ Tracker ready — play the game normally');
+		console.log('[OrganizedJihad] ✅ PHASE 2 complete — Tracker ready');
 	}
 
-	// Wait for game to fully load
+	// ── Entry point ─────────────────────────────────────────────────
+	// At @run-at document-start the DOM is not yet available.
+	// Wait for DOMContentLoaded before setting up any UI.
 	if (document.readyState === 'loading') {
-		document.addEventListener('DOMContentLoaded', initialize);
+		document.addEventListener('DOMContentLoaded', () => setupUI());
 	} else {
-		await initialize();
+		await setupUI();
 	}
 
 	// Cleanup on page unload
@@ -390,7 +418,5 @@ import './styles/main.css';
 		if (window.organizedJihadSyncInterval) {
 			clearInterval(window.organizedJihadSyncInterval);
 		}
-		domTargeting.destroy();
-		notificationManager.destroy();
 	});
 })();

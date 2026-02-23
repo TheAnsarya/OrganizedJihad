@@ -934,24 +934,31 @@ class GameTracker {
 					// minified property names instead of proper {calls, ident,
 					// name} keys.
 					//
-					// Pattern from HeroWarsHelper injected.js & hwh2.js:
-					//   ArrayBuffer  → TextDecoder.decode → string → JSON.parse
-					//   string       → JSON.parse directly
-					//   obj.bytes    → TextDecoder.decode(obj.bytes) (fallback)
+					// IMPORTANT: Do NOT use `instanceof ArrayBuffer` here!
+					// When running in TamperMonkey's sandbox (any @grant),
+					// the sandbox's `ArrayBuffer` is a different constructor
+					// than the page's `ArrayBuffer`. Cross-realm instanceof
+					// always returns false, silently breaking the decode.
+					// TextDecoder.decode() accepts any BufferSource and works
+					// cross-realm. (#57)
 					let bodyStr;
 					if (typeof data === 'string') {
 						bodyStr = data;
-					} else if (data instanceof ArrayBuffer) {
-						bodyStr = new TextDecoder('utf-8').decode(data);
-					} else if (ArrayBuffer.isView(data)) {
-						// TypedArray or DataView (Uint8Array, etc.)
-						bodyStr = new TextDecoder('utf-8').decode(data);
-					} else if (data?.bytes instanceof ArrayBuffer || ArrayBuffer.isView(data?.bytes)) {
-						// Some builds wrap the buffer in {bytes: ArrayBuffer}
-						bodyStr = new TextDecoder('utf-8').decode(data.bytes);
 					} else {
-						// Last resort: try stringifying/parsing as-is
-						bodyStr = typeof data === 'object' ? JSON.stringify(data) : String(data);
+						// Binary data (ArrayBuffer, TypedArray, or wrapped)
+						// TextDecoder handles all BufferSource types cross-realm.
+						try {
+							bodyStr = new TextDecoder('utf-8').decode(data);
+						} catch {
+							// Fallback: some builds wrap in {bytes: ArrayBuffer}
+							try {
+								bodyStr = new TextDecoder('utf-8').decode(data.bytes);
+							} catch {
+								bodyStr = typeof data === 'object'
+									? JSON.stringify(data)
+									: String(data);
+							}
+						}
 					}
 
 					const requestData = JSON.parse(bodyStr);
@@ -977,15 +984,25 @@ class GameTracker {
 					if (xhrRef.readyState !== 4 || xhrRef.status !== 200) return;
 
 					try {
-						// Handle both text and json responseType.
-						// If responseType is "json", responseText throws InvalidStateError;
-						// use this.response (already parsed) instead.
+						// Handle text, json, and binary responseType.
+						// responseType ''/'text': read responseText → JSON.parse
+						// responseType 'json': browser pre-parsed → use response
+						// responseType 'arraybuffer'/other: decode binary → JSON.parse
 						let responseData;
-						const isText = xhrRef.responseType === '' || xhrRef.responseType === 'text';
-						if (isText) {
+						const rt = xhrRef.responseType;
+						if (rt === '' || rt === 'text') {
 							responseData = JSON.parse(xhrRef.responseText);
-						} else {
+						} else if (rt === 'json') {
+							// Already parsed by the browser
 							responseData = xhrRef.response;
+						} else {
+							// Binary (arraybuffer, etc.) — decode to JSON
+							try {
+								const text = new TextDecoder('utf-8').decode(xhrRef.response);
+								responseData = JSON.parse(text);
+							} catch {
+								responseData = xhrRef.response;
+							}
 						}
 
 						const requestId = xhrRef._ojTracking?.requestId;
@@ -2413,6 +2430,19 @@ class GameTracker {
 
 		// Normalise the rewards from the varied game API formats
 		const drops = this._normalizeRewards(data);
+
+		// Debug: log raw response structure when no drops extracted (#58)
+		if (drops.length === 0 && data && typeof data === 'object') {
+			const topKeys = Object.keys(data).join(', ');
+			let snippet;
+			try { snippet = JSON.stringify(data).substring(0, 300); }
+			catch { snippet = '(unstringifiable)'; }
+			console.warn(
+				`[OrganizedJihad] _normalizeRewards returned 0 drops for ${sourceType}.`,
+				`Top-level keys: [${topKeys}]`,
+				`Snippet: ${snippet}`
+			);
+		}
 
 		// ── 1. Write to chests IDB store ────────────────────────────────
 		const chestRecord = {
