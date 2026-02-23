@@ -27,6 +27,25 @@ import UpgradeTracker from './trackers/UpgradeTracker.js';
 import { compressHeroBatch, compressTitanBatch } from './heroCompression.js';
 
 /**
+ * Reference to the real page window — bypasses TamperMonkey's sandbox.
+ *
+ * When TamperMonkey runs a script with any @grant directive, the script
+ * executes in an isolated sandbox context.  `window` in the sandbox is a
+ * proxy object, and its `XMLHttpRequest`, `WebSocket`, etc. are separate
+ * copies that the game never uses.  `unsafeWindow` is TamperMonkey's
+ * built-in escape hatch to the actual page `window`, which is where the
+ * game's XHR instances, Zone.js wrappers, and `nxg` framework live.
+ *
+ * If `unsafeWindow` isn't available (e.g. `@grant none` or non-TamperMonkey
+ * environments), falls back to the normal `window`.
+ *
+ * @see https://www.tampermonkey.net/documentation.php#api:unsafeWindow
+ * @type {Window}
+ */
+// eslint-disable-next-line no-undef
+const PAGE_WINDOW = (typeof unsafeWindow !== 'undefined') ? unsafeWindow : window;
+
+/**
  * Tracking categories used for per-category enable/disable toggles (#27).
  * Each key is a category slug; the value is the human-readable label.
  * Handler registrations specify a category; the dispatch code skips
@@ -535,9 +554,12 @@ class GameTracker {
 	 */
 	async init() {
 		try {
-			await this.storage.init();
+			// Set up XHR/WS proxies BEFORE awaiting IDB so we capture any
+			// API calls that occur while IndexedDB is still opening (#56).
 			this.proxyAPIRequests();
 			this.proxyWebSocket();
+
+			await this.storage.init();
 			this.isTracking = true;
 
 			// Run initial data purge on startup (#45)
@@ -610,12 +632,12 @@ class GameTracker {
 			this._snapshotDebounceTimer = null;
 		}
 		if (this.originalXHR) {
-			XMLHttpRequest.prototype.open = this.originalXHR.open;
-			XMLHttpRequest.prototype.send = this.originalXHR.send;
-			XMLHttpRequest.prototype.setRequestHeader = this.originalXHR.setRequestHeader;
+			PAGE_WINDOW.XMLHttpRequest.prototype.open = this.originalXHR.open;
+			PAGE_WINDOW.XMLHttpRequest.prototype.send = this.originalXHR.send;
+			PAGE_WINDOW.XMLHttpRequest.prototype.setRequestHeader = this.originalXHR.setRequestHeader;
 		}
 		if (this._originalWsSend) {
-			WebSocket.prototype.send = this._originalWsSend;
+			PAGE_WINDOW.WebSocket.prototype.send = this._originalWsSend;
 			this._originalWsSend = null;
 		}
 		this.isTracking = false;
@@ -651,8 +673,8 @@ class GameTracker {
 		this._pushdTimerId = null;
 
 		try {
-			if (typeof window !== 'undefined' && window.nxg && typeof window.nxg.getModule === 'function') {
-				const pushd = window.nxg.getModule('pushd');
+			if (PAGE_WINDOW.nxg && typeof PAGE_WINDOW.nxg.getModule === 'function') {
+				const pushd = PAGE_WINDOW.nxg.getModule('pushd');
 				if (pushd && typeof pushd.on === 'function') {
 					this._pushdModule = pushd;
 					pushd.on('message', (event) => this._handlePushEvent(event));
@@ -746,10 +768,10 @@ class GameTracker {
 		const self = this;
 
 		// Save original for cleanup
-		this._originalWsSend = WebSocket.prototype.send;
+		this._originalWsSend = PAGE_WINDOW.WebSocket.prototype.send;
 		const originalSend = this._originalWsSend;
 
-		WebSocket.prototype.send = function (data) {
+		PAGE_WINDOW.WebSocket.prototype.send = function (data) {
 			// On first send, wrap onmessage to filter duplicate login events
 			if (!this._ojPatched) {
 				const originalOnMessage = this.onmessage;
@@ -800,11 +822,11 @@ class GameTracker {
 	proxyAPIRequests() {
 		const self = this;
 
-		// Store original methods
+		// Store original methods from the PAGE's prototype (not sandbox's)
 		this.originalXHR = {
-			open: XMLHttpRequest.prototype.open,
-			send: XMLHttpRequest.prototype.send,
-			setRequestHeader: XMLHttpRequest.prototype.setRequestHeader,
+			open: PAGE_WINDOW.XMLHttpRequest.prototype.open,
+			send: PAGE_WINDOW.XMLHttpRequest.prototype.send,
+			setRequestHeader: PAGE_WINDOW.XMLHttpRequest.prototype.setRequestHeader,
 		};
 
 		// ── Start request history cleanup timer (#37) ────────────────────
@@ -819,7 +841,7 @@ class GameTracker {
 		 * Also detects and optionally blocks Sentry/analytics requests (#53).
 		 * Hero Wars uses POST requests to *.nextersglobal.com/api/
 		 */
-		XMLHttpRequest.prototype.open = function (method, url, async, user, password) {
+		PAGE_WINDOW.XMLHttpRequest.prototype.open = function (method, url, async, user, password) {
 			this._ojTracking = {
 				method,
 				url,
@@ -852,7 +874,7 @@ class GameTracker {
 		 *
 		 * Pattern from HeroWarsHelper hwh2.js setRequestHeader proxy.
 		 */
-		XMLHttpRequest.prototype.setRequestHeader = function (name, value) {
+		PAGE_WINDOW.XMLHttpRequest.prototype.setRequestHeader = function (name, value) {
 			// Store all headers on the tracking object for this XHR
 			if (this._ojTracking) {
 				this._ojTracking.headers[name] = value;
@@ -884,7 +906,7 @@ class GameTracker {
 		 *   ]
 		 * }
 		 */
-		XMLHttpRequest.prototype.send = function (data) {
+		PAGE_WINDOW.XMLHttpRequest.prototype.send = function (data) {
 			// ── Block Sentry / analytics requests (#53) ──────────────────
 			// Silently abort blocked requests to prevent error reporting
 			// from leaking info about our extension's presence.
