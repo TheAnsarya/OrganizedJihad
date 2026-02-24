@@ -44,6 +44,11 @@ module.exports = {
 	// Verbose output
 	verbose: true,
 
+	// Define globals that webpack DefinePlugin would normally inject
+	globals: {
+		__OJ_VERSION__: '0.0.0-test',
+	},
+
 	// Use CRLF line endings (Windows)
 	testEnvironmentOptions: {
 		customExportConditions: ['node', 'node-addons'],

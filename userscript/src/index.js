@@ -5,7 +5,7 @@
 // ==UserScript==  (informational — webpack banner is authoritative)
 // @name         OrganizedJihad - Hero Wars Tracker
 // @namespace    http://tampermonkey.net/
-// @version      0.9.3
+// @version      (auto-incremented by webpack — see webpack.config.cjs)
 // @description  Track and manage Hero Wars game data with IndexedDB storage and in-game UI
 // @author       Andy Hubbard <me@ansarya.com>
 // @match        https://www.hero-wars.com/*
@@ -40,8 +40,11 @@ import './styles/main.css';
 (async function () {
 	'use strict';
 
+	/** @type {string} Build version injected by webpack DefinePlugin */
+	const OJ_VERSION = typeof __OJ_VERSION__ !== 'undefined' ? __OJ_VERSION__ : '0.0.0';
+
 	console.log(
-		'%c[OrganizedJihad]%c Hero Wars Tracker v0.9.4 Loaded',
+		`%c[OrganizedJihad]%c Hero Wars Tracker v${OJ_VERSION} Loaded`,
 		'color: #4CAF50; font-weight: bold; font-size: 14px;',
 		'color: #2196F3; font-size: 14px;'
 	);
@@ -165,10 +168,11 @@ import './styles/main.css';
 			const badge = document.createElement('div');
 			badge.id = 'oj-status-badge';
 			badge.innerHTML = `
+				<span class="oj-badge-logo">⚔️</span>
+				<span class="oj-badge-text">OrganizedJihad</span>
 				<span class="oj-badge-dot"></span>
-				<span class="oj-badge-text">OJ: Listening...</span>
 			`;
-			badge.title = 'OrganizedJihad Tracker — Click to open panel';
+			badge.title = `OrganizedJihad Tracker v${OJ_VERSION} — Click to open panel`;
 			document.body.appendChild(badge);
 			return badge;
 		}
@@ -187,7 +191,7 @@ import './styles/main.css';
 			if (count > 0) {
 				badge.classList.add('oj-badge-active');
 				dot.classList.add('oj-badge-dot-active');
-				text.textContent = `OJ: ${count} call${count !== 1 ? 's' : ''}`;
+				text.textContent = `OrganizedJihad: ${count}`;
 			}
 		}
 
@@ -201,36 +205,46 @@ import './styles/main.css';
 				transform: translateX(-50%);
 				display: flex;
 				align-items: center;
-				gap: 6px;
-				padding: 6px 14px;
-				background: rgba(30, 58, 95, 0.92);
-				border: 1px solid rgba(255, 255, 255, 0.15);
-				border-radius: 20px;
-				color: #fff;
+				gap: 8px;
+				padding: 8px 18px;
+				background: #3b143d;
+				border: 1px solid rgba(200, 150, 255, 0.25);
+				border-radius: 24px;
+				color: #f0e0ff;
 				font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-				font-size: 12px;
-				font-weight: 500;
+				font-size: 13px;
+				font-weight: 600;
+				letter-spacing: 0.3px;
 				cursor: pointer;
 				z-index: 999998;
 				backdrop-filter: blur(8px);
 				transition: all 0.3s ease;
 				user-select: none;
-				box-shadow: 0 2px 12px rgba(0, 0, 0, 0.3);
+				box-shadow: 0 2px 16px rgba(59, 20, 61, 0.6), 0 0 0 1px rgba(200, 150, 255, 0.1);
 			}
 			#oj-status-badge:hover {
-				background: rgba(30, 58, 95, 1);
-				box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+				background: #4d1a50;
+				box-shadow: 0 4px 24px rgba(59, 20, 61, 0.8), 0 0 12px rgba(200, 150, 255, 0.15);
 				transform: translateX(-50%) translateY(-1px);
 			}
+			.oj-badge-logo {
+				font-size: 15px;
+				line-height: 1;
+			}
+			.oj-badge-text {
+				white-space: nowrap;
+			}
 			.oj-badge-dot {
-				width: 8px;
-				height: 8px;
+				width: 9px;
+				height: 9px;
 				border-radius: 50%;
 				background: #FFC107;
 				animation: oj-pulse 2s infinite;
+				flex-shrink: 0;
 			}
 			.oj-badge-dot-active {
 				background: #4CAF50 !important;
+				animation: none !important;
 			}
 			.oj-badge-dot-error {
 				background: #F44336 !important;
@@ -241,7 +255,7 @@ import './styles/main.css';
 			}
 			@keyframes oj-pulse {
 				0%, 100% { opacity: 1; }
-				50% { opacity: 0.5; }
+				50% { opacity: 0.4; }
 			}
 		`;
 		document.head.appendChild(badgeStyles);

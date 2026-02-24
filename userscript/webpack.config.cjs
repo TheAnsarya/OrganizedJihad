@@ -5,7 +5,20 @@
  */
 
 const path = require('path');
+const fs = require('fs');
 const webpack = require('webpack');
+
+// ─── Auto-increment patch version on every build ────────────────────────
+// Reads package.json, bumps `patch`, writes back, and uses the new version
+// in the TamperMonkey banner and DefinePlugin so runtime code can display it.
+const pkgPath = path.resolve(__dirname, 'package.json');
+const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
+const parts = pkg.version.split('.').map(Number);
+parts[2] = (parts[2] || 0) + 1; // bump patch
+const newVersion = parts.join('.');
+pkg.version = newVersion;
+fs.writeFileSync(pkgPath, JSON.stringify(pkg, null, '\t') + '\n', 'utf8');
+console.log(`[OJ] Build version: ${newVersion}`);
 
 /**
  * TamperMonkey metadata block.
@@ -16,7 +29,7 @@ const webpack = require('webpack');
 const userscriptBanner = `// ==UserScript==
 // @name         OrganizedJihad - Hero Wars Tracker
 // @namespace    http://tampermonkey.net/
-// @version      0.9.4
+// @version      ${newVersion}
 // @description  Track and manage Hero Wars game data with IndexedDB storage and in-game UI
 // @author       Andy Hubbard <me@ansarya.com>
 // @match        https://www.hero-wars.com/*
@@ -121,6 +134,10 @@ module.exports = {
 			banner: userscriptBanner,
 			raw: true,
 			entryOnly: true,
+		}),
+		// Inject build version into runtime code so index.js can display it
+		new webpack.DefinePlugin({
+			__OJ_VERSION__: JSON.stringify(newVersion),
 		}),
 	],
 
