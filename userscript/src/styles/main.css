@@ -724,6 +724,44 @@
 .oj-completion-green  { background: rgba(76, 175, 80, 0.7); }
 .oj-completion-cyan   { background: rgba(0, 188, 212, 0.7); }
 
+/* ── Hero Avatar Portraits ────────────────────────────────────────── */
+
+.oj-avatar-header {
+	width: 36px;
+	padding: 4px !important;
+}
+
+.oj-avatar-cell {
+	width: 36px;
+	padding: 3px 4px !important;
+	text-align: center;
+	vertical-align: middle;
+}
+
+.oj-hero-avatar {
+	width: 32px;
+	height: 32px;
+	border-radius: 6px;
+	object-fit: cover;
+	border: 2px solid rgba(255, 255, 255, 0.2);
+	background: rgba(0, 0, 0, 0.3);
+	vertical-align: middle;
+	transition: border-color 0.2s, transform 0.15s;
+}
+
+.oj-hero-avatar:hover {
+	transform: scale(1.15);
+	z-index: 1;
+}
+
+/* Color-rank borders on avatars */
+.oj-hero-avatar.oj-rank-gray   { border-color: #9e9e9e; }
+.oj-hero-avatar.oj-rank-green  { border-color: #4caf50; }
+.oj-hero-avatar.oj-rank-blue   { border-color: #42a5f5; }
+.oj-hero-avatar.oj-rank-violet { border-color: #ab47bc; }
+.oj-hero-avatar.oj-rank-orange { border-color: #ff9800; }
+.oj-hero-avatar.oj-rank-red    { border-color: #ef5350; }
+
 /* ── Clickable hero rows ─────────────────────────────────────────── */
 
 .oj-hero-row,

@@ -1010,6 +1010,11 @@ class UIManager {
 			const colorClass = this._colorRankClass(h.color);
 			const comp = completionMap[hId] || { overall: 0, systems: {} };
 
+			// Hero avatar from HW-Assist Calculator CDN
+			// IDs are zero-padded to 4 digits; enemy variant IDs (>=7000) map back to base hero
+			const avatarId = hId >= 7000 ? hId - 7000 : hId;
+			const avatarUrl = `https://calc2.hw-assist.com/static/assets/images/hero_icons/${String(avatarId).padStart(4, '0')}.png`;
+
 			// Build expandable per-system breakdown (hidden by default)
 			const sysRows = Object.entries(Calc.SYSTEM_LABELS).map(([key, label]) => {
 				const pct = comp.systems[key] || 0;
@@ -1022,6 +1027,7 @@ class UIManager {
 
 			return `
 				<tr class="oj-hero-row" data-hero-id="${hId}">
+					<td class="oj-avatar-cell"><img class="oj-hero-avatar ${colorClass}" src="${avatarUrl}" alt="${name}" loading="lazy" onerror="this.style.display='none'"></td>
 					<td><strong>${name}</strong></td>
 					<td>${h.level || '\u2014'}</td>
 					<td>${'\u2B50'.repeat(Math.min(h.stars || 0, 6)) || '\u2014'}</td>
@@ -1030,7 +1036,7 @@ class UIManager {
 					<td class="oj-completion-cell">${Calc.renderBar(comp.overall)}</td>
 				</tr>
 				<tr class="oj-hero-detail" data-detail-for="${hId}" style="display:none">
-					<td colspan="6">
+					<td colspan="7">
 						<div class="oj-sys-breakdown">${sysRows}</div>
 					</td>
 				</tr>
@@ -1046,6 +1052,7 @@ class UIManager {
 				<table class="oj-table oj-sortable">
 					<thead>
 						<tr>
+							<th class="oj-avatar-header"></th>
 							<th data-sort="name" class="oj-sort-header">Name ${sortInd('name')}</th>
 							<th data-sort="level" class="oj-sort-header">Lvl ${sortInd('level')}</th>
 							<th data-sort="stars" class="oj-sort-header">Stars ${sortInd('stars')}</th>
