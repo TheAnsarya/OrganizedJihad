@@ -54,6 +54,7 @@ class UIManager {
 			heroes:    { page: 0, sortField: 'power', sortDir: 'desc', filter: '' },
 			titans:    { page: 0, sortField: 'power', sortDir: 'desc', filter: '' },
 			pets:      { page: 0, sortField: 'power', sortDir: 'desc', filter: '' },
+			upgrades:  { page: 0, sortField: 'timestamp', sortDir: 'desc', filter: '', subTab: 'all' },
 			battles:   { page: 0, sortField: 'timestamp', sortDir: 'desc', filter: '', subTab: 'all' },
 			chests:    { page: 0, sortField: 'timestamp', sortDir: 'desc', filter: '' },
 			inventory: { page: 0, sortField: 'name', sortDir: 'asc', filter: '' },
@@ -131,6 +132,7 @@ class UIManager {
 					<button class="oj-nav-btn" data-view="heroes">Heroes</button>
 					<button class="oj-nav-btn" data-view="titans">Titans</button>
 					<button class="oj-nav-btn" data-view="pets">Pets</button>
+					<button class="oj-nav-btn" data-view="upgrades">Upgrades</button>
 					<button class="oj-nav-btn" data-view="battles">Battles</button>
 					<button class="oj-nav-btn" data-view="chests">Chests</button>
 					<button class="oj-nav-btn" data-view="inventory">Inventory</button>
@@ -430,6 +432,10 @@ class UIManager {
 				case 'pets':
 					content.innerHTML = await this.renderPets();
 					this._attachDataBrowserListeners('pets');
+					break;
+				case 'upgrades':
+					content.innerHTML = await this.renderUpgrades();
+					this._attachDataBrowserListeners('upgrades');
 					break;
 				case 'battles':
 					content.innerHTML = await this.renderBattles();
@@ -1521,6 +1527,173 @@ class UIManager {
 	}
 
 	/**
+	 * Upgrades — unified timeline of hero/titan upgrade events and equipment changes.
+	 * Reads from `heroUpgrades`, `titanUpgrades`, and `equipmentChanges` IDB stores.
+	 * Supports sub-tab filtering by category (hero/titan/equipment) and type.
+	 * @returns {Promise<string>} HTML content
+	 */
+	async renderUpgrades() {
+		const vs = this._viewState.upgrades;
+
+		// ── Load all upgrade events from IDB stores ─────────────────────
+		let heroUpgrades = [];
+		let titanUpgrades = [];
+		let equipChanges = [];
+
+		try {
+			[heroUpgrades, titanUpgrades, equipChanges] = await Promise.all([
+				this.idbStorage.getAll('heroUpgrades', 5000).catch(() => []),
+				this.idbStorage.getAll('titanUpgrades', 5000).catch(() => []),
+				this.idbStorage.getAll('equipmentChanges', 5000).catch(() => []),
+			]);
+		} catch { /* empty */ }
+
+		// Tag each record with its source category
+		heroUpgrades.forEach((r) => { r._category = 'hero'; });
+		titanUpgrades.forEach((r) => { r._category = 'titan'; });
+		equipChanges.forEach((r) => { r._category = 'equipment'; r.upgradeType = r.changeType || 'equipped'; });
+
+		const allUpgrades = [...heroUpgrades, ...titanUpgrades, ...equipChanges];
+
+		if (allUpgrades.length === 0) {
+			return `
+				<div class="oj-upgrades">
+					<h3>\uD83D\uDCC8 Upgrades</h3>
+					<p class="oj-empty">No upgrade events captured yet. Upgrade heroes, titans, or equip gear to start tracking!</p>
+				</div>
+			`;
+		}
+
+		// ── Sub-tab pills for category filtering ────────────────────────
+		const categoryCounts = {
+			all: allUpgrades.length,
+			hero: heroUpgrades.length,
+			titan: titanUpgrades.length,
+			equipment: equipChanges.length,
+		};
+
+		const subTab = vs.subTab || 'all';
+		let filtered = subTab === 'all'
+			? allUpgrades
+			: allUpgrades.filter((r) => r._category === subTab);
+
+		// ── Filter by name/type search ──────────────────────────────────
+		if (vs.filter) {
+			const q = vs.filter.toLowerCase();
+			filtered = filtered.filter((r) => {
+				const name = (r.heroName || r.titanName || '').toLowerCase();
+				const type = (r.upgradeType || '').toLowerCase();
+				return name.includes(q) || type.includes(q);
+			});
+		}
+
+		// ── Sort ────────────────────────────────────────────────────────
+		filtered.sort((a, b) => {
+			const ta = a.timestamp ? new Date(a.timestamp).getTime() : 0;
+			const tb = b.timestamp ? new Date(b.timestamp).getTime() : 0;
+			return vs.sortDir === 'asc' ? ta - tb : tb - ta;
+		});
+
+		// ── Paginate ────────────────────────────────────────────────────
+		const totalCount = filtered.length;
+		const totalPages = Math.max(1, Math.ceil(totalCount / this.PAGE_SIZE));
+		vs.page = Math.min(vs.page, totalPages - 1);
+		const pageItems = filtered.slice(vs.page * this.PAGE_SIZE, (vs.page + 1) * this.PAGE_SIZE);
+
+		// ── Upgrade type icons ──────────────────────────────────────────
+		const typeIcons = {
+			skill: '\uD83D\uDCD6',      // 📖
+			artifact: '\uD83D\uDD2E',   // 🔮
+			skin: '\uD83C\uDFA8',       // 🎨
+			glyph: '\uD83D\uDD36',      // 🔶
+			level: '\uD83D\uDCC8',       // 📈
+			star: '\u2B50',              // ⭐
+			color: '\uD83C\uDF08',       // 🌈
+			equipped: '\uD83D\uDEE1\uFE0F', // 🛡️
+			upgraded: '\u2B06\uFE0F',    // ⬆️
+			evolved: '\uD83D\uDD04',     // 🔄
+		};
+
+		// ── Build rows ──────────────────────────────────────────────────
+		const rows = pageItems.map((r) => {
+			const ts = r.timestamp ? new Date(r.timestamp) : null;
+			const timeStr = ts ? ts.toLocaleString() : '\u2014';
+			const name = this._escapeHtml(r.heroName || r.titanName || '\u2014');
+			const type = r.upgradeType || 'unknown';
+			const icon = typeIcons[type] || '\u2728';
+			const categoryBadge = r._category === 'hero'
+				? '<span class="oj-badge-hero">Hero</span>'
+				: r._category === 'titan'
+					? '<span class="oj-badge-titan">Titan</span>'
+					: '<span class="oj-badge-equip">Equip</span>';
+
+			// Build detail string based on upgrade type
+			let detail = '';
+			if (type === 'skill') {
+				detail = `Skill #${r.skillSlot ?? 0} \u2192 Lv.${r.skillLevelAfter || '?'}`;
+			} else if (type === 'artifact') {
+				detail = `${r.artifactType || 'Artifact'} \u2192 Lv.${r.levelAfter || '?'}`;
+			} else if (type === 'skin') {
+				detail = `${r.skinName || 'Skin'} \u2192 Lv.${r.levelAfter || '?'}${r.isNewUnlock ? ' \uD83C\uDD95' : ''}`;
+			} else if (type === 'glyph') {
+				detail = `${r.glyphType || 'Glyph'} enchanted`;
+			} else if (type === 'level') {
+				detail = `\u2192 Lv.${r.levelAfter || '?'}`;
+			} else if (type === 'star') {
+				detail = `${r.starsBefore || '?'}\u2605 \u2192 ${r.starsAfter || '?'}\u2605`;
+			} else if (type === 'color') {
+				detail = `${r.colorBefore || '?'} \u2192 ${r.colorAfter || '?'}`;
+			} else if (r._category === 'equipment') {
+				detail = `Slot ${r.slotIndex ?? '?'} ${type}`;
+			}
+
+			const powerStr = r.powerAfter ? r.powerAfter.toLocaleString() : '\u2014';
+
+			return `
+				<tr class="oj-upgrade-row">
+					<td class="oj-mono">${timeStr}</td>
+					<td>${categoryBadge}</td>
+					<td><strong>${name}</strong></td>
+					<td>${icon} ${this._escapeHtml(type)}</td>
+					<td>${detail}</td>
+					<td class="oj-num">${powerStr}</td>
+				</tr>
+			`;
+		}).join('');
+
+		// ── Sub-tab pills ───────────────────────────────────────────────
+		const pills = Object.entries(categoryCounts).map(([key, count]) => {
+			const active = key === subTab ? 'oj-pill-active' : '';
+			const labels = { all: 'All', hero: '\uD83E\uDDB8 Hero', titan: '\uD83D\uDCA0 Titan', equipment: '\uD83D\uDEE1\uFE0F Equipment' };
+			return `<button class="oj-pill-btn ${active}" data-sub-tab="${key}">${labels[key] || key} (${count})</button>`;
+		}).join('');
+
+		const sortInd = (field) => this._sortIndicator(vs.sortField, vs.sortDir, field);
+
+		return `
+			<div class="oj-upgrades" data-browser="upgrades">
+				<h3>\uD83D\uDCC8 Upgrades <span class="oj-muted">(${allUpgrades.length} events)</span></h3>
+				<div class="oj-sub-tabs">${pills}</div>
+				${this._renderSearchBar(vs.filter)}
+				<table class="oj-table oj-sortable">
+					<thead>
+						<tr>
+							<th data-sort="timestamp" class="oj-sort-header">Time ${sortInd('timestamp')}</th>
+							<th>Category</th>
+							<th>Name</th>
+							<th>Type</th>
+							<th>Detail</th>
+							<th>Power</th>
+						</tr>
+					</thead>
+					<tbody>${rows}</tbody>
+				</table>
+				${this._renderPagination(vs.page, totalPages, totalCount)}
+			</div>
+		`;
+	}
+
+	/**
 	 * Chests — paginated log of chest openings with drop details.
 	 * Reads from metadata `chestOpeningHistory` and/or the `chests` IDB store.
 	 * @returns {Promise<string>} HTML content
@@ -2132,6 +2305,7 @@ class UIManager {
 			['heroes', 'Heroes'],
 			['titans', 'Titans'],
 			['pets', 'Pets'],
+			['upgrades', 'Upgrades'],
 			['battles', 'Battles'],
 			['chests', 'Chests'],
 			['inventory', 'Inventory'],

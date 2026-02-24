@@ -839,6 +839,33 @@
 	border-top: 1px solid rgba(255, 255, 255, 0.05);
 }
 
+/* ── Upgrade History Badges ──────────────────────────────────────── */
+
+.oj-badge-hero,
+.oj-badge-titan,
+.oj-badge-equip {
+	display: inline-block;
+	padding: 2px 6px;
+	border-radius: 4px;
+	font-size: 10px;
+	font-weight: 600;
+	text-transform: uppercase;
+	letter-spacing: 0.3px;
+	white-space: nowrap;
+}
+
+.oj-badge-hero  { background: rgba(79, 195, 247, 0.25); color: #4fc3f7; }
+.oj-badge-titan { background: rgba(171, 71, 188, 0.25); color: #ce93d8; }
+.oj-badge-equip { background: rgba(255, 152, 0, 0.25); color: #ffb74d; }
+
+.oj-upgrade-row {
+	font-size: 12px;
+}
+
+.oj-upgrade-row td {
+	white-space: nowrap;
+}
+
 /* ── Clickable elements & resource filter ────────────────────────── */
 
 .oj-clickable {
