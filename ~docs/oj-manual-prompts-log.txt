@@ -80,6 +80,33 @@ work issues and continue!
 
 work issues and continue!
 
+work issues and continue!
+
+No information iws being collected, do we need to be attached to the iframe or are we just processing the api calls incorrectly? Look at HeroWarsHelper to see how they do it; make plans and issues and documents and make the script work; continue;
+
+for api call tracking, I've got 10 chests trackings, but it has only sparse data, and nothing else is tracking data; work issues and continue!
+
+Is this going to fix the problem? continue fixing issues and make this script work; continue;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 

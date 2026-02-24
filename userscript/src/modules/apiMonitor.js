@@ -26,6 +26,19 @@
 import IndexedDBStorage from './indexedDBStorage.js';
 
 /**
+ * Reference to the page's real `window` object.
+ * When TamperMonkey runs with any `@grant`, the script executes in a
+ * sandbox where globals like `XMLHttpRequest`, `fetch`, etc. are isolated
+ * copies that the game never touches.  `unsafeWindow` bridges into the
+ * real page context.  Falls back to `window` when unsafeWindow isn't
+ * available (Node.js tests, `@grant none`).
+ *
+ * @see https://www.tampermonkey.net/documentation.php#api:unsafeWindow
+ * @type {Window}
+ */
+const PAGE_WINDOW = (typeof unsafeWindow !== 'undefined') ? unsafeWindow : window;
+
+/**
  * API Monitor class for comprehensive request/response logging
  *
  * @class APIMonitor
@@ -79,8 +92,8 @@ class APIMonitor {
 			console.log('[APIMonitor] Access logs via window.apiMonitor.getLogs()');
 			console.log('[APIMonitor] Export logs via window.apiMonitor.exportLogs()');
 			
-			// Make available globally for console access
-			window.apiMonitor = this;
+			// Make available globally for console access (page context)
+			PAGE_WINDOW.apiMonitor = this;
 		} catch (error) {
 			console.error('[APIMonitor] Failed to initialize:', error);
 		}
@@ -101,15 +114,16 @@ class APIMonitor {
 	interceptXHR() {
 		const self = this;
 
-		// Store original methods
+		// Store original methods from the PAGE's prototype (not sandbox's)
+		// Same pattern as gameTracker.js (#59)
 		this.originalXHR = {
-			open: XMLHttpRequest.prototype.open,
-			send: XMLHttpRequest.prototype.send,
-			setRequestHeader: XMLHttpRequest.prototype.setRequestHeader,
+			open: PAGE_WINDOW.XMLHttpRequest.prototype.open,
+			send: PAGE_WINDOW.XMLHttpRequest.prototype.send,
+			setRequestHeader: PAGE_WINDOW.XMLHttpRequest.prototype.setRequestHeader,
 		};
 
-		// Override XMLHttpRequest.open()
-		XMLHttpRequest.prototype.open = function (method, url, ...args) {
+		// Override XMLHttpRequest.open() on the PAGE's prototype
+		PAGE_WINDOW.XMLHttpRequest.prototype.open = function (method, url, ...args) {
 			// Store request info on XHR object
 			this._apiMonitor = {
 				method: method,
@@ -122,8 +136,8 @@ class APIMonitor {
 			return self.originalXHR.open.call(this, method, url, ...args);
 		};
 
-		// Override XMLHttpRequest.setRequestHeader()
-		XMLHttpRequest.prototype.setRequestHeader = function (header, value) {
+		// Override XMLHttpRequest.setRequestHeader() on the PAGE's prototype
+		PAGE_WINDOW.XMLHttpRequest.prototype.setRequestHeader = function (header, value) {
 			// Store headers for logging
 			if (this._apiMonitor) {
 				this._apiMonitor.requestHeaders[header] = value;
@@ -133,8 +147,8 @@ class APIMonitor {
 			return self.originalXHR.setRequestHeader.call(this, header, value);
 		};
 
-		// Override XMLHttpRequest.send()
-		XMLHttpRequest.prototype.send = function (body) {
+		// Override XMLHttpRequest.send() on the PAGE's prototype
+		PAGE_WINDOW.XMLHttpRequest.prototype.send = function (body) {
 			const xhr = this;
 
 			// Store request body
@@ -189,11 +203,11 @@ class APIMonitor {
 	interceptFetch() {
 		const self = this;
 
-		// Store original fetch
-		this.originalFetch = window.fetch;
+		// Store original fetch from the PAGE context
+		this.originalFetch = PAGE_WINDOW.fetch;
 
-		// Override fetch
-		window.fetch = async function (url, options = {}) {
+		// Override fetch on the PAGE context
+		PAGE_WINDOW.fetch = async function (url, options = {}) {
 			const requestInfo = {
 				method: options.method || 'GET',
 				url: url.toString(),

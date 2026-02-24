@@ -822,6 +822,14 @@ class GameTracker {
 	proxyAPIRequests() {
 		const self = this;
 
+		// Diagnostic: confirm proxy installation (#61)
+		console.log(
+			'%c[OJ]%c XHR/fetch proxy installed on PAGE_WINDOW (%s)',
+			'color:#4CAF50;font-weight:bold',
+			'color:#888',
+			typeof PAGE_WINDOW.XMLHttpRequest
+		);
+
 		// Store original methods from the PAGE's prototype (not sandbox's)
 		this.originalXHR = {
 			open: PAGE_WINDOW.XMLHttpRequest.prototype.open,
@@ -946,13 +954,15 @@ class GameTracker {
 						bodyStr = data;
 					} else {
 						// Binary data (ArrayBuffer, TypedArray, or wrapped)
-						// TextDecoder handles all BufferSource types cross-realm.
+						// Use PAGE_WINDOW.TextDecoder to avoid cross-realm
+						// rejection of page-context ArrayBuffers. (#60)
+						const TD = PAGE_WINDOW.TextDecoder || TextDecoder;
 						try {
-							bodyStr = new TextDecoder('utf-8').decode(data);
+							bodyStr = new TD('utf-8').decode(data);
 						} catch {
 							// Fallback: some builds wrap in {bytes: ArrayBuffer}
 							try {
-								bodyStr = new TextDecoder('utf-8').decode(data.bytes);
+								bodyStr = new TD('utf-8').decode(data.bytes);
 							} catch {
 								bodyStr = typeof data === 'object'
 									? JSON.stringify(data)
@@ -964,6 +974,16 @@ class GameTracker {
 					const requestData = JSON.parse(bodyStr);
 					this._ojTracking.requestData = requestData;
 
+					// Diagnostic: log intercepted API call names (#61)
+					const callNames = requestData?.calls
+						? requestData.calls.map((c) => c.name || '?').join(', ')
+						: '(no calls array)';
+					console.log(
+						`%c[OJ]%c ← API Request: ${callNames}`,
+						'color:#4CAF50;font-weight:bold',
+						'color:#888'
+					);
+
 					// Store request for later processing
 					self.requestHistory[this._ojTracking.requestId] = {
 						request: requestData,
@@ -972,7 +992,9 @@ class GameTracker {
 						url: this._ojTracking.url,
 					};
 				} catch (error) {
-					console.warn('[OrganizedJihad] Failed to parse request data:', error);
+					console.warn('[OrganizedJihad] Failed to parse request data:', error,
+						'| data type:', typeof data,
+						'| constructor:', data?.constructor?.name);
 				}
 
 				// Use addEventListener instead of wrapping onreadystatechange.
@@ -997,8 +1019,10 @@ class GameTracker {
 							responseData = xhrRef.response;
 						} else {
 							// Binary (arraybuffer, etc.) — decode to JSON
+							// Use PAGE_WINDOW.TextDecoder for cross-realm safety (#60)
 							try {
-								const text = new TextDecoder('utf-8').decode(xhrRef.response);
+								const TD = PAGE_WINDOW.TextDecoder || TextDecoder;
+								const text = new TD('utf-8').decode(xhrRef.response);
 								responseData = JSON.parse(text);
 							} catch {
 								responseData = xhrRef.response;
@@ -1011,6 +1035,17 @@ class GameTracker {
 							self.requestHistory[requestId].response = responseData;
 							// Stash URL for log
 							self._lastInterceptedUrl = self.requestHistory[requestId].url;
+
+							// Diagnostic: log intercepted API response (#61)
+							const resultCount = responseData?.results?.length ?? 0;
+							const reqCallNames = self.requestHistory[requestId].request?.calls
+								? self.requestHistory[requestId].request.calls.map((c) => c.name || '?').join(', ')
+								: '?';
+							console.log(
+								`%c[OJ]%c → API Response: ${reqCallNames} (${resultCount} results)`,
+								'color:#2196F3;font-weight:bold',
+								'color:#888'
+							);
 
 							// processAPIResponse is async — use Promise.resolve().catch()
 							// to properly handle rejections (instead of uncaught async in
@@ -1202,6 +1237,28 @@ class GameTracker {
 			? `Dispatched: ${dispatched.join(', ')}` + (unhandled.length > 0 ? ` | Unhandled: ${unhandled.join(', ')}` : '')
 			: `Unhandled: ${unhandled.join(', ') || 'none'}`;
 		this._pushApiLog(allCallNames, status, detail, errors.length > 0 ? errors.join('; ') : null, this._lastInterceptedUrl);
+
+		// Diagnostic: console summary of dispatch results (#61)
+		if (dispatched.length > 0) {
+			console.log(
+				`%c[OJ]%c ✓ Dispatched: ${dispatched.join(', ')}` +
+				(unhandled.length > 0 ? ` | Skipped: ${unhandled.length}` : ''),
+				'color:#4CAF50;font-weight:bold',
+				'color:#8BC34A'
+			);
+		} else {
+			console.log(
+				`%c[OJ]%c ○ No handlers matched: ${allCallNames.join(', ')}`,
+				'color:#FF9800;font-weight:bold',
+				'color:#FFB74D'
+			);
+		}
+		if (errors.length > 0) {
+			console.warn(`%c[OJ]%c ✗ Handler errors: ${errors.join('; ')}`,
+				'color:#F44336;font-weight:bold',
+				'color:#EF9A9A'
+			);
+		}
 
 		// Trigger debounced data snapshot (#28)
 		// Uses a 5-second coalescing window so rapid API bursts produce

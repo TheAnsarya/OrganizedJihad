@@ -41,9 +41,16 @@ import './styles/main.css';
 	'use strict';
 
 	console.log(
-		'%c[OrganizedJihad]%c Hero Wars Tracker v0.9.3 Loaded',
+		'%c[OrganizedJihad]%c Hero Wars Tracker v0.9.4 Loaded',
 		'color: #4CAF50; font-weight: bold; font-size: 14px;',
 		'color: #2196F3; font-size: 14px;'
+	);
+	console.log(
+		'%c[OJ]%c unsafeWindow=%s, PAGE_WINDOW=%s',
+		'color:#4CAF50;font-weight:bold',
+		'color:#888',
+		typeof unsafeWindow,
+		typeof (typeof unsafeWindow !== 'undefined' ? unsafeWindow : window)
 	);
 
 	// ═══════════════════════════════════════════════════════════════════
