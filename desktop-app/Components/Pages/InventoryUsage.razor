@@ -2,48 +2,16 @@
 @using OrganizedJihad.Data
 @using OrganizedJihad.Data.Models
 @using Microsoft.EntityFrameworkCore
+@using System.Text.Json
 @inject IDbContextFactory<GameDatabaseContext> DbFactory
 
-<PageTitle>Inventory Usage - OrganizedJihad</PageTitle>
+<PageTitle>Inventory - OrganizedJihad</PageTitle>
 
 <div class="container-fluid">
 	<div class="row mb-4">
 		<div class="col-12">
-			<h1 class="display-5">Inventory Usage Log</h1>
-			<p class="text-muted">Track consumable usage and equipment changes across your heroes.</p>
-		</div>
-	</div>
-
-	<!-- Filters -->
-	<div class="row mb-4">
-		<div class="col-md-2">
-			<label class="form-label fw-bold">Category</label>
-			<select class="form-select" @bind="SelectedCategory">
-				<option value="">All Categories</option>
-				@foreach (var cat in Categories) {
-					<option value="@cat">@cat</option>
-				}
-			</select>
-		</div>
-		<div class="col-md-2">
-			<label class="form-label fw-bold">View</label>
-			<select class="form-select" @bind="SelectedView">
-				<option value="items">Item Usage</option>
-				<option value="equipment">Equipment Changes</option>
-				<option value="all">Both</option>
-			</select>
-		</div>
-		<div class="col-md-2">
-			<label class="form-label fw-bold">From</label>
-			<input type="date" class="form-control" @bind="DateFrom" />
-		</div>
-		<div class="col-md-2">
-			<label class="form-label fw-bold">To</label>
-			<input type="date" class="form-control" @bind="DateTo" />
-		</div>
-		<div class="col-md-3 d-flex align-items-end">
-			<button class="btn btn-primary me-2" @onclick="ApplyFilters">Apply</button>
-			<button class="btn btn-outline-secondary" @onclick="ClearFilters">Clear</button>
+			<h1 class="display-5">Inventory & Usage</h1>
+			<p class="text-muted">View your current inventory grouped by type, plus track consumable usage and equipment changes.</p>
 		</div>
 	</div>
 
@@ -56,95 +24,231 @@
 			</div>
 		</div>
 	} else {
-		<!-- Summary Cards -->
-		<div class="row mb-4">
-			<div class="col-md-3">
-				<div class="card text-white bg-primary">
-					<div class="card-body">
-						<h5 class="card-title">Items Used</h5>
-						<p class="card-text display-6">@ItemUsageCount</p>
-						<small>Unique events</small>
-					</div>
-				</div>
-			</div>
-			<div class="col-md-3">
-				<div class="card text-white bg-success">
-					<div class="card-body">
-						<h5 class="card-title">Total Consumed</h5>
-						<p class="card-text display-6">@TotalQuantityUsed.ToString("N0")</p>
-						<small>Items consumed</small>
-					</div>
-				</div>
-			</div>
-			<div class="col-md-3">
-				<div class="card text-white bg-info">
-					<div class="card-body">
-						<h5 class="card-title">Equipment Changes</h5>
-						<p class="card-text display-6">@EquipmentChangeCount</p>
-						<small>Equip/upgrade events</small>
-					</div>
-				</div>
-			</div>
-			<div class="col-md-3">
-				<div class="card text-white bg-warning">
-					<div class="card-body">
-						<h5 class="card-title">Categories</h5>
-						<p class="card-text display-6">@Categories.Count</p>
-						<small>Item types used</small>
-					</div>
-				</div>
-			</div>
-		</div>
+		<!-- Tab Navigation -->
+		<ul class="nav nav-tabs mb-4">
+			<li class="nav-item">
+				<button class="nav-link @(ActiveTab == "inventory" ? "active" : "")"
+						@onclick='() => ActiveTab = "inventory"'>
+					Current Inventory
+				</button>
+			</li>
+			<li class="nav-item">
+				<button class="nav-link @(ActiveTab == "usage" ? "active" : "")"
+						@onclick='() => ActiveTab = "usage"'>
+					Usage Log
+				</button>
+			</li>
+		</ul>
 
-		<!-- Category Breakdown -->
-		@if (CategoryBreakdown.Any()) {
-			<div class="row mb-4">
-				<div class="col-md-6">
-					<div class="card">
-						<div class="card-header">
-							<h5 class="mb-0">Usage by Category</h5>
+		@if (ActiveTab == "inventory") {
+			<!-- Current Inventory Snapshot -->
+			@if (LatestInventory != null) {
+				<div class="row mb-3">
+					<div class="col-12">
+						<small class="text-muted">
+							Snapshot from @LatestInventory.Timestamp.ToString("MMM dd, yyyy HH:mm")
+						</small>
+					</div>
+				</div>
+
+				<!-- Summary Cards -->
+				<div class="row mb-4">
+					<div class="col-md-2">
+						<div class="card text-white bg-primary cursor-pointer @(SelectedInventoryGroup == "hero_soul_stones" ? "border-3 border-warning" : "")"
+							 @onclick='() => ToggleInventoryGroup("hero_soul_stones")'>
+							<div class="card-body py-2 text-center">
+								<small>Hero Soul Stones</small>
+								<p class="display-6 mb-0">@LatestInventory.TotalHeroSoulStones.ToString("N0")</p>
+							</div>
 						</div>
-						<div class="card-body">
-							@foreach (var cat in CategoryBreakdown) {
-								var pct = TotalQuantityUsed > 0
-									? (int)((cat.Quantity / (double)TotalQuantityUsed) * 100)
-									: 0;
-								<div class="mb-2">
-									<div class="d-flex justify-content-between">
-										<span class="fw-bold">@cat.Category</span>
-										<span class="text-muted">@cat.Quantity.ToString("N0") (@cat.Count events)</span>
-									</div>
-									<div class="progress" style="height: 8px;">
-										<div class="progress-bar" role="progressbar"
-											 style="width: @(pct)%"
-											 aria-valuenow="@pct" aria-valuemin="0" aria-valuemax="100">
-										</div>
+					</div>
+					<div class="col-md-2">
+						<div class="card text-white bg-danger cursor-pointer @(SelectedInventoryGroup == "titan_soul_stones" ? "border-3 border-warning" : "")"
+							 @onclick='() => ToggleInventoryGroup("titan_soul_stones")'>
+							<div class="card-body py-2 text-center">
+								<small>Titan Soul Stones</small>
+								<p class="display-6 mb-0">@LatestInventory.TotalTitanSoulStones.ToString("N0")</p>
+							</div>
+						</div>
+					</div>
+					<div class="col-md-2">
+						<div class="card text-white bg-success cursor-pointer @(SelectedInventoryGroup == "pet_soul_stones" ? "border-3 border-warning" : "")"
+							 @onclick='() => ToggleInventoryGroup("pet_soul_stones")'>
+							<div class="card-body py-2 text-center">
+								<small>Pet Soul Stones</small>
+								<p class="display-6 mb-0">@LatestInventory.TotalPetSoulStones.ToString("N0")</p>
+							</div>
+						</div>
+					</div>
+					<div class="col-md-2">
+						<div class="card text-white bg-info cursor-pointer @(SelectedInventoryGroup == "evolution_items" ? "border-3 border-warning" : "")"
+							 @onclick='() => ToggleInventoryGroup("evolution_items")'>
+							<div class="card-body py-2 text-center">
+								<small>Evolution Items</small>
+								<p class="display-6 mb-0">@LatestInventory.TotalEvolutionItems.ToString("N0")</p>
+							</div>
+						</div>
+					</div>
+					<div class="col-md-2">
+						<div class="card text-white bg-warning cursor-pointer @(SelectedInventoryGroup == "consumables" ? "border-3 border-dark" : "")"
+							 @onclick='() => ToggleInventoryGroup("consumables")'>
+							<div class="card-body py-2 text-center">
+								<small>Consumables</small>
+								<p class="display-6 mb-0">@LatestInventory.TotalConsumables.ToString("N0")</p>
+							</div>
+						</div>
+					</div>
+					<div class="col-md-2">
+						<div class="card text-white bg-dark cursor-pointer @(SelectedInventoryGroup == "chests" ? "border-3 border-warning" : "")"
+							 @onclick='() => ToggleInventoryGroup("chests")'>
+							<div class="card-body py-2 text-center">
+								<small>Chests</small>
+								<p class="display-6 mb-0">@LatestInventory.TotalChests.ToString("N0")</p>
+							</div>
+						</div>
+					</div>
+				</div>
+
+				<!-- Inventory Items grouped by type -->
+				@if (InventoryGroups.Any()) {
+					@foreach (var group in InventoryGroups) {
+						@if (string.IsNullOrEmpty(SelectedInventoryGroup) || SelectedInventoryGroup == group.Key) {
+							<div class="card mb-3">
+								<div class="card-header d-flex justify-content-between align-items-center">
+									<h5 class="mb-0">@FormatGroupName(group.Key)</h5>
+									<span class="badge bg-secondary">@group.Value.Count items</span>
+								</div>
+								<div class="card-body p-0">
+									<div class="table-responsive">
+										<table class="table table-striped table-hover mb-0">
+											<thead class="table-light">
+												<tr>
+													<th>Item</th>
+													<th class="text-end">Quantity</th>
+												</tr>
+											</thead>
+											<tbody>
+												@foreach (var item in group.Value.OrderByDescending(i => i.Quantity)) {
+													<tr>
+														<td>
+															<strong>@item.Name</strong>
+														</td>
+														<td class="text-end fw-bold">@item.Quantity.ToString("N0")</td>
+													</tr>
+												}
+											</tbody>
+										</table>
 									</div>
 								</div>
-							}
+							</div>
+						}
+					}
+				} else {
+					<div class="text-center py-5 text-muted">
+						<p>No inventory data available. Inventory snapshots will appear after syncing.</p>
+					</div>
+				}
+			} else {
+				<div class="text-center py-5 text-muted">
+					<p>No inventory snapshot available yet.</p>
+					<small>Inventory data will appear after syncing from the browser extension.</small>
+				</div>
+			}
+		} else {
+			<!-- Usage Log Tab -->
+			<!-- Filters -->
+			<div class="row mb-4">
+				<div class="col-md-2">
+					<label class="form-label fw-bold">Category</label>
+					<select class="form-select" @bind="SelectedCategory">
+						<option value="">All Categories</option>
+						@foreach (var cat in Categories) {
+							<option value="@cat">@cat</option>
+						}
+					</select>
+				</div>
+				<div class="col-md-2">
+					<label class="form-label fw-bold">View</label>
+					<select class="form-select" @bind="SelectedView">
+						<option value="items">Item Usage</option>
+						<option value="equipment">Equipment Changes</option>
+						<option value="all">Both</option>
+					</select>
+				</div>
+				<div class="col-md-2">
+					<label class="form-label fw-bold">From</label>
+					<input type="date" class="form-control" @bind="DateFrom" />
+				</div>
+				<div class="col-md-2">
+					<label class="form-label fw-bold">To</label>
+					<input type="date" class="form-control" @bind="DateTo" />
+				</div>
+				<div class="col-md-3 d-flex align-items-end">
+					<button class="btn btn-primary me-2" @onclick="ApplyFilters">Apply</button>
+					<button class="btn btn-outline-secondary" @onclick="ClearFilters">Clear</button>
+				</div>
+			</div>
+
+			<!-- Summary Cards -->
+			<div class="row mb-4">
+				<div class="col-md-3">
+					<div class="card text-white bg-primary">
+						<div class="card-body py-2">
+							<h6 class="card-title mb-0">Items Used</h6>
+							<p class="card-text display-6 mb-0">@ItemUsageCount</p>
+							<small>Unique events</small>
 						</div>
 					</div>
 				</div>
+				<div class="col-md-3">
+					<div class="card text-white bg-success">
+						<div class="card-body py-2">
+							<h6 class="card-title mb-0">Total Consumed</h6>
+							<p class="card-text display-6 mb-0">@TotalQuantityUsed.ToString("N0")</p>
+							<small>Items consumed</small>
+						</div>
+					</div>
+				</div>
+				<div class="col-md-3">
+					<div class="card text-white bg-info">
+						<div class="card-body py-2">
+							<h6 class="card-title mb-0">Equipment Changes</h6>
+							<p class="card-text display-6 mb-0">@EquipmentChangeCount</p>
+							<small>Equip/upgrade events</small>
+						</div>
+					</div>
+				</div>
+				<div class="col-md-3">
+					<div class="card text-white bg-warning">
+						<div class="card-body py-2">
+							<h6 class="card-title mb-0">Categories</h6>
+							<p class="card-text display-6 mb-0">@Categories.Count</p>
+							<small>Item types used</small>
+						</div>
+					</div>
+				</div>
+			</div>
 
-				<!-- Equipment Change Types -->
-				@if (EquipmentTypeBreakdown.Any()) {
+			<!-- Category Breakdown -->
+			@if (CategoryBreakdown.Any()) {
+				<div class="row mb-4">
 					<div class="col-md-6">
 						<div class="card">
 							<div class="card-header">
-								<h5 class="mb-0">Equipment Changes by Type</h5>
+								<h5 class="mb-0">Usage by Category</h5>
 							</div>
 							<div class="card-body">
-								@foreach (var eq in EquipmentTypeBreakdown) {
-									var pct = EquipmentChangeCount > 0
-										? (int)((eq.Count / (double)EquipmentChangeCount) * 100)
+								@foreach (var cat in CategoryBreakdown) {
+									var pct = TotalQuantityUsed > 0
+										? (int)((cat.Quantity / (double)TotalQuantityUsed) * 100)
 										: 0;
 									<div class="mb-2">
 										<div class="d-flex justify-content-between">
-											<span class="fw-bold">@eq.ChangeType</span>
-											<span class="text-muted">@eq.Count events</span>
+											<span class="fw-bold">@cat.Category</span>
+											<span class="text-muted">@cat.Quantity.ToString("N0") (@cat.Count events)</span>
 										</div>
 										<div class="progress" style="height: 8px;">
-											<div class="progress-bar bg-info" role="progressbar"
+											<div class="progress-bar" role="progressbar"
 												 style="width: @(pct)%"
 												 aria-valuenow="@pct" aria-valuemin="0" aria-valuemax="100">
 											</div>
@@ -154,82 +258,124 @@
 							</div>
 						</div>
 					</div>
-				}
-			</div>
-		}
 
-		<!-- Inventory Log Table -->
-		<div class="row">
-			<div class="col-12">
-				<div class="card">
-					<div class="card-header d-flex justify-content-between align-items-center">
-						<h5 class="mb-0">Usage Log</h5>
-						<span class="badge bg-secondary">@FilteredRows.Count records</span>
-					</div>
-					<div class="card-body p-0">
-						@if (FilteredRows.Any()) {
-							<div class="table-responsive">
-								<table class="table table-striped table-hover mb-0">
-									<thead class="table-dark">
-										<tr>
-											<th>Time</th>
-											<th>Type</th>
-											<th>Item / Equipment</th>
-											<th>Details</th>
-											<th class="text-end">Qty</th>
-										</tr>
-									</thead>
-									<tbody>
-										@foreach (var row in FilteredRows.Take(200)) {
-											<tr>
-												<td><small>@row.Timestamp.ToString("MMM dd HH:mm")</small></td>
-												<td>
-													<span class="badge @(row.IsEquipment ? "bg-info" : "bg-primary")">
-														@(row.IsEquipment ? "Equipment" : row.Category)
-													</span>
-												</td>
-												<td>
-													<strong>@row.ItemName</strong>
-													@if (!string.IsNullOrEmpty(row.Target)) {
-														<br /><small class="text-muted">→ @row.Target</small>
-													}
-												</td>
-												<td><small class="text-muted">@row.Details</small></td>
-												<td class="text-end">
-													@if (row.Quantity > 0) {
-														<span class="fw-bold">@row.Quantity</span>
-													}
-												</td>
-											</tr>
-										}
-									</tbody>
-								</table>
+					<!-- Equipment Change Types -->
+					@if (EquipmentTypeBreakdown.Any()) {
+						<div class="col-md-6">
+							<div class="card">
+								<div class="card-header">
+									<h5 class="mb-0">Equipment Changes by Type</h5>
+								</div>
+								<div class="card-body">
+									@foreach (var eq in EquipmentTypeBreakdown) {
+										var pct = EquipmentChangeCount > 0
+											? (int)((eq.Count / (double)EquipmentChangeCount) * 100)
+											: 0;
+										<div class="mb-2">
+											<div class="d-flex justify-content-between">
+												<span class="fw-bold">@eq.ChangeType</span>
+												<span class="text-muted">@eq.Count events</span>
+											</div>
+											<div class="progress" style="height: 8px;">
+												<div class="progress-bar bg-info" role="progressbar"
+													 style="width: @(pct)%"
+													 aria-valuenow="@pct" aria-valuemin="0" aria-valuemax="100">
+												</div>
+											</div>
+										</div>
+									}
+								</div>
 							</div>
-							@if (FilteredRows.Count > 200) {
-								<div class="text-center py-2 text-muted">
-									<small>Showing first 200 of @FilteredRows.Count records</small>
+						</div>
+					}
+				</div>
+			}
+
+			<!-- Inventory Log Table -->
+			<div class="row">
+				<div class="col-12">
+					<div class="card">
+						<div class="card-header d-flex justify-content-between align-items-center">
+							<h5 class="mb-0">Usage Log</h5>
+							<span class="badge bg-secondary">@FilteredRows.Count records</span>
+						</div>
+						<div class="card-body p-0">
+							@if (FilteredRows.Any()) {
+								<div class="table-responsive">
+									<table class="table table-striped table-hover mb-0">
+										<thead class="table-dark">
+											<tr>
+												<th>Time</th>
+												<th>Type</th>
+												<th>Item / Equipment</th>
+												<th>Details</th>
+												<th class="text-end">Qty</th>
+											</tr>
+										</thead>
+										<tbody>
+											@foreach (var row in FilteredRows.Take(200)) {
+												<tr>
+													<td><small>@row.Timestamp.ToString("MMM dd HH:mm")</small></td>
+													<td>
+														<span class="badge @(row.IsEquipment ? "bg-info" : "bg-primary")">
+															@(row.IsEquipment ? "Equipment" : row.Category)
+														</span>
+													</td>
+													<td>
+														<strong>@row.ItemName</strong>
+														@if (!string.IsNullOrEmpty(row.Target)) {
+															<br /><small class="text-muted">→ @row.Target</small>
+														}
+													</td>
+													<td><small class="text-muted">@row.Details</small></td>
+													<td class="text-end">
+														@if (row.Quantity > 0) {
+															<span class="fw-bold">@row.Quantity</span>
+														}
+													</td>
+												</tr>
+											}
+										</tbody>
+									</table>
+								</div>
+								@if (FilteredRows.Count > 200) {
+									<div class="text-center py-2 text-muted">
+										<small>Showing first 200 of @FilteredRows.Count records</small>
+									</div>
+								}
+							} else {
+								<div class="text-center py-5 text-muted">
+									<p class="mb-0">No inventory usage data recorded yet.</p>
+									<small>Usage data will appear after syncing from the browser extension.</small>
 								</div>
 							}
-						} else {
-							<div class="text-center py-5 text-muted">
-								<p class="mb-0">No inventory usage data recorded yet.</p>
-								<small>Usage data will appear after syncing from the browser extension.</small>
-							</div>
-						}
+						</div>
 					</div>
 				</div>
 			</div>
-		</div>
+		}
 	}
 </div>
 
+<style>
+	.cursor-pointer { cursor: pointer; }
+	.cursor-pointer:hover { opacity: 0.85; }
+</style>
+
 @code {
 	private bool IsLoading { get; set; } = true;
+	private string ActiveTab { get; set; } = "inventory";
 	private string SelectedCategory { get; set; } = "";
 	private string SelectedView { get; set; } = "all";
+	private string SelectedInventoryGroup { get; set; } = "";
 	private DateTime? DateFrom { get; set; }
 	private DateTime? DateTo { get; set; }
 
+	// Inventory snapshot data
+	private InventorySnapshot? LatestInventory { get; set; }
+	private Dictionary<string, List<InventoryItem>> InventoryGroups { get; set; } = new();
+
+	// Usage log data
 	private List<InventoryRow> AllRows { get; set; } = new();
 	private List<InventoryRow> FilteredRows { get; set; } = new();
 	private List<string> Categories { get; set; } = new();
@@ -248,6 +394,15 @@
 
 	private async Task LoadData() {
 		using var context = await DbFactory.CreateDbContextAsync();
+
+		// Load latest inventory snapshot
+		LatestInventory = await context.InventorySnapshots.AsNoTracking()
+			.OrderByDescending(s => s.Timestamp)
+			.FirstOrDefaultAsync();
+
+		if (LatestInventory != null) {
+			ParseInventoryData(LatestInventory.InventoryData);
+		}
 
 		// Load inventory item usages
 		var itemUsages = await context.InventoryItemUsages.AsNoTracking()
@@ -320,6 +475,74 @@
 		ApplyFilters();
 	}
 
+	/// <summary>
+	/// Parses the JSON inventory data into grouped items for display.
+	/// </summary>
+	private void ParseInventoryData(string json) {
+		InventoryGroups = new Dictionary<string, List<InventoryItem>>();
+		if (string.IsNullOrEmpty(json)) return;
+
+		try {
+			using var doc = JsonDocument.Parse(json);
+			foreach (var group in doc.RootElement.EnumerateObject()) {
+				var items = new List<InventoryItem>();
+				if (group.Value.ValueKind == JsonValueKind.Object) {
+					foreach (var item in group.Value.EnumerateObject()) {
+						var itemId = item.Name;
+						var qty = item.Value.GetInt32();
+						// Resolve hero/titan/pet names for soul stones
+						var displayName = group.Name.Contains("soul_stone")
+							? ResolveItemName(itemId, group.Name)
+							: itemId;
+						items.Add(new InventoryItem { Name = displayName, Quantity = qty });
+					}
+				}
+				if (items.Any()) {
+					InventoryGroups[group.Name] = items;
+				}
+			}
+		} catch (JsonException) {
+			// If JSON parsing fails, show raw data
+		}
+	}
+
+	/// <summary>
+	/// Resolves item ID to display name based on category.
+	/// </summary>
+	private static string ResolveItemName(string itemId, string groupKey) {
+		if (long.TryParse(itemId, out var id)) {
+			var name = HeroNames.Resolve(id);
+			if (!name.StartsWith("Hero_")) return $"{name} Soul Stones";
+		}
+		return itemId;
+	}
+
+	/// <summary>
+	/// Formats inventory group key into display name.
+	/// </summary>
+	private static string FormatGroupName(string key) {
+		return key switch {
+			"hero_soul_stones" => "Hero Soul Stones",
+			"titan_soul_stones" => "Titan Soul Stones",
+			"pet_soul_stones" => "Pet Soul Stones",
+			"evolution_items" => "Evolution Items",
+			"consumables" => "Consumables",
+			"chests" => "Chests",
+			"gear" => "Gear",
+			"fragments" => "Fragments",
+			"scrolls" => "Scrolls",
+			"coins" => "Coins",
+			_ => key.Replace('_', ' '),
+		};
+	}
+
+	/// <summary>
+	/// Toggle which inventory group is shown (or show all if clicked again).
+	/// </summary>
+	private void ToggleInventoryGroup(string group) {
+		SelectedInventoryGroup = SelectedInventoryGroup == group ? "" : group;
+	}
+
 	private void ApplyFilters() {
 		var filtered = AllRows.AsEnumerable();
 
@@ -365,6 +588,14 @@
 		public string? Target { get; set; }
 		public int Quantity { get; set; }
 		public bool IsEquipment { get; set; }
+	}
+
+	/// <summary>
+	/// Item within an inventory group (parsed from JSON snapshot).
+	/// </summary>
+	private class InventoryItem {
+		public string Name { get; set; } = "";
+		public int Quantity { get; set; }
 	}
 
 	/// <summary>

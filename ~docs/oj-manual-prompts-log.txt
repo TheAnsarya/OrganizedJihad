@@ -92,7 +92,9 @@ The  UI is now displaying Heo information, but I need more, for instance it says
 
 Fix the titan tracking/display, every titan has `titan` listed as its element, which is wrong, add the percentage bar stuff we added to heroes only with titan level, titan stars, skins levels, artifact stars, artifact levels, totems, etc.; continue;
 
+`Hero_71` does not have a real name attached, fixed that, the chests don't have names and do not show what items we got from them with percentages; Inventory tab does not show the inventory or any information about it, they should be grouped by type; emeralds shows "0" which is wrong, and should be clickable to show a log of gettting and spending emeralds; Battles aren't being tracked correctly. They should be tracked and grouped by type: Clash of Worlds, Dungeon, Guild War, Arena, Grand Arena, Adventure, Tournament of the Elements, Tower, Guild Raid minions, Guild Raid Boss (Osh and Maestro), etc.; Track Outland chest rewards, track Adventures, track Tower cheststrack shop and merchant purchases, etc., and display them all; make issues and plans and documentation and instructions and the `readme.md` file and supporting linked `md` files; update the chat/session logs everytime, git commit; continue;
 
+Add element emojis to the Titan element column, 
 
 
 

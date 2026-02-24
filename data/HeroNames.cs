@@ -16,7 +16,7 @@ namespace OrganizedJihad.Data;
 public static class HeroNames {
 	/// <summary>
 	/// Frozen dictionary of hero ID → display name.
-	/// Includes heroes (1–70), titans (4000–4043), and pets (6000–6009).
+	/// Includes heroes (1–71), titans (4000–4043), and pets (6000–6009).
 	/// </summary>
 	public static readonly FrozenDictionary<long, string> All = new Dictionary<long, string> {
 		// ── Heroes ───────────────────────────────────────────────────────
@@ -90,6 +90,7 @@ public static class HeroNames {
 		[68] = "Guus",
 		[69] = "Cascade",
 		[70] = "Un1",
+		[71] = "Rosie",
 
 		// ── Titans ───────────────────────────────────────────────────────
 		[4000] = "Sigurd",

@@ -13,7 +13,7 @@
 
 /**
  * Map of game entity ID → display name.
- * Covers heroes (1–70), titans (4000–4043), and pets (6000–6009).
+ * Covers heroes (1–71), titans (4000–4043), and pets (6000–6009).
  *
  * @type {Object<number, string>}
  */
@@ -89,6 +89,7 @@ const HERO_NAMES = {
 	68: 'Guus',
 	69: 'Cascade',
 	70: 'Un1',
+	71: 'Rosie',
 
 	// ── Titans ────────────────────────────────────────────────────────────
 	4000: 'Sigurd',

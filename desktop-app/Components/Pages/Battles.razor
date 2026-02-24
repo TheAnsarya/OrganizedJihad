@@ -1,0 +1,533 @@
+@page "/battles"
+@using OrganizedJihad.Data
+@using OrganizedJihad.Data.Models
+@using Microsoft.EntityFrameworkCore
+@inject IDbContextFactory<GameDatabaseContext> DbFactory
+
+<PageTitle>Battles - OrganizedJihad</PageTitle>
+
+<div class="container-fluid">
+	<div class="row mb-4">
+		<div class="col-12">
+			<h1 class="display-5">Battle History</h1>
+			<p class="text-muted">All battles tracked across every game mode, grouped by type.</p>
+		</div>
+	</div>
+
+	@if (IsLoading) {
+		<div class="row">
+			<div class="col-12 text-center py-5">
+				<div class="spinner-border" role="status">
+					<span class="visually-hidden">Loading...</span>
+				</div>
+			</div>
+		</div>
+	} else {
+		<!-- Summary Cards -->
+		<div class="row mb-4">
+			<div class="col-md-2">
+				<div class="card text-white bg-primary">
+					<div class="card-body py-2">
+						<h6 class="card-title mb-0">Total Battles</h6>
+						<p class="card-text display-6 mb-0">@TotalBattles</p>
+					</div>
+				</div>
+			</div>
+			<div class="col-md-2">
+				<div class="card text-white bg-success">
+					<div class="card-body py-2">
+						<h6 class="card-title mb-0">Arena</h6>
+						<p class="card-text display-6 mb-0">@ArenaBattles.Count</p>
+					</div>
+				</div>
+			</div>
+			<div class="col-md-2">
+				<div class="card text-white bg-info">
+					<div class="card-body py-2">
+						<h6 class="card-title mb-0">Grand Arena</h6>
+						<p class="card-text display-6 mb-0">@GrandArenaBattles.Count</p>
+					</div>
+				</div>
+			</div>
+			<div class="col-md-2">
+				<div class="card text-white bg-warning">
+					<div class="card-body py-2">
+						<h6 class="card-title mb-0">Titan Arena</h6>
+						<p class="card-text display-6 mb-0">@TitanArenaBattles.Count</p>
+					</div>
+				</div>
+			</div>
+			<div class="col-md-2">
+				<div class="card text-white bg-danger">
+					<div class="card-body py-2">
+						<h6 class="card-title mb-0">Guild War</h6>
+						<p class="card-text display-6 mb-0">@GuildWarBattles.Count</p>
+					</div>
+				</div>
+			</div>
+			<div class="col-md-2">
+				<div class="card text-white bg-dark">
+					<div class="card-body py-2">
+						<h6 class="card-title mb-0">Raid Boss</h6>
+						<p class="card-text display-6 mb-0">@RaidBossAttacks.Count</p>
+					</div>
+				</div>
+			</div>
+		</div>
+
+		<!-- Battle Type Filter -->
+		<div class="row mb-3">
+			<div class="col-md-3">
+				<select class="form-select" @bind="SelectedType">
+					<option value="">All Battle Types</option>
+					<option value="arena">Arena</option>
+					<option value="grand_arena">Grand Arena</option>
+					<option value="titan_arena">Titan Arena (Tournament of Elements)</option>
+					<option value="guild_war">Guild War</option>
+					<option value="raid_boss">Guild Raid Boss (Osh / Maestro)</option>
+					<option value="expedition">Expedition / Adventure</option>
+				</select>
+			</div>
+			<div class="col-md-2">
+				<select class="form-select" @bind="SelectedOutcome">
+					<option value="">All Outcomes</option>
+					<option value="win">Victories</option>
+					<option value="loss">Defeats</option>
+				</select>
+			</div>
+			<div class="col-md-2">
+				<input type="date" class="form-control" @bind="DateFrom" />
+			</div>
+			<div class="col-md-2">
+				<input type="date" class="form-control" @bind="DateTo" />
+			</div>
+			<div class="col-md-3 d-flex align-items-end">
+				<button class="btn btn-primary me-2" @onclick="ApplyFilters">Apply</button>
+				<button class="btn btn-outline-secondary" @onclick="ClearFilters">Clear</button>
+			</div>
+		</div>
+
+		<!-- Win Rate Summary -->
+		@if (FilteredRows.Any()) {
+			var wins = FilteredRows.Count(r => r.IsWin);
+			var total = FilteredRows.Count;
+			var winPct = total > 0 ? (wins / (double)total) * 100 : 0;
+			<div class="row mb-3">
+				<div class="col-12">
+					<div class="d-flex align-items-center gap-3">
+						<span class="fw-bold">Win Rate:</span>
+						<div class="progress flex-grow-1" style="height: 20px;">
+							<div class="progress-bar @(winPct >= 60 ? "bg-success" : winPct >= 40 ? "bg-warning" : "bg-danger")"
+								 role="progressbar" style="width: @((int)winPct)%">
+								@winPct.ToString("F1")% (@wins / @total)
+							</div>
+						</div>
+					</div>
+				</div>
+			</div>
+		}
+
+		<!-- Battle Type Sections -->
+		@if (string.IsNullOrEmpty(SelectedType) || SelectedType == "arena") {
+			@if (FilteredArena.Any()) {
+				<div class="card mb-4">
+					<div class="card-header bg-success text-white d-flex justify-content-between">
+						<h5 class="mb-0">Arena Battles</h5>
+						<span class="badge bg-light text-dark">@FilteredArena.Count battles</span>
+					</div>
+					<div class="card-body p-0">
+						<div class="table-responsive">
+							<table class="table table-striped table-hover mb-0">
+								<thead class="table-dark">
+									<tr>
+										<th>Time</th>
+										<th>Opponent</th>
+										<th class="text-end">Power</th>
+										<th>Result</th>
+										<th>Rank</th>
+										<th class="text-end">Coins</th>
+									</tr>
+								</thead>
+								<tbody>
+									@foreach (var b in FilteredArena.Take(100)) {
+										<tr>
+											<td><small>@b.Timestamp.ToString("MMM dd HH:mm")</small></td>
+											<td>@(b.OpponentName ?? $"Player {b.OpponentId}")</td>
+											<td class="text-end">@b.OpponentPower.ToString("N0")</td>
+											<td>
+												<span class="badge @(b.IsWin ? "bg-success" : "bg-danger")">
+													@(b.IsWin ? "Victory" : "Defeat")
+												</span>
+											</td>
+											<td>
+												@b.RankBefore → @b.RankAfter
+												@if (b.RankAfter < b.RankBefore) {
+													<span class="text-success">↑@(b.RankBefore - b.RankAfter)</span>
+												} else if (b.RankAfter > b.RankBefore) {
+													<span class="text-danger">↓@(b.RankAfter - b.RankBefore)</span>
+												}
+											</td>
+											<td class="text-end">@b.CoinsEarned</td>
+										</tr>
+									}
+								</tbody>
+							</table>
+						</div>
+					</div>
+				</div>
+			}
+		}
+
+		@if (string.IsNullOrEmpty(SelectedType) || SelectedType == "grand_arena") {
+			@if (FilteredGrandArena.Any()) {
+				<div class="card mb-4">
+					<div class="card-header bg-info text-white d-flex justify-content-between">
+						<h5 class="mb-0">Grand Arena Battles</h5>
+						<span class="badge bg-light text-dark">@FilteredGrandArena.Count battles</span>
+					</div>
+					<div class="card-body p-0">
+						<div class="table-responsive">
+							<table class="table table-striped table-hover mb-0">
+								<thead class="table-dark">
+									<tr>
+										<th>Time</th>
+										<th>Opponent</th>
+										<th class="text-end">Power</th>
+										<th>Result</th>
+										<th>Rank</th>
+										<th class="text-end">Coins</th>
+									</tr>
+								</thead>
+								<tbody>
+									@foreach (var b in FilteredGrandArena.Take(100)) {
+										<tr>
+											<td><small>@b.Timestamp.ToString("MMM dd HH:mm")</small></td>
+											<td>@(b.OpponentName ?? $"Player {b.OpponentId}")</td>
+											<td class="text-end">@b.OpponentPower.ToString("N0")</td>
+											<td>
+												<span class="badge @(b.IsWin ? "bg-success" : "bg-danger")">
+													@(b.IsWin ? "Victory" : "Defeat")
+												</span>
+											</td>
+											<td>
+												@b.RankBefore → @b.RankAfter
+												@if (b.RankAfter < b.RankBefore) {
+													<span class="text-success">↑@(b.RankBefore - b.RankAfter)</span>
+												} else if (b.RankAfter > b.RankBefore) {
+													<span class="text-danger">↓@(b.RankAfter - b.RankBefore)</span>
+												}
+											</td>
+											<td class="text-end">@b.CoinsEarned</td>
+										</tr>
+									}
+								</tbody>
+							</table>
+						</div>
+					</div>
+				</div>
+			}
+		}
+
+		@if (string.IsNullOrEmpty(SelectedType) || SelectedType == "titan_arena") {
+			@if (FilteredTitanArena.Any()) {
+				<div class="card mb-4">
+					<div class="card-header bg-warning text-dark d-flex justify-content-between">
+						<h5 class="mb-0">Titan Arena (Tournament of Elements)</h5>
+						<span class="badge bg-dark">@FilteredTitanArena.Count battles</span>
+					</div>
+					<div class="card-body p-0">
+						<div class="table-responsive">
+							<table class="table table-striped table-hover mb-0">
+								<thead class="table-dark">
+									<tr>
+										<th>Time</th>
+										<th>Opponent</th>
+										<th class="text-end">Power</th>
+										<th>Result</th>
+										<th>Rank</th>
+										<th class="text-end">Coins</th>
+									</tr>
+								</thead>
+								<tbody>
+									@foreach (var b in FilteredTitanArena.Take(100)) {
+										<tr>
+											<td><small>@b.Timestamp.ToString("MMM dd HH:mm")</small></td>
+											<td>@(b.OpponentName ?? $"Player {b.OpponentId}")</td>
+											<td class="text-end">@b.OpponentPower.ToString("N0")</td>
+											<td>
+												<span class="badge @(b.IsWin ? "bg-success" : "bg-danger")">
+													@(b.IsWin ? "Victory" : "Defeat")
+												</span>
+											</td>
+											<td>
+												@b.RankBefore → @b.RankAfter
+												@if (b.RankAfter < b.RankBefore) {
+													<span class="text-success">↑@(b.RankBefore - b.RankAfter)</span>
+												} else if (b.RankAfter > b.RankBefore) {
+													<span class="text-danger">↓@(b.RankAfter - b.RankBefore)</span>
+												}
+											</td>
+											<td class="text-end">@b.CoinsEarned</td>
+										</tr>
+									}
+								</tbody>
+							</table>
+						</div>
+					</div>
+				</div>
+			}
+		}
+
+		@if (string.IsNullOrEmpty(SelectedType) || SelectedType == "guild_war") {
+			@if (FilteredGuildWar.Any()) {
+				<div class="card mb-4">
+					<div class="card-header bg-danger text-white d-flex justify-content-between">
+						<h5 class="mb-0">Guild War Battles</h5>
+						<span class="badge bg-light text-dark">@FilteredGuildWar.Count battles</span>
+					</div>
+					<div class="card-body p-0">
+						<div class="table-responsive">
+							<table class="table table-striped table-hover mb-0">
+								<thead class="table-dark">
+									<tr>
+										<th>Time</th>
+										<th>Enemy Guild</th>
+										<th>Fort #</th>
+										<th>Result</th>
+										<th class="text-end">Stars</th>
+										<th>Duration</th>
+									</tr>
+								</thead>
+								<tbody>
+									@foreach (var b in FilteredGuildWar.Take(100)) {
+										<tr>
+											<td><small>@b.Timestamp.ToString("MMM dd HH:mm")</small></td>
+											<td>@b.EnemyGuildName</td>
+											<td>@b.FortificationNumber</td>
+											<td>
+												<span class="badge @(b.IsWin ? "bg-success" : "bg-danger")">
+													@(b.IsWin ? "Victory" : "Defeat")
+												</span>
+											</td>
+											<td class="text-end">
+												@for (int i = 0; i < b.StarsEarned; i++) {
+													<span class="text-warning">★</span>
+												}
+												@for (int i = b.StarsEarned; i < 3; i++) {
+													<span class="text-muted">☆</span>
+												}
+											</td>
+											<td>@(b.DurationSeconds.HasValue ? $"{b.DurationSeconds}s" : "—")</td>
+										</tr>
+									}
+								</tbody>
+							</table>
+						</div>
+					</div>
+				</div>
+			}
+		}
+
+		@if (string.IsNullOrEmpty(SelectedType) || SelectedType == "raid_boss") {
+			@if (FilteredRaidBoss.Any()) {
+				<div class="card mb-4">
+					<div class="card-header bg-dark text-white d-flex justify-content-between">
+						<h5 class="mb-0">Guild Raid Boss (Osh / Maestro)</h5>
+						<span class="badge bg-light text-dark">@FilteredRaidBoss.Count attacks</span>
+					</div>
+					<div class="card-body p-0">
+						<div class="table-responsive">
+							<table class="table table-striped table-hover mb-0">
+								<thead class="table-dark">
+									<tr>
+										<th>Time</th>
+										<th>Boss</th>
+										<th>Difficulty</th>
+										<th class="text-end">Damage</th>
+									</tr>
+								</thead>
+								<tbody>
+									@foreach (var b in FilteredRaidBoss.Take(100)) {
+										<tr>
+											<td><small>@b.Timestamp.ToString("MMM dd HH:mm")</small></td>
+											<td><strong>@b.BossName</strong></td>
+											<td>@b.Difficulty</td>
+											<td class="text-end fw-bold">@b.DamageDealt.ToString("N0")</td>
+										</tr>
+									}
+								</tbody>
+							</table>
+						</div>
+					</div>
+				</div>
+			}
+		}
+
+		@if (string.IsNullOrEmpty(SelectedType) || SelectedType == "expedition") {
+			@if (FilteredExpeditions.Any()) {
+				<div class="card mb-4">
+					<div class="card-header" style="background-color: #6f42c1; color: white;">
+						<div class="d-flex justify-content-between">
+							<h5 class="mb-0">Expeditions / Adventures</h5>
+							<span class="badge bg-light text-dark">@FilteredExpeditions.Count battles</span>
+						</div>
+					</div>
+					<div class="card-body p-0">
+						<div class="table-responsive">
+							<table class="table table-striped table-hover mb-0">
+								<thead class="table-dark">
+									<tr>
+										<th>Time</th>
+										<th>Boss</th>
+										<th>Result</th>
+										<th class="text-end">Damage</th>
+									</tr>
+								</thead>
+								<tbody>
+									@foreach (var b in FilteredExpeditions.Take(100)) {
+										<tr>
+											<td><small>@b.Timestamp.ToString("MMM dd HH:mm")</small></td>
+											<td><strong>@b.BossName</strong></td>
+											<td>
+												<span class="badge @(b.IsWin ? "bg-success" : "bg-danger")">
+													@(b.IsWin ? "Victory" : "Defeat")
+												</span>
+											</td>
+											<td class="text-end">@b.DamageDealt.ToString("N0")</td>
+										</tr>
+									}
+								</tbody>
+							</table>
+						</div>
+					</div>
+				</div>
+			}
+		}
+
+		<!-- Empty State -->
+		@if (!FilteredRows.Any()) {
+			<div class="text-center py-5 text-muted">
+				<h4>No battles found</h4>
+				<p>Battle data will appear after syncing from the browser extension.</p>
+			</div>
+		}
+	}
+</div>
+
+@code {
+	private bool IsLoading { get; set; } = true;
+	private string SelectedType { get; set; } = "";
+	private string SelectedOutcome { get; set; } = "";
+	private DateTime? DateFrom { get; set; }
+	private DateTime? DateTo { get; set; }
+
+	// Raw data
+	private List<ArenaBattle> ArenaBattles { get; set; } = new();
+	private List<GrandArenaBattle> GrandArenaBattles { get; set; } = new();
+	private List<TitanArenaBattle> TitanArenaBattles { get; set; } = new();
+	private List<GuildWarBattle> GuildWarBattles { get; set; } = new();
+	private List<RaidBossAttack> RaidBossAttacks { get; set; } = new();
+	private List<ExpeditionBattle> ExpeditionBattles { get; set; } = new();
+
+	// Filtered data
+	private List<ArenaBattle> FilteredArena { get; set; } = new();
+	private List<GrandArenaBattle> FilteredGrandArena { get; set; } = new();
+	private List<TitanArenaBattle> FilteredTitanArena { get; set; } = new();
+	private List<GuildWarBattle> FilteredGuildWar { get; set; } = new();
+	private List<RaidBossAttack> FilteredRaidBoss { get; set; } = new();
+	private List<ExpeditionBattle> FilteredExpeditions { get; set; } = new();
+
+	// Unified for summary stats
+	private List<BattleRow> FilteredRows { get; set; } = new();
+	private int TotalBattles => ArenaBattles.Count + GrandArenaBattles.Count +
+		TitanArenaBattles.Count + GuildWarBattles.Count +
+		RaidBossAttacks.Count + ExpeditionBattles.Count;
+
+	protected override async Task OnInitializedAsync() {
+		await LoadData();
+		IsLoading = false;
+	}
+
+	private async Task LoadData() {
+		using var context = await DbFactory.CreateDbContextAsync();
+
+		ArenaBattles = await context.ArenaBattles.AsNoTracking()
+			.OrderByDescending(b => b.Timestamp).ToListAsync();
+		GrandArenaBattles = await context.GrandArenaBattles.AsNoTracking()
+			.OrderByDescending(b => b.Timestamp).ToListAsync();
+		TitanArenaBattles = await context.TitanArenaBattles.AsNoTracking()
+			.OrderByDescending(b => b.Timestamp).ToListAsync();
+		GuildWarBattles = await context.GuildWarBattles.AsNoTracking()
+			.OrderByDescending(b => b.Timestamp).ToListAsync();
+		RaidBossAttacks = await context.RaidBossAttacks.AsNoTracking()
+			.OrderByDescending(b => b.Timestamp).ToListAsync();
+		ExpeditionBattles = await context.ExpeditionBattles.AsNoTracking()
+			.OrderByDescending(b => b.Timestamp).ToListAsync();
+
+		ApplyFilters();
+	}
+
+	private void ApplyFilters() {
+		// Arena
+		FilteredArena = ApplyDateFilter(ArenaBattles, b => b.Timestamp);
+		if (SelectedOutcome == "win") FilteredArena = FilteredArena.Where(b => b.IsWin).ToList();
+		else if (SelectedOutcome == "loss") FilteredArena = FilteredArena.Where(b => !b.IsWin).ToList();
+
+		// Grand Arena
+		FilteredGrandArena = ApplyDateFilter(GrandArenaBattles, b => b.Timestamp);
+		if (SelectedOutcome == "win") FilteredGrandArena = FilteredGrandArena.Where(b => b.IsWin).ToList();
+		else if (SelectedOutcome == "loss") FilteredGrandArena = FilteredGrandArena.Where(b => !b.IsWin).ToList();
+
+		// Titan Arena
+		FilteredTitanArena = ApplyDateFilter(TitanArenaBattles, b => b.Timestamp);
+		if (SelectedOutcome == "win") FilteredTitanArena = FilteredTitanArena.Where(b => b.IsWin).ToList();
+		else if (SelectedOutcome == "loss") FilteredTitanArena = FilteredTitanArena.Where(b => !b.IsWin).ToList();
+
+		// Guild War
+		FilteredGuildWar = ApplyDateFilter(GuildWarBattles, b => b.Timestamp);
+		if (SelectedOutcome == "win") FilteredGuildWar = FilteredGuildWar.Where(b => b.IsWin).ToList();
+		else if (SelectedOutcome == "loss") FilteredGuildWar = FilteredGuildWar.Where(b => !b.IsWin).ToList();
+
+		// Raid Boss (no win/loss filter - always attacks)
+		FilteredRaidBoss = ApplyDateFilter(RaidBossAttacks, b => b.Timestamp);
+
+		// Expeditions
+		FilteredExpeditions = ApplyDateFilter(ExpeditionBattles, b => b.Timestamp);
+		if (SelectedOutcome == "win") FilteredExpeditions = FilteredExpeditions.Where(b => b.IsWin).ToList();
+		else if (SelectedOutcome == "loss") FilteredExpeditions = FilteredExpeditions.Where(b => !b.IsWin).ToList();
+
+		// Build unified rows for summary stat (win rate)
+		FilteredRows = new List<BattleRow>();
+		FilteredRows.AddRange(FilteredArena.Select(b => new BattleRow { IsWin = b.IsWin }));
+		FilteredRows.AddRange(FilteredGrandArena.Select(b => new BattleRow { IsWin = b.IsWin }));
+		FilteredRows.AddRange(FilteredTitanArena.Select(b => new BattleRow { IsWin = b.IsWin }));
+		FilteredRows.AddRange(FilteredGuildWar.Select(b => new BattleRow { IsWin = b.IsWin }));
+		FilteredRows.AddRange(FilteredExpeditions.Select(b => new BattleRow { IsWin = b.IsWin }));
+		// Raid boss attacks are always "attacks" not win/loss — include as wins
+		FilteredRows.AddRange(FilteredRaidBoss.Select(_ => new BattleRow { IsWin = true }));
+	}
+
+	private List<T> ApplyDateFilter<T>(List<T> items, Func<T, DateTime> getTimestamp) {
+		var filtered = items.AsEnumerable();
+		if (DateFrom.HasValue)
+			filtered = filtered.Where(i => getTimestamp(i) >= DateFrom.Value);
+		if (DateTo.HasValue)
+			filtered = filtered.Where(i => getTimestamp(i) <= DateTo.Value.AddDays(1));
+		return filtered.ToList();
+	}
+
+	private void ClearFilters() {
+		SelectedType = "";
+		SelectedOutcome = "";
+		DateFrom = null;
+		DateTo = null;
+		ApplyFilters();
+	}
+
+	/// <summary>
+	/// Minimal row for unified win-rate stats across all battle types.
+	/// </summary>
+	private class BattleRow {
+		public bool IsWin { get; set; }
+	}
+}
