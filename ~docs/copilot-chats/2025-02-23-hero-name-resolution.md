@@ -44,3 +44,41 @@ Fixed the "Hero_49" display issue across the entire project. The Hero Wars game 
 - Ascension column is a placeholder (data not yet persisted as a separate DB column)
 - New heroes added to the game will need manual dictionary updates
 - Existing DB records with "Hero_49" format will display correctly via `ResolveWithFallback()` at the display layer
+
+---
+
+## Session 14
+
+### Summary
+
+Fixed the titan element tracking bug — every titan was displayed as element "titan" because the game API `titanGetAll` response does not include an `element` field. The code was falling back to `titan.type` which is always `"titan"`. Fixed by deriving the element from the titan ID pattern (third digit: 0=water, 1=fire, 2=earth, 3=dark, 4=light), matching how HeroWarsHelper resolves it.
+
+Added progress bars with percentage tooltips to the Hero Roster page (level, stars, color rank, skills total, artifacts total). Created a new Titan Roster page (`/titans`) with element badges/icons, element filtering, element power summary cards, and progress bars for level, stars, skill, artifacts, and skins.
+
+### Files Created
+
+- `desktop-app/Components/Pages/TitanRoster.razor` — New titan roster page at `/titans` with element display, progress bars, filtering, artifact/totem JSON parsing
+
+### Files Modified
+
+- `data/HeroNames.cs` — Added `ResolveTitanElement()` static method (ID digit pattern → element name)
+- `userscript/src/modules/heroNames.js` — Added `resolveTitanElement()` export (JS equivalent)
+- `userscript/src/modules/gameTracker.js` — Import `resolveTitanElement`, replace broken `titan.element || titan.type || 'unknown'` with `resolveTitanElement(titan.id)`
+- `desktop-app/Components/Pages/HeroRoster.razor` — Added progress bars (level, stars, color, skills, artifacts) with computed percentages on `HeroRow` view model, added `GetColorProgressClass()` helper
+- `desktop-app/Components/Layout/NavMenu.razor` — Added "Titan Roster" nav link at `/titans`
+
+### Key Decisions
+
+1. **ID-based element resolution**: Titan IDs encode the element in the third digit (`40[0]x`=water, `40[1]x`=fire, `40[2]x`=earth, `40[3]x`=dark, `40[4]x`=light) — same approach as HWA reference code
+2. **DB fallback**: TitanRoster also checks if stored element is valid before falling back to ID-based resolution, so old "titan" records display correctly
+3. **Progress bar max values**: Level=130 (heroes), 120 (titans); Stars=7 (heroes), 6 (titans); Color=17 (Red+2); Artifacts=120 stars; Skin=60
+
+### Test Results
+
+- **296 JS tests** — All passing (7 suites)
+- **75 .NET tests** — All passing (39 Data + 36 API)
+- **Build** — 0 errors, 0 warnings
+
+### Commits
+
+- `7c525a4` — Fix titan element tracking and add progress bars to hero/titan rosters
