@@ -199,6 +199,14 @@ describe('UpgradeTracker', () => {
 			const rec = storage.records[0].record;
 			expect(rec.colorAfter).toBe('White');
 		});
+
+		test('should handle max color rank 18', async () => {
+			await tracker.trackHeroColorUpgrade({ heroId: 1 }, { hero: { color: 18 } }, 'p1');
+			const rec = storage.records[0].record;
+			expect(rec.colorAfter).toBe('Red+2 (Max)');
+			expect(rec.colorBefore).toBe('Red+2');
+			expect(rec.colorRankAfter).toBe(18);
+		});
 	});
 
 	describe('Hero gold level upgrade', () => {

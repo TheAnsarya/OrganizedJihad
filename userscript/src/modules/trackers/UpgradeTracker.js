@@ -345,7 +345,7 @@ class UpgradeTracker {
 		const colorNames = ['White', 'Green', 'Green+1', 'Blue', 'Blue+1', 'Blue+2',
 			'Violet', 'Violet+1', 'Violet+2', 'Violet+3',
 			'Orange', 'Orange+1', 'Orange+2', 'Orange+3', 'Orange+4',
-			'Red', 'Red+1', 'Red+2'];
+			'Red', 'Red+1', 'Red+2', 'Red+2 (Max)'];
 
 		const colorRank = hero?.color || 0;
 

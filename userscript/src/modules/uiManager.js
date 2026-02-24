@@ -938,7 +938,7 @@ class UIManager {
 	 *  0=Gray, 1=Green, 2=Green+1, 3=Blue, 4=Blue+1, 5=Blue+2,
 	 *  6=Violet, 7=Violet+1, 8=Violet+2, 9=Violet+3,
 	 *  10=Orange, 11=Orange+1, 12=Orange+2, 13=Orange+3, 14=Orange+4,
-	 *  15=Red, 16=Red+1, 17=Red+2
+	 *  15=Red, 16=Red+1, 17=Red+2, 18=Red+2 (Max)
 	 *
 	 * @returns {Promise<string>} HTML content
 	 */
@@ -3204,7 +3204,7 @@ class UIManager {
 			3: 'Blue', 4: 'Blue+1', 5: 'Blue+2',
 			6: 'Violet', 7: 'Violet+1', 8: 'Violet+2', 9: 'Violet+3',
 			10: 'Orange', 11: 'Orange+1', 12: 'Orange+2', 13: 'Orange+3', 14: 'Orange+4',
-			15: 'Red', 16: 'Red+1', 17: 'Red+2',
+			15: 'Red', 16: 'Red+1', 17: 'Red+2', 18: 'Red+2 (Max)',
 		};
 		const num = typeof color === 'string' ? parseInt(color, 10) : color;
 		return names[num] ?? (color != null ? `Rank ${color}` : '\u2014');
