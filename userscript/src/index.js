@@ -370,6 +370,14 @@ import './styles/main.css';
 			notificationManager.notifyMail({ count: data?.count });
 		}, 'notifyMail');
 
+		// Check energy level whenever player data arrives (#77)
+		gameTracker.registerHandler('userGetInfo', (_call, _args, data) => {
+			const energy = data?.stamina;
+			if (energy != null) {
+				notificationManager.checkEnergy(energy);
+			}
+		}, 'checkEnergy');
+
 		// Initialize API Monitor AFTER gameTracker so its XHR proxy layers
 		// correctly on top (apiMonitor ← gameTracker ← real XHR)
 		const apiMonitor = new APIMonitor(idbStorage);

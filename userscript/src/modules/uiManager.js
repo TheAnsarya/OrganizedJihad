@@ -698,6 +698,8 @@ class UIManager {
 					</div>
 				</div>
 
+				${await this._renderSuggestionsSection()}
+
 				<div class="oj-section">
 					<h3>\uD83C\uDFAF Quick Tips</h3>
 					<ul class="oj-tips">
@@ -777,8 +779,66 @@ class UIManager {
 	}
 
 	/**
-	 * Render a daily summary showing today's activity (#26).
-	 * Counts battles, quests, chests, and resource changes since midnight.
+	 * Render a suggestions section on the dashboard using SuggestionsEngine (#76).
+	 * Shows up to 6 highest-priority actionable suggestions.
+	 *
+	 * @returns {Promise<string>} HTML section
+	 * @private
+	 */
+	async _renderSuggestionsSection() {
+		if (!this.suggestionsEngine) return '';
+
+		try {
+			const suggestions = this.suggestionsEngine.getSuggestions();
+			if (!suggestions || suggestions.length === 0) return '';
+
+			/** Map priority to icon + colour */
+			const priMap = {
+				high: { icon: '\uD83D\uDD34', color: '#ef5350' },
+				medium: { icon: '\uD83D\uDFE1', color: '#ffb74d' },
+				low: { icon: '\uD83D\uDFE2', color: '#81c784' },
+			};
+
+			/** Map category/type to icon */
+			const catIcon = {
+				goal: '\uD83C\uDFAF',
+				resource: '\uD83D\uDCB0',
+				hero: '\uD83E\uDDB8',
+				battle: '\u2694\uFE0F',
+			};
+
+			// Show at most 6 suggestions, sorted by priority (high first)
+			const order = { high: 0, medium: 1, low: 2 };
+			const sorted = [...suggestions]
+				.sort((a, b) => (order[a.priority] ?? 9) - (order[b.priority] ?? 9))
+				.slice(0, 6);
+
+			const rows = sorted.map((s) => {
+				const pri = priMap[s.priority] || priMap.medium;
+				const icon = catIcon[s.type] || '\uD83D\uDCA1';
+				return `<div style="display:flex;align-items:flex-start;gap:8px;padding:6px 0;border-bottom:1px solid #333">
+					<span style="font-size:14px;flex-shrink:0">${icon}</span>
+					<div style="flex:1;min-width:0">
+						<div style="font-size:12px;font-weight:600;color:${pri.color}">${pri.icon} ${this._escapeHtml(s.title)}</div>
+						<div style="font-size:11px;color:#aaa;margin-top:2px">${this._escapeHtml(s.description)}</div>
+					</div>
+				</div>`;
+			}).join('');
+
+			const stats = this.suggestionsEngine.getStats();
+
+			return `<div class="oj-section">
+				<h3>\uD83D\uDCA1 Suggestions <span style="font-size:11px;font-weight:400;color:#888">(${stats.active} active)</span></h3>
+				${rows}
+				${suggestions.length > 6 ? `<div style="font-size:11px;color:#888;margin-top:6px;text-align:center">+ ${suggestions.length - 6} more</div>` : ''}
+			</div>`;
+		} catch {
+			return '';
+		}
+	}
+
+	/**
+	 * Render the daily summary section on the dashboard.
 	 *
 	 * @returns {Promise<string>} HTML section
 	 * @private

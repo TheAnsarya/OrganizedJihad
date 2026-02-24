@@ -94,19 +94,35 @@ Fix the titan tracking/display, every titan has `titan` listed as its element, w
 
 `Hero_71` does not have a real name attached, fixed that, the chests don't have names and do not show what items we got from them with percentages; Inventory tab does not show the inventory or any information about it, they should be grouped by type; emeralds shows "0" which is wrong, and should be clickable to show a log of gettting and spending emeralds; Battles aren't being tracked correctly. They should be tracked and grouped by type: Clash of Worlds, Dungeon, Guild War, Arena, Grand Arena, Adventure, Tournament of the Elements, Tower, Guild Raid minions, Guild Raid Boss (Osh and Maestro), etc.; Track Outland chest rewards, track Adventures, track Tower cheststrack shop and merchant purchases, etc., and display them all; make issues and plans and documentation and instructions and the `readme.md` file and supporting linked `md` files; update the chat/session logs everytime, git commit; continue;
 
-Add element emojis to the Titan element column, 
+Add element emojis to the Titan element column; move app badge from bottom-right to top-middle to so it doesn't cover up existing ui; titans don't seem to have the progress bars (with click the titan to show/hide the individual bars) like we added to the Heroes display, i told you to do that and it's not there, fix that;
+
+&&&
+Oh shit, I've been talking about the userscript (tampermonkey) and you've been updating the desktop app; So Let's redo our past work only in the appropriate context;
+All of the following prompts apply to the TamperMonkey userscript, not the dotnet projects, update the script's UI and tracking:
+Fix the titan tracking/display, every titan has `titan` listed as its element, which is wrong, add the percentage bar stuff we added to heroes only with titan level, titan stars, skins levels, artifact stars, artifact levels, totems, etc.; continue;
+`Hero_71` does not have a real name attached, fixed that, the chests don't have names and do not show what items we got from them with percentages; Inventory tab does not show the inventory or any information about it, they should be grouped by type; emeralds shows "0" which is wrong, and should be clickable to show a log of gettting and spending emeralds; Battles aren't being tracked correctly. They should be tracked and grouped by type: Clash of Worlds, Dungeon, Guild War, Arena, Grand Arena, Adventure, Tournament of the Elements, Tower, Guild Raid minions, Guild Raid Boss (Osh and Maestro), etc.; Track Outland chest rewards, track Adventures, track Tower cheststrack shop and merchant purchases, etc., and display them all; make issues and plans and documentation and instructions and the `readme.md` file and supporting linked `md` files; update the chat/session logs everytime, git commit; continue;
+Add element emojis to the Titan element column; move app badge from bottom-right to top-middle to so it doesn't cover up existing ui; titans don't seem to have the progress bars (with click the titan to show/hide the individual bars) like we added to the Heroes display, i told you to do that and it's not there, fix that;
+&&&
+
+(userscript) update the patch version number for every build so we can tell the difference, we've been stuck on `9.4.0` for a while; The application badge or whatever that opens the UI is labeled `( OJ: ### calls)` make it have the purple background color (3b143d) and add padding, and add a logo emoji and the tet should be something like `(emoji) OrganizedJihad: ## (status indicator)` instead; work issues and continue!
 
 
+&&&
+(userscript) `Cleaver` has `skills` listed as 66.92% when he has all skills maxed, make sure the Hero displays are showing the right numbers (and Titans, etc.); all prompts are about the userscript until further notice; make issues for all work before you do the work; and make docs and plans and issues;
+When opening the ui on the dashboard, the player component is terrible, instead redesign it and remove the table format, make the name big top-left, show the level large, overall progressbar (titans + heros + etc.), basic scratchpad of a design:
+{(Player Name, large, mine is Wayness, left)} {(Level number)}
+{[progress bar], add up the other progress bars}
+{[four cards]: (gold emoji) (amount of gold) (emerald emoji) (amount of emeralds) (hero emoji) (total heroes percentage bar) (titan emoji) (total titans pencentage bar)}
+{[four cards]: daily quests, guild quests, guild war/cow, guild raid (minions or boss)}
+&&&
 
+(userscript) the version says `9.5` while installed says `9.6` what's up with the version confusion? You're supposed to updating the patch number, not the minor number; continue; work issues!; continue;
 
+(userscript) ignore version number stuff, except that a build was a version less than the last one; work issues, continue;
 
+(userscript) find the graphics for the hero avatars in the game, and then load those and use them in the Heroes UI table at the beginning of the row; continue;
 
-
-
-
-
-
-
+(userscript) work issues and continue!
 
 
 
