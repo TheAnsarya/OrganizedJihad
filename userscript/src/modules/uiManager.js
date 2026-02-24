@@ -511,10 +511,11 @@ class UIManager {
 		const playerLevel = player.level || 0;
 		const playerGuild = player.guildName || player.clanTitle || null;
 
-		// ── Hero & Titan completion averages (#63) ───────────────────
+		// ── Hero, Titan & Pet completion averages (#63, #71) ────────
 		const heroAvg = await this._calcAverageHeroCompletion();
 		const titanAvg = await this._calcAverageTitanCompletion();
-		const overallAvg = (heroAvg + titanAvg) / 2;
+		const petAvg = await this._calcAveragePetCompletion();
+		const overallAvg = (heroAvg + titanAvg + petAvg) / 3;
 
 		// ── Today's quest & battle counts (#63) ─────────────────────
 		const todayStart = new Date();
@@ -617,6 +618,13 @@ class UIManager {
 							<div style="display:flex;align-items:center;gap:4px">
 								${_miniBar(titanAvg, '#ce93d8')}
 								<span style="font-size:11px;font-weight:600;color:#ce93d8;min-width:36px;text-align:right">${titanAvg.toFixed(1)}%</span>
+							</div>
+						</div>
+						<div style="flex:1;min-width:100px;background:#2a2a2e;border-radius:6px;padding:8px">
+							<div style="font-size:12px;margin-bottom:4px">\uD83D\uDC3E Pets</div>
+							<div style="display:flex;align-items:center;gap:4px">
+								${_miniBar(petAvg, '#ffb74d')}
+								<span style="font-size:11px;font-weight:600;color:#ffb74d;min-width:36px;text-align:right">${petAvg.toFixed(1)}%</span>
 							</div>
 						</div>
 					</div>
@@ -1632,7 +1640,7 @@ class UIManager {
 			if (type === 'skill') {
 				detail = `Skill #${r.skillSlot ?? 0} \u2192 Lv.${r.skillLevelAfter || '?'}`;
 			} else if (type === 'artifact') {
-				detail = `${r.artifactType || 'Artifact'} \u2192 Lv.${r.levelAfter || '?'}`;
+				detail = `${r.artifactType || r.artifactName || 'Artifact'} \u2192 Lv.${r.levelAfter || '?'}`;
 			} else if (type === 'skin') {
 				detail = `${r.skinName || 'Skin'} \u2192 Lv.${r.levelAfter || '?'}${r.isNewUnlock ? ' \uD83C\uDD95' : ''}`;
 			} else if (type === 'glyph') {
@@ -2063,11 +2071,58 @@ class UIManager {
 
 		const sortInd = (field) => this._sortIndicator(vs.sortField, vs.sortDir, field);
 
+		// ── Recent item usage history from inventoryItemUsages store ──
+		let usageHtml = '';
+		try {
+			const usages = await this.idbStorage.getAll('inventoryItemUsages', 5000);
+			if (usages.length > 0) {
+				// Sort by timestamp descending, show last 50
+				usages.sort((a, b) => (b.timestamp || '').localeCompare(a.timestamp || ''));
+				const recent = usages.slice(0, 50);
+				const usageRows = recent.map((u) => {
+					const ts = u.timestamp ? new Date(u.timestamp).toLocaleString() : '\u2014';
+					const item = this._escapeHtml(u.itemName || u.itemId || 'Unknown');
+					const qty = u.quantityUsed || 1;
+					const target = this._escapeHtml(u.targetEntity || '\u2014');
+					const ctx = this._escapeHtml(u.usageContext || '\u2014').replace(/_/g, ' ');
+					const catBadge = this._escapeHtml(u.category || '');
+					return `<tr>
+						<td style="white-space:nowrap;font-size:11px">${ts}</td>
+						<td>${item}</td>
+						<td class="oj-num">${qty}</td>
+						<td><span class="oj-badge">${catBadge}</span></td>
+						<td>${ctx}</td>
+						<td>${target}</td>
+					</tr>`;
+				}).join('');
+
+				usageHtml = `
+					<div class="oj-section" style="margin-top:12px">
+						<h4>\uD83D\uDCC9 Recent Usage <span class="oj-muted">(${usages.length} total, showing last 50)</span></h4>
+						<table class="oj-table oj-table-compact">
+							<thead>
+								<tr>
+									<th>Time</th>
+									<th>Item</th>
+									<th>Qty</th>
+									<th>Category</th>
+									<th>Context</th>
+									<th>Target</th>
+								</tr>
+							</thead>
+							<tbody>${usageRows}</tbody>
+						</table>
+					</div>
+				`;
+			}
+		} catch { /* empty */ }
+
 		return `
 			<div class="oj-inventory" data-browser="inventory">
 				<h3>\uD83C\uDF92 Inventory <span class="oj-muted">(${totalCount} items in ${categoryCount} categories)</span></h3>
 				${this._renderSearchBar(vs.filter, 'Search items...')}
 				${groupHtml}
+				${usageHtml}
 			</div>
 		`;
 	}
@@ -3026,6 +3081,51 @@ class UIManager {
 				total += TitanCompletionCalculator.calculateCompletion(t).overall;
 			}
 			return total / titans.length;
+		} catch {
+			return 0;
+		}
+	}
+
+	/**
+	 * Calculate the average pet completion percentage across all owned pets.
+	 *
+	 * Reads from metadata cache first, falls back to IDB pets store with dedup.
+	 *
+	 * @returns {Promise<number>} Average pet completion 0–100
+	 * @private
+	 */
+	async _calcAveragePetCompletion() {
+		try {
+			let pets = [];
+
+			// Try metadata cache first
+			const cached = await this.idbStorage.getMetadata('petsData', null);
+			if (Array.isArray(cached) && cached.length > 0) {
+				pets = cached;
+			}
+
+			// Fallback: IDB store with dedup
+			if (pets.length === 0) {
+				const raw = await this.idbStorage.getAll('pets', 5000);
+				if (raw.length > 0) {
+					const byId = {};
+					for (const p of raw) {
+						const key = p.petId || p.id;
+						if (!byId[key] || (p.timestamp || '') > (byId[key].timestamp || '')) {
+							byId[key] = p;
+						}
+					}
+					pets = Object.values(byId);
+				}
+			}
+
+			if (pets.length === 0) return 0;
+
+			let total = 0;
+			for (const p of pets) {
+				total += PetCompletionCalculator.calculateCompletion(p).overall;
+			}
+			return total / pets.length;
 		} catch {
 			return 0;
 		}
