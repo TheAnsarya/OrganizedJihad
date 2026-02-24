@@ -11,6 +11,7 @@
 
 import HeroCompletionCalculator from './helpers/HeroCompletionCalculator.js';
 import TitanCompletionCalculator from './helpers/TitanCompletionCalculator.js';
+import PetCompletionCalculator from './helpers/PetCompletionCalculator.js';
 import { TRACKING_CATEGORIES } from './gameTracker.js';
 import { decompressHeroStore, decompressTitanStore } from './heroCompression.js';
 import { NOTIFICATION_TYPES } from './notificationManager.js';
@@ -52,6 +53,7 @@ class UIManager {
 		this._viewState = {
 			heroes:    { page: 0, sortField: 'power', sortDir: 'desc', filter: '' },
 			titans:    { page: 0, sortField: 'power', sortDir: 'desc', filter: '' },
+			pets:      { page: 0, sortField: 'power', sortDir: 'desc', filter: '' },
 			battles:   { page: 0, sortField: 'timestamp', sortDir: 'desc', filter: '', subTab: 'all' },
 			chests:    { page: 0, sortField: 'timestamp', sortDir: 'desc', filter: '' },
 			inventory: { page: 0, sortField: 'name', sortDir: 'asc', filter: '' },
@@ -128,6 +130,7 @@ class UIManager {
 					<button class="oj-nav-btn" data-view="activity">Activity</button>
 					<button class="oj-nav-btn" data-view="heroes">Heroes</button>
 					<button class="oj-nav-btn" data-view="titans">Titans</button>
+					<button class="oj-nav-btn" data-view="pets">Pets</button>
 					<button class="oj-nav-btn" data-view="battles">Battles</button>
 					<button class="oj-nav-btn" data-view="chests">Chests</button>
 					<button class="oj-nav-btn" data-view="inventory">Inventory</button>
@@ -423,6 +426,10 @@ class UIManager {
 				case 'titans':
 					content.innerHTML = await this.renderTitans();
 					this._attachDataBrowserListeners('titans');
+					break;
+				case 'pets':
+					content.innerHTML = await this.renderPets();
+					this._attachDataBrowserListeners('pets');
 					break;
 				case 'battles':
 					content.innerHTML = await this.renderBattles();
@@ -1365,6 +1372,155 @@ class UIManager {
 	}
 
 	/**
+	 * Pets — sortable, filterable, paginated pet roster.
+	 * Pulls from metadata `petsData` with IDB `pets` store fallback.
+	 * Deduplicates by petId, keeping only the latest snapshot.
+	 * @returns {Promise<string>} HTML content
+	 */
+	async renderPets() {
+		const vs = this._viewState.pets;
+		const PCalc = PetCompletionCalculator;
+
+		// Prefer the metadata cache (latest roster, one row per pet)
+		let pets = [];
+		try {
+			const cached = await this.idbStorage.getMetadata('petsData', null);
+			if (Array.isArray(cached) && cached.length > 0) {
+				pets = cached;
+			}
+		} catch { /* empty */ }
+
+		// Fallback: read from the pets IDB store and deduplicate by petId
+		if (pets.length === 0) {
+			try {
+				const raw = await this.idbStorage.getAll('pets', 500);
+				if (raw.length > 0) {
+					const byId = {};
+					for (const p of raw) {
+						const key = p.petId || p.id;
+						if (!byId[key] || (p.timestamp || '') > (byId[key].timestamp || '')) {
+							byId[key] = p;
+						}
+					}
+					pets = Object.values(byId);
+				}
+			} catch { /* empty */ }
+		}
+
+		if (pets.length === 0) {
+			return `
+				<div class="oj-pets">
+					<h3>\uD83D\uDC3E Pets</h3>
+					<p class="oj-empty">No pet data captured yet. Open your pet roster in the game to trigger data capture.</p>
+				</div>
+			`;
+		}
+
+		// Pre-compute completion for every pet
+		const completionMap = {};
+		for (const p of pets) {
+			const key = p.petId || p.id;
+			completionMap[key] = PCalc.calculateCompletion(p);
+		}
+
+		// Filter by name
+		if (vs.filter) {
+			const q = vs.filter.toLowerCase();
+			pets = pets.filter((p) => {
+				const name = (p.petName || p.name || '').toLowerCase();
+				return name.includes(q);
+			});
+		}
+
+		// Sort
+		if (vs.sortField === 'completion') {
+			pets.sort((a, b) => {
+				const ca = completionMap[a.petId || a.id]?.overall || 0;
+				const cb = completionMap[b.petId || b.id]?.overall || 0;
+				return vs.sortDir === 'asc' ? ca - cb : cb - ca;
+			});
+		} else {
+			pets = this._sortData(pets, vs.sortField, vs.sortDir);
+		}
+
+		// Total power (post-filter)
+		const totalPower = pets.reduce((s, p) => s + (p.power || 0), 0);
+
+		// Average completion
+		const avgCompletion = pets.length > 0
+			? pets.reduce((s, p) => s + (completionMap[p.petId || p.id]?.overall || 0), 0) / pets.length
+			: 0;
+
+		// Paginate
+		const totalCount = pets.length;
+		const totalPages = Math.max(1, Math.ceil(totalCount / this.PAGE_SIZE));
+		vs.page = Math.min(vs.page, totalPages - 1);
+		const pageItems = pets.slice(vs.page * this.PAGE_SIZE, (vs.page + 1) * this.PAGE_SIZE);
+
+		const rows = pageItems.map((p) => {
+			const pId = p.petId || p.id;
+			const name = this._escapeHtml(p.petName || p.name || `Pet #${pId}`);
+			const comp = completionMap[pId] || { overall: 0, systems: {} };
+			const patronageCount = PCalc.countPatronage(p.patronageData);
+
+			// Build expandable per-system breakdown (hidden by default)
+			const sysRows = Object.entries(PCalc.SYSTEM_LABELS).map(([key, label]) => {
+				const pct = comp.systems[key] || 0;
+				return `<div class="oj-sys-row">` +
+					`<span class="oj-sys-icon">${PCalc.SYSTEM_ICONS[key] || ''}</span>` +
+					`<span class="oj-sys-name">${label}</span>` +
+					PCalc.renderBar(pct) +
+					`</div>`;
+			}).join('');
+
+			// Patronage info for detail row
+			const patronageInfo = patronageCount > 0
+				? `<div class="oj-pet-patronage">\uD83D\uDC64 Supporting ${patronageCount} hero${patronageCount !== 1 ? 'es' : ''}</div>`
+				: '';
+
+			return `
+				<tr class="oj-pet-row" data-pet-id="${pId}">
+					<td><strong>${name}</strong></td>
+					<td>${p.level || '\u2014'}</td>
+					<td>${'\u2B50'.repeat(Math.min(p.stars || p.star || 0, 6)) || '\u2014'}</td>
+					<td class="oj-num">${p.power ? p.power.toLocaleString() : '\u2014'}</td>
+					<td class="oj-completion-cell">${PCalc.renderBar(comp.overall)}</td>
+				</tr>
+				<tr class="oj-pet-detail" data-detail-for="${pId}" style="display:none">
+					<td colspan="5">
+						<div class="oj-sys-breakdown">
+							${sysRows}
+						</div>
+						${patronageInfo}
+					</td>
+				</tr>
+			`;
+		}).join('');
+
+		const sortInd = (field) => this._sortIndicator(vs.sortField, vs.sortDir, field);
+
+		return `
+			<div class="oj-pets" data-browser="pets">
+				<h3>\uD83D\uDC3E Pets <span class="oj-muted">(${totalCount} \u2022 ${totalPower.toLocaleString()} power \u2022 avg ${PCalc.formatPercent(avgCompletion)} complete)</span></h3>
+				${this._renderSearchBar(vs.filter)}
+				<table class="oj-table oj-sortable">
+					<thead>
+						<tr>
+							<th data-sort="name" class="oj-sort-header">Name ${sortInd('name')}</th>
+							<th data-sort="level" class="oj-sort-header">Lvl ${sortInd('level')}</th>
+							<th data-sort="stars" class="oj-sort-header">Stars ${sortInd('stars')}</th>
+							<th data-sort="power" class="oj-sort-header">Power ${sortInd('power')}</th>
+							<th data-sort="completion" class="oj-sort-header">Complete ${sortInd('completion')}</th>
+						</tr>
+					</thead>
+					<tbody>${rows}</tbody>
+				</table>
+				${this._renderPagination(vs.page, totalPages, totalCount)}
+			</div>
+		`;
+	}
+
+	/**
 	 * Chests — paginated log of chest openings with drop details.
 	 * Reads from metadata `chestOpeningHistory` and/or the `chests` IDB store.
 	 * @returns {Promise<string>} HTML content
@@ -1975,6 +2131,7 @@ class UIManager {
 			['activity', 'Activity'],
 			['heroes', 'Heroes'],
 			['titans', 'Titans'],
+			['pets', 'Pets'],
 			['battles', 'Battles'],
 			['chests', 'Chests'],
 			['inventory', 'Inventory'],
@@ -2557,6 +2714,19 @@ class UIManager {
 			row.addEventListener('click', () => {
 				const tId = row.dataset.titanId;
 				const detailRow = content.querySelector(`tr.oj-titan-detail[data-detail-for="${tId}"]`);
+				if (detailRow) {
+					const isHidden = detailRow.style.display === 'none';
+					detailRow.style.display = isHidden ? '' : 'none';
+					row.classList.toggle('oj-expanded', isHidden);
+				}
+			});
+		});
+
+		// Pet row expand/collapse (pets view only)
+		content.querySelectorAll('.oj-pet-row[data-pet-id]').forEach((row) => {
+			row.addEventListener('click', () => {
+				const pId = row.dataset.petId;
+				const detailRow = content.querySelector(`tr.oj-pet-detail[data-detail-for="${pId}"]`);
 				if (detailRow) {
 					const isHidden = detailRow.style.display === 'none';
 					detailRow.style.display = isHidden ? '' : 'none';
