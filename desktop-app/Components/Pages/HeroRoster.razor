@@ -103,8 +103,8 @@
 									<tr>
 										<th class="text-end">ID</th>
 										<th>Name</th>
-										<th class="text-end">Lv</th>
-										<th class="text-center">Stars</th>
+										<th>Level</th>
+										<th>Stars</th>
 										<th>Color</th>
 										<th class="text-end">Power</th>
 										<th>Skills</th>
@@ -119,29 +119,56 @@
 										<tr>
 											<td class="text-end text-muted">@hero.HeroId</td>
 											<td><strong>@hero.DisplayName</strong></td>
-											<td class="text-end">@hero.Level</td>
-											<td class="text-center">
-												<span class="@GetStarClass(hero.Stars)">
-													@(new string('★', Math.Min(hero.Stars, 7)))
-												</span>
+											<td>
+												<div class="d-flex align-items-center gap-1">
+													<span style="min-width: 28px;" class="text-end">@hero.Level</span>
+													<div class="progress flex-grow-1" style="height: 14px; min-width: 60px;" title="@hero.Level / @MaxHeroLevel (@((hero.Level * 100 / MaxHeroLevel))%)">
+														<div class="progress-bar bg-info" style="width: @((hero.Level * 100 / MaxHeroLevel))%"></div>
+													</div>
+												</div>
 											</td>
 											<td>
-												<span class="badge @GetColorBadgeClass(hero.Color)">
-													@GetColorName(hero.Color)
-												</span>
+												<div class="d-flex align-items-center gap-1">
+													<span class="@GetStarClass(hero.Stars)" style="min-width: 20px;">
+														★@hero.Stars
+													</span>
+													<div class="progress flex-grow-1" style="height: 14px; min-width: 50px;" title="@hero.Stars / @MaxHeroStars (@((hero.Stars * 100 / MaxHeroStars))%)">
+														<div class="progress-bar bg-warning" style="width: @((hero.Stars * 100 / MaxHeroStars))%"></div>
+													</div>
+												</div>
+											</td>
+											<td>
+												<div class="d-flex align-items-center gap-1">
+													<span class="badge @GetColorBadgeClass(hero.Color)" style="min-width: 55px; font-size: 0.7em;">
+														@GetColorName(hero.Color)
+													</span>
+													<div class="progress flex-grow-1" style="height: 14px; min-width: 40px;" title="@GetColorName(hero.Color) (@((hero.Color * 100 / MaxHeroColor))%)">
+														<div class="progress-bar @GetColorProgressClass(hero.Color)" style="width: @((hero.Color * 100 / MaxHeroColor))%"></div>
+													</div>
+												</div>
 											</td>
 											<td class="text-end fw-bold">@hero.Power.ToString("N0")</td>
 											<td>
-												<small class="text-muted">
-													@hero.SkillLevel1/@hero.SkillLevel2/@hero.SkillLevel3/@hero.SkillLevel4
-												</small>
+												<div class="d-flex align-items-center gap-1" title="@hero.SkillLevel1/@hero.SkillLevel2/@hero.SkillLevel3/@hero.SkillLevel4 = @hero.SkillTotal / @(MaxHeroLevel * 4) (@hero.SkillPct%)">
+													<small class="text-muted" style="min-width: 50px;">
+														@hero.SkillLevel1/@hero.SkillLevel2/@hero.SkillLevel3/@hero.SkillLevel4
+													</small>
+													<div class="progress flex-grow-1" style="height: 14px; min-width: 40px;">
+														<div class="progress-bar bg-primary" style="width: @hero.SkillPct%"></div>
+													</div>
+												</div>
 											</td>
 											<td>
-												<small>
-													<span class="text-danger" title="Weapon">W:@hero.ArtifactWeapon</span>
-													<span class="text-primary" title="Book">B:@hero.ArtifactBook</span>
-													<span class="text-warning" title="Ring">R:@hero.ArtifactRing</span>
-												</small>
+												<div class="d-flex align-items-center gap-1" title="W:@hero.ArtifactWeapon B:@hero.ArtifactBook R:@hero.ArtifactRing = @hero.ArtifactTotal / @(MaxArtifactStars * 3) (@hero.ArtifactPct%)">
+													<small style="min-width: 60px;">
+														<span class="text-danger">W:@hero.ArtifactWeapon</span>
+														<span class="text-primary">B:@hero.ArtifactBook</span>
+														<span class="text-warning">R:@hero.ArtifactRing</span>
+													</small>
+													<div class="progress flex-grow-1" style="height: 14px; min-width: 30px;">
+														<div class="progress-bar bg-danger" style="width: @hero.ArtifactPct%"></div>
+													</div>
+												</div>
 											</td>
 											<td>
 												@if (!string.IsNullOrEmpty(hero.GlyphSummary)) {
@@ -175,6 +202,12 @@
 	private List<HeroRow> Heroes { get; set; } = new();
 	private DateTime? SnapshotTime { get; set; }
 	private string SortField { get; set; } = "power";
+
+	// ── Max values for progress bar calculations ────────────────────
+	private const int MaxHeroLevel = 130;
+	private const int MaxHeroStars = 7;
+	private const int MaxHeroColor = 17; // Red+2
+	private const int MaxArtifactStars = 120; // Max artifact star level
 
 	protected override async Task OnInitializedAsync() {
 		await LoadData();
@@ -331,6 +364,19 @@
 	};
 
 	/// <summary>
+	/// Returns a Bootstrap progress bar class for the color rank.
+	/// </summary>
+	private static string GetColorProgressClass(int color) => color switch {
+		0 => "bg-secondary",
+		1 or 2 => "bg-success",
+		3 or 4 or 5 => "bg-primary",
+		6 or 7 or 8 or 9 => "bg-purple",
+		10 or 11 or 12 or 13 or 14 => "bg-warning",
+		>= 15 => "bg-danger",
+		_ => "bg-secondary",
+	};
+
+	/// <summary>
 	/// View model for displaying hero roster information.
 	/// </summary>
 	private class HeroRow {
@@ -350,5 +396,15 @@
 		public int ArtifactRing { get; set; }
 		public string? GlyphSummary { get; set; }
 		public string? AscensionSummary { get; set; }
+
+		// ── Computed progress percentages ───────────────────────────
+		/// <summary>Total skill levels across all 4 skills.</summary>
+		public int SkillTotal => SkillLevel1 + SkillLevel2 + SkillLevel3 + SkillLevel4;
+		/// <summary>Skill completion percentage (0–100).</summary>
+		public int SkillPct => SkillTotal * 100 / (130 * 4);
+		/// <summary>Total artifact star levels across all 3 artifacts.</summary>
+		public int ArtifactTotal => ArtifactWeapon + ArtifactBook + ArtifactRing;
+		/// <summary>Artifact completion percentage (0–100).</summary>
+		public int ArtifactPct => ArtifactTotal * 100 / (120 * 3);
 	}
 }

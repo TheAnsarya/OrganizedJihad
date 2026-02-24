@@ -151,4 +151,26 @@ public static class HeroNames {
 		}
 		return Resolve(heroId);
 	}
+
+	/// <summary>
+	/// Resolves a titan's element based on its ID.
+	/// Titan IDs encode the element in the third digit:
+	/// 40[0]x = Water, 40[1]x = Fire, 40[2]x = Earth, 40[3]x = Dark, 40[4]x = Light.
+	/// </summary>
+	/// <param name="titanId">The titan's game ID (4000–4043).</param>
+	/// <returns>The element name (water/fire/earth/dark/light) or "unknown".</returns>
+	public static string ResolveTitanElement(long titanId) {
+		var idStr = titanId.ToString();
+		if (idStr.Length >= 3) {
+			return idStr[2] switch {
+				'0' => "water",
+				'1' => "fire",
+				'2' => "earth",
+				'3' => "dark",
+				'4' => "light",
+				_ => "unknown",
+			};
+		}
+		return "unknown";
+	}
 }

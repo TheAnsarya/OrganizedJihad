@@ -25,7 +25,7 @@
 import IndexedDBStorage from './indexedDBStorage.js';
 import UpgradeTracker from './trackers/UpgradeTracker.js';
 import { compressHeroBatch, compressTitanBatch } from './heroCompression.js';
-import { resolveHeroName } from './heroNames.js';
+import { resolveHeroName, resolveTitanElement } from './heroNames.js';
 
 /**
  * Reference to the real page window — bypasses TamperMonkey's sandbox.
@@ -1950,7 +1950,7 @@ class GameTracker {
 			skillLevel: titan.skill?.level || titan.skillLevel || 0, // Titans have one main skill
 			artifactData: JSON.stringify(titan.artifacts || {}), // Titan artifacts are different from heroes
 			summonStars: titan.summonStars || 0, // Special titan mechanic
-			element: titan.element || titan.type || 'unknown', // fire, water, earth
+			element: resolveTitanElement(titan.id), // Derived from titan ID: 40[0]x=water, 40[1]x=fire, etc.
 			skinLevel: titan.skinLevel || 0,
 			playerId: playerId,
 			timestamp: timestamp,

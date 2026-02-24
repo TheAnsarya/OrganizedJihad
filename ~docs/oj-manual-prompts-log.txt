@@ -90,6 +90,7 @@ Is this going to fix the problem? continue fixing issues and make this script wo
 
 The  UI is now displaying Heo information, but I need more, for instance it says the name is "Hero_49" instead of "Yasmine" but we need an ID column with 49 and the name column needs to be fixed to the actual hero name and add ascension and glyph and artfiact columns; continue;
 
+Fix the titan tracking/display, every titan has `titan` listed as its element, which is wrong, add the percentage bar stuff we added to heroes only with titan level, titan stars, skins levels, artifact stars, artifact levels, totems, etc.; continue;
 
 
 

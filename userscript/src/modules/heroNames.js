@@ -153,4 +153,24 @@ export function resolveHeroNameWithFallback(id, storedName) {
 	return resolveHeroName(id);
 }
 
+/**
+ * Resolves a titan's element based on its ID.
+ * Titan IDs encode the element in the third digit:
+ * 40[0]x = Water, 40[1]x = Fire, 40[2]x = Earth, 40[3]x = Dark, 40[4]x = Light.
+ *
+ * @param {number} titanId - The titan's game ID (4000–4043).
+ * @returns {string} The element name (water/fire/earth/dark/light) or "unknown".
+ */
+export function resolveTitanElement(titanId) {
+	const d = titanId.toString()[2];
+	switch (d) {
+		case '0': return 'water';
+		case '1': return 'fire';
+		case '2': return 'earth';
+		case '3': return 'dark';
+		case '4': return 'light';
+		default: return 'unknown';
+	}
+}
+
 export default HERO_NAMES;
