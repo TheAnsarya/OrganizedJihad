@@ -104,3 +104,75 @@ After the Session 10 `unsafeWindow` fix, user reported 10 chest trackings with s
 ### Commits
 
 - `9148cf9` — Fix #55, Fix #57, Fix #58: document-start + cross-realm instanceof + reward logging
+
+---
+
+## Session 12
+
+### Summary
+
+Continued comprehensive audit of all userscript modules for remaining TamperMonkey sandbox isolation issues. Found and fixed three more issues:
+
+1. **APIMonitor sandbox isolation (#59, CRITICAL)**: `apiMonitor.js` was patching the sandbox's `XMLHttpRequest.prototype` and `window.fetch` instead of the page's — same root cause as #54. Applied `PAGE_WINDOW` pattern to all 6 affected locations.
+2. **TextDecoder cross-realm (#60)**: `new TextDecoder('utf-8').decode(data)` used the sandbox's TextDecoder which may reject page-context ArrayBuffers internally. Changed to `new (PAGE_WINDOW.TextDecoder || TextDecoder)('utf-8')` at 3 locations.
+3. **Diagnostic console logging (#61)**: Added colored `console.log` at every stage of the interception pipeline — proxy installation, request capture (with call names), response capture (with result count), handler dispatch (with dispatched vs unhandled), and startup (with unsafeWindow availability).
+
+### Full Module Audit Results
+
+| Module | Risk | Findings | Action |
+|--------|------|----------|--------|
+| apiMonitor.js | **HIGH** | 6 sandbox refs (XHR prototype, fetch, window.apiMonitor) | **FIXED** — PAGE_WINDOW |
+| gameTracker.js | **HIGH** | 3 TextDecoder refs using sandbox constructor | **FIXED** — PAGE_WINDOW.TextDecoder |
+| syncClient.js | MEDIUM | Uses bare `fetch()` (sandbox copy) for localhost | No change needed — sandbox fetch works for localhost API |
+| domTargeting.js | LOW | `document.body` refs | Safe — init in PHASE 2 (DOMContentLoaded) |
+| uiManager.js | LOW | `document.body.appendChild` | Safe — init in PHASE 2 |
+| gameOverlay.js | LOW | `document.body.appendChild` | Safe — init in PHASE 2 |
+| notificationManager.js | CLEAN | — | — |
+| goalsManager.js | CLEAN | — | — |
+| calendarManager.js | CLEAN | — | — |
+
+### Changes Made
+
+#### Files Modified
+- **userscript/src/modules/apiMonitor.js** — Added `PAGE_WINDOW` constant. Changed all 6 sandbox references:
+  - `XMLHttpRequest.prototype.open/send/setRequestHeader` → `PAGE_WINDOW.XMLHttpRequest.prototype.*`
+  - `window.fetch` → `PAGE_WINDOW.fetch`
+  - `window.apiMonitor` → `PAGE_WINDOW.apiMonitor`
+- **userscript/src/modules/gameTracker.js** — 3 TextDecoder locations use `PAGE_WINDOW.TextDecoder || TextDecoder`. Added diagnostic `console.log` at proxy install, request intercept, response receive, and handler dispatch. Enhanced error logging with data type info.
+- **userscript/src/index.js** — Added startup diagnostic log (unsafeWindow availability). Version bumped to 0.9.4.
+- **userscript/webpack.config.cjs** — Version bumped to 0.9.4.
+- **userscript/package.json** — Version bumped to 0.9.4.
+
+### GitHub Issues
+
+| Issue | Title | Status |
+|-------|-------|--------|
+| #59 | Fix APIMonitor sandbox isolation - use PAGE_WINDOW for XHR/fetch interception | **Closed** |
+| #60 | Use PAGE_WINDOW.TextDecoder for cross-realm ArrayBuffer decoding | **Closed** |
+| #61 | Add diagnostic console logging for API interception pipeline | **Closed** |
+
+### What the Console Should Now Show
+
+When the script runs correctly in TamperMonkey, the browser console should display:
+
+```
+[OrganizedJihad] Hero Wars Tracker v0.9.4 Loaded
+[OJ] unsafeWindow=object, PAGE_WINDOW=object
+[OJ] XHR/fetch proxy installed on PAGE_WINDOW (function)
+[OJ] PHASE 1 complete — XHR/WS proxy active, IDB ready
+[OJ] ← API Request: userGetInfo, heroGetAll, titanGetAll, ...
+[OJ] → API Response: userGetInfo, heroGetAll, ... (15 results)
+[OJ] ✓ Dispatched: userGetInfo, heroGetAll, titanGetAll | Skipped: 3
+```
+
+If the user sees `unsafeWindow=undefined` or `PAGE_WINDOW=undefined`, the sandbox bridge isn't working and we need a different approach (e.g., `@grant none` or script injection).
+
+### Test Results
+
+- **Userscript**: 296 tests passed, 7 suites
+- **.NET**: 75 tests passed (39 Data + 36 API)
+- **Build**: Clean (webpack production, 1.79 MiB)
+
+### Commits
+
+- `d5b4771` — Fix #59 #60 #61: APIMonitor PAGE_WINDOW, TextDecoder cross-realm, diagnostic logging (v0.9.4)
