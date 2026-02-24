@@ -155,14 +155,43 @@ describe('HeroCompletionCalculator', () => {
 			expect(result.systems.skills).toBeLessThan(60);
 		});
 
-		test('should handle extra ascension skills', () => {
+		test('should ignore ascension skills and only count top 4 core skills (#62)', () => {
+			// Cleaver scenario: 4 core skills at 130, plus 2 ascension at 1.
+			// Before fix: avg of all 6 = 87, 87/130 = 66.92% (WRONG)
+			// After fix: top 4 non-zero sorted descending = [130,130,130,130], avg = 130/130 = 100%
 			const hero = {
 				rawSkills: JSON.stringify({ 2: 130, 3: 130, 4: 130, 5: 130, 6022: 130, 8268: 1 }),
 			};
 			const result = Calc.calculateCompletion(hero);
-			// avg of 130,130,130,130,130,1 = 108.5 / 130 ≈ 83.5%
-			expect(result.systems.skills).toBeGreaterThan(80);
-			expect(result.systems.skills).toBeLessThan(90);
+			// Top 4 are all 130 → 100%
+			expect(result.systems.skills).toBeCloseTo(100, 0);
+		});
+
+		test('should ignore zero-level skills from rawSkills (#62)', () => {
+			// Hero with 4 core skills, 2 ascension skills at 0
+			const hero = {
+				rawSkills: JSON.stringify({ 2: 130, 3: 130, 4: 130, 5: 130, 6022: 0, 8268: 0 }),
+			};
+			const result = Calc.calculateCompletion(hero);
+			expect(result.systems.skills).toBeCloseTo(100, 0);
+		});
+
+		test('should ignore ascension skills from direct skills object (#62)', () => {
+			const hero = {
+				skills: { 2: 130, 3: 130, 4: 130, 5: 130, 6022: 1, 8268: 0 },
+			};
+			const result = Calc.calculateCompletion(hero);
+			expect(result.systems.skills).toBeCloseTo(100, 0);
+		});
+
+		test('should handle hero with fewer than 4 skills', () => {
+			const hero = {
+				rawSkills: JSON.stringify({ 2: 100, 3: 80 }),
+			};
+			const result = Calc.calculateCompletion(hero);
+			// avg(100, 80) / 130 = 90/130 ≈ 69.2%
+			expect(result.systems.skills).toBeGreaterThan(65);
+			expect(result.systems.skills).toBeLessThan(75);
 		});
 	});
 

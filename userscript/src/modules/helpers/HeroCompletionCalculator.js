@@ -313,15 +313,24 @@ class HeroCompletionCalculator {
 	 * @private
 	 */
 	static _parseSkillLevels(hero) {
-		// Try rawSkills JSON first (most complete)
+		// Try rawSkills JSON first (most complete).
+		// Heroes have 4 core skills; the API may also include ascension
+		// bonus skills at level 0-1 which would dilute the average (#62).
+		// We take only the top 4 non-zero entries to match the core paradigm.
 		const raw = this._parseJSON(hero.rawSkills, null);
 		if (raw && typeof raw === 'object' && !Array.isArray(raw)) {
-			return Object.values(raw).filter((v) => typeof v === 'number');
+			return Object.values(raw)
+				.filter((v) => typeof v === 'number' && v > 0)
+				.sort((a, b) => b - a)
+				.slice(0, 4);
 		}
 
 		// Try direct skills object (raw API hero)
 		if (hero.skills && typeof hero.skills === 'object' && !Array.isArray(hero.skills)) {
-			return Object.values(hero.skills).filter((v) => typeof v === 'number');
+			return Object.values(hero.skills)
+				.filter((v) => typeof v === 'number' && v > 0)
+				.sort((a, b) => b - a)
+				.slice(0, 4);
 		}
 
 		// Fall back to skillLevel1-4 fields

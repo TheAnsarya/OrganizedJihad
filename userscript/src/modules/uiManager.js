@@ -466,8 +466,13 @@ class UIManager {
 	// =====================================================================
 
 	/**
-	 * Dashboard — player overview, store counts, status, and quick tips.
-	 * Pulls live data from IndexedDB metadata + store counts.
+	 * Dashboard — redesigned player overview with card-based layout (#63).
+	 * Row 1: Player name (large, left) + Level (large, right)
+	 * Row 2: Overall progress bar (heroes + titans average)
+	 * Row 3: Four resource/progress cards (Gold, Emeralds, Heroes %, Titans %)
+	 * Row 4: Four activity cards (Daily Quests, Guild Quests, Guild War, Guild Raid)
+	 * Then: win rates, daily summary, tracked data, status, tips.
+	 *
 	 * @returns {Promise<string>} HTML content
 	 */
 	async renderDashboard() {
@@ -492,6 +497,38 @@ class UIManager {
 		const playerName = player.playerName || player.name || null;
 		const playerLevel = player.level || 0;
 		const playerGuild = player.guildName || player.clanTitle || null;
+
+		// ── Hero & Titan completion averages (#63) ───────────────────
+		const heroAvg = await this._calcAverageHeroCompletion();
+		const titanAvg = await this._calcAverageTitanCompletion();
+		const overallAvg = (heroAvg + titanAvg) / 2;
+
+		// ── Today's quest & battle counts (#63) ─────────────────────
+		const todayStart = new Date();
+		todayStart.setHours(0, 0, 0, 0);
+		const todayISO = todayStart.toISOString();
+
+		let dailyQuestsToday = 0;
+		let guildQuestsToday = 0;
+		let guildWarBattlesToday = 0;
+		let guildRaidBattlesToday = 0;
+
+		try {
+			const dq = await this.idbStorage.getAll('dailyQuestCompletions');
+			dailyQuestsToday = dq.filter((q) => q.completedAt >= todayISO).length;
+		} catch { /* empty */ }
+
+		try {
+			const gq = await this.idbStorage.getAll('guildQuestCompletions');
+			guildQuestsToday = gq.filter((q) => q.completedAt >= todayISO).length;
+		} catch { /* empty */ }
+
+		try {
+			const battles = await this.idbStorage.getAll('battles');
+			const todayBattles = battles.filter((b) => b.timestamp >= todayISO);
+			guildWarBattlesToday = todayBattles.filter((b) => b.type === 'GuildWar').length;
+			guildRaidBattlesToday = todayBattles.filter((b) => b.type === 'GuildRaid' || b.type === 'RaidBoss').length;
+		} catch { /* empty */ }
 
 		// Gather counts from actual IndexedDB stores
 		const snapshotCount = await this._countStore('snapshots');
@@ -519,16 +556,78 @@ class UIManager {
 		// ── Daily Summary (#26) ──────────────────────────────────────
 		const dailySummary = await this._renderDailySummary();
 
-		// Player info section
+		// Gold / Emeralds values
+		const gold = player.gold ? Number(player.gold).toLocaleString() : '0';
+		const emeralds = Number(player.starmoney || player.emeralds || 0).toLocaleString();
+
+		// ── Completion bar helper (inline, dark theme) ───────────────
+		const _miniBar = (pct, color) => {
+			const clamped = Math.min(100, Math.max(0, pct || 0));
+			return `<div style="flex:1;background:#333;border-radius:3px;height:8px;min-width:60px">` +
+				`<div style="background:${color};height:100%;border-radius:3px;width:${clamped}%;transition:width .3s"></div>` +
+				`</div>`;
+		};
+
+		// ── Player header section (#63) ──────────────────────────────
 		const playerSection = playerName
-			? `<div class="oj-section">
-					<h3>\uD83D\uDC64 Player</h3>
-					<div class="oj-status-list">
-						<div class="oj-status-row"><span>Name</span><span><strong>${this._escapeHtml(playerName)}</strong></span></div>
-						<div class="oj-status-row"><span>Level</span><span>${playerLevel}</span></div>
-						${playerGuild ? `<div class="oj-status-row"><span>Guild</span><span>${this._escapeHtml(playerGuild)}</span></div>` : ''}
-						${player.gold ? `<div class="oj-status-row"><span>\uD83E\uDE99 Gold</span><span>${Number(player.gold).toLocaleString()}</span></div>` : ''}
-						${(player.starmoney || player.emeralds) ? `<div class="oj-status-row oj-clickable" data-resource-filter="emeralds"><span>\uD83D\uDC8E Emeralds</span><span>${Number(player.starmoney || player.emeralds).toLocaleString()}</span></div>` : ''}
+			? `<div class="oj-section" style="padding:12px 14px">
+					<div style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:8px">
+						<span style="font-size:20px;font-weight:700;color:#e0e0e0">${this._escapeHtml(playerName)}</span>
+						<span style="font-size:18px;font-weight:600;color:#90caf9">Lv ${playerLevel}</span>
+					</div>
+					${playerGuild ? `<div style="font-size:11px;color:#888;margin-bottom:8px">\uD83C\uDFF0 ${this._escapeHtml(playerGuild)}</div>` : ''}
+					<div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">
+						<span style="font-size:11px;color:#aaa;white-space:nowrap">\uD83C\uDFAF Overall</span>
+						${_miniBar(overallAvg, '#7e57c2')}
+						<span style="font-size:12px;font-weight:600;color:#ce93d8;min-width:42px;text-align:right">${overallAvg.toFixed(1)}%</span>
+					</div>
+					<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px">
+						<div style="flex:1;min-width:100px;background:#2a2a2e;border-radius:6px;padding:8px;text-align:center">
+							<div style="font-size:18px">\uD83E\uDE99</div>
+							<div style="font-size:14px;font-weight:700;color:#ffd54f">${gold}</div>
+							<div style="font-size:10px;color:#888">Gold</div>
+						</div>
+						<div style="flex:1;min-width:100px;background:#2a2a2e;border-radius:6px;padding:8px;text-align:center">
+							<div style="font-size:18px">\uD83D\uDC8E</div>
+							<div style="font-size:14px;font-weight:700;color:#4fc3f7">${emeralds}</div>
+							<div style="font-size:10px;color:#888">Emeralds</div>
+						</div>
+						<div style="flex:1;min-width:100px;background:#2a2a2e;border-radius:6px;padding:8px">
+							<div style="font-size:12px;margin-bottom:4px">\uD83E\uDDB8 Heroes</div>
+							<div style="display:flex;align-items:center;gap:4px">
+								${_miniBar(heroAvg, '#81c784')}
+								<span style="font-size:11px;font-weight:600;color:#81c784;min-width:36px;text-align:right">${heroAvg.toFixed(1)}%</span>
+							</div>
+						</div>
+						<div style="flex:1;min-width:100px;background:#2a2a2e;border-radius:6px;padding:8px">
+							<div style="font-size:12px;margin-bottom:4px">\uD83D\uDCA0 Titans</div>
+							<div style="display:flex;align-items:center;gap:4px">
+								${_miniBar(titanAvg, '#ce93d8')}
+								<span style="font-size:11px;font-weight:600;color:#ce93d8;min-width:36px;text-align:right">${titanAvg.toFixed(1)}%</span>
+							</div>
+						</div>
+					</div>
+					<div style="display:flex;gap:6px;flex-wrap:wrap">
+						<div style="flex:1;min-width:100px;background:#2a2a2e;border-radius:6px;padding:6px 8px;text-align:center">
+							<div style="font-size:14px">\u2705</div>
+							<div style="font-size:16px;font-weight:700;color:#81c784">${dailyQuestsToday}</div>
+							<div style="font-size:10px;color:#888">Daily Quests</div>
+						</div>
+						<div style="flex:1;min-width:100px;background:#2a2a2e;border-radius:6px;padding:6px 8px;text-align:center">
+							<div style="font-size:14px">\uD83C\uDFF0</div>
+							<div style="font-size:16px;font-weight:700;color:#ffb74d">${guildQuestsToday}</div>
+							<div style="font-size:10px;color:#888">Guild Quests</div>
+						</div>
+						<div style="flex:1;min-width:100px;background:#2a2a2e;border-radius:6px;padding:6px 8px;text-align:center">
+							<div style="font-size:14px">\u2694\uFE0F</div>
+							<div style="font-size:16px;font-weight:700;color:#ef9a9a">${guildWarBattlesToday}</div>
+							<div style="font-size:10px;color:#888">Guild War</div>
+						</div>
+						<div style="flex:1;min-width:100px;background:#2a2a2e;border-radius:6px;padding:6px 8px;text-align:center">
+							<div style="font-size:14px">\uD83D\uDC32</div>
+							<div style="font-size:16px;font-weight:700;color:#4fc3f7">${guildRaidBattlesToday}</div>
+							<div style="font-size:10px;color:#888">Guild Raid</div>
+						</div>
 					</div>
 				</div>`
 			: '';
@@ -573,7 +672,7 @@ class UIManager {
 						${errorCount > 0 ? `<div class="oj-status-row"><span>Errors</span><span class="oj-status-err">${errorCount}</span></div>` : ''}
 						<div class="oj-status-row">
 							<span>Version</span>
-							<span>0.9.2</span>
+							<span>${__OJ_VERSION__}</span>
 						</div>
 					</div>
 				</div>
@@ -2488,6 +2587,105 @@ class UIManager {
 	 *
 	 * @param {string} storeName - The object store name
 	 * @returns {Promise<number>} Record count
+	 */
+	/**
+	 * Calculate the average hero completion percentage across all tracked heroes (#63).
+	 * Loads heroes from metadata cache or IDB store, deduplicates by heroId,
+	 * then computes each hero's overall completion and averages them.
+	 *
+	 * @returns {Promise<number>} Average hero completion percentage (0-100)
+	 * @private
+	 */
+	async _calcAverageHeroCompletion() {
+		try {
+			let heroes = [];
+
+			// Try metadata cache first
+			const cached = await this.idbStorage.getMetadata('heroesData', null);
+			if (Array.isArray(cached) && cached.length > 0) {
+				heroes = cached;
+			}
+
+			// Fallback: IDB store with dedup
+			if (heroes.length === 0) {
+				const raw = await this.idbStorage.getAll('heroes', 5000);
+				const all = decompressHeroStore(raw);
+				if (all.length > 0) {
+					const byId = {};
+					for (const h of all) {
+						const key = h.heroId || h.id;
+						if (!byId[key] || (h.timestamp || '') > (byId[key].timestamp || '')) {
+							byId[key] = h;
+						}
+					}
+					heroes = Object.values(byId);
+				}
+			}
+
+			if (heroes.length === 0) return 0;
+
+			let total = 0;
+			for (const h of heroes) {
+				total += HeroCompletionCalculator.calculateCompletion(h).overall;
+			}
+			return total / heroes.length;
+		} catch {
+			return 0;
+		}
+	}
+
+	/**
+	 * Calculate the average titan completion percentage across all tracked titans (#63).
+	 * Loads titans from metadata cache or IDB store, deduplicates by titanId,
+	 * then computes each titan's overall completion and averages them.
+	 *
+	 * @returns {Promise<number>} Average titan completion percentage (0-100)
+	 * @private
+	 */
+	async _calcAverageTitanCompletion() {
+		try {
+			let titans = [];
+
+			// Try metadata cache first
+			const cached = await this.idbStorage.getMetadata('titansData', null);
+			if (Array.isArray(cached) && cached.length > 0) {
+				titans = cached;
+			}
+
+			// Fallback: IDB store with dedup
+			if (titans.length === 0) {
+				const raw = await this.idbStorage.getAll('titans', 5000);
+				const all = decompressTitanStore(raw);
+				if (all.length > 0) {
+					const byId = {};
+					for (const t of all) {
+						const key = t.titanId || t.id;
+						if (!byId[key] || (t.timestamp || '') > (byId[key].timestamp || '')) {
+							byId[key] = t;
+						}
+					}
+					titans = Object.values(byId);
+				}
+			}
+
+			if (titans.length === 0) return 0;
+
+			let total = 0;
+			for (const t of titans) {
+				total += TitanCompletionCalculator.calculateCompletion(t).overall;
+			}
+			return total / titans.length;
+		} catch {
+			return 0;
+		}
+	}
+
+	/**
+	 * Count the total entries in an IndexedDB store.
+	 *
+	 * @param {string} storeName - IDB store name
+	 * @returns {Promise<number>} Entry count (0 on error)
+	 * @private
 	 */
 	async _countStore(storeName) {
 		try {
