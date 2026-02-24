@@ -2415,11 +2415,14 @@ class GameTracker {
 	 * @private
 	 */
 	async trackGuildWarBattle(args, data) {
+		const isWin = data.result?.win || false;
+		const timestamp = new Date().toISOString();
+
 		const battleRecord = {
 			type: 'guildWar',
 			defenderId: args.defenderId,
 			fortId: args.fortId,
-			result: data.result?.win ? 'victory' : 'defeat',
+			result: isWin ? 'victory' : 'defeat',
 			myTeam: data.attackers ? this.compressHeroTeam(data.attackers) : null,
 			enemyTeam: data.defenders ? this.compressHeroTeam(data.defenders) : null,
 			reward: data.reward || {},
@@ -2435,8 +2438,22 @@ class GameTracker {
 
 		await this.storage.setMetadata('guildWarBattleHistory', guildWarHistory);
 
+		// Write to IDB battles store for Battles tab display (#85)
+		const battle = {
+			battleType: 'GuildWar',
+			isWin,
+			playerHeroes: data.attackers ? JSON.stringify(this.compressHeroTeam(data.attackers)) : null,
+			opponentHeroes: data.defenders ? JSON.stringify(this.compressHeroTeam(data.defenders)) : null,
+			rewards: data.reward ? JSON.stringify(data.reward) : null,
+			mission: args.fortId || null,
+			timestamp,
+		};
+
+		if (!this._isBattleDuplicate(battle)) {
+			await this.storage.add('battles', battle);
+		}
+
 		// Live activity event
-		const isWin = data.result?.win || false;
 		await this._logActivity('battle', `Guild War ${isWin ? 'WIN' : 'LOSS'} at fort #${args.fortId || '?'}`, { isWin });
 
 		// Track guild activity for guild war participation
@@ -2492,6 +2509,8 @@ class GameTracker {
 	 * @private
 	 */
 	async trackRaidBossAttack(args, data) {
+		const timestamp = new Date().toISOString();
+
 		const attackRecord = {
 			bossId: args.bossId,
 			damage: data.damage || 0,
@@ -2508,6 +2527,22 @@ class GameTracker {
 		}
 
 		await this.storage.setMetadata('raidBossAttackHistory', raidHistory);
+
+		// Write to IDB battles store for Battles tab display (#85)
+		// Raid boss attacks are always successful (you always deal damage)
+		const battle = {
+			battleType: 'RaidBoss',
+			isWin: true,
+			playerHeroes: data.attackers ? JSON.stringify(this.compressHeroTeam(data.attackers)) : null,
+			opponentHeroes: null,
+			rewards: data.reward ? JSON.stringify(data.reward) : null,
+			mission: args.bossId || null,
+			timestamp,
+		};
+
+		if (!this._isBattleDuplicate(battle)) {
+			await this.storage.add('battles', battle);
+		}
 
 		// Track guild activity for raid boss attacks
 		// Guild raids are cooperative PvE events
@@ -3692,7 +3727,7 @@ class GameTracker {
 			}
 
 			// Update chat activity summary for the day
-			await this.updateChatActivitySummary(chatType, conversationId, messages.length, currentPlayerId);
+			await this.updateChatActivitySummary(chatType, conversationId, messages.length, currentPlayerId, false);
 		} catch (error) {
 			console.error('[OrganizedJihad] Error tracking chat messages:', error);
 		}
@@ -3752,7 +3787,7 @@ class GameTracker {
 			console.log(`[OrganizedJihad] Tracked outgoing ${chatType} chat message`);
 
 			// Update activity summary
-			await this.updateChatActivitySummary(chatType, conversationId, 1, playerId);
+			await this.updateChatActivitySummary(chatType, conversationId, 1, playerId, true);
 		} catch (error) {
 			console.error('[OrganizedJihad] Error tracking outgoing message:', error);
 		}
@@ -3766,9 +3801,10 @@ class GameTracker {
 	 * @param {string} conversationId - Conversation/chat identifier
 	 * @param {number} messageCount - Number of messages in this batch
 	 * @param {number} currentPlayerId - Current player's user ID
+	 * @param {boolean} isOutgoing - Whether these are outgoing messages (true) or incoming (false)
 	 * @private
 	 */
-	async updateChatActivitySummary(chatType, conversationId, messageCount, currentPlayerId) {
+	async updateChatActivitySummary(chatType, conversationId, messageCount, currentPlayerId, isOutgoing = false) {
 		try {
 			// Get today's date (YYYY-MM-DD format)
 			const today = new Date().toISOString().split('T')[0];
@@ -3789,8 +3825,8 @@ class GameTracker {
 			const summary = {
 				summaryDate: new Date(today),
 				chatType: chatType,
-				messagesSent: messagesSent + messageCount, // Approximate, improve with actual query
-				messagesReceived: messagesReceived,
+				messagesSent: messagesSent + (isOutgoing ? messageCount : 0),
+				messagesReceived: messagesReceived + (isOutgoing ? 0 : messageCount),
 				uniqueContacts: existingSummary?.uniqueContacts || 1,
 				conversationId: conversationId,
 				groupName: existingSummary?.groupName || null,

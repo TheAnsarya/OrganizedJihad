@@ -695,19 +695,14 @@ class IndexedDBStorage {
 	 */
 	async saveAPILogs(logData) {
 		try {
-			await this.ensureDB();
+			await this.initPromise;
 
-			const transaction = this.db.transaction(['metadata'], 'readwrite');
-			const metadataStore = transaction.objectStore('metadata');
-
-			// Store the log data in metadata store
-			await metadataStore.put({
+			// Delegate to put() which already uses proper Promise wrapping (#84)
+			await this.put('metadata', {
 				key: 'apiMonitorLogs',
 				value: logData,
 				timestamp: Date.now(),
 			});
-
-			await transaction.complete;
 		} catch (error) {
 			console.error('[IndexedDBStorage] Failed to save API logs:', error);
 			throw error;
@@ -721,7 +716,7 @@ class IndexedDBStorage {
 	 */
 	async getAPILogs() {
 		try {
-			await this.ensureDB();
+			await this.initPromise;
 
 			const data = await this.get('metadata', 'apiMonitorLogs');
 			return data ? data.value : null;
@@ -740,19 +735,23 @@ class IndexedDBStorage {
 	 */
 	async saveAPILogEntries(logEntries) {
 		try {
-			await this.ensureDB();
+			await this.initPromise;
 
-			const transaction = this.db.transaction(['apiLogs'], 'readwrite');
-			const apiLogsStore = transaction.objectStore('apiLogs');
+			// Use proper Promise wrapping for IDB transaction (#84)
+			return new Promise((resolve, reject) => {
+				const transaction = this.db.transaction(['apiLogs'], 'readwrite');
+				const apiLogsStore = transaction.objectStore('apiLogs');
 
-			for (const entry of logEntries) {
-				await apiLogsStore.add({
-					...entry,
-					savedAt: Date.now(),
-				});
-			}
+				for (const entry of logEntries) {
+					apiLogsStore.add({
+						...entry,
+						savedAt: Date.now(),
+					});
+				}
 
-			await transaction.complete;
+				transaction.oncomplete = () => resolve();
+				transaction.onerror = () => reject(transaction.error);
+			});
 		} catch (error) {
 			console.error('[IndexedDBStorage] Failed to save API log entries:', error);
 			throw error;
@@ -770,7 +769,7 @@ class IndexedDBStorage {
 	 */
 	async getAPILogEntries(options = {}) {
 		try {
-			await this.ensureDB();
+			await this.initPromise;
 
 			const limit = options.limit || 1000;
 			let entries = await this.getAll('apiLogs', limit);
@@ -800,7 +799,7 @@ class IndexedDBStorage {
 	 */
 	async clearOldAPILogs(keepCount = 5000) {
 		try {
-			await this.ensureDB();
+			await this.initPromise;
 
 			const allEntries = await this.getAll('apiLogs');
 
@@ -812,17 +811,21 @@ class IndexedDBStorage {
 			allEntries.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
 			const entriesToDelete = allEntries.slice(keepCount);
 
-			const transaction = this.db.transaction(['apiLogs'], 'readwrite');
-			const apiLogsStore = transaction.objectStore('apiLogs');
+			// Use proper Promise wrapping for IDB transaction (#84)
+			return new Promise((resolve, reject) => {
+				const transaction = this.db.transaction(['apiLogs'], 'readwrite');
+				const apiLogsStore = transaction.objectStore('apiLogs');
 
-			for (const entry of entriesToDelete) {
-				await apiLogsStore.delete(entry.id);
-			}
+				for (const entry of entriesToDelete) {
+					apiLogsStore.delete(entry.id);
+				}
 
-			await transaction.complete;
-
-			console.log(`[IndexedDBStorage] Deleted ${entriesToDelete.length} old API log entries`);
-			return entriesToDelete.length;
+				transaction.oncomplete = () => {
+					console.log(`[IndexedDBStorage] Deleted ${entriesToDelete.length} old API log entries`);
+					resolve(entriesToDelete.length);
+				};
+				transaction.onerror = () => reject(transaction.error);
+			});
 		} catch (error) {
 			console.error('[IndexedDBStorage] Failed to clear old API logs:', error);
 			return 0;

@@ -314,8 +314,8 @@ class UpgradeTracker {
 			heroName: resolveHeroName(heroId),
 			playerId,
 			powerAfter: hero?.power || 0,
-			starsBefore: Math.max(0, (hero?.star || hero?.color || 1) - 1),
-			starsAfter: hero?.star || hero?.color || 0,
+			starsBefore: Math.max(0, (hero?.star || 1) - 1),
+			starsAfter: hero?.star || 0,
 			soulStonesConsumed: args.count || 0,
 		};
 

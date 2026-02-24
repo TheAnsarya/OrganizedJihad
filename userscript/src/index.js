@@ -385,12 +385,18 @@ import './styles/main.css';
 		// ─── Wire PHASE 2 UI Callbacks ──────────────────────────────
 		// Now that all DOM-dependent modules exist, wire the callback
 		// so future processAPIResponse calls update badge + overlay.
-		onApiProcessed = async (_request, _response, count) => {
+		onApiProcessed = async (request, _response, count) => {
 			updateBadge(statusBadge, count);
-			// NOTE: request contains the full batch {calls:[...]},
-			// not individual call objects, so request.name is always
-			// undefined.  domTargeting and energy checks are handled
-			// per-call inside the handler registry instead.
+
+			// Notify domTargeting about each API call for battle auto-hide (#86)
+			if (request?.calls) {
+				for (const call of request.calls) {
+					if (call.name) {
+						domTargeting.onApiCall(call.name);
+					}
+				}
+			}
+
 			await gameOverlay.onHeroDataUpdated();
 		};
 
