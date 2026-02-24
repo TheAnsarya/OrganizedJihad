@@ -20,7 +20,7 @@
 			<label class="form-label fw-bold">Hero</label>
 			<select class="form-select" @bind="SelectedHeroName">
 				<option value="">All Heroes</option>
-				@foreach (var name in HeroNames) {
+				@foreach (var name in HeroNameList) {
 					<option value="@name">@name</option>
 				}
 			</select>
@@ -128,9 +128,13 @@
 									<thead class="table-dark">
 										<tr>
 											<th>Time</th>
+											<th class="text-end">ID</th>
 											<th>Hero</th>
 											<th>Type</th>
 											<th>Details</th>
+											<th>Artifact</th>
+											<th>Glyph</th>
+											<th>Ascension</th>
 											<th class="text-end">Power</th>
 										</tr>
 									</thead>
@@ -140,8 +144,11 @@
 												<td>
 													<small>@upgrade.Timestamp.ToString("MMM dd HH:mm")</small>
 												</td>
+												<td class="text-end text-muted">
+													<small>@upgrade.HeroId</small>
+												</td>
 												<td>
-													<strong>@upgrade.HeroName</strong>
+													<strong>@upgrade.DisplayName</strong>
 												</td>
 												<td>
 													<span class="badge @GetUpgradeTypeBadgeClass(upgrade.UpgradeType)">
@@ -149,6 +156,21 @@
 													</span>
 												</td>
 												<td>@upgrade.Details</td>
+												<td>
+													@if (!string.IsNullOrEmpty(upgrade.ArtifactInfo)) {
+														<small class="text-info">@upgrade.ArtifactInfo</small>
+													}
+												</td>
+												<td>
+													@if (!string.IsNullOrEmpty(upgrade.GlyphInfo)) {
+														<small class="text-secondary">@upgrade.GlyphInfo</small>
+													}
+												</td>
+												<td>
+													@if (!string.IsNullOrEmpty(upgrade.AscensionInfo)) {
+														<small class="text-warning">@upgrade.AscensionInfo</small>
+													}
+												</td>
 												<td class="text-end">
 													@if (upgrade.PowerAfter > 0) {
 														<span class="text-muted">@upgrade.PowerAfter.ToString("N0")</span>
@@ -183,7 +205,7 @@
 	private string SelectedUpgradeType { get; set; } = "";
 	private DateTime? DateFrom { get; set; }
 	private DateTime? DateTo { get; set; }
-	private List<string> HeroNames { get; set; } = new();
+	private List<string> HeroNameList { get; set; } = new();
 	private List<UpgradeRow> AllUpgrades { get; set; } = new();
 	private List<UpgradeRow> FilteredUpgrades { get; set; } = new();
 
@@ -201,6 +223,13 @@
 		await LoadData();
 		IsLoading = false;
 	}
+
+	/// <summary>
+	/// Resolves a hero name from the static dictionary, falling back to
+	/// the stored name only if it's a real name (not Hero_NNN).
+	/// </summary>
+	private static string ResolveName(long heroId, string storedName) =>
+		HeroNames.ResolveWithFallback(heroId, storedName);
 
 	private async Task LoadData() {
 		using var context = await DbFactory.CreateDbContextAsync();
@@ -233,7 +262,8 @@
 
 		AllUpgrades.AddRange(levels.Select(u => new UpgradeRow {
 			Timestamp = u.Timestamp,
-			HeroName = u.HeroName,
+			HeroId = u.HeroId,
+			DisplayName = ResolveName(u.HeroId, u.HeroName),
 			UpgradeType = "Level",
 			Details = $"Lv {u.LevelBefore} → {u.LevelAfter} ({u.ExperienceSpent:N0} XP, {u.GoldSpent:N0} gold)",
 			PowerAfter = u.PowerAfter,
@@ -241,7 +271,8 @@
 
 		AllUpgrades.AddRange(stars.Select(u => new UpgradeRow {
 			Timestamp = u.Timestamp,
-			HeroName = u.HeroName,
+			HeroId = u.HeroId,
+			DisplayName = ResolveName(u.HeroId, u.HeroName),
 			UpgradeType = "Star",
 			Details = $"★{u.StarsBefore} → ★{u.StarsAfter} ({u.SoulStonesConsumed} soul stones)",
 			PowerAfter = u.PowerAfter,
@@ -249,7 +280,8 @@
 
 		AllUpgrades.AddRange(colors.Select(u => new UpgradeRow {
 			Timestamp = u.Timestamp,
-			HeroName = u.HeroName,
+			HeroId = u.HeroId,
+			DisplayName = ResolveName(u.HeroId, u.HeroName),
 			UpgradeType = "Color",
 			Details = $"{u.ColorNameBefore ?? $"Rank {u.ColorBefore}"} → {u.ColorNameAfter ?? $"Rank {u.ColorAfter}"}",
 			PowerAfter = u.PowerAfter,
@@ -257,7 +289,8 @@
 
 		AllUpgrades.AddRange(skills.Select(u => new UpgradeRow {
 			Timestamp = u.Timestamp,
-			HeroName = u.HeroName,
+			HeroId = u.HeroId,
+			DisplayName = ResolveName(u.HeroId, u.HeroName),
 			UpgradeType = "Skill",
 			Details = $"{u.SkillName} Lv {u.SkillLevelBefore} → {u.SkillLevelAfter} ({u.GoldSpent:N0} gold)",
 			PowerAfter = u.PowerAfter,
@@ -265,23 +298,28 @@
 
 		AllUpgrades.AddRange(artifacts.Select(u => new UpgradeRow {
 			Timestamp = u.Timestamp,
-			HeroName = u.HeroName,
+			HeroId = u.HeroId,
+			DisplayName = ResolveName(u.HeroId, u.HeroName),
 			UpgradeType = "Artifact",
 			Details = $"{u.ArtifactType} {u.ArtifactName ?? ""} Lv {u.LevelBefore} → {u.LevelAfter}",
+			ArtifactInfo = $"{u.ArtifactType}: {u.ArtifactName ?? "?"} Lv {u.LevelAfter}",
 			PowerAfter = u.PowerAfter,
 		}));
 
 		AllUpgrades.AddRange(glyphs.Select(u => new UpgradeRow {
 			Timestamp = u.Timestamp,
-			HeroName = u.HeroName,
+			HeroId = u.HeroId,
+			DisplayName = ResolveName(u.HeroId, u.HeroName),
 			UpgradeType = "Glyph",
 			Details = $"{u.GlyphType} Lv {u.GlyphLevelBefore} → {u.GlyphLevelAfter} ({u.GoldSpent:N0} gold)",
+			GlyphInfo = $"{u.GlyphType}: Lv {u.GlyphLevelAfter}",
 			PowerAfter = u.PowerAfter,
 		}));
 
 		AllUpgrades.AddRange(skins.Select(u => new UpgradeRow {
 			Timestamp = u.Timestamp,
-			HeroName = u.HeroName,
+			HeroId = u.HeroId,
+			DisplayName = ResolveName(u.HeroId, u.HeroName),
 			UpgradeType = "Skin",
 			Details = u.IsNewUnlock
 				? $"{u.SkinName} unlocked!"
@@ -292,8 +330,8 @@
 		// Sort by timestamp descending
 		AllUpgrades = AllUpgrades.OrderByDescending(u => u.Timestamp).ToList();
 
-		// Extract unique hero names for filter dropdown
-		HeroNames = AllUpgrades.Select(u => u.HeroName)
+		// Extract unique hero names for filter dropdown (using resolved names)
+		HeroNameList = AllUpgrades.Select(u => u.DisplayName)
 			.Where(n => !string.IsNullOrEmpty(n))
 			.Distinct()
 			.OrderBy(n => n)
@@ -306,7 +344,7 @@
 		var filtered = AllUpgrades.AsEnumerable();
 
 		if (!string.IsNullOrEmpty(SelectedHeroName)) {
-			filtered = filtered.Where(u => u.HeroName == SelectedHeroName);
+			filtered = filtered.Where(u => u.DisplayName == SelectedHeroName);
 		}
 
 		if (!string.IsNullOrEmpty(SelectedUpgradeType)) {
@@ -349,12 +387,34 @@
 
 	/// <summary>
 	/// Unified view model for displaying all hero upgrade types in a single table.
+	/// Includes optional columns for artifact, glyph, and ascension details.
 	/// </summary>
 	private class UpgradeRow {
+		/// <summary>When the upgrade occurred.</summary>
 		public DateTime Timestamp { get; set; }
-		public string HeroName { get; set; } = "";
+
+		/// <summary>Game's internal hero ID (e.g. 49 = Yasmine).</summary>
+		public long HeroId { get; set; }
+
+		/// <summary>Resolved display name (from static dictionary).</summary>
+		public string DisplayName { get; set; } = "";
+
+		/// <summary>Type of upgrade (Level, Star, Color, Skill, Artifact, Glyph, Skin).</summary>
 		public string UpgradeType { get; set; } = "";
+
+		/// <summary>Human-readable details of the upgrade.</summary>
 		public string Details { get; set; } = "";
+
+		/// <summary>Artifact-specific info (only for artifact upgrades).</summary>
+		public string? ArtifactInfo { get; set; }
+
+		/// <summary>Glyph-specific info (only for glyph upgrades).</summary>
+		public string? GlyphInfo { get; set; }
+
+		/// <summary>Ascension-specific info (only for ascension-related upgrades).</summary>
+		public string? AscensionInfo { get; set; }
+
+		/// <summary>Hero's total power after the upgrade.</summary>
 		public int PowerAfter { get; set; }
 	}
 }

@@ -310,7 +310,7 @@
 			Category = "equipment",
 			ItemName = e.EquipmentName ?? $"Slot {e.SlotIndex}",
 			Details = $"{e.ChangeType} (Color Rank {e.HeroColorRank})",
-			Target = e.HeroName,
+			Target = HeroNames.ResolveWithFallback(e.HeroId, e.HeroName),
 			Quantity = 1,
 			IsEquipment = true,
 		}));

@@ -88,6 +88,7 @@ for api call tracking, I've got 10 chests trackings, but it has only sparse data
 
 Is this going to fix the problem? continue fixing issues and make this script work; continue;
 
+The  UI is now displaying Heo information, but I need more, for instance it says the name is "Hero_49" instead of "Yasmine" but we need an ID column with 49 and the name column needs to be fixed to the actual hero name and add ascension and glyph and artfiact columns; continue;
 
 
 

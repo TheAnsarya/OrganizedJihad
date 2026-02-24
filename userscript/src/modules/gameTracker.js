@@ -25,6 +25,7 @@
 import IndexedDBStorage from './indexedDBStorage.js';
 import UpgradeTracker from './trackers/UpgradeTracker.js';
 import { compressHeroBatch, compressTitanBatch } from './heroCompression.js';
+import { resolveHeroName } from './heroNames.js';
 
 /**
  * Reference to the real page window — bypasses TamperMonkey's sandbox.
@@ -1781,7 +1782,7 @@ class GameTracker {
 
 			return {
 				heroId: hero.id,
-				heroName: hero.name || `Hero_${hero.id}`,
+				heroName: resolveHeroName(hero.id),
 				level: hero.level || 0,
 				stars: hero.star || 0,
 				color: hero.color || 0,
@@ -1942,7 +1943,7 @@ class GameTracker {
 
 		const titans = Object.values(data).map((titan) => ({
 			titanId: titan.id,
-			titanName: titan.name || `Titan_${titan.id}`,
+			titanName: resolveHeroName(titan.id),
 			level: titan.level || 0,
 			stars: titan.star || 0,
 			power: titan.power || 0,
@@ -4696,7 +4697,7 @@ class GameTracker {
 			quantityUsed: args.amount || 1,
 			quantityRemaining: 0, // Not always available in response
 			usageContext,
-			targetEntity: args.heroId ? `Hero_${args.heroId}` : (args.titanId ? `Titan_${args.titanId}` : null),
+			targetEntity: args.heroId ? resolveHeroName(args.heroId) : (args.titanId ? resolveHeroName(args.titanId) : null),
 			playerId,
 		};
 

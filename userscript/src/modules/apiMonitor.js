@@ -49,14 +49,14 @@ class APIMonitor {
 		this.isMonitoring = false;
 		this.originalXHR = null;
 		this.originalFetch = null;
-		
+
 		// Storage for discovered endpoints and their call counts
 		this.discoveredEndpoints = new Map();
-		
+
 		// Request/response log (limited to last 1000 entries to prevent memory issues)
 		this.requestLog = [];
 		this.maxLogSize = 1000;
-		
+
 		// Statistics
 		this.stats = {
 			totalRequests: 0,
@@ -65,7 +65,7 @@ class APIMonitor {
 			failedRequests: 0,
 			startTime: Date.now(),
 		};
-		
+
 		// Event listeners for real-time monitoring
 		this.listeners = [];
 	}
@@ -79,19 +79,19 @@ class APIMonitor {
 	async init() {
 		try {
 			await this.storage.init();
-			
+
 			// Set up request interception
 			this.interceptXHR();
 			this.interceptFetch();
-			
+
 			// Load previously discovered endpoints from storage
 			await this.loadDiscoveredEndpoints();
-			
+
 			this.isMonitoring = true;
 			console.log('[APIMonitor] Initialized - monitoring all Hero Wars API calls');
 			console.log('[APIMonitor] Access logs via window.apiMonitor.getLogs()');
 			console.log('[APIMonitor] Export logs via window.apiMonitor.exportLogs()');
-			
+
 			// Make available globally for console access (page context)
 			PAGE_WINDOW.apiMonitor = this;
 		} catch (error) {

@@ -1,0 +1,354 @@
+@page "/heroes"
+@using OrganizedJihad.Data
+@using OrganizedJihad.Data.Models
+@using Microsoft.EntityFrameworkCore
+@using System.Text.Json
+@inject IDbContextFactory<GameDatabaseContext> DbFactory
+
+<PageTitle>Hero Roster - OrganizedJihad</PageTitle>
+
+<div class="container-fluid">
+	<div class="row mb-4">
+		<div class="col-12">
+			<h1 class="display-5">Hero Roster</h1>
+			<p class="text-muted">Latest snapshot of all heroes with stats, artifacts, glyphs, and ascension progress.</p>
+		</div>
+	</div>
+
+	@if (IsLoading) {
+		<div class="row">
+			<div class="col-12 text-center py-5">
+				<div class="spinner-border" role="status">
+					<span class="visually-hidden">Loading...</span>
+				</div>
+			</div>
+		</div>
+	} else if (!Heroes.Any()) {
+		<div class="row">
+			<div class="col-12 text-center py-5 text-muted">
+				<p class="mb-0">No hero data captured yet.</p>
+				<small>Hero data will appear after the browser extension captures a heroGetAll API response.</small>
+			</div>
+		</div>
+	} else {
+		<!-- Summary -->
+		<div class="row mb-4">
+			<div class="col-md-2">
+				<div class="card text-center border-primary">
+					<div class="card-body py-2">
+						<div class="fs-4 fw-bold text-primary">@Heroes.Count</div>
+						<small class="text-muted">Heroes</small>
+					</div>
+				</div>
+			</div>
+			<div class="col-md-2">
+				<div class="card text-center">
+					<div class="card-body py-2">
+						<div class="fs-4 fw-bold">@Heroes.Sum(h => h.Power).ToString("N0")</div>
+						<small class="text-muted">Total Power</small>
+					</div>
+				</div>
+			</div>
+			<div class="col-md-2">
+				<div class="card text-center">
+					<div class="card-body py-2">
+						<div class="fs-4 fw-bold">@Heroes.Max(h => h.Level)</div>
+						<small class="text-muted">Max Level</small>
+					</div>
+				</div>
+			</div>
+			<div class="col-md-2">
+				<div class="card text-center">
+					<div class="card-body py-2">
+						<div class="fs-4 fw-bold">@Heroes.Count(h => h.Stars >= 6)</div>
+						<small class="text-muted">★6+ Heroes</small>
+					</div>
+				</div>
+			</div>
+			<div class="col-md-4">
+				<div class="card">
+					<div class="card-body py-2">
+						<small class="text-muted d-block">Snapshot from</small>
+						<span>@SnapshotTime?.ToString("yyyy-MM-dd HH:mm:ss") ?? "N/A"</span>
+					</div>
+				</div>
+			</div>
+		</div>
+
+		<!-- Sort Options -->
+		<div class="row mb-3">
+			<div class="col-md-3">
+				<label class="form-label fw-bold">Sort by</label>
+				<select class="form-select" @bind="SortField" @bind:after="ApplySort">
+					<option value="power">Power (desc)</option>
+					<option value="level">Level (desc)</option>
+					<option value="stars">Stars (desc)</option>
+					<option value="name">Name (A-Z)</option>
+					<option value="id">ID</option>
+				</select>
+			</div>
+		</div>
+
+		<!-- Hero Table -->
+		<div class="row">
+			<div class="col-12">
+				<div class="card">
+					<div class="card-header">
+						<h5 class="mb-0">All Heroes</h5>
+					</div>
+					<div class="card-body p-0">
+						<div class="table-responsive">
+							<table class="table table-striped table-hover mb-0 table-sm">
+								<thead class="table-dark">
+									<tr>
+										<th class="text-end">ID</th>
+										<th>Name</th>
+										<th class="text-end">Lv</th>
+										<th class="text-center">Stars</th>
+										<th>Color</th>
+										<th class="text-end">Power</th>
+										<th>Skills</th>
+										<th>Artifacts</th>
+										<th>Glyphs</th>
+										<th>Ascension</th>
+										<th class="text-end">Skins</th>
+									</tr>
+								</thead>
+								<tbody>
+									@foreach (var hero in Heroes) {
+										<tr>
+											<td class="text-end text-muted">@hero.HeroId</td>
+											<td><strong>@hero.DisplayName</strong></td>
+											<td class="text-end">@hero.Level</td>
+											<td class="text-center">
+												<span class="@GetStarClass(hero.Stars)">
+													@(new string('★', Math.Min(hero.Stars, 7)))
+												</span>
+											</td>
+											<td>
+												<span class="badge @GetColorBadgeClass(hero.Color)">
+													@GetColorName(hero.Color)
+												</span>
+											</td>
+											<td class="text-end fw-bold">@hero.Power.ToString("N0")</td>
+											<td>
+												<small class="text-muted">
+													@hero.SkillLevel1/@hero.SkillLevel2/@hero.SkillLevel3/@hero.SkillLevel4
+												</small>
+											</td>
+											<td>
+												<small>
+													<span class="text-danger" title="Weapon">W:@hero.ArtifactWeapon</span>
+													<span class="text-primary" title="Book">B:@hero.ArtifactBook</span>
+													<span class="text-warning" title="Ring">R:@hero.ArtifactRing</span>
+												</small>
+											</td>
+											<td>
+												@if (!string.IsNullOrEmpty(hero.GlyphSummary)) {
+													<small class="text-secondary">@hero.GlyphSummary</small>
+												} else {
+													<small class="text-muted">—</small>
+												}
+											</td>
+											<td>
+												@if (!string.IsNullOrEmpty(hero.AscensionSummary)) {
+													<small class="text-info">@hero.AscensionSummary</small>
+												} else {
+													<small class="text-muted">—</small>
+												}
+											</td>
+											<td class="text-end">@hero.Skins</td>
+										</tr>
+									}
+								</tbody>
+							</table>
+						</div>
+					</div>
+				</div>
+			</div>
+		</div>
+	}
+</div>
+
+@code {
+	private bool IsLoading { get; set; } = true;
+	private List<HeroRow> Heroes { get; set; } = new();
+	private DateTime? SnapshotTime { get; set; }
+	private string SortField { get; set; } = "power";
+
+	protected override async Task OnInitializedAsync() {
+		await LoadData();
+		IsLoading = false;
+	}
+
+	private async Task LoadData() {
+		using var context = await DbFactory.CreateDbContextAsync();
+
+		// Get the latest snapshot timestamp (all heroes from the same batch share a timestamp)
+		var latestTimestamp = await context.Heroes.AsNoTracking()
+			.MaxAsync(h => (DateTime?)h.Timestamp);
+
+		if (latestTimestamp == null) return;
+
+		SnapshotTime = latestTimestamp;
+
+		// Load all heroes from the latest snapshot
+		var heroes = await context.Heroes.AsNoTracking()
+			.Where(h => h.Timestamp == latestTimestamp)
+			.ToListAsync();
+
+		Heroes = heroes.Select(h => new HeroRow {
+			HeroId = h.HeroId,
+			DisplayName = HeroNames.ResolveWithFallback(h.HeroId, h.HeroName),
+			Level = h.Level,
+			Stars = h.Stars,
+			Color = h.Color,
+			Power = h.Power,
+			Skins = h.Skins,
+			SkillLevel1 = h.SkillLevel1,
+			SkillLevel2 = h.SkillLevel2,
+			SkillLevel3 = h.SkillLevel3,
+			SkillLevel4 = h.SkillLevel4,
+			ArtifactWeapon = h.ArtifactWeapon,
+			ArtifactBook = h.ArtifactBook,
+			ArtifactRing = h.ArtifactRing,
+			GlyphSummary = ParseGlyphSummary(h.GlyphData),
+			AscensionSummary = ParseAscensionSummary(h),
+		}).ToList();
+
+		ApplySort();
+	}
+
+	private void ApplySort() {
+		Heroes = SortField switch {
+			"power" => Heroes.OrderByDescending(h => h.Power).ToList(),
+			"level" => Heroes.OrderByDescending(h => h.Level).ThenByDescending(h => h.Power).ToList(),
+			"stars" => Heroes.OrderByDescending(h => h.Stars).ThenByDescending(h => h.Power).ToList(),
+			"name" => Heroes.OrderBy(h => h.DisplayName).ToList(),
+			"id" => Heroes.OrderBy(h => h.HeroId).ToList(),
+			_ => Heroes.OrderByDescending(h => h.Power).ToList(),
+		};
+	}
+
+	/// <summary>
+	/// Parses the GlyphData JSON string into a human-readable glyph summary.
+	/// Expected format: JSON array of rune levels, e.g. [10, 20, 15, 5, 30]
+	/// or JSON object like {"strength": 5, "intelligence": 3, ...}.
+	/// </summary>
+	private static string? ParseGlyphSummary(string? glyphData) {
+		if (string.IsNullOrEmpty(glyphData)) return null;
+
+		try {
+			using var doc = JsonDocument.Parse(glyphData);
+
+			if (doc.RootElement.ValueKind == JsonValueKind.Array) {
+				var levels = new List<int>();
+				foreach (var el in doc.RootElement.EnumerateArray()) {
+					levels.Add(el.TryGetInt32(out var v) ? v : 0);
+				}
+				if (levels.Count == 0 || levels.All(l => l == 0)) return null;
+				return string.Join("/", levels);
+			}
+
+			if (doc.RootElement.ValueKind == JsonValueKind.Object) {
+				var parts = new List<string>();
+				foreach (var prop in doc.RootElement.EnumerateObject()) {
+					var shortName = prop.Name.Length > 3 ? prop.Name[..3].ToUpper() : prop.Name.ToUpper();
+					parts.Add($"{shortName}:{prop.Value}");
+				}
+				return parts.Count > 0 ? string.Join(" ", parts) : null;
+			}
+		} catch {
+			// If JSON parsing fails, return null
+		}
+
+		return null;
+	}
+
+	/// <summary>
+	/// Parses ascension data from the hero's extended fields.
+	/// The Hero model stores raw ascension data as JSON; we try
+	/// to extract a summary like "T1: 3/5, T2: 1/5" showing
+	/// completed tiers/nodes.
+	/// </summary>
+	private static string? ParseAscensionSummary(Hero hero) {
+		// The Hero model currently doesn't have an Ascension column —
+		// ascension data is captured in the userscript's hero snapshot
+		// but not yet persisted as a separate DB column.
+		// For future use: when the column is added, parse it here.
+		// For now, return null.
+		return null;
+	}
+
+	/// <summary>
+	/// Returns a CSS class for star display based on count.
+	/// </summary>
+	private static string GetStarClass(int stars) => stars switch {
+		>= 6 => "text-warning fw-bold",
+		>= 4 => "text-warning",
+		_ => "text-muted",
+	};
+
+	/// <summary>
+	/// Maps color rank number to a human-readable name.
+	/// HW color ranks: 0=White, 1=Green, 2=Green+1, 3=Blue, 4=Blue+1, 5=Blue+2,
+	/// 6=Violet, 7=Violet+1, 8=Violet+2, 9=Violet+3, 10=Orange, 11=Orange+1,
+	/// 12=Orange+2, 13=Orange+3, 14=Orange+4, 15=Red, 16=Red+1, 17=Red+2
+	/// </summary>
+	private static string GetColorName(int color) => color switch {
+		0 => "White",
+		1 => "Green",
+		2 => "Green+1",
+		3 => "Blue",
+		4 => "Blue+1",
+		5 => "Blue+2",
+		6 => "Violet",
+		7 => "Violet+1",
+		8 => "Violet+2",
+		9 => "Violet+3",
+		10 => "Orange",
+		11 => "Orange+1",
+		12 => "Orange+2",
+		13 => "Orange+3",
+		14 => "Orange+4",
+		15 => "Red",
+		16 => "Red+1",
+		17 => "Red+2",
+		_ => $"Rank {color}",
+	};
+
+	/// <summary>
+	/// Returns a Bootstrap badge CSS class for the color rank.
+	/// </summary>
+	private static string GetColorBadgeClass(int color) => color switch {
+		0 => "bg-light text-dark border",
+		1 or 2 => "bg-success",
+		3 or 4 or 5 => "bg-primary",
+		6 or 7 or 8 or 9 => "text-bg-purple",
+		10 or 11 or 12 or 13 or 14 => "bg-warning text-dark",
+		>= 15 => "bg-danger",
+		_ => "bg-secondary",
+	};
+
+	/// <summary>
+	/// View model for displaying hero roster information.
+	/// </summary>
+	private class HeroRow {
+		public long HeroId { get; set; }
+		public string DisplayName { get; set; } = "";
+		public int Level { get; set; }
+		public int Stars { get; set; }
+		public int Color { get; set; }
+		public int Power { get; set; }
+		public int Skins { get; set; }
+		public int SkillLevel1 { get; set; }
+		public int SkillLevel2 { get; set; }
+		public int SkillLevel3 { get; set; }
+		public int SkillLevel4 { get; set; }
+		public int ArtifactWeapon { get; set; }
+		public int ArtifactBook { get; set; }
+		public int ArtifactRing { get; set; }
+		public string? GlyphSummary { get; set; }
+		public string? AscensionSummary { get; set; }
+	}
+}

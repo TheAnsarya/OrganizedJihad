@@ -186,8 +186,8 @@ describe('GameTracker', () => {
 	describe('trackHeroesData', () => {
 		test('should save heroes as a compressed batch', async () => {
 			const data = {
-				'101': { id: 101, name: 'Galahad', level: 120, star: 6, color: 15, power: 50000 },
-				'102': { id: 102, name: 'Astaroth', level: 115, star: 5, color: 12, power: 48000 },
+				'2': { id: 2, level: 120, star: 6, color: 15, power: 50000 },
+				'4': { id: 4, level: 115, star: 5, color: 12, power: 48000 },
 			};
 
 			await tracker.trackHeroesData(data);
@@ -198,18 +198,18 @@ describe('GameTracker', () => {
 				'heroes',
 				expect.objectContaining({ _compressed: 1 }),
 			);
-			// Verify both heroes are in the batch
+			// Verify both heroes are in the batch with dictionary-resolved names
 			const batch = mockStorage.add.mock.calls.find((c) => c[0] === 'heroes')?.[1];
 			const heroes = decompressHeroBatch(batch);
 			expect(heroes).toHaveLength(2);
-			expect(heroes.find((h) => h.heroId === 101).heroName).toBe('Galahad');
-			expect(heroes.find((h) => h.heroId === 102).heroName).toBe('Astaroth');
+			expect(heroes.find((h) => h.heroId === 2).heroName).toBe('Galahad');
+			expect(heroes.find((h) => h.heroId === 4).heroName).toBe('Astaroth');
 		});
 
 		test('should extract skills from {skillId: level} format', async () => {
 			const data = {
-				'1': {
-					id: 1, name: 'Galahad', level: 130, star: 6, color: 18, power: 198000,
+				'2': {
+					id: 2, level: 130, star: 6, color: 18, power: 198000,
 					skills: { 2: 130, 3: 120, 4: 110, 5: 100 },
 				},
 			};
@@ -308,7 +308,7 @@ describe('GameTracker', () => {
 
 		test('should cache heroes in metadata for fast UI access', async () => {
 			const data = {
-				'1': { id: 1, name: 'Galahad', level: 120, star: 6, color: 15, power: 50000 },
+				'2': { id: 2, level: 120, star: 6, color: 15, power: 50000 },
 			};
 
 			await tracker.trackHeroesData(data);
@@ -316,7 +316,7 @@ describe('GameTracker', () => {
 			expect(mockStorage.setMetadata).toHaveBeenCalledWith(
 				'heroesData',
 				expect.arrayContaining([
-					expect.objectContaining({ heroId: 1, heroName: 'Galahad' }),
+					expect.objectContaining({ heroId: 2, heroName: 'Galahad' }),
 				]),
 			);
 		});

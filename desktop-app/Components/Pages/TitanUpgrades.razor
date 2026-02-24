@@ -139,7 +139,10 @@
 													<small>@upgrade.Timestamp.ToString("MMM dd HH:mm")</small>
 												</td>
 												<td>
-													<strong>@upgrade.TitanName</strong>
+													<small class="text-muted">@upgrade.TitanId</small>
+												</td>
+												<td>
+													<strong>@upgrade.DisplayName</strong>
 												</td>
 												<td>
 													<span class="badge @GetUpgradeTypeBadgeClass(upgrade.UpgradeType)">
@@ -223,7 +226,8 @@
 
 		AllUpgrades.AddRange(levels.Select(u => new UpgradeRow {
 			Timestamp = u.Timestamp,
-			TitanName = u.TitanName,
+			TitanId = u.TitanId,
+			DisplayName = ResolveName(u.TitanId, u.TitanName),
 			UpgradeType = "Level",
 			Details = $"Lv {u.LevelBefore} → {u.LevelAfter} ({u.PotionsSpent:N0} potions, {u.GoldSpent:N0} gold)",
 			PowerAfter = u.PowerAfter,
@@ -231,7 +235,8 @@
 
 		AllUpgrades.AddRange(stars.Select(u => new UpgradeRow {
 			Timestamp = u.Timestamp,
-			TitanName = u.TitanName,
+			TitanId = u.TitanId,
+			DisplayName = ResolveName(u.TitanId, u.TitanName),
 			UpgradeType = "Star",
 			Details = $"★{u.StarsBefore} → ★{u.StarsAfter} ({u.SoulStonesConsumed} soul stones)",
 			PowerAfter = u.PowerAfter,
@@ -239,7 +244,8 @@
 
 		AllUpgrades.AddRange(skills.Select(u => new UpgradeRow {
 			Timestamp = u.Timestamp,
-			TitanName = u.TitanName,
+			TitanId = u.TitanId,
+			DisplayName = ResolveName(u.TitanId, u.TitanName),
 			UpgradeType = "Skill",
 			Details = $"{u.SkillName} Lv {u.SkillLevelBefore} → {u.SkillLevelAfter} ({u.TitaniteSpent:N0} titanite)",
 			PowerAfter = u.PowerAfter,
@@ -247,7 +253,8 @@
 
 		AllUpgrades.AddRange(artifacts.Select(u => new UpgradeRow {
 			Timestamp = u.Timestamp,
-			TitanName = u.TitanName,
+			TitanId = u.TitanId,
+			DisplayName = ResolveName(u.TitanId, u.TitanName),
 			UpgradeType = "Artifact",
 			Details = $"{u.ArtifactType} {u.ArtifactName ?? ""} Lv {u.LevelBefore} → {u.LevelAfter}",
 			PowerAfter = u.PowerAfter,
@@ -255,7 +262,8 @@
 
 		AllUpgrades.AddRange(skins.Select(u => new UpgradeRow {
 			Timestamp = u.Timestamp,
-			TitanName = u.TitanName,
+			TitanId = u.TitanId,
+			DisplayName = ResolveName(u.TitanId, u.TitanName),
 			UpgradeType = "Skin",
 			Details = $"{u.SkinName}",
 			PowerAfter = u.PowerAfter,
@@ -264,8 +272,8 @@
 		// Sort by timestamp descending
 		AllUpgrades = AllUpgrades.OrderByDescending(u => u.Timestamp).ToList();
 
-		// Extract unique titan names for filter dropdown
-		TitanNames = AllUpgrades.Select(u => u.TitanName)
+		// Extract unique titan names for filter dropdown (using resolved names)
+		TitanNames = AllUpgrades.Select(u => u.DisplayName)
 			.Where(n => !string.IsNullOrEmpty(n))
 			.Distinct()
 			.OrderBy(n => n)
@@ -278,7 +286,7 @@
 		var filtered = AllUpgrades.AsEnumerable();
 
 		if (!string.IsNullOrEmpty(SelectedTitanName)) {
-			filtered = filtered.Where(u => u.TitanName == SelectedTitanName);
+			filtered = filtered.Where(u => u.DisplayName == SelectedTitanName);
 		}
 
 		if (!string.IsNullOrEmpty(SelectedUpgradeType)) {
@@ -318,11 +326,17 @@
 	};
 
 	/// <summary>
+	/// Resolves a titan display name from the static dictionary, falling back to the stored DB name.
+	/// </summary>
+	private static string ResolveName(long titanId, string storedName) => HeroNames.ResolveWithFallback(titanId, storedName);
+
+	/// <summary>
 	/// Unified view model for displaying all titan upgrade types in a single table.
 	/// </summary>
 	private class UpgradeRow {
 		public DateTime Timestamp { get; set; }
-		public string TitanName { get; set; } = "";
+		public long TitanId { get; set; }
+		public string DisplayName { get; set; } = "";
 		public string UpgradeType { get; set; } = "";
 		public string Details { get; set; } = "";
 		public int PowerAfter { get; set; }

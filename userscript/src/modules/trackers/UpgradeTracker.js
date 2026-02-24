@@ -32,6 +32,8 @@
  * @module UpgradeTracker
  */
 
+import { resolveHeroName } from '../heroNames.js';
+
 /**
  * Tracks hero and titan upgrade events from intercepted API calls.
  *
@@ -74,7 +76,7 @@ class UpgradeTracker {
 			upgradeType: 'skill',
 			timestamp,
 			heroId,
-			heroName: hero?.name || `Hero_${heroId}`,
+			heroName: resolveHeroName(heroId),
 			playerId,
 			powerAfter: hero?.power || 0,
 			skillSlot,
@@ -117,7 +119,7 @@ class UpgradeTracker {
 			upgradeType: 'artifact',
 			timestamp,
 			heroId,
-			heroName: hero?.name || `Hero_${heroId}`,
+			heroName: resolveHeroName(heroId),
 			playerId,
 			powerAfter: hero?.power || 0,
 			artifactType,
@@ -155,7 +157,7 @@ class UpgradeTracker {
 			upgradeType: 'skin',
 			timestamp,
 			heroId,
-			heroName: hero?.name || `Hero_${heroId}`,
+			heroName: resolveHeroName(heroId),
 			playerId,
 			powerAfter: hero?.power || 0,
 			skinName: skinData?.name || `Skin_${skinId}`,
@@ -197,7 +199,7 @@ class UpgradeTracker {
 			upgradeType: 'glyph',
 			timestamp,
 			heroId,
-			heroName: hero?.name || `Hero_${heroId}`,
+			heroName: resolveHeroName(heroId),
 			playerId,
 			powerAfter: hero?.power || 0,
 			glyphType,
@@ -235,7 +237,7 @@ class UpgradeTracker {
 			upgradeType: 'level',
 			timestamp,
 			heroId,
-			heroName: hero?.name || `Hero_${heroId}`,
+			heroName: resolveHeroName(heroId),
 			playerId,
 			powerAfter: hero?.power || 0,
 			levelBefore: 0, // Would need cached state
@@ -273,7 +275,7 @@ class UpgradeTracker {
 			upgradeType: 'artifact',
 			timestamp,
 			titanId,
-			titanName: titan?.name || `Titan_${titanId}`,
+			titanName: resolveHeroName(titanId),
 			playerId,
 			powerAfter: titan?.power || 0,
 			artifactType: `Slot_${slotId}`,
@@ -309,7 +311,7 @@ class UpgradeTracker {
 			upgradeType: 'star',
 			timestamp,
 			heroId,
-			heroName: hero?.name || `Hero_${heroId}`,
+			heroName: resolveHeroName(heroId),
 			playerId,
 			powerAfter: hero?.power || 0,
 			starsBefore: Math.max(0, (hero?.star || hero?.color || 1) - 1),
@@ -351,7 +353,7 @@ class UpgradeTracker {
 			upgradeType: 'color',
 			timestamp,
 			heroId,
-			heroName: hero?.name || `Hero_${heroId}`,
+			heroName: resolveHeroName(heroId),
 			playerId,
 			powerAfter: hero?.power || 0,
 			colorBefore: colorNames[Math.max(0, colorRank - 1)] || `Color_${colorRank - 1}`,
@@ -385,7 +387,7 @@ class UpgradeTracker {
 			upgradeType: 'level',
 			timestamp,
 			heroId,
-			heroName: hero?.name || `Hero_${heroId}`,
+			heroName: resolveHeroName(heroId),
 			playerId,
 			powerAfter: hero?.power || 0,
 			levelBefore: args.level ? args.level - 1 : 0,
@@ -417,7 +419,7 @@ class UpgradeTracker {
 			upgradeType: 'level',
 			timestamp,
 			titanId,
-			titanName: titan?.name || `Titan_${titanId}`,
+			titanName: resolveHeroName(titanId),
 			playerId,
 			powerAfter: titan?.power || 0,
 			levelBefore: 0, // Would need cached state
@@ -452,7 +454,7 @@ class UpgradeTracker {
 			upgradeType: 'star',
 			timestamp,
 			titanId,
-			titanName: titan?.name || `Titan_${titanId}`,
+			titanName: resolveHeroName(titanId),
 			playerId,
 			powerAfter: titan?.power || 0,
 			starsBefore: Math.max(0, (titan?.star || 1) - 1),
@@ -484,7 +486,7 @@ class UpgradeTracker {
 			upgradeType: 'skill',
 			timestamp,
 			titanId,
-			titanName: titan?.name || `Titan_${titanId}`,
+			titanName: resolveHeroName(titanId),
 			playerId,
 			powerAfter: titan?.power || 0,
 			skillName: '', // Not always available in API response
@@ -518,7 +520,7 @@ class UpgradeTracker {
 			upgradeType: 'skin',
 			timestamp,
 			titanId,
-			titanName: titan?.name || `Titan_${titanId}`,
+			titanName: resolveHeroName(titanId),
 			playerId,
 			powerAfter: titan?.power || 0,
 			skinName: skinData?.name || `Skin_${skinId}`,
@@ -555,7 +557,7 @@ class UpgradeTracker {
 		const record = {
 			timestamp,
 			heroId,
-			heroName: hero?.name || `Hero_${heroId}`,
+			heroName: resolveHeroName(heroId),
 			slotIndex,
 			equipmentItemId: String(args.itemId || args.libId || ''),
 			equipmentName: '', // Item name not always in response
