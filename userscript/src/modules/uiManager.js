@@ -10,6 +10,7 @@
  */
 
 import HeroCompletionCalculator from './helpers/HeroCompletionCalculator.js';
+import TitanCompletionCalculator from './helpers/TitanCompletionCalculator.js';
 import { TRACKING_CATEGORIES } from './gameTracker.js';
 import { decompressHeroStore, decompressTitanStore } from './heroCompression.js';
 import { NOTIFICATION_TYPES } from './notificationManager.js';
@@ -527,7 +528,7 @@ class UIManager {
 						<div class="oj-status-row"><span>Level</span><span>${playerLevel}</span></div>
 						${playerGuild ? `<div class="oj-status-row"><span>Guild</span><span>${this._escapeHtml(playerGuild)}</span></div>` : ''}
 						${player.gold ? `<div class="oj-status-row"><span>\uD83E\uDE99 Gold</span><span>${Number(player.gold).toLocaleString()}</span></div>` : ''}
-						${player.emeralds || player.starmoney ? `<div class="oj-status-row"><span>\uD83D\uDC8E Emeralds</span><span>${Number(player.emeralds || player.starmoney).toLocaleString()}</span></div>` : ''}
+						${(player.starmoney || player.emeralds) ? `<div class="oj-status-row oj-clickable" data-resource-filter="emeralds"><span>\uD83D\uDC8E Emeralds</span><span>${Number(player.starmoney || player.emeralds).toLocaleString()}</span></div>` : ''}
 					</div>
 				</div>`
 			: '';
@@ -997,9 +998,26 @@ class UIManager {
 		const overallWinRate = ((totalWins / allBattles.length) * 100).toFixed(1);
 
 		// Per-type counts for sub-tab pills
-		const types = ['Arena', 'GrandArena', 'TitanArena', 'GuildWar'];
-		const typeLabels = { Arena: 'Arena', GrandArena: 'Grand Arena', TitanArena: 'Titan Arena', GuildWar: 'Guild War' };
-		const typeIcons = { Arena: '\uD83C\uDFC6', GrandArena: '\uD83C\uDFDF\uFE0F', TitanArena: '\uD83D\uDCA0', GuildWar: '\u2694\uFE0F' };
+		const types = [
+			'Arena', 'GrandArena', 'TitanArena', 'GuildWar',
+			'GuildRaid', 'RaidBoss', 'Dungeon', 'Tower', 'Adventure',
+			'ClashOfWorlds', 'TournamentOfElements', 'Expedition',
+		];
+		const typeLabels = {
+			Arena: 'Arena', GrandArena: 'Grand Arena', TitanArena: 'Titan Arena',
+			GuildWar: 'Guild War', GuildRaid: 'Guild Raid', RaidBoss: 'Raid Boss',
+			Dungeon: 'Dungeon', Tower: 'Tower', Adventure: 'Adventure',
+			ClashOfWorlds: 'Clash of Worlds', TournamentOfElements: 'Tournament of Elements',
+			Expedition: 'Expedition',
+		};
+		const typeIcons = {
+			Arena: '\uD83C\uDFC6', GrandArena: '\uD83C\uDFDF\uFE0F',
+			TitanArena: '\uD83D\uDCA0', GuildWar: '\u2694\uFE0F',
+			GuildRaid: '\uD83D\uDC32', RaidBoss: '\uD83D\uDC79',
+			Dungeon: '\uD83C\uDFF0', Tower: '\uD83D\uDDFC',
+			Adventure: '\uD83D\uDDFA\uFE0F', ClashOfWorlds: '\uD83C\uDF0D',
+			TournamentOfElements: '\uD83C\uDF29\uFE0F', Expedition: '\u26F5',
+		};
 
 		/** @type {Record<string, {count: number, wins: number}>} */
 		const byType = {};
@@ -1010,8 +1028,14 @@ class UIManager {
 			if (b.isWin === true) byType[t].wins++;
 		}
 
-		// Sub-tab pills (All + each type with counts)
-		const subTabs = ['all', ...types.filter((t) => byType[t])];
+		// Sub-tab pills (All + each type with counts, including unknown types from data)
+		const knownTypes = new Set(types);
+		const allTypes = [...types.filter((t) => byType[t])];
+		// Add any additional types found in data that aren't in the known list
+		for (const t of Object.keys(byType)) {
+			if (!knownTypes.has(t) && t !== 'Other') allTypes.push(t);
+		}
+		const subTabs = ['all', ...allTypes];
 		const pills = subTabs.map((t) => {
 			const active = vs.subTab === t ? 'oj-pill-active' : '';
 			if (t === 'all') {
@@ -1141,27 +1165,71 @@ class UIManager {
 			});
 		}
 
-		// Sort
-		titans = this._sortData(titans, vs.sortField, vs.sortDir);
+		// Sort (non-completion sort handled first, completion sort done after completionMap)
+		if (vs.sortField !== 'completion') {
+			titans = this._sortData(titans, vs.sortField, vs.sortDir);
+		}
 
 		const totalPower = titans.reduce((s, t) => s + (t.power || 0), 0);
 
-		// Paginate
+		const TCalc = TitanCompletionCalculator;
+
+		// Pre-compute completion for every titan (keyed by titanId for fast lookup)
+		const completionMap = {};
+		for (const t of titans) {
+			const key = t.titanId || t.id;
+			completionMap[key] = TCalc.calculateCompletion(t);
+		}
+
+		// Average completion
+		const avgCompletion = titans.length > 0
+			? titans.reduce((s, t) => s + (completionMap[t.titanId || t.id]?.overall || 0), 0) / titans.length
+			: 0;
+
+		// Sort — add virtual 'completion' field for sorting
+		if (vs.sortField === 'completion') {
+			titans.sort((a, b) => {
+				const ca = completionMap[a.titanId || a.id]?.overall || 0;
+				const cb = completionMap[b.titanId || b.id]?.overall || 0;
+				return vs.sortDir === 'asc' ? ca - cb : cb - ca;
+			});
+		}
+
+		// Re-paginate after sort
 		const totalCount = titans.length;
 		const totalPages = Math.max(1, Math.ceil(totalCount / this.PAGE_SIZE));
 		vs.page = Math.min(vs.page, totalPages - 1);
 		const pageItems = titans.slice(vs.page * this.PAGE_SIZE, (vs.page + 1) * this.PAGE_SIZE);
 
 		const rows = pageItems.map((t) => {
-			const name = this._escapeHtml(t.titanName || t.name || `Titan #${t.titanId || t.id}`);
-			const element = this._escapeHtml(t.element || '\u2014');
+			const tId = t.titanId || t.id;
+			const name = this._escapeHtml(t.titanName || t.name || `Titan #${tId}`);
+			const elementDisplay = TCalc.formatElement(t.element);
+			const comp = completionMap[tId] || { overall: 0, systems: {} };
+
+			// Build expandable per-system breakdown (hidden by default)
+			const sysRows = Object.entries(TCalc.SYSTEM_LABELS).map(([key, label]) => {
+				const pct = comp.systems[key] || 0;
+				return `<div class="oj-sys-row">` +
+					`<span class="oj-sys-icon">${TCalc.SYSTEM_ICONS[key] || ''}</span>` +
+					`<span class="oj-sys-name">${label}</span>` +
+					TCalc.renderBar(pct) +
+					`</div>`;
+			}).join('');
+
 			return `
-				<tr>
+				<tr class="oj-titan-row" data-titan-id="${tId}">
 					<td><strong>${name}</strong></td>
 					<td>${t.level || '\u2014'}</td>
 					<td>${'\u2B50'.repeat(Math.min(t.stars || 0, 6)) || '\u2014'}</td>
-					<td>${element}</td>
+					<td>${elementDisplay}</td>
 					<td class="oj-num">${t.power ? t.power.toLocaleString() : '\u2014'}</td>
+					<td class="oj-completion-cell">${TCalc.renderBar(comp.overall)}</td>
+				</tr>
+				<tr class="oj-titan-detail" data-detail-for="${tId}" style="display:none">
+					<td colspan="6">
+						<div class="oj-sys-breakdown">${sysRows}</div>
+					</td>
 				</tr>
 			`;
 		}).join('');
@@ -1170,7 +1238,7 @@ class UIManager {
 
 		return `
 			<div class="oj-titans" data-browser="titans">
-				<h3>\uD83D\uDCA0 Titans <span class="oj-muted">(${totalCount} \u2022 ${totalPower.toLocaleString()} total power)</span></h3>
+				<h3>\uD83D\uDCA0 Titans <span class="oj-muted">(${totalCount} \u2022 ${totalPower.toLocaleString()} power \u2022 avg ${TCalc.formatPercent(avgCompletion)} complete)</span></h3>
 				${this._renderSearchBar(vs.filter)}
 				<table class="oj-table oj-sortable">
 					<thead>
@@ -1180,6 +1248,7 @@ class UIManager {
 							<th data-sort="stars" class="oj-sort-header">Stars ${sortInd('stars')}</th>
 							<th data-sort="element" class="oj-sort-header">Element ${sortInd('element')}</th>
 							<th data-sort="power" class="oj-sort-header">Power ${sortInd('power')}</th>
+							<th data-sort="completion" class="oj-sort-header">Complete ${sortInd('completion')}</th>
 						</tr>
 					</thead>
 					<tbody>${rows}</tbody>
@@ -1389,12 +1458,26 @@ class UIManager {
 				: '\u2014';
 			const type = this._escapeHtml(sourceLabels[c.chestType] || c.chestType || c.type || 'Unknown');
 			const drops = c.dropCount ?? (Array.isArray(c.rewards) ? c.rewards.length : '\u2014');
+
+			// Render individual reward items if available
+			let rewardDetail = '\u2014';
+			if (Array.isArray(c.rewards) && c.rewards.length > 0) {
+				rewardDetail = c.rewards.map((r) => {
+					const itemName = this._escapeHtml(r.name || r.itemName || `${r.type || r.itemType || '?'}:${r.id || r.itemId || '?'}`);
+					const qty = r.quantity || r.count || 1;
+					return `<span class="oj-reward-item">${itemName} \u00D7${qty}</span>`;
+				}).join(', ');
+			} else if (c.rewardSummary) {
+				rewardDetail = this._escapeHtml(c.rewardSummary);
+			}
+
 			return `
 				<tr>
 					<td class="oj-mono">${time}</td>
 					<td>${type}</td>
 					<td class="oj-num">${drops}</td>
 					<td class="oj-num">${c.quantity || 1}</td>
+					<td class="oj-reward-list">${rewardDetail}</td>
 				</tr>
 			`;
 		}).join('');
@@ -1408,7 +1491,7 @@ class UIManager {
 				${this._renderSearchBar(vs.filter, 'Filter by chest type...')}
 				<table class="oj-table">
 					<thead>
-						<tr><th>Time</th><th>Type</th><th>Drops</th><th>Qty</th></tr>
+						<tr><th>Time</th><th>Type</th><th>Drops</th><th>Qty</th><th>Items</th></tr>
 					</thead>
 					<tbody>${rows}</tbody>
 				</table>
@@ -1481,42 +1564,75 @@ class UIManager {
 		// Sort
 		items = this._sortData(items, vs.sortField, vs.sortDir);
 
-		// Paginate
+		// Group by category
+		const grouped = {};
+		for (const it of items) {
+			const cat = it.category || it.type || 'Uncategorized';
+			if (!grouped[cat]) grouped[cat] = [];
+			grouped[cat].push(it);
+		}
+
+		// Category display names and icons
+		const catLabels = {
+			hero_soul_stones: '\uD83D\uDC8E Hero Soul Stones',
+			titan_soul_stones: '\uD83D\uDCA0 Titan Soul Stones',
+			equipment: '\uD83D\uDEE1\uFE0F Equipment',
+			consumable: '\uD83E\uDDEA Consumables',
+			fragment: '\uD83E\uDDE9 Fragments',
+			scroll: '\uD83D\uDCDC Scrolls',
+			gear: '\u2699\uFE0F Gear',
+			potion: '\uD83E\uDDEB Potions',
+			skin_stone: '\uD83C\uDFAD Skin Stones',
+			artifact: '\uD83C\uDFFA Artifacts',
+			rune: '\uD83D\uDD2E Runes',
+			gold: '\uD83E\uDE99 Gold Items',
+			resource: '\uD83D\uDCE6 Resources',
+			Uncategorized: '\uD83D\uDCE6 Other',
+		};
+
+		// Paginate across all items (flat) but render grouped
 		const totalCount = items.length;
 		const totalPages = Math.max(1, Math.ceil(totalCount / this.PAGE_SIZE));
 		vs.page = Math.min(vs.page, totalPages - 1);
-		const pageItems = items.slice(vs.page * this.PAGE_SIZE, (vs.page + 1) * this.PAGE_SIZE);
 
-		const rows = pageItems.map((it) => {
-			const name = this._escapeHtml(it.name || it.itemName || `Item #${it.itemId || it.id}`);
-			const qty = it.count ?? it.quantity ?? '\u2014';
-			const category = this._escapeHtml(it.category || it.type || '\u2014');
-			return `
-				<tr>
-					<td><strong>${name}</strong></td>
-					<td>${category}</td>
-					<td class="oj-num">${typeof qty === 'number' ? qty.toLocaleString() : qty}</td>
-				</tr>
-			`;
-		}).join('');
+		// Build grouped HTML — each category is a collapsible section
+		const categoryCount = Object.keys(grouped).length;
+		const groupHtml = Object.entries(grouped)
+			.sort(([a], [b]) => a.localeCompare(b))
+			.map(([cat, catItems]) => {
+				const label = catLabels[cat] || `\uD83D\uDCE6 ${cat}`;
+				const itemRows = catItems.map((it) => {
+					const name = this._escapeHtml(it.name || it.itemName || `Item #${it.itemId || it.id}`);
+					const qty = it.count ?? it.quantity ?? '\u2014';
+					return `
+						<tr>
+							<td><strong>${name}</strong></td>
+							<td class="oj-num">${typeof qty === 'number' ? qty.toLocaleString() : qty}</td>
+						</tr>
+					`;
+				}).join('');
+
+				return `
+					<div class="oj-inv-group">
+						<div class="oj-inv-group-header" data-inv-cat="${this._escapeHtml(cat)}">
+							<span>${label}</span>
+							<span class="oj-muted">(${catItems.length} items)</span>
+						</div>
+						<table class="oj-table oj-table-compact oj-inv-group-table">
+							<thead><tr><th>Name</th><th>Qty</th></tr></thead>
+							<tbody>${itemRows}</tbody>
+						</table>
+					</div>
+				`;
+			}).join('');
 
 		const sortInd = (field) => this._sortIndicator(vs.sortField, vs.sortDir, field);
 
 		return `
 			<div class="oj-inventory" data-browser="inventory">
-				<h3>\uD83C\uDF92 Inventory <span class="oj-muted">(${totalCount} items)</span></h3>
+				<h3>\uD83C\uDF92 Inventory <span class="oj-muted">(${totalCount} items in ${categoryCount} categories)</span></h3>
 				${this._renderSearchBar(vs.filter, 'Search items...')}
-				<table class="oj-table oj-sortable">
-					<thead>
-						<tr>
-							<th data-sort="name" class="oj-sort-header">Name ${sortInd('name')}</th>
-							<th data-sort="category" class="oj-sort-header">Category ${sortInd('category')}</th>
-							<th data-sort="count" class="oj-sort-header">Qty ${sortInd('count')}</th>
-						</tr>
-					</thead>
-					<tbody>${rows}</tbody>
-				</table>
-				${this._renderPagination(vs.page, totalPages, totalCount)}
+				${groupHtml}
 			</div>
 		`;
 	}
@@ -1581,7 +1697,7 @@ class UIManager {
 			].filter((r) => r.value !== undefined && r.value !== null);
 
 			const cards = resources.map((r) => `
-				<div class="oj-resource-card">
+				<div class="oj-resource-card${r.label === 'Emeralds' ? ' oj-clickable' : ''}"${r.label === 'Emeralds' ? ' data-resource-filter="emeralds"' : ''}>
 					<div class="oj-resource-icon">${r.icon}</div>
 					<div class="oj-resource-amount">${typeof r.value === 'number' ? r.value.toLocaleString() : r.value}</div>
 					<div class="oj-resource-label">${r.label}</div>
@@ -2326,6 +2442,37 @@ class UIManager {
 					const isHidden = detailRow.style.display === 'none';
 					detailRow.style.display = isHidden ? '' : 'none';
 					row.classList.toggle('oj-expanded', isHidden);
+				}
+			});
+		});
+
+		// Titan row expand/collapse (titans view only)
+		content.querySelectorAll('.oj-titan-row[data-titan-id]').forEach((row) => {
+			row.addEventListener('click', () => {
+				const tId = row.dataset.titanId;
+				const detailRow = content.querySelector(`tr.oj-titan-detail[data-detail-for="${tId}"]`);
+				if (detailRow) {
+					const isHidden = detailRow.style.display === 'none';
+					detailRow.style.display = isHidden ? '' : 'none';
+					row.classList.toggle('oj-expanded', isHidden);
+				}
+			});
+		});
+
+		// Emerald click — navigate to resources tab and filter to emerald transactions
+		content.querySelectorAll('[data-resource-filter="emeralds"]').forEach((el) => {
+			el.addEventListener('click', () => {
+				this.renderView('resources');
+			});
+		});
+
+		// Inventory group header expand/collapse
+		content.querySelectorAll('.oj-inv-group-header').forEach((header) => {
+			header.addEventListener('click', () => {
+				const table = header.nextElementSibling;
+				if (table && table.classList.contains('oj-inv-group-table')) {
+					table.classList.toggle('oj-collapsed');
+					header.classList.toggle('oj-inv-collapsed');
 				}
 			});
 		});

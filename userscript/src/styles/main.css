@@ -726,22 +726,26 @@
 
 /* ── Clickable hero rows ─────────────────────────────────────────── */
 
-.oj-hero-row {
+.oj-hero-row,
+.oj-titan-row {
 	cursor: pointer;
 	transition: background 0.15s ease;
 }
 
-.oj-hero-row:hover {
+.oj-hero-row:hover,
+.oj-titan-row:hover {
 	background: rgba(255, 255, 255, 0.06);
 }
 
-.oj-hero-row.oj-expanded {
+.oj-hero-row.oj-expanded,
+.oj-titan-row.oj-expanded {
 	background: rgba(79, 195, 247, 0.08);
 }
 
 /* ── Per-system breakdown (expandable detail row) ────────────────── */
 
-.oj-hero-detail td {
+.oj-hero-detail td,
+.oj-titan-detail td {
 	padding: 0 !important;
 }
 
@@ -781,6 +785,74 @@
 
 .oj-sys-row .oj-completion-label {
 	font-size: 9px;
+}
+
+/* ── Clickable elements & resource filter ────────────────────────── */
+
+.oj-clickable {
+	cursor: pointer;
+	transition: background 0.15s ease, transform 0.1s ease;
+}
+
+.oj-clickable:hover {
+	background: rgba(79, 195, 247, 0.15) !important;
+	transform: scale(1.02);
+}
+
+/* ── Chest reward items ──────────────────────────────────────────── */
+
+.oj-reward-list {
+	font-size: 11px;
+	line-height: 1.4;
+	max-width: 300px;
+}
+
+.oj-reward-item {
+	white-space: nowrap;
+}
+
+/* ── Inventory grouped layout ────────────────────────────────────── */
+
+.oj-inv-group {
+	margin-bottom: 8px;
+}
+
+.oj-inv-group-header {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	padding: 6px 10px;
+	background: rgba(255, 255, 255, 0.06);
+	border-radius: 4px;
+	cursor: pointer;
+	font-weight: 600;
+	font-size: 12px;
+	transition: background 0.15s ease;
+	user-select: none;
+}
+
+.oj-inv-group-header:hover {
+	background: rgba(255, 255, 255, 0.10);
+}
+
+.oj-inv-group-header::before {
+	content: '\u25BC';
+	font-size: 9px;
+	margin-right: 6px;
+	transition: transform 0.2s ease;
+}
+
+.oj-inv-group-header.oj-inv-collapsed::before {
+	transform: rotate(-90deg);
+}
+
+.oj-inv-group-table {
+	margin-top: 2px;
+	transition: max-height 0.2s ease;
+}
+
+.oj-inv-group-table.oj-collapsed {
+	display: none;
 }
 
 /* =========================================================================
