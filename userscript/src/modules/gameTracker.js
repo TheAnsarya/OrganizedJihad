@@ -1568,14 +1568,40 @@ class GameTracker {
 
 		this.registerHandler('heroArtifactLevelUp', async (_call, args, data) => {
 			await this.upgradeTracker.trackHeroArtifactUpgrade(args, data, await this._getPlayerId());
+			// Track each consumed artifact resource if items data is present
+			if (args.items) {
+				for (const [itemId, qty] of Object.entries(args.items)) {
+					await this.trackInventoryItemUsage(
+						{ ...args, itemId, amount: qty },
+						data, 'artifact_resource', 'hero_artifact'
+					);
+				}
+			} else {
+				await this.trackInventoryItemUsage(
+					{ ...args, itemId: `artifact_slot_${args.slotId || 0}`, amount: 1 },
+					data, 'artifact_resource', 'hero_artifact'
+				);
+			}
 		}, 'heroArtifactUpgrade', { category: 'upgrades' });
 
 		this.registerHandler('heroSkinUpgrade', async (_call, args, data) => {
 			await this.upgradeTracker.trackHeroSkinUpgrade(args, data, await this._getPlayerId());
+			await this.trackInventoryItemUsage(
+				{ ...args, itemId: args.skinId, amount: 1 },
+				data, 'skin_stone', 'hero_skin'
+			);
 		}, 'heroSkinUpgrade', { category: 'upgrades' });
 
 		this.registerHandler('heroEnchantRune', async (_call, args, data) => {
 			await this.upgradeTracker.trackHeroGlyphUpgrade(args, data, await this._getPlayerId());
+			// Track each consumed glyph essence from items.consumable
+			const consumables = args.items?.consumable || {};
+			for (const [itemId, qty] of Object.entries(consumables)) {
+				await this.trackInventoryItemUsage(
+					{ ...args, itemId, amount: qty },
+					data, 'glyph_essence', 'hero_glyph'
+				);
+			}
 		}, 'heroGlyphUpgrade', { category: 'upgrades' });
 
 		this.registerHandler('consumableUseHeroXp', async (_call, args, data) => {
@@ -1599,6 +1625,22 @@ class GameTracker {
 			await this.upgradeTracker.trackEquipmentChange(args, data, await this._getPlayerId(), 'equipped');
 		}, 'heroEquip', { category: 'upgrades' });
 
+		// Hero ascension — consuming ascension materials
+		this.registerHandler('heroAscension', async (_call, args, data) => {
+			// args may contain: {heroId, items: {[itemId]: qty, ...}}
+			const materials = args.items || {};
+			if (Object.keys(materials).length > 0) {
+				for (const [itemId, qty] of Object.entries(materials)) {
+					await this.trackInventoryItemUsage(
+						{ ...args, itemId, amount: qty },
+						data, 'ascension_material', 'hero_ascension'
+					);
+				}
+			} else {
+				await this.trackInventoryItemUsage(args, data, 'ascension_material', 'hero_ascension');
+			}
+		}, 'heroAscension', { category: 'upgrades' });
+
 		// ── Titan Upgrade Events (Phase 8) ──────────────────────────────
 		this.registerHandler('titanArtifactLevelUp', async (_call, args, data) => {
 			await this.upgradeTracker.trackTitanArtifactUpgrade(args, data, await this._getPlayerId());
@@ -1606,6 +1648,7 @@ class GameTracker {
 
 		this.registerHandler('titanUsePotions', async (_call, args, data) => {
 			await this.upgradeTracker.trackTitanLevelUpgrade(args, data, await this._getPlayerId());
+			await this.trackInventoryItemUsage(args, data, 'potion', 'titan_level');
 		}, 'titanLevelUpgrade', { category: 'upgrades' });
 
 		this.registerHandler(['titanEvolve', 'titanStarUp'], async (_call, args, data) => {
