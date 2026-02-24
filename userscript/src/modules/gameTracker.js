@@ -2069,31 +2069,53 @@ class GameTracker {
 	}
 
 	/**
-	 * Track battle results from various battle end API calls
+	 * Track battle results from various battle end API calls.
+	 * Writes to the IDB `battles` store using the same schema as
+	 * arena/guild war tracking so records appear in the Battles tab.
 	 *
-	 * @param {string} battleType - Type of battle (missionEnd, towerEnd, etc)
+	 * @param {string} callName - API call name (missionEnd, towerEnd, bossEnd, etc.)
 	 * @param {Object} args - Battle request arguments
 	 * @param {Object} data - Battle result data
 	 * @private
 	 */
-	async trackBattleResult(battleType, args, data) {
-		const battleRecord = {
-			type: battleType.replace('End', ''),
-			result: data.result?.win ? 'victory' : 'defeat',
-			reward: data.reward || {},
-			timestamp: Date.now(),
-			mission: args.mission || args.id || 'unknown',
+	async trackBattleResult(callName, args, data) {
+		// Derive a clean battle type from the call name (e.g. 'missionEnd' → 'Mission')
+		const rawType = callName.replace(/End$/i, '');
+		const battleType = rawType.charAt(0).toUpperCase() + rawType.slice(1);
+
+		const battle = {
+			battleType,
+			isWin: data.result?.win || false,
+			playerHeroes: data.attackers ? JSON.stringify(this.compressHeroTeam(data.attackers)) : null,
+			opponentHeroes: data.defenders ? JSON.stringify(this.compressHeroTeam(data.defenders)) : null,
+			rewards: data.reward ? JSON.stringify(data.reward) : null,
+			mission: args.mission || args.id || null,
+			timestamp: new Date().toISOString(),
 		};
 
-		const battleHistory = await this.storage.getMetadata('battleHistory', []);
-		battleHistory.push(battleRecord);
+		// Deduplication check (#44)
+		if (this._isBattleDuplicate(battle)) {
+			return;
+		}
 
-		// Keep last 1000 battles
+		await this.storage.add('battles', battle);
+
+		// Also maintain the legacy metadata list for SuggestionsEngine/getBattleHistory()
+		const battleHistory = await this.storage.getMetadata('battleHistory', []);
+		battleHistory.push({
+			type: battleType,
+			result: battle.isWin ? 'victory' : 'defeat',
+			reward: data.reward || {},
+			timestamp: battle.timestamp,
+			mission: battle.mission,
+		});
 		if (battleHistory.length > 1000) {
 			battleHistory.shift();
 		}
-
 		await this.storage.setMetadata('battleHistory', battleHistory);
+
+		// Live activity event
+		await this._logActivity('battle', `${battleType} ${battle.isWin ? 'WIN' : 'LOSS'}`, { isWin: battle.isWin });
 	}
 
 	/**

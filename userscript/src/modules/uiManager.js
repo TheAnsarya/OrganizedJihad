@@ -467,7 +467,7 @@ class UIManager {
 			content.innerHTML = `
 				<div class="oj-error">
 					<h3>\u26A0\uFE0F Render Error</h3>
-					<p>${err.message || 'Unknown error'}</p>
+					<p>${this._escapeHtml(err.message || 'Unknown error')}</p>
 					<p class="oj-muted">Check the console for details.</p>
 				</div>
 			`;
@@ -498,10 +498,9 @@ class UIManager {
 		// Also try the latest snapshot for richer fields
 		let latestSnapshot = null;
 		try {
-			const snaps = await this.idbStorage.getAll('snapshots', 1);
+			const snaps = await this.idbStorage.getPage('snapshots', { limit: 1, direction: 'prev' });
 			if (snaps.length > 0) {
-				// getAll returns oldest-first; grab last
-				latestSnapshot = snaps[snaps.length - 1];
+				latestSnapshot = snaps[0];
 			}
 		} catch { /* empty */ }
 
@@ -540,8 +539,8 @@ class UIManager {
 		try {
 			const battles = await this.idbStorage.getAll('battles');
 			const todayBattles = battles.filter((b) => b.timestamp >= todayISO);
-			guildWarBattlesToday = todayBattles.filter((b) => b.type === 'GuildWar').length;
-			guildRaidBattlesToday = todayBattles.filter((b) => b.type === 'GuildRaid' || b.type === 'RaidBoss').length;
+			guildWarBattlesToday = todayBattles.filter((b) => b.battleType === 'GuildWar').length;
+			guildRaidBattlesToday = todayBattles.filter((b) => b.battleType === 'GuildRaid' || b.battleType === 'RaidBoss').length;
 		} catch { /* empty */ }
 
 		// Gather counts from actual IndexedDB stores
@@ -733,13 +732,13 @@ class UIManager {
 
 		// Group by type and calculate win rates
 		const types = [
-			{ key: 'arena', label: '\u2694\uFE0F Arena', color: '#4fc3f7' },
-			{ key: 'titanArena', label: '\uD83D\uDEE1\uFE0F Titan Arena', color: '#ce93d8' },
-			{ key: 'grandArena', label: '\uD83C\uDFC6 Grand Arena', color: '#ffb74d' },
+			{ key: 'Arena', label: '\u2694\uFE0F Arena', color: '#4fc3f7' },
+			{ key: 'TitanArena', label: '\uD83D\uDEE1\uFE0F Titan Arena', color: '#ce93d8' },
+			{ key: 'GrandArena', label: '\uD83C\uDFC6 Grand Arena', color: '#ffb74d' },
 		];
 
 		const cards = types.map(({ key, label, color }) => {
-			const all = battles.filter((b) => b.type === key);
+			const all = battles.filter((b) => b.battleType === key);
 			const recent = all.filter((b) => {
 				const ts = b.timestamp ? new Date(b.timestamp).getTime() : 0;
 				return ts >= sevenDaysAgo;
@@ -2203,9 +2202,9 @@ class UIManager {
 		let snap = null;
 		if (!playerData) {
 			try {
-				const snapshots = await this.idbStorage.getAll('snapshots', 10);
+				const snapshots = await this.idbStorage.getPage('snapshots', { limit: 1, direction: 'prev' });
 				if (snapshots.length > 0) {
-					snap = snapshots[snapshots.length - 1];
+					snap = snapshots[0];
 				}
 			} catch { /* empty */ }
 		}
@@ -3200,8 +3199,7 @@ class UIManager {
 	 */
 	async _countStore(storeName) {
 		try {
-			const all = await this.idbStorage.getAll(storeName);
-			return Array.isArray(all) ? all.length : 0;
+			return await this.idbStorage.count(storeName);
 		} catch {
 			return 0;
 		}

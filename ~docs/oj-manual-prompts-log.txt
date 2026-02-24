@@ -124,6 +124,8 @@ When opening the ui on the dashboard, the player component is terrible, instead 
 
 (userscript) work issues and continue!
 
+(userscript) Hero Rank when maxed is displayed as `Rank 18` when it should say `Red +2 (Max)` or something like that; work issues and continue!
+
 
 
 

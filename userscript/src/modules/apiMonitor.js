@@ -162,15 +162,9 @@ class APIMonitor {
 					// Log the outgoing request
 					self.logRequest(xhr._apiMonitor);
 
-					// Set up response capture
-					const originalOnReadyStateChange = xhr.onreadystatechange;
-
-					xhr.onreadystatechange = function (...args) {
-						// Call original handler first
-						if (originalOnReadyStateChange) {
-							originalOnReadyStateChange.apply(this, args);
-						}
-
+					// Use addEventListener instead of wrapping onreadystatechange
+					// to avoid the game overwriting our handler after send() (#83)
+					xhr.addEventListener('readystatechange', function () {
 						// Capture response when complete
 						if (xhr.readyState === 4) {
 							self.logResponse(xhr._apiMonitor, {
@@ -181,7 +175,7 @@ class APIMonitor {
 								endTime: Date.now(),
 							});
 						}
-					};
+					});
 				}
 			}
 
