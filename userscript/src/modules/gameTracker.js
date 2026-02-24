@@ -1969,8 +1969,10 @@ class GameTracker {
 	}
 
 	/**
-	 * Track pets from petGetAll API call
-	 * Stores complete pet snapshots in IndexedDB (matches C# Pet entity)
+	 * Track pets from petGetAll API call (#65).
+	 * Stores complete pet snapshots in IndexedDB `pets` store (matches C# Pet entity)
+	 * AND writes a lightweight metadata summary cache for the dashboard.
+	 * Includes deduplication fingerprinting to skip unchanged rosters.
 	 *
 	 * Entity Structure (8 properties):
 	 * - Identity: PetId, PetName
@@ -1991,15 +1993,34 @@ class GameTracker {
 			stars: pet.star || 0,
 			power: pet.power || 0,
 			level: pet.level || 0,
-			patronageData: JSON.stringify(pet.patronage || {}), // Which heroes this pet supports
+			patronageData: JSON.stringify(pet.patronage || {}),
 			playerId: playerId,
 			timestamp: timestamp,
 		}));
+
+		// ── Deduplication: skip if pet roster hasn't changed ─────────────
+		const petFingerprint = this._computeDataFingerprint(
+			pets.map((p) => [p.petId, p.level, p.stars, p.power])
+		);
+		if (petFingerprint === this._lastPetHash) {
+			return;
+		}
+		this._lastPetHash = petFingerprint;
 
 		// Store each pet snapshot in IndexedDB pets store
 		for (const pet of pets) {
 			await this.storage.add('pets', pet);
 		}
+
+		// Also cache lightweight metadata summary for dashboard/quick access
+		const summary = pets.map((p) => ({
+			id: p.petId,
+			name: p.petName,
+			level: p.level,
+			stars: p.stars,
+			power: p.power,
+		}));
+		await this.storage.setMetadata('petsData', summary);
 
 		console.log(`[OrganizedJihad] Pets tracked: ${pets.length} pets stored as snapshots`);
 	}
@@ -3098,34 +3119,6 @@ class GameTracker {
 
 		await this.storage.add('guildActivities', activity);
 		console.log(`[OrganizedJihad] Guild activity tracked: ${activity.activityType} in ${activity.guildName}`);
-	}
-
-	/**
-	 * Track pets data (metadata summary — called from petGetAll)
-	 * NOTE: The earlier IDB-store version of this method is overridden by
-	 * this definition (same method name, last-wins in ES6 classes).
-	 *
-	 * @param {Object} data - Pets data
-	 * @private
-	 */
-	async trackPetsData(data) {
-		const pets = Object.values(data).map((pet) => ({
-			id: pet.id,
-			level: pet.level || 0,
-			stars: pet.star || 0,
-			power: pet.power || 0,
-		}));
-
-		// ── Deduplication: skip if pet roster hasn't changed ─────────────
-		const petFingerprint = this._computeDataFingerprint(
-			pets.map((p) => [p.id, p.level, p.stars, p.power])
-		);
-		if (petFingerprint === this._lastPetHash) {
-			return;
-		}
-		this._lastPetHash = petFingerprint;
-
-		await this.storage.setMetadata('petsData', pets);
 	}
 
 	/**
