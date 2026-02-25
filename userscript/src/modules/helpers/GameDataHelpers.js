@@ -173,7 +173,8 @@ class GameDataHelpers {
 			vipLevel: data.vipLevel || 0,
 			power: data.power || 0,
 			gold: data.gold || 0,
-			emeralds: data.starmoney || 0,
+			emeralds: data.starMoney || data.starmoney || 0,
+			stamina: data.stamina || 0,
 			clanTitle: data.clanTitle || null,
 			clanId: data.clanId || null,
 		};

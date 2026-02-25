@@ -1992,9 +1992,10 @@ class GameTracker {
 		// ── Deduplication: skip if key fields unchanged since last call ───
 		// userGetInfo fires on nearly every API batch, so this prevents
 		// writing an identical snapshot row every few seconds.
+		// Note: API field is `starMoney` (camelCase), not `starmoney`
 		const playerKey = this._computeDataFingerprint([
 			data.userId, data.level, data.vipLevel, data.power,
-			data.gold, data.starmoney, data.clanId,
+			data.gold, data.starMoney, data.stamina, data.clanId,
 			arenaRank, grandArenaRank, titanArenaRank,
 		]);
 		if (playerKey === this._lastPlayerKey) {
@@ -2014,7 +2015,8 @@ class GameTracker {
 			vipLevel: data.vipLevel || 0,
 			teamPower: data.power || 0,
 			gold: data.gold || 0,
-			emeralds: data.starmoney || 0,
+			emeralds: data.starMoney || 0,
+			stamina: data.stamina || 0,
 			guildName: data.clanTitle || null,
 			guildId: data.clanId || null,
 			arenaRank: arenaRank,
@@ -2036,8 +2038,9 @@ class GameTracker {
 				level: data.level || 0,
 			},
 			gold: data.gold || 0,
-			starmoney: data.starmoney || 0,
-			emeralds: data.starmoney || 0,
+			starMoney: data.starMoney || 0,
+			emeralds: data.starMoney || 0,
+			stamina: data.stamina || 0,
 			clanId: data.clanId || null,
 			clanTitle: data.clanTitle || null,
 			vipLevel: data.vipLevel || 0,
@@ -2047,7 +2050,7 @@ class GameTracker {
 		console.log('[OrganizedJihad] Player snapshot saved:', snapshot.playerName, 'Level', snapshot.level);
 
 		// Live activity event
-		await this._logActivity('info', `Player snapshot: ${snapshot.playerName} (Lv${snapshot.level}, ${snapshot.gold?.toLocaleString()} gold, ${snapshot.emeralds?.toLocaleString()} emeralds)`);
+		await this._logActivity('info', `Player snapshot: ${snapshot.playerName} (Lv${snapshot.level}, ${snapshot.gold?.toLocaleString()} gold, ${snapshot.emeralds?.toLocaleString()} emeralds, ${snapshot.stamina || 0} energy)`);
 	}
 
 	/**

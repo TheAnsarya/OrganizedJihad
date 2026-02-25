@@ -185,7 +185,8 @@ describe('normalizePlayerData', () => {
 			vipLevel: 15,
 			power: 500000,
 			gold: 1000000,
-			starmoney: 5000,
+			starMoney: 5000,
+			stamina: 120,
 			clanTitle: 'MyGuild',
 			clanId: 42,
 		};
@@ -193,6 +194,7 @@ describe('normalizePlayerData', () => {
 		expect(result.userId).toBe(123);
 		expect(result.name).toBe('TestPlayer');
 		expect(result.emeralds).toBe(5000);
+		expect(result.stamina).toBe(120);
 		expect(result.clanTitle).toBe('MyGuild');
 	});
 

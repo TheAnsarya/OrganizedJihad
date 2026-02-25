@@ -143,7 +143,8 @@ describe('GameTracker', () => {
 				vipLevel: 15,
 				power: 1500000,
 				gold: 5000000,
-				starmoney: 99999,
+				starMoney: 99999,
+				stamina: 120,
 				clanTitle: 'MyGuild',
 				clanId: 888,
 			};
@@ -160,6 +161,7 @@ describe('GameTracker', () => {
 					teamPower: 1500000,
 					gold: 5000000,
 					emeralds: 99999,
+					stamina: 120,
 					guildName: 'MyGuild',
 					guildId: 888,
 				}),
@@ -443,7 +445,7 @@ describe('GameTracker', () => {
 
 	describe('Deduplication', () => {
 		test('should skip duplicate player snapshots', async () => {
-			const data = { userId: 1, name: 'A', level: 50, gold: 1000, starmoney: 500 };
+			const data = { userId: 1, name: 'A', level: 50, gold: 1000, starMoney: 500 };
 
 			await tracker.trackPlayerData(data);
 			await tracker.trackPlayerData(data);
@@ -453,8 +455,8 @@ describe('GameTracker', () => {
 		});
 
 		test('should write player snapshot when key fields change', async () => {
-			const data1 = { userId: 1, name: 'A', level: 50, gold: 1000, starmoney: 500 };
-			const data2 = { userId: 1, name: 'A', level: 51, gold: 1000, starmoney: 500 };
+			const data1 = { userId: 1, name: 'A', level: 50, gold: 1000, starMoney: 500 };
+			const data2 = { userId: 1, name: 'A', level: 51, gold: 1000, starMoney: 500 };
 
 			await tracker.trackPlayerData(data1);
 			await tracker.trackPlayerData(data2);

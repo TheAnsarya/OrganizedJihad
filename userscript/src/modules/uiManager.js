@@ -534,9 +534,11 @@ class UIManager {
 			...playerData,
 			...(latestSnapshot || {}),
 			// Ensure resources come from the most recent source
+			// API field is `starMoney` (camelCase) — stored as both starMoney and emeralds
 			gold: playerData?.gold ?? latestSnapshot?.gold ?? 0,
-			starmoney: playerData?.starmoney ?? latestSnapshot?.starmoney ?? 0,
-			emeralds: playerData?.emeralds ?? latestSnapshot?.emeralds ?? 0,
+			starMoney: playerData?.starMoney ?? playerData?.emeralds ?? latestSnapshot?.emeralds ?? 0,
+			emeralds: playerData?.starMoney ?? playerData?.emeralds ?? latestSnapshot?.emeralds ?? 0,
+			stamina: playerData?.stamina ?? latestSnapshot?.stamina ?? 0,
 		};
 		const playerName = player.playerName || pdPlayer.name || player.name || null;
 		const playerLevel = pdPlayer.level || player.level || 0;
@@ -611,9 +613,10 @@ class UIManager {
 		// ── Daily Summary (#26) ──────────────────────────────────────
 		const dailySummary = await this._renderDailySummary();
 
-		// Gold / Emeralds values
+		// Gold / Emeralds / Energy values
 		const gold = player.gold ? Number(player.gold).toLocaleString() : '0';
-		const emeralds = Number(player.starmoney || player.emeralds || 0).toLocaleString();
+		const emeralds = Number(player.starMoney || player.emeralds || 0).toLocaleString();
+		const energy = Number(player.stamina || 0).toLocaleString();
 
 		// ── Completion bar helper (inline, dark theme) ───────────────
 		const _miniBar = (pct, color) => {
@@ -643,9 +646,14 @@ class UIManager {
 							<div style="font-size:10px;color:#888">Gold</div>
 						</div>
 						<div style="flex:1;min-width:100px;background:#2a2a2e;border-radius:6px;padding:8px;text-align:center">
-							<div style="font-size:18px">\uD83D\uDC8E</div>
+							<div style="font-size:18px;filter:hue-rotate(100deg) saturate(2.5) brightness(1.1)">\uD83D\uDC8E</div>
 							<div style="font-size:14px;font-weight:700;color:#66bb6a">${emeralds}</div>
 							<div style="font-size:10px;color:#888">Emeralds</div>
+						</div>
+						<div style="flex:1;min-width:100px;background:#2a2a2e;border-radius:6px;padding:8px;text-align:center">
+							<div style="font-size:18px">\u26A1</div>
+							<div style="font-size:14px;font-weight:700;color:#4fc3f7">${energy}</div>
+							<div style="font-size:10px;color:#888">Energy</div>
 						</div>
 						<div style="flex:1;min-width:100px;background:#2a2a2e;border-radius:6px;padding:8px">
 							<div style="font-size:12px;margin-bottom:4px">\uD83E\uDDB8 Heroes</div>
