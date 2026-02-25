@@ -132,6 +132,7 @@ When opening the ui on the dashboard, the player component is terrible, instead 
 
 (userscript) We're having problems with messages that say `The diff algorithm was stopped early (after 5000 ms.)` I thought we fixed this already, remove the limit, or increase it; continue working issues and continue;
 
+(userscript) There still is no information in the Pets tab, after I opened Pets in the game, keep finding api data sources that don't work and fix them; plan, issues, docs, etc, implement; continue;
 
 
 

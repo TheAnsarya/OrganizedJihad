@@ -1520,6 +1520,25 @@ class GameTracker {
 			await this.trackAdventureReplay(callName, args, data);
 		}, 'trackAdventureReplay', { category: 'battles' });
 
+		// ── Generic Replay (#106) ───────────────────────────────────────
+		// The game may use battleGetReplay as a unified replay endpoint
+		// for all battle types. Route to the appropriate tracker based on
+		// response data; fall through to arena replay as the default.
+		this.registerHandler('battleGetReplay', async (_call, args, data) => {
+			// Unwrap nested replay wrapper if present
+			const replay = data.replay || data;
+			// Detect type from ident, args, or response structure
+			const ident = args.ident || args.type || '';
+			if (ident.includes('boss') || ident.includes('adventure')) {
+				await this.trackAdventureReplay('battleGetReplay', args, replay);
+			} else if (ident.includes('grand')) {
+				await this.trackArenaReplay('grandGetReplay', args, replay);
+			} else {
+				// Default to arena replay — the most common replay type
+				await this.trackArenaReplay('arenaGetReplay', args, replay);
+			}
+		}, 'trackBattleGetReplay', { category: 'battles' });
+
 		// ── Guild Raid ──────────────────────────────────────────────────
 		this.registerHandler('bossRaidAttack', async (_call, args, data) => {
 			await this.trackRaidBossAttack(args, data);
@@ -1574,7 +1593,7 @@ class GameTracker {
 			await this.trackTitansData(data);
 		}, 'trackTitansData', { category: 'player' });
 
-		this.registerHandler('petGetAll', async (_call, _args, data) => {
+		this.registerHandler('pet_getAll', async (_call, _args, data) => {
 			await this.trackPetsData(data);
 		}, 'trackPetsData', { category: 'player' });
 
@@ -1736,7 +1755,7 @@ class GameTracker {
 			await this.trackConsumableOpening(args, data, 'towerChest');
 		}, 'consumable:towerChest', { category: 'chests' });
 
-		this.registerHandler('bossOpenChestPay', async (_call, args, data) => {
+		this.registerHandler('bossOpenChest', async (_call, args, data) => {
 			await this.trackConsumableOpening(args, data, 'outlandChest');
 		}, 'consumable:outlandChest', { category: 'chests' });
 	}

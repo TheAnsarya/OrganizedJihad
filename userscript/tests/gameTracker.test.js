@@ -669,7 +669,7 @@ describe('GameTracker', () => {
 				{ name: 'pet_chestOpen', expectedType: 'petChest' },
 				{ name: 'consumableUseLootBox', expectedType: 'lootBox' },
 				{ name: 'towerOpenChest', expectedType: 'towerChest' },
-				{ name: 'bossOpenChestPay', expectedType: 'outlandChest' },
+				{ name: 'bossOpenChest', expectedType: 'outlandChest' },
 			];
 
 			for (const { name, expectedType } of apiCalls) {
@@ -702,7 +702,7 @@ describe('GameTracker', () => {
 				'arenaAttack', 'arenaEnd', 'titanArenaAttack',
 				'grandArenaAttack', 'clanWarAttack', 'bossRaidAttack',
 				'chestOpen', 'shopBuy', 'questComplete',
-				'titanGetAll', 'petGetAll',
+				'titanGetAll', 'pet_getAll',
 			];
 			for (const method of coreMethods) {
 				expect(tracker._handlerRegistry.has(method)).toBe(true);
