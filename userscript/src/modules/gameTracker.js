@@ -2093,9 +2093,9 @@ class GameTracker {
 	 * AND writes a lightweight metadata summary cache for the dashboard.
 	 * Includes deduplication fingerprinting to skip unchanged rosters.
 	 *
-	 * Entity Structure (8 properties):
+	 * Entity Structure (9 properties):
 	 * - Identity: PetId, PetName
-	 * - Stats: Stars, Power, Level
+	 * - Stats: Stars, Power, Level, Items
 	 * - Special: PatronageData (JSON - which heroes the pet supports)
 	 * - Tracking: PlayerId, Timestamp
 	 *
@@ -2112,6 +2112,7 @@ class GameTracker {
 			stars: pet.star || 0,
 			power: pet.power || 0,
 			level: pet.level || 0,
+			items: pet.slots ? Object.keys(pet.slots).filter((k) => pet.slots[k]).length : 0,
 			patronageData: JSON.stringify(pet.patronage || {}),
 			playerId: playerId,
 			timestamp: timestamp,
@@ -2119,7 +2120,7 @@ class GameTracker {
 
 		// ── Deduplication: skip if pet roster hasn't changed ─────────────
 		const petFingerprint = this._computeDataFingerprint(
-			pets.map((p) => [p.petId, p.level, p.stars, p.power])
+			pets.map((p) => [p.petId, p.level, p.stars, p.power, p.items])
 		);
 		if (petFingerprint === this._lastPetHash) {
 			return;
@@ -2138,6 +2139,7 @@ class GameTracker {
 			level: p.level,
 			stars: p.stars,
 			power: p.power,
+			items: p.items,
 			patronageData: p.patronageData,
 		}));
 		await this.storage.setMetadata('petsData', summary);

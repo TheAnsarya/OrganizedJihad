@@ -1584,16 +1584,20 @@ class UIManager {
 				? `<div class="oj-pet-patronage">\uD83D\uDC64 Supporting ${patronageCount} hero${patronageCount !== 1 ? 'es' : ''}</div>`
 				: '';
 
+			const itemCount = p.items ?? 0;
+			const itemDisplay = `${itemCount}/${PCalc.MAX_ITEMS}`;
+
 			return `
 				<tr class="oj-pet-row" data-pet-id="${pId}">
 					<td><strong>${name}</strong></td>
 					<td>${p.level || '\u2014'}</td>
 					<td>${'\u2B50'.repeat(Math.min(p.stars || p.star || 0, 6)) || '\u2014'}</td>
+					<td class="oj-num">${itemDisplay}</td>
 					<td class="oj-num">${p.power ? p.power.toLocaleString() : '\u2014'}</td>
 					<td class="oj-completion-cell">${PCalc.renderBar(comp.overall)}</td>
 				</tr>
 				<tr class="oj-pet-detail" data-detail-for="${pId}" style="display:none">
-					<td colspan="5">
+					<td colspan="6">
 						<div class="oj-sys-breakdown">
 							${sysRows}
 						</div>
@@ -1615,6 +1619,7 @@ class UIManager {
 							<th data-sort="name" class="oj-sort-header">Name ${sortInd('name')}</th>
 							<th data-sort="level" class="oj-sort-header">Lvl ${sortInd('level')}</th>
 							<th data-sort="stars" class="oj-sort-header">Stars ${sortInd('stars')}</th>
+							<th data-sort="items" class="oj-sort-header">Items ${sortInd('items')}</th>
 							<th data-sort="power" class="oj-sort-header">Power ${sortInd('power')}</th>
 							<th data-sort="completion" class="oj-sort-header">Complete ${sortInd('completion')}</th>
 						</tr>

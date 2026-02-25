@@ -15,6 +15,7 @@ describe('PetCompletionCalculator', () => {
 			const result = Calc.calculateCompletion({
 				level: 130,
 				stars: 6,
+				items: 6,
 			});
 			expect(result.overall).toBeCloseTo(100, 1);
 		});
@@ -23,9 +24,11 @@ describe('PetCompletionCalculator', () => {
 			const result = Calc.calculateCompletion({
 				level: 130,
 				stars: 6,
+				items: 6,
 			});
 			expect(result.systems.level).toBeCloseTo(100, 1);
 			expect(result.systems.stars).toBeCloseTo(100, 1);
+			expect(result.systems.items).toBeCloseTo(100, 1);
 		});
 	});
 
@@ -37,6 +40,7 @@ describe('PetCompletionCalculator', () => {
 			expect(result.overall).toBe(0);
 			expect(result.systems.level).toBe(0);
 			expect(result.systems.stars).toBe(0);
+			expect(result.systems.items).toBe(0);
 		});
 
 		test('should return 0% for undefined', () => {
@@ -67,21 +71,28 @@ describe('PetCompletionCalculator', () => {
 			const result = Calc.calculateCompletion({
 				level: 65,  // 50% of 130
 				stars: 3,   // 50% of 6
+				items: 3,   // 50% of 6
 			});
-			// level: 50% * 0.55 = 27.5, stars: 50% * 0.45 = 22.5, total: 50%
+			// level: 50% * 0.45 = 22.5, stars: 50% * 0.35 = 17.5, items: 50% * 0.20 = 10, total: 50%
 			expect(result.overall).toBeCloseTo(50, 0);
 		});
 
 		test('should handle pet with only level set', () => {
 			const result = Calc.calculateCompletion({ level: 130 });
-			// level: 100% * 0.55 = 55, stars: 0% * 0.45 = 0
-			expect(result.overall).toBeCloseTo(55, 0);
+			// level: 100% * 0.45 = 45, stars: 0%, items: 0%
+			expect(result.overall).toBeCloseTo(45, 0);
 		});
 
 		test('should handle pet with only stars set', () => {
 			const result = Calc.calculateCompletion({ stars: 6 });
-			// level: 0% * 0.55 = 0, stars: 100% * 0.45 = 45
-			expect(result.overall).toBeCloseTo(45, 0);
+			// level: 0%, stars: 100% * 0.35 = 35, items: 0%
+			expect(result.overall).toBeCloseTo(35, 0);
+		});
+
+		test('should handle pet with only items set', () => {
+			const result = Calc.calculateCompletion({ items: 6 });
+			// level: 0%, stars: 0%, items: 100% * 0.20 = 20
+			expect(result.overall).toBeCloseTo(20, 0);
 		});
 	});
 
@@ -89,9 +100,10 @@ describe('PetCompletionCalculator', () => {
 
 	describe('System details', () => {
 		test('should include current/max info for each system', () => {
-			const result = Calc.calculateCompletion({ level: 50, stars: 3 });
+			const result = Calc.calculateCompletion({ level: 50, stars: 3, items: 4 });
 			expect(result.systemDetails.level).toEqual({ current: 50, max: 130 });
 			expect(result.systemDetails.stars).toEqual({ current: 3, max: 6 });
+			expect(result.systemDetails.items).toEqual({ current: 4, max: 6 });
 		});
 	});
 
@@ -186,10 +198,12 @@ describe('PetCompletionCalculator', () => {
 			const result = Calc.calculateCompletion({
 				level: 200,
 				stars: 10,
+				items: 10,
 			});
 			expect(result.overall).toBeCloseTo(100, 0);
 			expect(result.systems.level).toBeCloseTo(100, 1);
 			expect(result.systems.stars).toBeCloseTo(100, 1);
+			expect(result.systems.items).toBeCloseTo(100, 1);
 		});
 	});
 
@@ -201,8 +215,8 @@ describe('PetCompletionCalculator', () => {
 			expect(sum).toBeCloseTo(1.0, 5);
 		});
 
-		test('should have 2 weighted systems', () => {
-			expect(Object.keys(Calc.WEIGHTS)).toHaveLength(2);
+		test('should have 3 weighted systems', () => {
+			expect(Object.keys(Calc.WEIGHTS)).toHaveLength(3);
 		});
 	});
 
