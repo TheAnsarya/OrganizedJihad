@@ -1758,6 +1758,220 @@ class GameTracker {
 		this.registerHandler('bossOpenChest', async (_call, args, data) => {
 			await this.trackConsumableOpening(args, data, 'outlandChest');
 		}, 'consumable:outlandChest', { category: 'chests' });
+
+		// ── Additional Battle Endpoints (#112) ──────────────────────────
+		// Titan Arena end — battle completion with results
+		this.registerHandler('titanArenaEnd', async (callName, args, data) => {
+			await this.trackTitanArenaBattle(args, data);
+		}, 'trackTitanArenaEnd', { category: 'battles' });
+
+		// Grand Arena end — battle completion with results
+		this.registerHandler('grandArenaEnd', async (callName, args, data) => {
+			await this.trackGrandArenaBattle(args, data);
+		}, 'trackGrandArenaEnd', { category: 'battles' });
+
+		// Adventure end — adventure boss battles
+		this.registerHandler('adventureEnd', async (callName, args, data) => {
+			await this.trackBattleResult(callName, args, data);
+		}, 'trackAdventureEnd', { category: 'battles' });
+
+		// Dungeon battles
+		this.registerHandler(['dungeonBattle', 'dungeonEnd'], async (callName, args, data) => {
+			await this.trackBattleResult(callName, args, data);
+		}, 'trackDungeonBattle', { category: 'battles' });
+
+		// Titan dungeon battles
+		this.registerHandler(['titanDungeonBattle', 'titanDungeonEnd'], async (callName, args, data) => {
+			await this.trackBattleResult(callName, args, data);
+		}, 'trackTitanDungeonBattle', { category: 'battles' });
+
+		// Arena end — standalone battle end signal
+		this.registerHandler('arenaEnd', async (_call, args, data) => {
+			await this.trackArenaBattle(args, data);
+		}, 'trackArenaEnd', { category: 'battles' });
+
+		// ── Pet Upgrade Endpoints (#112) ─────────────────────────────────
+		this.registerHandler('pet_levelUp', async (_call, args, data) => {
+			await this._trackGenericUpgrade('pet', 'levelUp', args, data);
+		}, 'petLevelUp', { category: 'upgrades' });
+
+		this.registerHandler('pet_evolve', async (_call, args, data) => {
+			await this._trackGenericUpgrade('pet', 'evolve', args, data);
+		}, 'petEvolve', { category: 'upgrades' });
+
+		// ── Titan Additional Upgrades (#112) ────────────────────────────
+		this.registerHandler('titanEnchantRune', async (_call, args, data) => {
+			await this.upgradeTracker.trackTitanGlyphUpgrade?.(args, data, await this._getPlayerId());
+			await this._trackGenericUpgrade('titan', 'glyphUpgrade', args, data);
+		}, 'titanGlyphUpgrade', { category: 'upgrades' });
+
+		this.registerHandler('titanSpiritUpgrade', async (_call, args, data) => {
+			await this._trackGenericUpgrade('titan', 'spiritUpgrade', args, data);
+		}, 'titanSpiritUpgrade', { category: 'upgrades' });
+
+		// ── Economy / Shopping Endpoints (#112) ─────────────────────────
+		this.registerHandler('offerBuy', async (_call, args, data) => {
+			await this._trackGenericEvent('economy', 'offerBuy', args, data);
+			// Track resource costs if available
+			if (data.reward) {
+				const rewards = data.reward;
+				if (rewards.gold) await this.trackResourceTransaction('gold', rewards.gold, 'offer', 'shop');
+				if (rewards.starmoney) await this.trackResourceTransaction('emeralds', rewards.starmoney, 'offer', 'shop');
+			}
+		}, 'trackOfferBuy', { category: 'chests' });
+
+		this.registerHandler(['campaignFarm', 'missionFarm'], async (_call, args, data) => {
+			await this._trackGenericEvent('economy', 'campaignFarm', args, data);
+			// Track loot rewards from auto-farming
+			if (data.reward) {
+				const rewards = data.reward;
+				if (rewards.gold) await this.trackResourceTransaction('gold', rewards.gold, 'farm', 'campaign');
+				if (rewards.starmoney) await this.trackResourceTransaction('emeralds', rewards.starmoney, 'farm', 'campaign');
+			}
+		}, 'trackCampaignFarm', { category: 'quests' });
+
+		// ── Friend / Social Endpoints (#112) ────────────────────────────
+		this.registerHandler(['friendSendGift', 'friendGetGift', 'friendSendHearts', 'friendGetHearts'], async (_call, args, data) => {
+			await this._trackGenericEvent('social', 'friendGift', args, data);
+			if (data.reward?.starmoney) {
+				await this.trackResourceTransaction('emeralds', data.reward.starmoney, 'gift', 'friend');
+			}
+		}, 'trackFriendGift', { category: 'player' });
+
+		// ── Event / Season Endpoints (#112) ─────────────────────────────
+		this.registerHandler(['eventGetInfo', 'eventGetAll'], async (_call, _args, data) => {
+			await this._trackGenericEvent('event', 'eventInfo', {}, data);
+		}, 'trackEventInfo', { category: 'quests' });
+
+		this.registerHandler('eventFarm', async (_call, args, data) => {
+			await this._trackGenericEvent('event', 'eventFarm', args, data);
+			if (data.reward) {
+				const rewards = data.reward;
+				if (rewards.gold) await this.trackResourceTransaction('gold', rewards.gold, 'event', 'event');
+				if (rewards.starmoney) await this.trackResourceTransaction('emeralds', rewards.starmoney, 'event', 'event');
+			}
+		}, 'trackEventFarm', { category: 'quests' });
+
+		this.registerHandler(['seasonGetInfo', 'seasonGetAll'], async (_call, _args, data) => {
+			await this._trackGenericEvent('event', 'seasonInfo', {}, data);
+		}, 'trackSeasonInfo', { category: 'quests' });
+
+		this.registerHandler('seasonFarm', async (_call, args, data) => {
+			await this._trackGenericEvent('event', 'seasonFarm', args, data);
+			if (data.reward) {
+				const rewards = data.reward;
+				if (rewards.gold) await this.trackResourceTransaction('gold', rewards.gold, 'season', 'season');
+				if (rewards.starmoney) await this.trackResourceTransaction('emeralds', rewards.starmoney, 'season', 'season');
+			}
+		}, 'trackSeasonFarm', { category: 'quests' });
+
+		// ── Additional Chest Types (#112) ───────────────────────────────
+		this.registerHandler('skinChestOpen', async (_call, args, data) => {
+			await this.trackConsumableOpening(args, data, 'skinChest');
+		}, 'consumable:skinChest', { category: 'chests' });
+
+		this.registerHandler('runeChestOpen', async (_call, args, data) => {
+			await this.trackConsumableOpening(args, data, 'runeChest');
+		}, 'consumable:runeChest', { category: 'chests' });
+
+		this.registerHandler('gachaOpen', async (_call, args, data) => {
+			await this.trackConsumableOpening(args, data, 'gacha');
+		}, 'consumable:gacha', { category: 'chests' });
+
+		// ── Adventure State (#112) ──────────────────────────────────────
+		this.registerHandler('adventureGetAll', async (_call, _args, data) => {
+			await this._trackGenericEvent('adventure', 'adventureState', {}, data);
+		}, 'trackAdventureState', { category: 'battles' });
+
+		// ── Guild Dungeon (#112) ────────────────────────────────────────
+		this.registerHandler('clanDungeonBattle', async (callName, args, data) => {
+			await this.trackBattleResult(callName, args, data);
+		}, 'trackClanDungeonBattle', { category: 'battles' });
+
+		// ── Hero Special Endpoints (#112) ───────────────────────────────
+		this.registerHandler('heroAbsoluteStarMission', async (_call, args, data) => {
+			await this._trackGenericEvent('hero', 'absoluteStarMission', args, data);
+		}, 'trackAbsoluteStarMission', { category: 'upgrades' });
+
+		this.registerHandler('heroGiftOfElements', async (_call, args, data) => {
+			await this._trackGenericUpgrade('hero', 'giftOfElements', args, data);
+		}, 'trackGiftOfElements', { category: 'upgrades' });
+
+		// ── Seer / Special (#112) ───────────────────────────────────────
+		this.registerHandler('seerFarm', async (_call, args, data) => {
+			await this._trackGenericEvent('economy', 'seerFarm', args, data);
+			if (data.reward) {
+				const rewards = data.reward;
+				if (rewards.gold) await this.trackResourceTransaction('gold', rewards.gold, 'seer', 'seer');
+				if (rewards.starmoney) await this.trackResourceTransaction('emeralds', rewards.starmoney, 'seer', 'seer');
+			}
+		}, 'trackSeerFarm', { category: 'quests' });
+
+		// ── Tower Get State (#112) ──────────────────────────────────────
+		this.registerHandler('towerGetState', async (_call, _args, data) => {
+			await this._trackGenericEvent('tower', 'towerState', {}, data);
+		}, 'trackTowerState', { category: 'battles' });
+
+		// ── Clash of Worlds (#112) ──────────────────────────────────────
+		this.registerHandler(['clashGetInfo', 'clashBattle', 'clashEnd'], async (callName, args, data) => {
+			if (callName.includes('Battle') || callName.includes('End')) {
+				await this.trackBattleResult(callName, args, data);
+			} else {
+				await this._trackGenericEvent('clash', 'clashInfo', args, data);
+			}
+		}, 'trackClash', { category: 'battles' });
+
+		// ── Tournament of Elements (#112) ───────────────────────────────
+		this.registerHandler(['tournamentGetInfo', 'tournamentBattle', 'tournamentEnd'], async (callName, args, data) => {
+			if (callName.includes('Battle') || callName.includes('End')) {
+				await this.trackBattleResult(callName, args, data);
+			} else {
+				await this._trackGenericEvent('tournament', 'tournamentInfo', args, data);
+			}
+		}, 'trackTournament', { category: 'battles' });
+	}
+
+	// =====================================================================
+	// Generic Tracking Helpers (#112)
+	// =====================================================================
+
+	/**
+	 * Track a generic upgrade event. Logs the upgrade to the activity feed
+	 * and stores the upgrade metadata for later analysis.
+	 *
+	 * @param {string} entityType - Type of entity (hero, titan, pet)
+	 * @param {string} upgradeType - Type of upgrade (levelUp, evolve, etc.)
+	 * @param {Object} args - API request arguments
+	 * @param {Object} data - API response data
+	 * @private
+	 */
+	async _trackGenericUpgrade(entityType, upgradeType, args, data) {
+		const entityId = args.heroId || args.titanId || args.petId || args.id || 0;
+		const label = `${entityType} ${upgradeType}`;
+		await this._logActivity('upgrade', `${label} #${entityId}`, {
+			entityType,
+			upgradeType,
+			entityId,
+		});
+	}
+
+	/**
+	 * Track a generic game event. Logs the event to the activity feed.
+	 * Used for API endpoints where we want to acknowledge receipt but
+	 * don't yet have specialized handling logic.
+	 *
+	 * @param {string} category - Event category (economy, event, social, etc.)
+	 * @param {string} eventType - Specific event type
+	 * @param {Object} args - API request arguments
+	 * @param {Object} data - API response data
+	 * @private
+	 */
+	async _trackGenericEvent(category, eventType, args, data) {
+		await this._logActivity(category, eventType, {
+			category,
+			eventType,
+			hasReward: !!data.reward,
+		});
 	}
 
 	/**
@@ -3504,8 +3718,13 @@ class GameTracker {
 	}
 
 	/**
-	 * Compress hero team data for storage efficiency
-	 * Based on Hero Wars Assistant's compression algorithm
+	 * Compress hero team data for storage efficiency (#111)
+	 * Enhanced format captures damage, healing, and pet assignment.
+	 * Backward-compatible — old 5-element tuples still parse correctly.
+	 *
+	 * Format: [id, level, star, color, power, damage, healing, petId]
+	 *   - Elements 0-4: core stats (always present)
+	 *   - Elements 5-7: battle stats (0 when not in a battle context)
 	 *
 	 * @param {Object} team - Team object with heroes
 	 * @returns {Array} Compressed team data
@@ -3519,6 +3738,9 @@ class GameTracker {
 			hero.star || 0,
 			hero.color || 0,
 			hero.power || 0,
+			hero.damage || hero.totalDamage || 0,
+			hero.healing || hero.totalHealing || 0,
+			hero.petId || hero.pet || 0,
 		]);
 	}
 

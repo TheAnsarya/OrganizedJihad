@@ -138,7 +138,9 @@ When opening the ui on the dashboard, the player component is terrible, instead 
 
 (userscript) For the `Pets` tab ui and tracking, `Items` is always listed as 100% when it is not, fix that; at the top of the Pets UI tab, show a progress bar (not percentage, but actual number) show the progress on pet soul stones so we can see what we have and how many we need total; continue; 
 
+(userscript) like we added avatars to the heroes, let's add avatars to pets and titans; on dashboard ui, make emeralds green, not blue, and make the value accurate; for the dashboard, turn the second row of cards (Daily Quests, Guild Quests, Guild War, Guild Raid) to use ##/## in order to show a useful number, guild raid should show both minions (1/9) and guild boss (1/5); and fix tracking battles, as none of them are saved/shown correctly they need to track and show the enemy teams and the actual result, with damage ane hhealing numbers and what pets were used, and display with all the avatars; track all api calls that happen, and make code to deal with each and every kind of call, api endpoint; track everything; continue;
 
+(userscript) make issues and plans and docs, etc, then implement; continue!
 
 
 

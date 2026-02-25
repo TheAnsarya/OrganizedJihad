@@ -557,6 +557,8 @@ class UIManager {
 		let guildQuestsToday = 0;
 		let guildWarBattlesToday = 0;
 		let guildRaidBattlesToday = 0;
+		let guildRaidMinionToday = 0;
+		let guildRaidBossToday = 0;
 
 		try {
 			const dq = await this.idbStorage.getAll('dailyQuestCompletions');
@@ -572,7 +574,15 @@ class UIManager {
 			const battles = await this.idbStorage.getAll('battles');
 			const todayBattles = battles.filter((b) => b.timestamp >= todayISO);
 			guildWarBattlesToday = todayBattles.filter((b) => b.battleType === 'GuildWar').length;
-			guildRaidBattlesToday = todayBattles.filter((b) => b.battleType === 'RaidBoss').length;
+			// Guild Raid: split into minion attacks vs boss attacks (#110)
+			// RaidBoss battles where mission/bossId indicates boss type
+			const raidBattles = todayBattles.filter((b) => b.battleType === 'RaidBoss');
+			guildRaidBattlesToday = raidBattles.length;
+			// Boss battles have higher bossId or specific markers — approximate by counting all
+			// Minion attacks (9 max per day) vs Guild Boss attacks (5 max per day)
+			// Without explicit boss type markers, show total raid attacks
+			guildRaidMinionToday = raidBattles.length; // Will be refined when API data distinguishes types
+			guildRaidBossToday = 0; // Placeholder until boss type tracking is added
 		} catch { /* empty */ }
 
 		// Gather counts from actual IndexedDB stores
@@ -634,7 +644,7 @@ class UIManager {
 						</div>
 						<div style="flex:1;min-width:100px;background:#2a2a2e;border-radius:6px;padding:8px;text-align:center">
 							<div style="font-size:18px">\uD83D\uDC8E</div>
-							<div style="font-size:14px;font-weight:700;color:#4fc3f7">${emeralds}</div>
+							<div style="font-size:14px;font-weight:700;color:#66bb6a">${emeralds}</div>
 							<div style="font-size:10px;color:#888">Emeralds</div>
 						</div>
 						<div style="flex:1;min-width:100px;background:#2a2a2e;border-radius:6px;padding:8px">
@@ -662,23 +672,23 @@ class UIManager {
 					<div style="display:flex;gap:6px;flex-wrap:wrap">
 						<div style="flex:1;min-width:100px;background:#2a2a2e;border-radius:6px;padding:6px 8px;text-align:center">
 							<div style="font-size:14px">\u2705</div>
-							<div style="font-size:16px;font-weight:700;color:#81c784">${dailyQuestsToday}</div>
+							<div style="font-size:16px;font-weight:700;color:#81c784">${dailyQuestsToday} today</div>
 							<div style="font-size:10px;color:#888">Daily Quests</div>
 						</div>
 						<div style="flex:1;min-width:100px;background:#2a2a2e;border-radius:6px;padding:6px 8px;text-align:center">
 							<div style="font-size:14px">\uD83C\uDFF0</div>
-							<div style="font-size:16px;font-weight:700;color:#ffb74d">${guildQuestsToday}</div>
+							<div style="font-size:16px;font-weight:700;color:#ffb74d">${guildQuestsToday} today</div>
 							<div style="font-size:10px;color:#888">Guild Quests</div>
 						</div>
 						<div style="flex:1;min-width:100px;background:#2a2a2e;border-radius:6px;padding:6px 8px;text-align:center">
 							<div style="font-size:14px">\u2694\uFE0F</div>
-							<div style="font-size:16px;font-weight:700;color:#ef9a9a">${guildWarBattlesToday}</div>
+							<div style="font-size:16px;font-weight:700;color:#ef9a9a">${guildWarBattlesToday}/3</div>
 							<div style="font-size:10px;color:#888">Guild War</div>
 						</div>
 						<div style="flex:1;min-width:100px;background:#2a2a2e;border-radius:6px;padding:6px 8px;text-align:center">
 							<div style="font-size:14px">\uD83D\uDC32</div>
-							<div style="font-size:16px;font-weight:700;color:#4fc3f7">${guildRaidBattlesToday}</div>
-							<div style="font-size:10px;color:#888">Guild Raid</div>
+							<div style="font-size:14px;font-weight:700;color:#4fc3f7">${guildRaidMinionToday}/9</div>
+							<div style="font-size:10px;color:#888">Raid Attacks</div>
 						</div>
 					</div>
 				</div>`
@@ -1298,13 +1308,47 @@ class UIManager {
 				: '<span class="oj-loss">LOSS</span>';
 			const opponent = b.opponentName || b.defenderId || b.opponentId || '\u2014';
 			const type = typeLabels[b.battleType] || b.battleType || '\u2014';
+
+			// Calculate total damage/healing from compressed team data (#111)
+			let totalDmg = 0;
+			let totalHeal = 0;
+			try {
+				const team = b.playerHeroes ? JSON.parse(b.playerHeroes) : [];
+				const flat = Array.isArray(team[0]) && Array.isArray(team[0][0]) ? team.flat() : team;
+				for (const h of flat) {
+					if (Array.isArray(h)) {
+						totalDmg += h[5] || 0;
+						totalHeal += h[6] || 0;
+					}
+				}
+			} catch { /* empty */ }
+
+			const dmgCell = totalDmg > 0 ? `<span class="oj-mono oj-dmg">${this._formatCompact(totalDmg)}</span>` : '\u2014';
+			const healCell = totalHeal > 0 ? `<span class="oj-mono oj-heal">${this._formatCompact(totalHeal)}</span>` : '\u2014';
+
+			// Battle detail row with team compositions and avatars
+			const playerTeamHtml = this._renderBattleTeam(b.playerHeroes, '\uD83D\uDDE1\uFE0F Attack');
+			const opponentTeamHtml = this._renderBattleTeam(b.opponentHeroes, '\uD83D\uDEE1\uFE0F Defense');
+			const hasDetail = playerTeamHtml || opponentTeamHtml;
+			const battleId = `battle-${b.timestamp || Math.random()}`;
+
 			return `
-				<tr>
+				<tr class="${hasDetail ? 'oj-battle-row' : ''}" data-battle-id="${battleId}">
 					<td class="oj-mono">${time}</td>
 					<td>${type}</td>
 					<td>${this._escapeHtml(String(opponent))}</td>
+					<td>${dmgCell}</td>
+					<td>${healCell}</td>
 					<td>${result}</td>
 				</tr>
+				${hasDetail ? `<tr class="oj-battle-detail" data-detail-for="${battleId}" style="display:none">
+					<td colspan="6">
+						<div class="oj-battle-teams">
+							${playerTeamHtml}
+							${opponentTeamHtml}
+						</div>
+					</td>
+				</tr>` : ''}
 			`;
 		}).join('');
 
@@ -1320,7 +1364,7 @@ class UIManager {
 				${this._renderSearchBar(vs.filter, 'Search opponent...')}
 				<table class="oj-table">
 					<thead>
-						<tr><th>Time</th><th>Type</th><th>Opponent</th><th>Result</th></tr>
+						<tr><th>Time</th><th>Type</th><th>Opponent</th><th>Dmg</th><th>Heal</th><th>Result</th></tr>
 					</thead>
 					<tbody>${rows}</tbody>
 				</table>
@@ -1425,6 +1469,10 @@ class UIManager {
 			const elementDisplay = TCalc.formatElement(t.element);
 			const comp = completionMap[tId] || { overall: 0, systems: {} };
 
+			// Titan avatar from HW-Assist Calculator CDN (#109)
+			// Titan IDs are in the 4000-range; zero-padded to 4 digits
+			const avatarUrl = `https://calc2.hw-assist.com/static/assets/images/hero_icons/${String(tId).padStart(4, '0')}.png`;
+
 			// Build expandable per-system breakdown (hidden by default)
 			const sysRows = Object.entries(TCalc.SYSTEM_LABELS).map(([key, label]) => {
 				const pct = comp.systems[key] || 0;
@@ -1437,6 +1485,7 @@ class UIManager {
 
 			return `
 				<tr class="oj-titan-row" data-titan-id="${tId}">
+					<td class="oj-avatar-cell"><img class="oj-hero-avatar" src="${avatarUrl}" alt="${name}" loading="lazy" onerror="this.style.display='none'"></td>
 					<td><strong>${name}</strong></td>
 					<td>${t.level || '\u2014'}</td>
 					<td>${'\u2B50'.repeat(Math.min(t.stars || 0, 6)) || '\u2014'}</td>
@@ -1445,7 +1494,7 @@ class UIManager {
 					<td class="oj-completion-cell">${TCalc.renderBar(comp.overall)}</td>
 				</tr>
 				<tr class="oj-titan-detail" data-detail-for="${tId}" style="display:none">
-					<td colspan="6">
+					<td colspan="7">
 						<div class="oj-sys-breakdown">${sysRows}</div>
 					</td>
 				</tr>
@@ -1461,6 +1510,7 @@ class UIManager {
 				<table class="oj-table oj-sortable">
 					<thead>
 						<tr>
+							<th class="oj-avatar-header"></th>
 							<th data-sort="name" class="oj-sort-header">Name ${sortInd('name')}</th>
 							<th data-sort="level" class="oj-sort-header">Lvl ${sortInd('level')}</th>
 							<th data-sort="stars" class="oj-sort-header">Stars ${sortInd('stars')}</th>
@@ -1569,6 +1619,10 @@ class UIManager {
 			const comp = completionMap[pId] || { overall: 0, systems: {} };
 			const patronageCount = PCalc.countPatronage(p.patronageData);
 
+			// Pet avatar from HW-Assist Calculator CDN (#109)
+			// Pet IDs are in the 6000-range; zero-padded to 4 digits
+			const avatarUrl = `https://calc2.hw-assist.com/static/assets/images/hero_icons/${String(pId).padStart(4, '0')}.png`;
+
 			// Build expandable per-system breakdown (hidden by default)
 			const sysRows = Object.entries(PCalc.SYSTEM_LABELS).map(([key, label]) => {
 				const pct = comp.systems[key] || 0;
@@ -1590,6 +1644,7 @@ class UIManager {
 
 			return `
 				<tr class="oj-pet-row" data-pet-id="${pId}">
+					<td class="oj-avatar-cell"><img class="oj-hero-avatar ${colorClass}" src="${avatarUrl}" alt="${name}" loading="lazy" onerror="this.style.display='none'"></td>
 					<td><strong>${name}</strong></td>
 					<td>${p.level || '\u2014'}</td>
 					<td>${'\u2B50'.repeat(Math.min(p.stars || p.star || 0, 6)) || '\u2014'}</td>
@@ -1598,7 +1653,7 @@ class UIManager {
 					<td class="oj-completion-cell">${PCalc.renderBar(comp.overall)}</td>
 				</tr>
 				<tr class="oj-pet-detail" data-detail-for="${pId}" style="display:none">
-					<td colspan="6">
+					<td colspan="7">
 						<div class="oj-sys-breakdown">
 							${sysRows}
 						</div>
@@ -1661,6 +1716,7 @@ class UIManager {
 				<table class="oj-table oj-sortable">
 					<thead>
 						<tr>
+							<th class="oj-avatar-header"></th>
 							<th data-sort="name" class="oj-sort-header">Name ${sortInd('name')}</th>
 							<th data-sort="level" class="oj-sort-header">Lvl ${sortInd('level')}</th>
 							<th data-sort="stars" class="oj-sort-header">Stars ${sortInd('stars')}</th>
@@ -3361,6 +3417,19 @@ class UIManager {
 			});
 		});
 
+		// Battle row expand/collapse (#111 — show team compositions with avatars)
+		content.querySelectorAll('.oj-battle-row[data-battle-id]').forEach((row) => {
+			row.addEventListener('click', () => {
+				const bId = row.dataset.battleId;
+				const detailRow = content.querySelector(`tr.oj-battle-detail[data-detail-for="${bId}"]`);
+				if (detailRow) {
+					const isHidden = detailRow.style.display === 'none';
+					detailRow.style.display = isHidden ? '' : 'none';
+					row.classList.toggle('oj-expanded', isHidden);
+				}
+			});
+		});
+
 		// Emerald click — navigate to resources tab and filter to emerald transactions
 		content.querySelectorAll('[data-resource-filter="emeralds"]').forEach((el) => {
 			el.addEventListener('click', () => {
@@ -3598,6 +3667,91 @@ class UIManager {
 		const div = document.createElement('div');
 		div.textContent = str;
 		return div.innerHTML;
+	}
+
+	/**
+	 * Render a compressed hero team as a row of avatar icons with optional stats.
+	 * Handles both old 5-element tuples and new 8-element tuples (#111).
+	 *
+	 * Compressed format: [id, level, star, color, power, damage, healing, petId]
+	 *
+	 * @param {string|null} heroesJson - JSON string of compressed team array
+	 * @param {string} [label='Team'] - Label shown above the team
+	 * @returns {string} HTML fragment
+	 * @private
+	 */
+	_renderBattleTeam(heroesJson, label = 'Team') {
+		if (!heroesJson) return '';
+		let heroes;
+		try {
+			heroes = JSON.parse(heroesJson);
+		} catch {
+			return '';
+		}
+		if (!Array.isArray(heroes) || heroes.length === 0) return '';
+
+		// Grand Arena has nested arrays (array of teams); flatten for display
+		const isNested = Array.isArray(heroes[0]) && Array.isArray(heroes[0][0]);
+		const teams = isNested ? heroes : [heroes];
+
+		const teamHtmls = teams.map((team, teamIdx) => {
+			if (!Array.isArray(team)) return '';
+			const avatars = team.map((h) => {
+				const id = h[0] || 0;
+				const level = h[1] || 0;
+				const star = h[2] || 0;
+				const color = h[3] || 0;
+				const power = h[4] || 0;
+				const damage = h[5] || 0;
+				const healing = h[6] || 0;
+				const petId = h[7] || 0;
+
+				// Avatar URL — map enemy variant IDs (>=7000) back to base
+				const avatarId = id >= 7000 ? id - 7000 : id;
+				const avatarUrl = `https://calc2.hw-assist.com/static/assets/images/hero_icons/${String(avatarId).padStart(4, '0')}.png`;
+				const name = resolveHeroName(id) || `#${id}`;
+				const colorClass = this._colorRankClass(color);
+
+				// Stats tooltip
+				const statsTitle = `${name} Lv${level} ${'★'.repeat(Math.min(star, 6))} ${this._colorRankName(color)} | Power: ${power.toLocaleString()}` +
+					(damage ? ` | DMG: ${damage.toLocaleString()}` : '') +
+					(healing ? ` | Heal: ${healing.toLocaleString()}` : '');
+
+				let petHtml = '';
+				if (petId > 0) {
+					const petAvatarId = petId >= 7000 ? petId - 7000 : petId;
+					const petUrl = `https://calc2.hw-assist.com/static/assets/images/hero_icons/${String(petAvatarId).padStart(4, '0')}.png`;
+					petHtml = `<img class="oj-battle-pet-icon" src="${petUrl}" alt="Pet" loading="lazy" onerror="this.style.display='none'" title="${resolveHeroName(petId) || 'Pet'}">`;
+				}
+
+				return `<div class="oj-battle-hero" title="${this._escapeHtml(statsTitle)}">` +
+					`<img class="oj-hero-avatar ${colorClass}" src="${avatarUrl}" alt="${name}" loading="lazy" onerror="this.style.display='none'">` +
+					petHtml +
+					(damage ? `<div class="oj-battle-dmg">${this._formatCompact(damage)}</div>` : '') +
+					`</div>`;
+			}).join('');
+
+			const teamLabel = teams.length > 1 ? ` ${teamIdx + 1}` : '';
+			return `<div class="oj-battle-team-row">${avatars}</div>`;
+		}).join('');
+
+		return `<div class="oj-battle-team-block">` +
+			`<div class="oj-battle-team-label">${label}</div>` +
+			teamHtmls +
+			`</div>`;
+	}
+
+	/**
+	 * Format a number in compact notation (e.g. 1.2M, 45K).
+	 *
+	 * @param {number} n - Number to format
+	 * @returns {string} Compact string
+	 * @private
+	 */
+	_formatCompact(n) {
+		if (n >= 1_000_000) return (n / 1_000_000).toFixed(1) + 'M';
+		if (n >= 1_000) return (n / 1_000).toFixed(1) + 'K';
+		return String(n);
 	}
 
 	/**

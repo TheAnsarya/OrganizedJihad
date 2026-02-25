@@ -766,20 +766,23 @@
 
 .oj-hero-row,
 .oj-titan-row,
-.oj-pet-row {
+.oj-pet-row,
+.oj-battle-row {
 	cursor: pointer;
 	transition: background 0.15s ease;
 }
 
 .oj-hero-row:hover,
 .oj-titan-row:hover,
-.oj-pet-row:hover {
+.oj-pet-row:hover,
+.oj-battle-row:hover {
 	background: rgba(255, 255, 255, 0.06);
 }
 
 .oj-hero-row.oj-expanded,
 .oj-titan-row.oj-expanded,
-.oj-pet-row.oj-expanded {
+.oj-pet-row.oj-expanded,
+.oj-battle-row.oj-expanded {
 	background: rgba(79, 195, 247, 0.08);
 }
 
@@ -787,7 +790,8 @@
 
 .oj-hero-detail td,
 .oj-titan-detail td,
-.oj-pet-detail td {
+.oj-pet-detail td,
+.oj-battle-detail td {
 	padding: 0 !important;
 }
 
@@ -1245,3 +1249,62 @@
 	background: rgba(255, 255, 255, 0.15);
 	border-radius: 2px;
 }
+
+/* ── Battle team display (#111) ──────────────────────────────────── */
+
+.oj-battle-teams {
+	display: flex;
+	gap: 16px;
+	padding: 10px 12px;
+	background: rgba(0, 0, 0, 0.15);
+	border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+	flex-wrap: wrap;
+}
+
+.oj-battle-team-block {
+	flex: 1;
+	min-width: 140px;
+}
+
+.oj-battle-team-label {
+	font-size: 11px;
+	color: rgba(255, 255, 255, 0.6);
+	margin-bottom: 6px;
+	font-weight: 600;
+}
+
+.oj-battle-team-row {
+	display: flex;
+	gap: 4px;
+	flex-wrap: wrap;
+	margin-bottom: 4px;
+}
+
+.oj-battle-hero {
+	position: relative;
+	display: inline-flex;
+	flex-direction: column;
+	align-items: center;
+	gap: 2px;
+}
+
+.oj-battle-dmg {
+	font-size: 9px;
+	color: #ef9a9a;
+	font-weight: 600;
+	white-space: nowrap;
+}
+
+.oj-battle-pet-icon {
+	position: absolute;
+	bottom: 14px;
+	right: -4px;
+	width: 14px;
+	height: 14px;
+	border-radius: 3px;
+	border: 1px solid rgba(255, 255, 255, 0.3);
+	background: rgba(0, 0, 0, 0.5);
+}
+
+.oj-dmg { color: #ef9a9a; }
+.oj-heal { color: #81c784; }
