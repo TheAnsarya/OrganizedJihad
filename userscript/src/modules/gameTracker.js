@@ -290,6 +290,9 @@ class GameTracker {
 		// Emit to live listeners immediately (before IDB write)
 		this._emit('activity', entry);
 
+		// Emit dataUpdate so UI tabs can auto-refresh (#90)
+		this._emit('dataUpdate', eventType);
+
 		try {
 			await this.storage.add('activityEvents', entry);
 
@@ -521,9 +524,11 @@ class GameTracker {
 	 * @param {'ok'|'error'|'skipped'|'no-match'} status - Outcome
 	 * @param {string} detail - Human-readable description
 	 * @param {string|null} error - Error message(s), if any
+	 * @param {string|null} url - Request URL
+	 * @param {Object|null} payload - Per-call request args and response data (#91)
 	 * @private
 	 */
-	_pushApiLog(callNames, status, detail, error, url) {
+	_pushApiLog(callNames, status, detail, error, url, payload = null) {
 		this._apiCallLog.push({
 			ts: Date.now(),
 			callNames,
@@ -532,6 +537,7 @@ class GameTracker {
 			error,
 			url: url || null,
 			page: this._pageHost,
+			payload: payload || null,
 		});
 		if (this._apiCallLog.length > this._apiCallLogMax) {
 			this._apiCallLog.shift();
@@ -1233,11 +1239,31 @@ class GameTracker {
 		}
 
 		// Push to API call log ring buffer
+		// Build per-call payload map for API Log viewer (#91)
+		const payload = {};
+		for (const result of sortedResults) {
+			const callName = callMap[result.ident];
+			if (!callName) continue;
+			const args = callArgs[result.ident];
+			const responseData = result.result?.response;
+			// Truncate large payloads to prevent memory bloat
+			try {
+				const argsStr = JSON.stringify(args);
+				const resStr = JSON.stringify(responseData);
+				payload[callName] = {
+					args: argsStr.length > 2000 ? JSON.parse(argsStr.substring(0, 2000) + '..."') : args,
+					response: resStr.length > 5000 ? `[truncated: ${resStr.length} bytes]` : responseData,
+				};
+			} catch {
+				payload[callName] = { args, response: '[unstringifiable]' };
+			}
+		}
+
 		const status = errors.length > 0 ? 'error' : (dispatched.length > 0 ? 'ok' : 'no-match');
 		const detail = dispatched.length > 0
 			? `Dispatched: ${dispatched.join(', ')}` + (unhandled.length > 0 ? ` | Unhandled: ${unhandled.join(', ')}` : '')
 			: `Unhandled: ${unhandled.join(', ') || 'none'}`;
-		this._pushApiLog(allCallNames, status, detail, errors.length > 0 ? errors.join('; ') : null, this._lastInterceptedUrl);
+		this._pushApiLog(allCallNames, status, detail, errors.length > 0 ? errors.join('; ') : null, this._lastInterceptedUrl, payload);
 
 		// Diagnostic: console summary of dispatch results (#61)
 		if (dispatched.length > 0) {
@@ -1561,6 +1587,15 @@ class GameTracker {
 			await this.trackOutgoingMessage(args, data);
 		}, 'trackOutgoingMessage', { category: 'guild' });
 
+		// ── Mail tracking (Phase 12, #94) ───────────────────────────────
+		this.registerHandler('mailGetAll', async (_call, _args, data) => {
+			await this.trackMailList(data);
+		}, 'trackMailList', { category: 'player' });
+
+		this.registerHandler(['mailFarm', 'mailCollect'], async (callName, args, data) => {
+			await this.trackMailRewards(callName, args, data);
+		}, 'trackMailRewards', { category: 'player' });
+
 		// ── Hero Upgrade Events (Phase 8) ───────────────────────────────
 		this.registerHandler('heroUpgradeSkill', async (_call, args, data) => {
 			await this.upgradeTracker.trackHeroSkillUpgrade(args, data, await this._getPlayerId());
@@ -1758,6 +1793,24 @@ class GameTracker {
 		};
 
 		await this.storage.add('snapshots', snapshot);
+
+		// Cache playerData in metadata for fast access by other tracker methods (#98)
+		// Many methods read getMetadata('playerData', {}) for player.id, player.name, etc.
+		await this.storage.setMetadata('playerData', {
+			player: {
+				id: data.userId,
+				name: data.name || 'Unknown',
+				level: data.level || 0,
+			},
+			gold: data.gold || 0,
+			starmoney: data.starmoney || 0,
+			emeralds: data.starmoney || 0,
+			clanId: data.clanId || null,
+			clanTitle: data.clanTitle || null,
+			vipLevel: data.vipLevel || 0,
+			power: data.power || 0,
+		});
+
 		console.log('[OrganizedJihad] Player snapshot saved:', snapshot.playerName, 'Level', snapshot.level);
 
 		// Live activity event
@@ -1946,6 +1999,10 @@ class GameTracker {
 		// Store snapshot in IndexedDB inventory store
 		await this.storage.add('inventory', inventorySnapshot);
 
+		// Cache raw inventory data in metadata for fast UI rendering (#97)
+		// The UI parses this to show individual items by category
+		await this.storage.setMetadata('inventoryData', data);
+
 		console.log(
 			`[OrganizedJihad] Inventory tracked: ${totalHeroSoulStones} hero souls, ${totalTitanSoulStones} titan souls, ${totalPetSoulStones} pet souls, ${totalConsumables} consumables`
 		);
@@ -2032,7 +2089,7 @@ class GameTracker {
 
 		const pets = Object.values(data).map((pet) => ({
 			petId: pet.id,
-			petName: pet.name || `Pet_${pet.id}`,
+			petName: resolveHeroName(pet.id) || pet.name || `Pet_${pet.id}`,
 			stars: pet.star || 0,
 			power: pet.power || 0,
 			level: pet.level || 0,
@@ -2062,10 +2119,123 @@ class GameTracker {
 			level: p.level,
 			stars: p.stars,
 			power: p.power,
+			patronageData: p.patronageData,
 		}));
 		await this.storage.setMetadata('petsData', summary);
 
 		console.log(`[OrganizedJihad] Pets tracked: ${pets.length} pets stored as snapshots`);
+	}
+
+	// ═══════════════════════════════════════════════════════════════════
+	// ██  Mail Tracking (Phase 12, #94)
+	// ═══════════════════════════════════════════════════════════════════
+
+	/**
+	 * Track the full mail list from `mailGetAll`.
+	 * Caches mail summary in metadata for the UI Mail tab.
+	 * Each mail item typically has: id, type, subject, letter, reward, time, isRead, isCollected.
+	 *
+	 * @param {Object|Array} data - Mail list response (array or keyed object of mail items)
+	 * @private
+	 */
+	async trackMailList(data) {
+		const playerId = (await this.storage.getMetadata('currentPlayerId')) || 'unknown';
+		const timestamp = new Date().toISOString();
+
+		// Normalize: API may return array or object keyed by mail ID
+		const mailArray = Array.isArray(data) ? data : Object.values(data || {});
+		if (mailArray.length === 0) return;
+
+		const mailItems = mailArray.map((m) => ({
+			mailId: m.id || m.mailId,
+			mailType: m.type || 'unknown',
+			subject: m.subject || m.letter || '',
+			rewards: m.reward || m.rewards || null,
+			receivedAt: m.time ? new Date(m.time * 1000).toISOString() : timestamp,
+			isRead: !!m.isRead,
+			isCollected: !!m.isCollected,
+		}));
+
+		// Store in metadata for UI quick access
+		await this.storage.setMetadata('mailData', {
+			playerId,
+			timestamp,
+			count: mailItems.length,
+			unread: mailItems.filter((m) => !m.isRead).length,
+			uncollected: mailItems.filter((m) => !m.isCollected && m.rewards).length,
+			items: mailItems,
+		});
+
+		this._logActivity('info', `📬 Mail tracked: ${mailItems.length} messages (${mailItems.filter((m) => !m.isRead).length} unread)`);
+		console.log(`[OrganizedJihad] Mail tracked: ${mailItems.length} messages`);
+	}
+
+	/**
+	 * Track rewards collected from mail via `mailFarm` or `mailCollect`.
+	 * Writes individual reward records to the `mailRewards` IDB store and
+	 * logs resource gains as activity events.
+	 *
+	 * @param {string} callName - 'mailFarm' (collect all) or 'mailCollect' (single)
+	 * @param {Object} args - Request args (may contain mailId for single collect)
+	 * @param {Object} data - Response data with collected rewards
+	 * @private
+	 */
+	async trackMailRewards(callName, args, data) {
+		const playerId = (await this.storage.getMetadata('currentPlayerId')) || 'unknown';
+		const timestamp = new Date().toISOString();
+
+		// The response typically contains reward data in various formats.
+		// `mailFarm` returns bulk rewards; `mailCollect` returns rewards for a single mail.
+		// Common reward structures: { gold, starmoney, coin, ...items }
+		// or { reward: { ...items } } or direct item arrays.
+
+		const rewards = data?.reward || data?.rewards || data || {};
+		const mailId = args?.id || args?.mailId || callName;
+
+		// Parse reward entries — they can be simple key:value pairs or nested objects
+		const rewardEntries = [];
+		for (const [key, value] of Object.entries(rewards)) {
+			if (value === null || value === undefined) continue;
+
+			if (typeof value === 'number' && value > 0) {
+				// Simple resource: { gold: 50000, starmoney: 100 }
+				rewardEntries.push({
+					mailId: String(mailId),
+					mailType: callName,
+					rewardType: key,
+					rewardId: key,
+					quantity: value,
+					playerId,
+					timestamp,
+				});
+			} else if (typeof value === 'object' && !Array.isArray(value)) {
+				// Nested items: { consumable: { "123": 5, "456": 10 } }
+				for (const [itemId, qty] of Object.entries(value)) {
+					if (typeof qty === 'number' && qty > 0) {
+						rewardEntries.push({
+							mailId: String(mailId),
+							mailType: callName,
+							rewardType: key,
+							rewardId: String(itemId),
+							quantity: qty,
+							playerId,
+							timestamp,
+						});
+					}
+				}
+			}
+		}
+
+		// Write to IDB
+		for (const entry of rewardEntries) {
+			await this.storage.add('mailRewards', entry);
+		}
+
+		if (rewardEntries.length > 0) {
+			const totalItems = rewardEntries.reduce((s, e) => s + e.quantity, 0);
+			this._logActivity('resource', `📬 Mail collected: ${rewardEntries.length} reward types (${totalItems} total items)`);
+			console.log(`[OrganizedJihad] Mail rewards collected: ${rewardEntries.length} entries from ${callName}`);
+		}
 	}
 
 	/**

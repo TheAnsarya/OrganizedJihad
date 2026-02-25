@@ -41,20 +41,16 @@ class TitanCompletionCalculator {
 	/** @type {number} Maximum skin level */
 	static MAX_SKIN_LEVEL = 60;
 
-	/** @type {number} Maximum summon stars */
-	static MAX_SUMMON_STARS = 6;
-
 	// ─── System Weights ──────────────────────────────────────────────────
 	// Must sum to 1.0
 
 	/** @type {Object<string, number>} Weight of each system in overall score */
 	static WEIGHTS = {
 		level: 0.25,
-		stars: 0.20,
+		stars: 0.25,
 		skill: 0.15,
-		artifacts: 0.20,
+		artifacts: 0.25,
 		skins: 0.10,
-		summonStars: 0.10,
 	};
 
 	// ─── Element Emojis ──────────────────────────────────────────────────
@@ -148,11 +144,6 @@ class TitanCompletionCalculator {
 		const skinLevel = titan.skinLevel || 0;
 		systems.skins = this._clamp(skinLevel / this.MAX_SKIN_LEVEL);
 		systemDetails.skins = { score: systems.skins, current: skinLevel, max: this.MAX_SKIN_LEVEL };
-
-		// ── Summon Stars ────────────────────────────────────────────────
-		const summonStars = titan.summonStars || 0;
-		systems.summonStars = this._clamp(summonStars / this.MAX_SUMMON_STARS);
-		systemDetails.summonStars = { score: systems.summonStars, current: summonStars, max: this.MAX_SUMMON_STARS };
 
 		// ── Overall weighted score ──────────────────────────────────────
 		let overall = 0;
@@ -279,9 +270,8 @@ class TitanCompletionCalculator {
 		level: 'Level',
 		stars: 'Stars',
 		skill: 'Skill',
-		artifacts: 'Totems/Artifacts',
+		artifacts: 'Artifacts',
 		skins: 'Skins',
-		summonStars: 'Summon Stars',
 	};
 
 	/**
@@ -294,7 +284,6 @@ class TitanCompletionCalculator {
 		skill: '\u2694\uFE0F',   // ⚔️
 		artifacts: '\uD83D\uDCA0', // 💠
 		skins: '\uD83C\uDFAD',   // 🎭
-		summonStars: '\uD83C\uDF1F', // 🌟
 	};
 }
 

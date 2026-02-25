@@ -14,6 +14,7 @@ import TitanCompletionCalculator from './helpers/TitanCompletionCalculator.js';
 import PetCompletionCalculator from './helpers/PetCompletionCalculator.js';
 import { TRACKING_CATEGORIES } from './gameTracker.js';
 import { decompressHeroStore, decompressTitanStore } from './heroCompression.js';
+import { resolveHeroName } from './heroNames.js';
 import { NOTIFICATION_TYPES } from './notificationManager.js';
 
 class UIManager {
@@ -58,6 +59,7 @@ class UIManager {
 			battles:   { page: 0, sortField: 'timestamp', sortDir: 'desc', filter: '', subTab: 'all' },
 			chests:    { page: 0, sortField: 'timestamp', sortDir: 'desc', filter: '' },
 			inventory: { page: 0, sortField: 'name', sortDir: 'asc', filter: '' },
+			mail:      { page: 0, sortField: 'receivedAt', sortDir: 'desc', filter: '' },
 		};
 	}
 
@@ -94,6 +96,19 @@ class UIManager {
 				if (this.isVisible && this.currentView === 'apilog') {
 					this.renderView('apilog');
 				}
+			});
+			// Auto-refresh any data tab when new data arrives (#90)
+			// Debounced to 2s to avoid rapid re-renders during API bursts
+			let dataUpdateTimer = null;
+			this.gameTracker.on('dataUpdate', () => {
+				if (!this.isVisible) return;
+				// Skip tabs that already have their own live refresh
+				if (this.currentView === 'activity' || this.currentView === 'apilog') return;
+				if (dataUpdateTimer) clearTimeout(dataUpdateTimer);
+				dataUpdateTimer = setTimeout(() => {
+					dataUpdateTimer = null;
+					this.renderView(this.currentView);
+				}, 2000);
 			});
 		}
 	}
@@ -136,6 +151,7 @@ class UIManager {
 					<button class="oj-nav-btn" data-view="battles">Battles</button>
 					<button class="oj-nav-btn" data-view="chests">Chests</button>
 					<button class="oj-nav-btn" data-view="inventory">Inventory</button>
+					<button class="oj-nav-btn" data-view="mail">Mail</button>
 					<button class="oj-nav-btn" data-view="apilog">API Log</button>
 					<button class="oj-nav-btn" data-view="resources">Resources</button>
 					<button class="oj-nav-btn" data-view="settings">Settings</button>
@@ -449,6 +465,9 @@ class UIManager {
 					content.innerHTML = await this.renderInventory();
 					this._attachDataBrowserListeners('inventory');
 					break;
+				case 'mail':
+					content.innerHTML = await this.renderMail();
+					break;
 				case 'apilog':
 					content.innerHTML = this.renderApiLog();
 					break;
@@ -504,11 +523,24 @@ class UIManager {
 			}
 		} catch { /* empty */ }
 
-		// Merge snapshot fields into playerData for display
-		const player = latestSnapshot || playerData || {};
-		const playerName = player.playerName || player.name || null;
-		const playerLevel = player.level || 0;
-		const playerGuild = player.guildName || player.clanTitle || null;
+		// Merge snapshot fields into playerData for display.
+		// playerData (from trackPlayerData metadata) has nested structure:
+		//   { player: { id, name, level }, gold, starmoney, emeralds, clanTitle, vipLevel, power }
+		// Snapshots (from IDB) have flat structure:
+		//   { playerName, level, gold, starmoney, guildName, ... }
+		// Prefer playerData for resources (most recent), snapshot for player details.
+		const pdPlayer = playerData?.player || {};
+		const player = {
+			...playerData,
+			...(latestSnapshot || {}),
+			// Ensure resources come from the most recent source
+			gold: playerData?.gold ?? latestSnapshot?.gold ?? 0,
+			starmoney: playerData?.starmoney ?? latestSnapshot?.starmoney ?? 0,
+			emeralds: playerData?.emeralds ?? latestSnapshot?.emeralds ?? 0,
+		};
+		const playerName = player.playerName || pdPlayer.name || player.name || null;
+		const playerLevel = pdPlayer.level || player.level || 0;
+		const playerGuild = player.guildName || player.clanTitle || playerData?.clanTitle || null;
 
 		// ── Hero, Titan & Pet completion averages (#63, #71) ────────
 		const heroAvg = await this._calcAverageHeroCompletion();
@@ -540,7 +572,7 @@ class UIManager {
 			const battles = await this.idbStorage.getAll('battles');
 			const todayBattles = battles.filter((b) => b.timestamp >= todayISO);
 			guildWarBattlesToday = todayBattles.filter((b) => b.battleType === 'GuildWar').length;
-			guildRaidBattlesToday = todayBattles.filter((b) => b.battleType === 'GuildRaid' || b.battleType === 'RaidBoss').length;
+			guildRaidBattlesToday = todayBattles.filter((b) => b.battleType === 'RaidBoss').length;
 		} catch { /* empty */ }
 
 		// Gather counts from actual IndexedDB stores
@@ -1500,7 +1532,8 @@ class UIManager {
 		if (vs.filter) {
 			const q = vs.filter.toLowerCase();
 			pets = pets.filter((p) => {
-				const name = (p.petName || p.name || '').toLowerCase();
+				const pId = p.petId || p.id;
+				const name = (resolveHeroName(pId) || p.petName || p.name || '').toLowerCase();
 				return name.includes(q);
 			});
 		}
@@ -1532,7 +1565,7 @@ class UIManager {
 
 		const rows = pageItems.map((p) => {
 			const pId = p.petId || p.id;
-			const name = this._escapeHtml(p.petName || p.name || `Pet #${pId}`);
+			const name = this._escapeHtml(resolveHeroName(pId) || p.petName || p.name || `Pet #${pId}`);
 			const comp = completionMap[pId] || { overall: 0, systems: {} };
 			const patronageCount = PCalc.countPatronage(p.patronageData);
 
@@ -2012,34 +2045,23 @@ class UIManager {
 
 		let items = [];
 		try {
-			const cached = await this.idbStorage.getMetadata('inventoryData', null);
-			if (cached) {
-				// inventoryData might be a keyed object or an array
-				if (Array.isArray(cached)) {
-					items = cached;
-				} else if (typeof cached === 'object') {
-					// Convert { id: {...}, ... } to array
-					items = Object.values(cached).map((v) =>
-						typeof v === 'object' && v !== null ? v : { id: v }
-					);
-				}
+			// Primary: read raw inventory data from metadata cache (#97)
+			// This is the raw API object: { fragmentHero: {id: qty}, consumable: {id: qty}, gear: {id: qty}, ... }
+			const rawData = await this.idbStorage.getMetadata('inventoryData', null);
+			if (rawData && typeof rawData === 'object') {
+				items = this._parseRawInventory(rawData);
 			}
 		} catch { /* empty */ }
 
-		// Fallback: read from inventory IDB store
+		// Fallback: parse inventoryData JSON from latest IDB snapshot
 		if (items.length === 0) {
 			try {
-				const all = await this.idbStorage.getAll('inventory', 5000);
-				if (all.length > 0) {
-					// Keep only the latest record per item
-					const byId = {};
-					for (const it of all) {
-						const key = it.itemId || it.id;
-						if (!byId[key] || (it.timestamp || '') > (byId[key].timestamp || '')) {
-							byId[key] = it;
-						}
-					}
-					items = Object.values(byId);
+				const snapshots = await this.idbStorage.getPage('inventory', { limit: 1, direction: 'prev' });
+				if (snapshots.length > 0 && snapshots[0].inventoryData) {
+					const rawData = typeof snapshots[0].inventoryData === 'string'
+						? JSON.parse(snapshots[0].inventoryData)
+						: snapshots[0].inventoryData;
+					items = this._parseRawInventory(rawData);
 				}
 			} catch { /* empty */ }
 		}
@@ -2187,6 +2209,79 @@ class UIManager {
 	}
 
 	/**
+	 * Parse raw inventory API data into a flat array of items suitable for display.
+	 * The game's inventoryGet API returns an object like:
+	 *   { fragmentHero: {id: qty}, fragmentTitan: {id: qty}, fragmentPet: {id: qty},
+	 *     consumable: {id: qty}, gear: {id: qty}, ... }
+	 *
+	 * We convert each {id: qty} entry to { itemId, name, category, count }.
+	 *
+	 * @param {Object} rawData - Raw inventory data from the API
+	 * @returns {Array<{itemId: string, name: string, category: string, count: number}>}
+	 * @private
+	 */
+	_parseRawInventory(rawData) {
+		const items = [];
+
+		// Category mapping: API key → display category + name resolver
+		const categories = {
+			fragmentHero: { category: 'hero_soul_stones', prefix: 'Hero' },
+			fragmentTitan: { category: 'titan_soul_stones', prefix: 'Titan' },
+			fragmentPet: { category: 'pet_soul_stones', prefix: 'Pet' },
+			consumable: { category: 'consumable', prefix: 'Consumable' },
+			gear: { category: 'equipment', prefix: 'Gear' },
+			craftItem: { category: 'fragment', prefix: 'Craft' },
+			scroll: { category: 'scroll', prefix: 'Scroll' },
+			artifact: { category: 'artifact', prefix: 'Artifact' },
+			experience: { category: 'resource', prefix: 'XP Item' },
+			treasure: { category: 'resource', prefix: 'Treasure' },
+			coin: { category: 'resource', prefix: 'Coin' },
+		};
+
+		for (const [apiKey, entries] of Object.entries(rawData)) {
+			if (!entries || typeof entries !== 'object') continue;
+
+			const catInfo = categories[apiKey] || { category: apiKey, prefix: apiKey };
+
+			for (const [itemId, qty] of Object.entries(entries)) {
+				if (qty <= 0) continue;
+
+				// Try to resolve name via heroNames dictionary for soul stones
+				let name;
+				if (apiKey === 'fragmentHero' || apiKey === 'fragmentTitan' || apiKey === 'fragmentPet') {
+					const resolvedName = this._resolveEntityName(Number(itemId));
+					name = resolvedName !== `Hero_${itemId}` ? `${resolvedName} Stones` : `${catInfo.prefix} #${itemId} Stones`;
+				} else {
+					name = `${catInfo.prefix} #${itemId}`;
+				}
+
+				items.push({
+					itemId,
+					name,
+					category: catInfo.category,
+					count: Number(qty) || 0,
+				});
+			}
+		}
+
+		// Sort by category then by count descending
+		items.sort((a, b) => a.category.localeCompare(b.category) || b.count - a.count);
+		return items;
+	}
+
+	/**
+	 * Resolve an entity ID to a display name using the heroNames dictionary.
+	 * Falls back to "Hero_{id}" if not found (same as resolveHeroName).
+	 *
+	 * @param {number} id - Entity ID
+	 * @returns {string} Display name
+	 * @private
+	 */
+	_resolveEntityName(id) {
+		return resolveHeroName(id);
+	}
+
+	/**
 	 * Resources — display player resources from metadata cache and recent
 	 * resource transaction history from the `resourceTransactions` IDB store.
 	 * @returns {Promise<string>} HTML content
@@ -2301,6 +2396,179 @@ class UIManager {
 	// =====================================================================
 	// API Log (Debug View)
 	// =====================================================================
+	// Mail Tab (#94)
+	// =====================================================================
+
+	/**
+	 * Mail — displays mail messages and collected rewards from the in-game mailbox.
+	 * Reads from `mailData` metadata (mail list) and `mailRewards` IDB store (collected items).
+	 * @returns {Promise<string>} HTML content
+	 */
+	async renderMail() {
+		// ── Mail list from metadata ─────────────────────────────────────
+		let mailData = null;
+		try {
+			mailData = await this.idbStorage.getMetadata('mailData', null);
+		} catch { /* empty */ }
+
+		// ── Collected rewards from IDB ──────────────────────────────────
+		let rewards = [];
+		try {
+			rewards = await this.idbStorage.getAll('mailRewards', 500);
+		} catch { /* empty */ }
+
+		if (!mailData && rewards.length === 0) {
+			return `
+				<div class="oj-mail">
+					<h3>\uD83D\uDCEC Mail</h3>
+					<p class="oj-empty">No mail data captured yet. Open your mailbox in the game to trigger data capture.</p>
+				</div>
+			`;
+		}
+
+		// ── Mail list section ───────────────────────────────────────────
+		let mailListHtml = '';
+		if (mailData && Array.isArray(mailData.items) && mailData.items.length > 0) {
+			const vs = this._viewState.mail;
+
+			let items = [...mailData.items];
+
+			// Filter
+			if (vs.filter) {
+				const q = vs.filter.toLowerCase();
+				items = items.filter((m) =>
+					(m.subject || '').toLowerCase().includes(q) ||
+					(m.mailType || '').toLowerCase().includes(q)
+				);
+			}
+
+			// Sort
+			items = this._sortData(items, vs.sortField, vs.sortDir);
+
+			// Paginate
+			const totalCount = items.length;
+			const totalPages = Math.max(1, Math.ceil(totalCount / this.PAGE_SIZE));
+			vs.page = Math.min(vs.page, totalPages - 1);
+			const pageItems = items.slice(vs.page * this.PAGE_SIZE, (vs.page + 1) * this.PAGE_SIZE);
+
+			const rows = pageItems.map((m) => {
+				const statusIcon = m.isCollected ? '\u2705' : m.isRead ? '\uD83D\uDCE8' : '\uD83D\uDCE9';
+				const subject = this._escapeHtml(m.subject || '(no subject)');
+				const type = this._escapeHtml(m.mailType || 'unknown');
+				const date = m.receivedAt ? new Date(m.receivedAt).toLocaleString() : '\u2014';
+
+				// Summarize attached rewards
+				let rewardSummary = '\u2014';
+				if (m.rewards && typeof m.rewards === 'object') {
+					const parts = [];
+					for (const [key, val] of Object.entries(m.rewards)) {
+						if (typeof val === 'number' && val > 0) {
+							parts.push(`${key}: ${val.toLocaleString()}`);
+						} else if (typeof val === 'object' && val !== null) {
+							const count = Object.values(val).reduce((s, v) => s + (typeof v === 'number' ? v : 0), 0);
+							if (count > 0) parts.push(`${key}: ${count.toLocaleString()} items`);
+						}
+					}
+					if (parts.length > 0) rewardSummary = parts.join(', ');
+				}
+
+				return `
+					<tr>
+						<td>${statusIcon}</td>
+						<td>${subject}</td>
+						<td><span class="oj-badge">${type}</span></td>
+						<td class="oj-muted">${date}</td>
+						<td class="oj-muted">${rewardSummary}</td>
+					</tr>
+				`;
+			}).join('');
+
+			const sortInd = (field) => this._sortIndicator(vs.sortField, vs.sortDir, field);
+
+			mailListHtml = `
+				<div class="oj-mail-list" data-browser="mail">
+					<h4>\uD83D\uDCE5 Inbox <span class="oj-muted">(${totalCount} messages \u2022 ${mailData.unread || 0} unread \u2022 ${mailData.uncollected || 0} uncollected)</span></h4>
+					${this._renderSearchBar(vs.filter)}
+					<table class="oj-table oj-sortable">
+						<thead>
+							<tr>
+								<th style="width:30px">&nbsp;</th>
+								<th data-sort="subject" class="oj-sort-header">Subject ${sortInd('subject')}</th>
+								<th data-sort="mailType" class="oj-sort-header">Type ${sortInd('mailType')}</th>
+								<th data-sort="receivedAt" class="oj-sort-header">Received ${sortInd('receivedAt')}</th>
+								<th>Rewards</th>
+							</tr>
+						</thead>
+						<tbody>${rows}</tbody>
+					</table>
+					${this._renderPagination(vs.page, totalPages, totalCount)}
+				</div>
+			`;
+		}
+
+		// ── Collected rewards section ───────────────────────────────────
+		let rewardHtml = '';
+		if (rewards.length > 0) {
+			// Group by rewardType for a summary view
+			const byType = {};
+			for (const r of rewards) {
+				const key = r.rewardType || 'unknown';
+				if (!byType[key]) byType[key] = { count: 0, totalQty: 0, items: {} };
+				byType[key].count++;
+				byType[key].totalQty += r.quantity || 0;
+				const itemKey = r.rewardId || 'unknown';
+				byType[key].items[itemKey] = (byType[key].items[itemKey] || 0) + (r.quantity || 0);
+			}
+
+			const typeRows = Object.entries(byType)
+				.sort((a, b) => b[1].totalQty - a[1].totalQty)
+				.map(([type, info]) => {
+					const topItems = Object.entries(info.items)
+						.sort((a, b) => b[1] - a[1])
+						.slice(0, 5)
+						.map(([id, qty]) => `${this._escapeHtml(resolveHeroName(id) || id)}: ${qty.toLocaleString()}`)
+						.join(', ');
+
+					return `
+						<tr>
+							<td><strong>${this._escapeHtml(type)}</strong></td>
+							<td class="oj-num">${info.count.toLocaleString()}</td>
+							<td class="oj-num">${info.totalQty.toLocaleString()}</td>
+							<td class="oj-muted">${topItems}</td>
+						</tr>
+					`;
+				}).join('');
+
+			rewardHtml = `
+				<div class="oj-mail-rewards">
+					<h4>\uD83C\uDF81 Collected Rewards <span class="oj-muted">(${rewards.length} entries)</span></h4>
+					<table class="oj-table">
+						<thead>
+							<tr>
+								<th>Type</th>
+								<th>Collections</th>
+								<th>Total Qty</th>
+								<th>Top Items</th>
+							</tr>
+						</thead>
+						<tbody>${typeRows}</tbody>
+					</table>
+				</div>
+			`;
+		}
+
+		return `
+			<div class="oj-mail">
+				<h3>\uD83D\uDCEC Mail</h3>
+				${mailListHtml}
+				${rewardHtml}
+			</div>
+		`;
+	}
+
+	// =====================================================================
+	// API Call Log
+	// =====================================================================
 
 	/**
 	 * Render the API call log from GameTracker's in-memory ring buffer.
@@ -2344,6 +2612,24 @@ class UIManager {
 				? `<span class="oj-log-page">[${this._escapeHtml(entry.page)}]</span>`
 				: '';
 
+			// Build expandable payload viewer (#91)
+			let payloadHtml = '';
+			if (entry.payload && Object.keys(entry.payload).length > 0) {
+				const payloadRows = Object.entries(entry.payload).map(([callName, data]) => {
+					let argsJson = '';
+					let resJson = '';
+					try { argsJson = JSON.stringify(data.args, null, 2); } catch { argsJson = String(data.args); }
+					try { resJson = typeof data.response === 'string' ? data.response : JSON.stringify(data.response, null, 2); } catch { resJson = String(data.response); }
+					return `<div class="oj-payload-call">` +
+						`<strong>${this._escapeHtml(callName)}</strong>` +
+						`<div class="oj-payload-section"><span class="oj-payload-label">\u2191 Args:</span><pre class="oj-payload-json">${this._escapeHtml(argsJson)}</pre></div>` +
+						`<div class="oj-payload-section"><span class="oj-payload-label">\u2193 Response:</span><pre class="oj-payload-json">${this._escapeHtml(resJson)}</pre></div>` +
+						`</div>`;
+				}).join('');
+				payloadHtml = `<div class="oj-log-payload" data-log-idx="${i}" style="display:none">${payloadRows}</div>` +
+					`<button class="oj-btn-tiny oj-payload-toggle" data-log-idx="${i}">\uD83D\uDD0D Payload</button>`;
+			}
+
 			return `
 				<div class="oj-log-entry ${statusClass}">
 					<div class="oj-log-header">
@@ -2356,6 +2642,7 @@ class UIManager {
 					<div class="oj-log-calls">${this._escapeHtml(names)}</div>
 					<div class="oj-log-detail">${this._escapeHtml(entry.detail || '')}</div>
 					${errorInfo}
+					${payloadHtml}
 				</div>
 			`;
 		}).join('');
@@ -2423,6 +2710,7 @@ class UIManager {
 			['battles', 'Battles'],
 			['chests', 'Chests'],
 			['inventory', 'Inventory'],
+			['mail', 'Mail'],
 			['resources', 'Resources'],
 			['apilog', 'API Log'],
 		].map(([val, label]) => {
@@ -3037,6 +3325,19 @@ class UIManager {
 				if (table && table.classList.contains('oj-inv-group-table')) {
 					table.classList.toggle('oj-collapsed');
 					header.classList.toggle('oj-inv-collapsed');
+				}
+			});
+		});
+
+		// API Log payload expand/collapse (#91)
+		content.querySelectorAll('.oj-payload-toggle').forEach((btn) => {
+			btn.addEventListener('click', () => {
+				const idx = btn.getAttribute('data-log-idx');
+				const payloadDiv = content.querySelector(`.oj-log-payload[data-log-idx="${idx}"]`);
+				if (payloadDiv) {
+					const isHidden = payloadDiv.style.display === 'none';
+					payloadDiv.style.display = isHidden ? '' : 'none';
+					btn.textContent = isHidden ? '\uD83D\uDD0D Hide Payload' : '\uD83D\uDD0D Payload';
 				}
 			});
 		});

@@ -46,7 +46,7 @@ describe('IndexedDBStorage', () => {
 		test('should initialize database successfully', async () => {
 			expect(storage.db).toBeDefined();
 			expect(storage.db.name).toBe('OrganizedJihad');
-			expect(storage.db.version).toBe(9);
+			expect(storage.db.version).toBe(10);
 		});
 
 		test('should create core object stores', async () => {
@@ -421,7 +421,7 @@ describe('IndexedDBStorage', () => {
 
 			expect(result._meta).toBeDefined();
 			expect(result._meta.exportedAt).toBeDefined();
-			expect(result._meta.version).toBe(9);
+			expect(result._meta.version).toBe(10);
 			expect(result.battles).toHaveLength(1);
 			expect(result.battles[0].type).toBe('arena');
 		});
@@ -484,7 +484,8 @@ describe('IndexedDBStorage', () => {
 			expect(names).toContain('battles');
 			expect(names).toContain('heroes');
 			expect(names).toContain('errorLog');
-			expect(names.length).toBe(36);
+			expect(names).toContain('mailRewards');
+			expect(names.length).toBe(37);
 		});
 	});
 });

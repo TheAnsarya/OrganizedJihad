@@ -45,7 +45,6 @@ describe('TitanCompletionCalculator', () => {
 			expect(result.systems.skill).toBeCloseTo(100, 1);
 			expect(result.systems.artifacts).toBeCloseTo(100, 1);
 			expect(result.systems.skins).toBeCloseTo(100, 1);
-			expect(result.systems.summonStars).toBeCloseTo(100, 1);
 		});
 	});
 
@@ -93,11 +92,10 @@ describe('TitanCompletionCalculator', () => {
 			};
 			const result = Calc.calculateCompletion(titan);
 			// Level: 50% * 0.25 = 12.5
-			// Stars: 50% * 0.20 = 10.0
+			// Stars: 50% * 0.25 = 12.5
 			// Skill: 50% * 0.15 = 7.5
-			// Artifacts: ~50% * 0.20 = ~10.0
+			// Artifacts: ~50% * 0.25 = ~12.5
 			// Skins: 50% * 0.10 = 5.0
-			// SummonStars: 50% * 0.10 = 5.0
 			// Total: ~50%
 			expect(result.overall).toBeGreaterThan(45);
 			expect(result.overall).toBeLessThan(55);
@@ -106,10 +104,10 @@ describe('TitanCompletionCalculator', () => {
 		test('should handle titan with only level and stars set', () => {
 			const result = Calc.calculateCompletion({ level: 130, stars: 6 });
 			// Level: 100% * 0.25 = 25
-			// Stars: 100% * 0.20 = 20
+			// Stars: 100% * 0.25 = 25
 			// Rest: 0
-			// Total: 45%
-			expect(result.overall).toBeCloseTo(45, 0);
+			// Total: 50%
+			expect(result.overall).toBeCloseTo(50, 0);
 		});
 	});
 
@@ -300,8 +298,8 @@ describe('TitanCompletionCalculator', () => {
 			expect(total).toBeCloseTo(1.0, 5);
 		});
 
-		test('should have 6 weighted systems', () => {
-			expect(Object.keys(Calc.WEIGHTS)).toHaveLength(6);
+		test('should have 5 weighted systems', () => {
+			expect(Object.keys(Calc.WEIGHTS)).toHaveLength(5);
 		});
 	});
 

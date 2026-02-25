@@ -128,7 +128,9 @@ When opening the ui on the dashboard, the player component is terrible, instead 
 
 (userscript) work issues and continue!
 
+(userscript) The dashboard is not updating as the game state changes, `Gold` is wrong, and `Emeralds` still shows 0, and the four other numbers are meaningless (Daily Quests, Guild Quests, Guild War, Guild Raid) what are these numbers?; Chests still does not show what came out of them with percentages, Inventory has basically nothing, API log doesn't have a way to see the request/response; Titans ui has "skill" and "Summon stars" which are not things in the game, it shouldn't be `Totems/Artifacts' just artifacts if showing the totem, then separate it into its own bar, two Titans still don't have names, I can give you the names; `Pets` tab has no data and opening the game's pets ui does not update the data; and the data should update dynamically; And you need to add tracking of the mail (track what we get from it); make issues and plans and docs, etc, then implement; continue!
 
+(userscript) We're having problems with messages that say `The diff algorithm was stopped early (after 5000 ms.)` I thought we fixed this already, remove the limit, or increase it; continue working issues and continue;
 
 
 

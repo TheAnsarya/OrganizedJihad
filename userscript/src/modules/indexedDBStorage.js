@@ -46,7 +46,7 @@
 class IndexedDBStorage {
 	constructor() {
 		this.dbName = 'OrganizedJihad';
-		this.version = 9; // v9: Added errorLog store for dedicated error tracking (#28)
+		this.version = 10; // v10: Added mailRewards store for mail tracking (#94)
 		this.db = null;
 		/** @type {Promise<IDBDatabase>} Resolves once the DB is open and upgraded. */
 		this.initPromise = this._openDatabase();
@@ -411,6 +411,21 @@ class IndexedDBStorage {
 					const errorStore = db.createObjectStore('errorLog', { keyPath: 'id', autoIncrement: true });
 					errorStore.createIndex('timestamp', 'timestamp', { unique: false });
 					errorStore.createIndex('context', 'context', { unique: false });
+				}
+
+				// === Phase 12: Mail Reward Tracking (#94) ===
+
+				// Mail items collected from in-game mailbox.
+				// Tracks each mail message and its attached rewards/items when
+				// read or collected. Enables reward source analysis and resource
+				// tracking from mail-based distributions (events, compensation,
+				// daily login bonuses delivered via mail, etc.).
+				if (!db.objectStoreNames.contains('mailRewards')) {
+					const mailStore = db.createObjectStore('mailRewards', { keyPath: 'id', autoIncrement: true });
+					mailStore.createIndex('timestamp', 'timestamp', { unique: false });
+					mailStore.createIndex('mailId', 'mailId', { unique: false });
+					mailStore.createIndex('mailType', 'mailType', { unique: false });
+					mailStore.createIndex('playerId', 'playerId', { unique: false });
 				}
 			};
 		});
