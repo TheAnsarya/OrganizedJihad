@@ -1473,13 +1473,14 @@ class UIManager {
 			// Titans use a separate directory with `titan_icon_` prefix, unlike heroes/pets
 			const avatarUrl = `https://calc2.hw-assist.com/static/assets/images/titan_icons/titan_icon_${tId}.png`;
 
-			// ── Artifacts column — 3 small icons with colored borders + level badges ──
+			// ── Artifacts column — 3 small icons with colored borders, star at top, level at bottom ──
 			const artifacts = TCalc.parseArtifacts(t);
 			const artifactIcons = artifacts.length > 0
 				? artifacts.map((art) => {
 					const borderClass = TCalc.artifactStarClass(art.star);
 					const starTip = `${art.star}\u2605 L${art.level}`;
 					return `<div class="oj-artifact-icon ${borderClass}" title="${starTip}">` +
+						`<span class="oj-artifact-star">${art.star}\u2B50</span>` +
 						`<span class="oj-artifact-level">${art.level}</span>` +
 						`</div>`;
 				}).join('')
@@ -1489,7 +1490,7 @@ class UIManager {
 			const totemLevel = t.totemLevel || 0;
 			const totemStar = t.totemStar || 0;
 			const totemDisplay = (totemLevel > 0 || totemStar > 0)
-				? `${elementDisplay}<br><span class="oj-totem-stats">${'\u2B50'.repeat(Math.min(totemStar, 6))} L${totemLevel}</span>`
+				? `${elementDisplay}<br><span class="oj-totem-stats">${totemStar}\u2B50 L${totemLevel}</span>`
 				: elementDisplay;
 
 			// Build expandable per-system breakdown (hidden by default)
@@ -1504,7 +1505,7 @@ class UIManager {
 
 			return `
 				<tr class="oj-titan-row" data-titan-id="${tId}">
-					<td class="oj-avatar-cell"><img class="oj-hero-avatar" src="${avatarUrl}" alt="${name}" loading="lazy" onerror="this.style.display='none'"></td>
+					<td class="oj-avatar-cell"><img class="oj-hero-avatar" src="${avatarUrl}" alt="${name}" loading="lazy" referrerpolicy="no-referrer" onerror="this.onerror=null;this.src='';this.alt='\uD83D\uDCA0';this.className='oj-avatar-fallback'"></td>
 					<td><strong>${name}</strong></td>
 					<td>${t.level || '\u2014'}</td>
 					<td>${'\u2B50'.repeat(Math.min(t.stars || 0, 6)) || '\u2014'}</td>
