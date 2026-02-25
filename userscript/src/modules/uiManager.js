@@ -1584,15 +1584,16 @@ class UIManager {
 				? `<div class="oj-pet-patronage">\uD83D\uDC64 Supporting ${patronageCount} hero${patronageCount !== 1 ? 'es' : ''}</div>`
 				: '';
 
-			const itemCount = p.items ?? 0;
-			const itemDisplay = `${itemCount}/${PCalc.MAX_ITEMS}`;
+			const colorVal = p.color || 0;
+			const colorName = this._colorRankName(colorVal);
+			const colorClass = this._colorRankClass(colorVal);
 
 			return `
 				<tr class="oj-pet-row" data-pet-id="${pId}">
 					<td><strong>${name}</strong></td>
 					<td>${p.level || '\u2014'}</td>
 					<td>${'\u2B50'.repeat(Math.min(p.stars || p.star || 0, 6)) || '\u2014'}</td>
-					<td class="oj-num">${itemDisplay}</td>
+					<td class="${colorClass}">${colorName}</td>
 					<td class="oj-num">${p.power ? p.power.toLocaleString() : '\u2014'}</td>
 					<td class="oj-completion-cell">${PCalc.renderBar(comp.overall)}</td>
 				</tr>
@@ -1609,9 +1610,53 @@ class UIManager {
 
 		const sortInd = (field) => this._sortIndicator(vs.sortField, vs.sortDir, field);
 
+		// ── Pet Soul Stones Progress ────────────────────────────────────
+		// Load fragmentPet data from cached inventory to show soul stone counts.
+		// Star requirements (cumulative stones needed to reach each star):
+		//   1★=10, 2★=20, 3★=50, 4★=100, 5★=150, 6★=300 (total 630 per pet to max)
+		// Reference: Hero Wars community data
+		const STAR_COSTS_CUMULATIVE = [0, 10, 30, 80, 180, 330, 630];
+		const MAX_STONES_PER_PET = 630;
+
+		let soulStonesHtml = '';
+		try {
+			const invData = await this.idbStorage.getMetadata('inventoryData', null);
+			const fragPet = (invData && invData.fragmentPet) ? invData.fragmentPet : {};
+
+			// Current stones in inventory (available to spend)
+			const currentStones = Object.values(fragPet).reduce((s, c) => s + (c || 0), 0);
+
+			// Calculate total stones still needed across all pets to reach max star
+			let stonesNeeded = 0;
+			for (const p of pets) {
+				const pId = p.petId || p.id;
+				const curStars = p.stars || p.star || 0;
+				// Stones needed for this pet = total to max minus what it already "consumed"
+				const alreadyUsed = STAR_COSTS_CUMULATIVE[Math.min(curStars, 6)] || 0;
+				stonesNeeded += MAX_STONES_PER_PET - alreadyUsed;
+			}
+
+			// Progress bar: current stones vs total still needed
+			const pct = stonesNeeded > 0 ? Math.min(100, (currentStones / stonesNeeded) * 100) : 100;
+			const barColor = PCalc.colorClass(pct);
+
+			soulStonesHtml = `
+				<div class="oj-pet-soulstones">
+					<div class="oj-pet-soulstones-label">
+						\uD83D\uDC8E Pet Soul Stones: <strong>${currentStones.toLocaleString()}</strong> available / <strong>${stonesNeeded.toLocaleString()}</strong> needed to max all
+					</div>
+					<div class="oj-completion-bar oj-pet-soulstones-bar">
+						<div class="oj-completion-fill oj-completion-${barColor}" style="width:${pct.toFixed(1)}%"></div>
+						<div class="oj-completion-label">${currentStones.toLocaleString()} / ${stonesNeeded.toLocaleString()}</div>
+					</div>
+				</div>
+			`;
+		} catch { /* empty — no inventory data available yet */ }
+
 		return `
 			<div class="oj-pets" data-browser="pets">
 				<h3>\uD83D\uDC3E Pets <span class="oj-muted">(${totalCount} \u2022 ${totalPower.toLocaleString()} power \u2022 avg ${PCalc.formatPercent(avgCompletion)} complete)</span></h3>
+				${soulStonesHtml}
 				${this._renderSearchBar(vs.filter)}
 				<table class="oj-table oj-sortable">
 					<thead>
@@ -1619,7 +1664,7 @@ class UIManager {
 							<th data-sort="name" class="oj-sort-header">Name ${sortInd('name')}</th>
 							<th data-sort="level" class="oj-sort-header">Lvl ${sortInd('level')}</th>
 							<th data-sort="stars" class="oj-sort-header">Stars ${sortInd('stars')}</th>
-							<th data-sort="items" class="oj-sort-header">Items ${sortInd('items')}</th>
+							<th data-sort="color" class="oj-sort-header">Color ${sortInd('color')}</th>
 							<th data-sort="power" class="oj-sort-header">Power ${sortInd('power')}</th>
 							<th data-sort="completion" class="oj-sort-header">Complete ${sortInd('completion')}</th>
 						</tr>

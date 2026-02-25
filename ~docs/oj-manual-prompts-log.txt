@@ -134,8 +134,9 @@ When opening the ui on the dashboard, the player component is terrible, instead 
 
 (userscript) There still is no information in the Pets tab, after I opened Pets in the game, keep finding api data sources that don't work and fix them; plan, issues, docs, etc, implement; continue;
 
+(userscript) Add column on `Pets` tab ui for the Items, and add Items to the the progress bar; continue; 
 
-
+(userscript) For the `Pets` tab ui and tracking, `Items` is always listed as 100% when it is not, fix that; at the top of the Pets UI tab, show a progress bar (not percentage, but actual number) show the progress on pet soul stones so we can see what we have and how many we need total; continue; 
 
 
 

@@ -3,6 +3,7 @@
  *
  * Tests for pet completion percentage calculation.
  * Verifies scoring, formatting, patronage parsing, and edge cases.
+ * Systems: level (0.45), stars (0.35), color (0.20)
  */
 
 import Calc from '../src/modules/helpers/PetCompletionCalculator.js';
@@ -15,7 +16,7 @@ describe('PetCompletionCalculator', () => {
 			const result = Calc.calculateCompletion({
 				level: 130,
 				stars: 6,
-				items: 6,
+				color: 10,
 			});
 			expect(result.overall).toBeCloseTo(100, 1);
 		});
@@ -24,11 +25,11 @@ describe('PetCompletionCalculator', () => {
 			const result = Calc.calculateCompletion({
 				level: 130,
 				stars: 6,
-				items: 6,
+				color: 10,
 			});
 			expect(result.systems.level).toBeCloseTo(100, 1);
 			expect(result.systems.stars).toBeCloseTo(100, 1);
-			expect(result.systems.items).toBeCloseTo(100, 1);
+			expect(result.systems.color).toBeCloseTo(100, 1);
 		});
 	});
 
@@ -40,7 +41,7 @@ describe('PetCompletionCalculator', () => {
 			expect(result.overall).toBe(0);
 			expect(result.systems.level).toBe(0);
 			expect(result.systems.stars).toBe(0);
-			expect(result.systems.items).toBe(0);
+			expect(result.systems.color).toBe(0);
 		});
 
 		test('should return 0% for undefined', () => {
@@ -71,9 +72,9 @@ describe('PetCompletionCalculator', () => {
 			const result = Calc.calculateCompletion({
 				level: 65,  // 50% of 130
 				stars: 3,   // 50% of 6
-				items: 3,   // 50% of 6
+				color: 5,   // 50% of 10
 			});
-			// level: 50% * 0.45 = 22.5, stars: 50% * 0.35 = 17.5, items: 50% * 0.20 = 10, total: 50%
+			// level: 50% * 0.45 = 22.5, stars: 50% * 0.35 = 17.5, color: 50% * 0.20 = 10, total: 50%
 			expect(result.overall).toBeCloseTo(50, 0);
 		});
 
@@ -89,9 +90,9 @@ describe('PetCompletionCalculator', () => {
 			expect(result.overall).toBeCloseTo(35, 0);
 		});
 
-		test('should handle pet with only items set', () => {
-			const result = Calc.calculateCompletion({ items: 6 });
-			// level: 0%, stars: 0%, items: 100% * 0.20 = 20
+		test('should handle pet with only color set', () => {
+			const result = Calc.calculateCompletion({ color: 10 });
+			// level: 0%, stars: 0%, color: 100% * 0.20 = 20
 			expect(result.overall).toBeCloseTo(20, 0);
 		});
 	});
@@ -100,10 +101,10 @@ describe('PetCompletionCalculator', () => {
 
 	describe('System details', () => {
 		test('should include current/max info for each system', () => {
-			const result = Calc.calculateCompletion({ level: 50, stars: 3, items: 4 });
+			const result = Calc.calculateCompletion({ level: 50, stars: 3, color: 5 });
 			expect(result.systemDetails.level).toEqual({ current: 50, max: 130 });
 			expect(result.systemDetails.stars).toEqual({ current: 3, max: 6 });
-			expect(result.systemDetails.items).toEqual({ current: 4, max: 6 });
+			expect(result.systemDetails.color).toEqual({ current: 5, max: 10 });
 		});
 	});
 
@@ -198,12 +199,12 @@ describe('PetCompletionCalculator', () => {
 			const result = Calc.calculateCompletion({
 				level: 200,
 				stars: 10,
-				items: 10,
+				color: 20,
 			});
 			expect(result.overall).toBeCloseTo(100, 0);
 			expect(result.systems.level).toBeCloseTo(100, 1);
 			expect(result.systems.stars).toBeCloseTo(100, 1);
-			expect(result.systems.items).toBeCloseTo(100, 1);
+			expect(result.systems.color).toBeCloseTo(100, 1);
 		});
 	});
 
