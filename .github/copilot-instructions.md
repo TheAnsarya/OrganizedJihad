@@ -251,10 +251,10 @@ OrganizedJihad/
 1. ✅ Core entity models for all battle types
 2. ✅ Guild member and participation tracking
 3. ✅ Chat message archiving
-4. 🔄 Hero/Titan upgrade event tracking (in progress)
-5. 🔄 Daily/Guild quest tracking (in progress)
-6. 🔄 Inventory usage tracking (in progress)
-7. 🔄 Comprehensive test coverage
+4. ✅ Hero/Titan upgrade event tracking
+5. ✅ Daily/Guild quest tracking
+6. ✅ Inventory usage tracking
+7. 🔄 Comprehensive test coverage (552/16 — heroNames, syncClient, apiMonitor added)
 8. 🔄 Performance benchmarking
 9. ⬜ Desktop app data visualization
 10. ⬜ Automated daily report generation
