@@ -3,7 +3,7 @@
  *
  * Tests for the titan completion percentage calculation system.
  * Covers per-system scores, weighted overall, edge cases,
- * artifact scoring, and static helper methods.
+ * artifact scoring, skin scoring, totem scoring, and static helper methods.
  *
  * Mirrors the structure of heroCompletionCalculator.test.js for consistency.
  */
@@ -22,8 +22,6 @@ describe('TitanCompletionCalculator', () => {
 			level: 130,
 			stars: 6,
 			power: 120000,
-			skillLevel: 130,
-			skinLevel: 60,
 			summonStars: 6,
 			element: 'light',
 			artifactData: JSON.stringify({
@@ -31,6 +29,12 @@ describe('TitanCompletionCalculator', () => {
 				2: { level: 130, star: 6 },
 				3: { level: 130, star: 6 },
 			}),
+			skinData: JSON.stringify({
+				1: { level: 60 },
+				2: { level: 60 },
+			}),
+			totemLevel: 130,
+			totemStar: 6,
 		};
 
 		test('should return 100% overall for a fully maxed titan', () => {
@@ -42,9 +46,9 @@ describe('TitanCompletionCalculator', () => {
 			const result = Calc.calculateCompletion(maxedTitan);
 			expect(result.systems.level).toBeCloseTo(100, 1);
 			expect(result.systems.stars).toBeCloseTo(100, 1);
-			expect(result.systems.skill).toBeCloseTo(100, 1);
 			expect(result.systems.artifacts).toBeCloseTo(100, 1);
 			expect(result.systems.skins).toBeCloseTo(100, 1);
+			expect(result.systems.totem).toBeCloseTo(100, 1);
 		});
 	});
 
@@ -69,8 +73,9 @@ describe('TitanCompletionCalculator', () => {
 
 		test('should return 0% for titan with all zeros', () => {
 			const result = Calc.calculateCompletion({
-				level: 0, stars: 0, skillLevel: 0,
-				skinLevel: 0, summonStars: 0, artifactData: '{}',
+				level: 0, stars: 0,
+				artifactData: '{}', skinData: '{}',
+				totemLevel: 0, totemStar: 0,
 			});
 			expect(result.overall).toBe(0);
 		});
@@ -83,19 +88,19 @@ describe('TitanCompletionCalculator', () => {
 			const titan = {
 				level: 65,       // 50%
 				stars: 3,        // 50%
-				skillLevel: 65,  // 50%
-				skinLevel: 30,   // 50%
-				summonStars: 3,  // 50%
 				artifactData: JSON.stringify({
 					1: { level: 65, star: 3 },
 				}),
+				skinData: JSON.stringify({ 1: { level: 30 } }), // 50%
+				totemLevel: 65,  // 50% level
+				totemStar: 3,    // 50% star → avg 50%
 			};
 			const result = Calc.calculateCompletion(titan);
 			// Level: 50% * 0.25 = 12.5
 			// Stars: 50% * 0.25 = 12.5
-			// Skill: 50% * 0.15 = 7.5
-			// Artifacts: ~50% * 0.25 = ~12.5
-			// Skins: 50% * 0.10 = 5.0
+			// Artifacts: ~50% * 0.20 = ~10.0
+			// Skins: 50% * 0.15 = 7.5
+			// Totem: 50% * 0.15 = 7.5
 			// Total: ~50%
 			expect(result.overall).toBeGreaterThan(45);
 			expect(result.overall).toBeLessThan(55);
@@ -120,6 +125,12 @@ describe('TitanCompletionCalculator', () => {
 			expect(result.systemDetails.level.max).toBe(130);
 			expect(result.systemDetails.stars.current).toBe(4);
 			expect(result.systemDetails.stars.max).toBe(6);
+		});
+
+		test('should include totem details', () => {
+			const result = Calc.calculateCompletion({ totemLevel: 50, totemStar: 3 });
+			expect(result.systemDetails.totem.current).toContain('3');
+			expect(result.systemDetails.totem.current).toContain('50');
 		});
 	});
 
@@ -163,6 +174,139 @@ describe('TitanCompletionCalculator', () => {
 		test('should handle missing artifactData gracefully', () => {
 			const result = Calc.calculateCompletion({ level: 50 });
 			expect(result.systems.artifacts).toBe(0);
+		});
+	});
+
+	// ─── Skin Scoring ────────────────────────────────────────────────────
+
+	describe('Skin scoring', () => {
+		test('should score object-format skins (new skinData)', () => {
+			const titan = {
+				skinData: JSON.stringify({
+					1: { level: 60 },
+					2: { level: 30 },
+				}),
+			};
+			const result = Calc.calculateCompletion(titan);
+			// Skin1: 60/60 = 1.0, Skin2: 30/60 = 0.5, avg = 0.75 → 75%
+			expect(result.systems.skins).toBeCloseTo(75, 0);
+		});
+
+		test('should score skins with numeric values', () => {
+			const titan = {
+				skinData: JSON.stringify({ 1: 60, 2: 30 }),
+			};
+			const result = Calc.calculateCompletion(titan);
+			expect(result.systems.skins).toBeCloseTo(75, 0);
+		});
+
+		test('should fall back to legacy skinLevel', () => {
+			const titan = { skinLevel: 30 };
+			const result = Calc.calculateCompletion(titan);
+			expect(result.systems.skins).toBeCloseTo(50, 0);
+		});
+
+		test('should return 0 for empty skinData', () => {
+			const result = Calc.calculateCompletion({ skinData: '{}' });
+			expect(result.systems.skins).toBe(0);
+		});
+
+		test('should handle missing skinData gracefully', () => {
+			const result = Calc.calculateCompletion({ level: 50 });
+			expect(result.systems.skins).toBe(0);
+		});
+	});
+
+	// ─── Totem (Element Spirit) Scoring ──────────────────────────────────
+
+	describe('Totem scoring', () => {
+		test('should score totem from level and star', () => {
+			const titan = { totemLevel: 130, totemStar: 6 };
+			const result = Calc.calculateCompletion(titan);
+			expect(result.systems.totem).toBeCloseTo(100, 0);
+		});
+
+		test('should average level and star scores', () => {
+			const titan = { totemLevel: 65, totemStar: 3 };
+			const result = Calc.calculateCompletion(titan);
+			// (65/130 + 3/6) / 2 = (0.5 + 0.5) / 2 = 0.5 → 50%
+			expect(result.systems.totem).toBeCloseTo(50, 0);
+		});
+
+		test('should return 0 for no totem data', () => {
+			const result = Calc.calculateCompletion({});
+			expect(result.systems.totem).toBe(0);
+		});
+	});
+
+	// ─── parseArtifacts ──────────────────────────────────────────────────
+
+	describe('parseArtifacts', () => {
+		test('should parse object-format artifacts', () => {
+			const titan = {
+				artifactData: JSON.stringify({
+					1: { level: 100, star: 5 },
+					2: { level: 80, star: 4 },
+				}),
+			};
+			const result = Calc.parseArtifacts(titan);
+			expect(result).toHaveLength(2);
+			expect(result[0].level).toBe(100);
+			expect(result[0].star).toBe(5);
+		});
+
+		test('should parse array-format artifacts', () => {
+			const titan = {
+				artifactData: JSON.stringify([
+					{ level: 50, star: 2 },
+				]),
+			};
+			const result = Calc.parseArtifacts(titan);
+			expect(result).toHaveLength(1);
+			expect(result[0].level).toBe(50);
+		});
+
+		test('should return empty array for null titan', () => {
+			expect(Calc.parseArtifacts(null)).toEqual([]);
+		});
+	});
+
+	// ─── parseSkins ──────────────────────────────────────────────────────
+
+	describe('parseSkins', () => {
+		test('should parse object-format skins', () => {
+			const titan = {
+				skinData: JSON.stringify({ 1: { level: 30 }, 2: { level: 45 } }),
+			};
+			const result = Calc.parseSkins(titan);
+			expect(result).toHaveLength(2);
+			expect(result[0].level).toBe(30);
+		});
+
+		test('should parse numeric skin values', () => {
+			const titan = {
+				skinData: JSON.stringify({ 1: 30, 2: 45 }),
+			};
+			const result = Calc.parseSkins(titan);
+			expect(result).toHaveLength(2);
+			expect(result[0].level).toBe(30);
+		});
+
+		test('should return empty array when no skinData', () => {
+			expect(Calc.parseSkins({})).toEqual([]);
+		});
+	});
+
+	// ─── artifactStarClass ───────────────────────────────────────────────
+
+	describe('artifactStarClass', () => {
+		test('should return correct color classes for star counts', () => {
+			expect(Calc.artifactStarClass(0)).toBe('oj-rank-gray');
+			expect(Calc.artifactStarClass(1)).toBe('oj-rank-green');
+			expect(Calc.artifactStarClass(3)).toBe('oj-rank-blue');
+			expect(Calc.artifactStarClass(4)).toBe('oj-rank-violet');
+			expect(Calc.artifactStarClass(5)).toBe('oj-rank-orange');
+			expect(Calc.artifactStarClass(6)).toBe('oj-rank-red');
 		});
 	});
 
@@ -258,13 +402,14 @@ describe('TitanCompletionCalculator', () => {
 	describe('Edge cases', () => {
 		test('should clamp values exceeding max', () => {
 			const result = Calc.calculateCompletion({
-				level: 200, stars: 10, skillLevel: 200,
+				level: 200, stars: 10,
 				artifactData: JSON.stringify([
 					{ level: 200, star: 10 },
 					{ level: 200, star: 10 },
 					{ level: 200, star: 10 },
 				]),
-				skinLevel: 100, summonStars: 10,
+				skinData: JSON.stringify({ 1: { level: 100 }, 2: { level: 100 } }),
+				totemLevel: 200, totemStar: 10,
 			});
 			// Each system score should cap at 100, overall caps at 100
 			expect(result.overall).toBeCloseTo(100, 0);

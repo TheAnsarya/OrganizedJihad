@@ -1470,8 +1470,27 @@ class UIManager {
 			const comp = completionMap[tId] || { overall: 0, systems: {} };
 
 			// Titan avatar from HW-Assist Calculator CDN (#109)
-			// Titan IDs are in the 4000-range; zero-padded to 4 digits
-			const avatarUrl = `https://calc2.hw-assist.com/static/assets/images/hero_icons/${String(tId).padStart(4, '0')}.png`;
+			// Titans use a separate directory with `titan_icon_` prefix, unlike heroes/pets
+			const avatarUrl = `https://calc2.hw-assist.com/static/assets/images/titan_icons/titan_icon_${tId}.png`;
+
+			// ── Artifacts column — 3 small icons with colored borders + level badges ──
+			const artifacts = TCalc.parseArtifacts(t);
+			const artifactIcons = artifacts.length > 0
+				? artifacts.map((art) => {
+					const borderClass = TCalc.artifactStarClass(art.star);
+					const starTip = `${art.star}\u2605 L${art.level}`;
+					return `<div class="oj-artifact-icon ${borderClass}" title="${starTip}">` +
+						`<span class="oj-artifact-level">${art.level}</span>` +
+						`</div>`;
+				}).join('')
+				: '<span class="oj-muted">\u2014</span>';
+
+			// ── Totem (Element Spirit) stats ──
+			const totemLevel = t.totemLevel || 0;
+			const totemStar = t.totemStar || 0;
+			const totemDisplay = (totemLevel > 0 || totemStar > 0)
+				? `${elementDisplay}<br><span class="oj-totem-stats">${'\u2B50'.repeat(Math.min(totemStar, 6))} L${totemLevel}</span>`
+				: elementDisplay;
 
 			// Build expandable per-system breakdown (hidden by default)
 			const sysRows = Object.entries(TCalc.SYSTEM_LABELS).map(([key, label]) => {
@@ -1489,12 +1508,13 @@ class UIManager {
 					<td><strong>${name}</strong></td>
 					<td>${t.level || '\u2014'}</td>
 					<td>${'\u2B50'.repeat(Math.min(t.stars || 0, 6)) || '\u2014'}</td>
-					<td>${elementDisplay}</td>
+					<td>${totemDisplay}</td>
+					<td class="oj-artifact-cell"><div class="oj-artifact-col">${artifactIcons}</div></td>
 					<td class="oj-num">${t.power ? t.power.toLocaleString() : '\u2014'}</td>
 					<td class="oj-completion-cell">${TCalc.renderBar(comp.overall)}</td>
 				</tr>
 				<tr class="oj-titan-detail" data-detail-for="${tId}" style="display:none">
-					<td colspan="7">
+					<td colspan="8">
 						<div class="oj-sys-breakdown">${sysRows}</div>
 					</td>
 				</tr>
@@ -1514,7 +1534,8 @@ class UIManager {
 							<th data-sort="name" class="oj-sort-header">Name ${sortInd('name')}</th>
 							<th data-sort="level" class="oj-sort-header">Lvl ${sortInd('level')}</th>
 							<th data-sort="stars" class="oj-sort-header">Stars ${sortInd('stars')}</th>
-							<th data-sort="element" class="oj-sort-header">Element ${sortInd('element')}</th>
+							<th data-sort="element" class="oj-sort-header">Element / Totem ${sortInd('element')}</th>
+							<th>Artifacts</th>
 							<th data-sort="power" class="oj-sort-header">Power ${sortInd('power')}</th>
 							<th data-sort="completion" class="oj-sort-header">Complete ${sortInd('completion')}</th>
 						</tr>
@@ -1666,11 +1687,13 @@ class UIManager {
 		const sortInd = (field) => this._sortIndicator(vs.sortField, vs.sortDir, field);
 
 		// ── Pet Soul Stones Progress ────────────────────────────────────
-		// Load fragmentPet data from cached inventory to show soul stone counts.
+		// Load fragmentPet data from cached inventory to show per-pet soul stone counts.
 		// Star requirements (cumulative stones needed to reach each star):
-		//   1★=10, 2★=20, 3★=50, 4★=100, 5★=150, 6★=300 (total 630 per pet to max)
+		//   1★=10, 2★=30, 3★=80, 4★=180, 5★=330, 6★=630 (total 630 per pet to max)
+		// Each pet has TYPE-SPECIFIC soul stones — Fenris stones only work on Fenris.
 		// Reference: Hero Wars community data
 		const STAR_COSTS_CUMULATIVE = [0, 10, 30, 80, 180, 330, 630];
+		const STAR_COSTS_INCREMENTAL = [10, 20, 50, 100, 150, 300]; // cost for star N+1
 		const MAX_STONES_PER_PET = 630;
 
 		let soulStonesHtml = '';
@@ -1678,32 +1701,66 @@ class UIManager {
 			const invData = await this.idbStorage.getMetadata('inventoryData', null);
 			const fragPet = (invData && invData.fragmentPet) ? invData.fragmentPet : {};
 
-			// Current stones in inventory (available to spend)
-			const currentStones = Object.values(fragPet).reduce((s, c) => s + (c || 0), 0);
+			// Build per-pet soul stone breakdown
+			const petStoneSummary = [];
+			let totalUsable = 0; // Stones that can actually be applied (capped at what's needed)
+			let totalNeeded = 0; // Total stones still needed across all pets
+			let totalAvailable = 0; // Raw total stones in inventory
 
-			// Calculate total stones still needed across all pets to reach max star
-			let stonesNeeded = 0;
 			for (const p of pets) {
 				const pId = p.petId || p.id;
-				const curStars = p.stars || p.star || 0;
-				// Stones needed for this pet = total to max minus what it already "consumed"
-				const alreadyUsed = STAR_COSTS_CUMULATIVE[Math.min(curStars, 6)] || 0;
-				stonesNeeded += MAX_STONES_PER_PET - alreadyUsed;
+				const curStars = Math.min(p.stars || p.star || 0, 6);
+				const stonesOwned = fragPet[pId] || fragPet[String(pId)] || 0;
+				const alreadyUsed = STAR_COSTS_CUMULATIVE[curStars] || 0;
+				const neededToMax = MAX_STONES_PER_PET - alreadyUsed;
+				const nextStarCost = curStars < 6 ? STAR_COSTS_INCREMENTAL[curStars] : 0;
+				const usable = Math.min(stonesOwned, neededToMax);
+
+				totalAvailable += stonesOwned;
+				totalUsable += usable;
+				totalNeeded += neededToMax;
+
+				const petName = this._escapeHtml(resolveHeroName(pId) || p.petName || p.name || `Pet #${pId}`);
+				petStoneSummary.push({ pId, petName, curStars, stonesOwned, neededToMax, nextStarCost, usable });
 			}
 
-			// Progress bar: current stones vs total still needed
-			const pct = stonesNeeded > 0 ? Math.min(100, (currentStones / stonesNeeded) * 100) : 100;
+			// Overall progress: usable stones / needed stones
+			const pct = totalNeeded > 0 ? Math.min(100, (totalUsable / totalNeeded) * 100) : 100;
 			const barColor = PCalc.colorClass(pct);
+
+			// Per-pet breakdown rows
+			const stoneRows = petStoneSummary.map((s) => {
+				const starDisplay = '\u2B50'.repeat(Math.min(s.curStars, 6));
+				const isMaxed = s.curStars >= 6;
+				const nextInfo = isMaxed
+					? '<span class="oj-muted">MAX</span>'
+					: `${s.nextStarCost} to ${s.curStars + 1}\u2605`;
+				const statusClass = isMaxed ? 'oj-muted' : (s.stonesOwned >= s.nextStarCost && s.curStars < 6) ? 'oj-text-green' : '';
+				return `<tr class="${statusClass}">` +
+					`<td>${s.petName}</td>` +
+					`<td>${starDisplay || '\u2014'}</td>` +
+					`<td class="oj-num">${s.stonesOwned.toLocaleString()}</td>` +
+					`<td class="oj-num">${nextInfo}</td>` +
+					`<td class="oj-num">${isMaxed ? '\u2014' : s.neededToMax.toLocaleString()}</td>` +
+					`</tr>`;
+			}).join('');
 
 			soulStonesHtml = `
 				<div class="oj-pet-soulstones">
 					<div class="oj-pet-soulstones-label">
-						\uD83D\uDC8E Pet Soul Stones: <strong>${currentStones.toLocaleString()}</strong> available / <strong>${stonesNeeded.toLocaleString()}</strong> needed to max all
+						\uD83D\uDC8E Pet Soul Stones: <strong>${totalUsable.toLocaleString()}</strong> usable of <strong>${totalAvailable.toLocaleString()}</strong> in inventory / <strong>${totalNeeded.toLocaleString()}</strong> needed to max all
 					</div>
 					<div class="oj-completion-bar oj-pet-soulstones-bar">
 						<div class="oj-completion-fill oj-completion-${barColor}" style="width:${pct.toFixed(1)}%"></div>
-						<div class="oj-completion-label">${currentStones.toLocaleString()} / ${stonesNeeded.toLocaleString()}</div>
+						<div class="oj-completion-label">${totalUsable.toLocaleString()} / ${totalNeeded.toLocaleString()}</div>
 					</div>
+					<details class="oj-soulstone-details">
+						<summary>Per-pet breakdown</summary>
+						<table class="oj-table oj-soulstone-table">
+							<thead><tr><th>Pet</th><th>Stars</th><th>Have</th><th>Next \u2605</th><th>To Max</th></tr></thead>
+							<tbody>${stoneRows}</tbody>
+						</table>
+					</details>
 				</div>
 			`;
 		} catch { /* empty — no inventory data available yet */ }

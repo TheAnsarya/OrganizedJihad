@@ -2249,11 +2249,12 @@ class GameTracker {
 	 * Track titans from titanGetAll API call
 	 * Stores complete titan snapshots in IndexedDB (matches C# Titan entity)
 	 *
-	 * Entity Structure (12 properties):
+	 * Entity Structure (14 properties):
 	 * - Identity: TitanId, TitanName
-	 * - Stats: Level, Stars, Power, Element (fire/water/earth), SkinLevel
-	 * - Skills: SkillLevel (single main skill)
+	 * - Stats: Level, Stars, Power, Element (fire/water/earth)
 	 * - Artifacts: ArtifactData (JSON - titans have different artifact system)
+	 * - Skins: SkinData (JSON - { skinId: { level, ... } })
+	 * - Totem: TotemLevel, TotemStar, TotemPower (element spirit)
 	 * - Special: SummonStars
 	 * - Tracking: PlayerId, Timestamp
 	 *
@@ -2280,11 +2281,13 @@ class GameTracker {
 			level: titan.level || 0,
 			stars: titan.star || 0,
 			power: titan.power || 0,
-			skillLevel: titan.skill?.level || titan.skillLevel || 0, // Titans have one main skill
 			artifactData: JSON.stringify(titan.artifacts || {}), // Titan artifacts are different from heroes
 			summonStars: titan.summonStars || 0, // Special titan mechanic
 			element: resolveTitanElement(titan.id), // Derived from titan ID: 40[0]x=water, 40[1]x=fire, etc.
-			skinLevel: titan.skinLevel || 0,
+			skinData: JSON.stringify(titan.skins || {}), // Skin object { skinId: { level, ... } }
+			totemLevel: titan.elementSpiritLevel || 0, // Totem (element spirit) level
+			totemStar: titan.elementSpiritStar || 0, // Totem (element spirit) star rank
+			totemPower: titan.elementSpiritPower || 0, // Totem (element spirit) power
 			playerId: playerId,
 			timestamp: timestamp,
 		}));

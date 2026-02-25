@@ -2,8 +2,8 @@
  * TitanCompletionCalculator.js
  *
  * Calculates per-system and overall completion percentages for Hero Wars titans.
- * Each titan has multiple upgrade systems: level, stars, skill, artifacts/totems,
- * skins, and summon stars. This calculator produces a 0–100% score for each
+ * Each titan has multiple upgrade systems: level, stars, artifacts, skins, and
+ * totem (element spirit). This calculator produces a 0–100% score for each
  * system and a weighted overall score.
  *
  * Max values are configurable so they can be updated when the game raises caps.
@@ -29,17 +29,20 @@ class TitanCompletionCalculator {
 	/** @type {number} Maximum star rank */
 	static MAX_STARS = 6;
 
-	/** @type {number} Maximum skill level */
-	static MAX_SKILL_LEVEL = 130;
-
-	/** @type {number} Maximum artifact/totem level per slot */
+	/** @type {number} Maximum artifact level per slot */
 	static MAX_ARTIFACT_LEVEL = 130;
 
-	/** @type {number} Maximum artifact/totem star rank */
+	/** @type {number} Maximum artifact star rank */
 	static MAX_ARTIFACT_STARS = 6;
 
-	/** @type {number} Maximum skin level */
+	/** @type {number} Maximum skin level per skin slot */
 	static MAX_SKIN_LEVEL = 60;
+
+	/** @type {number} Maximum totem (element spirit) level */
+	static MAX_TOTEM_LEVEL = 130;
+
+	/** @type {number} Maximum totem (element spirit) star rank */
+	static MAX_TOTEM_STARS = 6;
 
 	// ─── System Weights ──────────────────────────────────────────────────
 	// Must sum to 1.0
@@ -48,9 +51,9 @@ class TitanCompletionCalculator {
 	static WEIGHTS = {
 		level: 0.25,
 		stars: 0.25,
-		skill: 0.15,
-		artifacts: 0.25,
-		skins: 0.10,
+		artifacts: 0.20,
+		skins: 0.15,
+		totem: 0.15,
 	};
 
 	// ─── Element Emojis ──────────────────────────────────────────────────
@@ -131,19 +134,29 @@ class TitanCompletionCalculator {
 		systems.stars = this._clamp(stars / this.MAX_STARS);
 		systemDetails.stars = { score: systems.stars, current: stars, max: this.MAX_STARS };
 
-		// ── Skill ───────────────────────────────────────────────────────
-		const skillLevel = titan.skillLevel || 0;
-		systems.skill = this._clamp(skillLevel / this.MAX_SKILL_LEVEL);
-		systemDetails.skill = { score: systems.skill, current: skillLevel, max: this.MAX_SKILL_LEVEL };
-
-		// ── Artifacts / Totems ───────────────────────────────────────────
+		// ── Artifacts ───────────────────────────────────────────────────
 		systems.artifacts = this._calcArtifactScore(titan);
 		systemDetails.artifacts = { score: systems.artifacts, current: 'see detail', max: `L${this.MAX_ARTIFACT_LEVEL}` };
 
 		// ── Skins ───────────────────────────────────────────────────────
-		const skinLevel = titan.skinLevel || 0;
-		systems.skins = this._clamp(skinLevel / this.MAX_SKIN_LEVEL);
-		systemDetails.skins = { score: systems.skins, current: skinLevel, max: this.MAX_SKIN_LEVEL };
+		// Skins are stored as JSON object: { skinId: { level, ... }, ... }
+		// or as a legacy single number (skinLevel)
+		systems.skins = this._calcSkinScore(titan);
+		systemDetails.skins = { score: systems.skins, current: 'see detail', max: `L${this.MAX_SKIN_LEVEL}` };
+
+		// ── Totem (Element Spirit) ──────────────────────────────────────
+		// API fields: elementSpiritLevel, elementSpiritStar, elementSpiritPower
+		// Stored as: totemLevel, totemStar
+		const totemLevel = titan.totemLevel || 0;
+		const totemStar = titan.totemStar || 0;
+		const totemLevelScore = totemLevel / this.MAX_TOTEM_LEVEL;
+		const totemStarScore = totemStar / this.MAX_TOTEM_STARS;
+		systems.totem = this._clamp((totemLevelScore + totemStarScore) / 2);
+		systemDetails.totem = {
+			score: systems.totem,
+			current: `${totemStar}\u2605 L${totemLevel}`,
+			max: `${this.MAX_TOTEM_STARS}\u2605 L${this.MAX_TOTEM_LEVEL}`,
+		};
 
 		// ── Overall weighted score ──────────────────────────────────────
 		let overall = 0;
@@ -219,7 +232,7 @@ class TitanCompletionCalculator {
 	}
 
 	/**
-	 * Calculate titan artifact/totem score (0–1).
+	 * Calculate titan artifact score (0–1).
 	 * Titan artifacts are stored as JSON in artifactData.
 	 * Handles both raw API objects and JSON strings.
 	 *
@@ -260,6 +273,118 @@ class TitanCompletionCalculator {
 		return 0;
 	}
 
+	/**
+	 * Calculate titan skin score (0–1).
+	 * Skins can be stored as:
+	 *   - skinData (JSON string/object): { skinId: { level, ... }, ... }
+	 *   - skinLevel (legacy single number)
+	 *
+	 * When stored as an object, averages all skin levels vs MAX_SKIN_LEVEL.
+	 *
+	 * @param {Object} titan - Titan record
+	 * @returns {number} Score 0–1
+	 * @private
+	 */
+	static _calcSkinScore(titan) {
+		// New format: skinData as JSON object { skinId: { level, ... } }
+		const skinData = this._parseJSON(titan.skinData, null);
+		if (skinData && typeof skinData === 'object' && !Array.isArray(skinData)) {
+			const entries = Object.values(skinData);
+			if (entries.length > 0) {
+				let total = 0;
+				for (const skin of entries) {
+					if (typeof skin === 'object' && skin !== null) {
+						total += (skin.level || 0) / this.MAX_SKIN_LEVEL;
+					} else if (typeof skin === 'number') {
+						total += skin / this.MAX_SKIN_LEVEL;
+					}
+				}
+				return this._clamp(total / entries.length);
+			}
+		}
+
+		// Legacy format: single skinLevel number
+		const skinLevel = titan.skinLevel || 0;
+		if (skinLevel > 0) {
+			return this._clamp(skinLevel / this.MAX_SKIN_LEVEL);
+		}
+
+		return 0;
+	}
+
+	/**
+	 * Parse artifact data into an array of { level, star } objects for display.
+	 * Handles JSON strings, objects, and arrays.
+	 *
+	 * @param {Object} titan - Titan record with artifactData
+	 * @returns {Array<{id: string, level: number, star: number}>} Parsed artifacts
+	 */
+	static parseArtifacts(titan) {
+		const artifacts = this._parseJSON(titan?.artifactData, {});
+		const result = [];
+
+		if (typeof artifacts === 'object' && !Array.isArray(artifacts)) {
+			for (const [id, art] of Object.entries(artifacts)) {
+				if (typeof art === 'object' && art !== null) {
+					result.push({
+						id: id,
+						level: art.level || 0,
+						star: art.star || art.stars || 0,
+					});
+				}
+			}
+		} else if (Array.isArray(artifacts)) {
+			for (let i = 0; i < artifacts.length; i++) {
+				const art = artifacts[i];
+				result.push({
+					id: String(i),
+					level: art?.level || 0,
+					star: art?.star || art?.stars || 0,
+				});
+			}
+		}
+
+		return result;
+	}
+
+	/**
+	 * Parse skin data into an array of { id, level } objects for display.
+	 *
+	 * @param {Object} titan - Titan record with skinData (or legacy skinLevel)
+	 * @returns {Array<{id: string, level: number}>} Parsed skins
+	 */
+	static parseSkins(titan) {
+		const skinData = this._parseJSON(titan?.skinData, null);
+		const result = [];
+
+		if (skinData && typeof skinData === 'object' && !Array.isArray(skinData)) {
+			for (const [id, skin] of Object.entries(skinData)) {
+				const level = (typeof skin === 'object' && skin !== null)
+					? (skin.level || 0)
+					: (typeof skin === 'number' ? skin : 0);
+				result.push({ id, level });
+			}
+		}
+
+		return result;
+	}
+
+	/**
+	 * Get the star-based color class for an artifact/totem star count.
+	 * Used for colored borders on artifact icons.
+	 *
+	 * @param {number} stars - Star count (0–6)
+	 * @returns {string} CSS class name for the border color
+	 */
+	static artifactStarClass(stars) {
+		if (stars >= 6) return 'oj-rank-red';
+		if (stars >= 5) return 'oj-rank-orange';
+		if (stars >= 4) return 'oj-rank-violet';
+		if (stars >= 3) return 'oj-rank-blue';
+		if (stars >= 1) return 'oj-rank-green';
+		return 'oj-rank-gray';
+	}
+
 	// ─── System Labels for UI ────────────────────────────────────────────
 
 	/**
@@ -269,9 +394,9 @@ class TitanCompletionCalculator {
 	static SYSTEM_LABELS = {
 		level: 'Level',
 		stars: 'Stars',
-		skill: 'Skill',
 		artifacts: 'Artifacts',
 		skins: 'Skins',
+		totem: 'Totem',
 	};
 
 	/**
@@ -281,9 +406,9 @@ class TitanCompletionCalculator {
 	static SYSTEM_ICONS = {
 		level: '\uD83D\uDCCA',   // 📊
 		stars: '\u2B50',          // ⭐
-		skill: '\u2694\uFE0F',   // ⚔️
 		artifacts: '\uD83D\uDCA0', // 💠
 		skins: '\uD83C\uDFAD',   // 🎭
+		totem: '\uD83D\uDD2E',   // 🔮
 	};
 }
 
