@@ -3024,6 +3024,44 @@ class UIManager {
 			});
 		}
 
+		// ── Export API Samples (for AI/developer debugging) ────────────
+		const exportSamplesBtn = this.overlay.querySelector('#oj-export-api-samples');
+		if (exportSamplesBtn) {
+			exportSamplesBtn.addEventListener('click', () => {
+				try {
+					const count = this.gameTracker?.getApiSampleCount?.() || 0;
+					if (count === 0) {
+						alert('No API samples captured yet. Play the game for a while \u2014 visit different screens (arena, heroes, inventory, guild war) to populate samples.');
+						return;
+					}
+					const data = this.gameTracker.exportApiSamples();
+					this._downloadJson(data, 'hw-api-samples');
+					// Update the stats display
+					const statsEl = this.overlay.querySelector('#oj-api-sample-stats');
+					if (statsEl) {
+						statsEl.textContent = `Methods captured: ${count} \u2014 exported!`;
+					}
+				} catch (err) {
+					console.error('[OrganizedJihad] API samples export failed:', err);
+					alert('Export failed \u2014 check console.');
+				}
+			});
+		}
+
+		// ── Clear/reset API Samples ────────────────────────────────────
+		const clearSamplesBtn = this.overlay.querySelector('#oj-clear-api-samples');
+		if (clearSamplesBtn) {
+			clearSamplesBtn.addEventListener('click', () => {
+				if (confirm('Clear all captured API samples? They will be re-captured as you play.')) {
+					this.gameTracker?.clearApiSamples?.();
+					const statsEl = this.overlay.querySelector('#oj-api-sample-stats');
+					if (statsEl) {
+						statsEl.textContent = 'Methods captured: 0 \u2014 cleared! Play the game to re-capture.';
+					}
+				}
+			});
+		}
+
 		// ── Import data ─────────────────────────────────────────────────
 		const importBtn = this.overlay.querySelector('#oj-import-data');
 		const importFile = this.overlay.querySelector('#oj-import-file');
