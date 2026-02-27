@@ -322,6 +322,14 @@ describe('syncToServer', () => {
 		// Should update local metadata
 		expect(storage.setMetadata).toHaveBeenCalledWith('lastSync', apiResult.timestamp);
 
+		// Should write success syncStatus (#130)
+		const syncStatusCall = storage.setMetadata.mock.calls.find(
+			([key]) => key === 'syncStatus'
+		);
+		expect(syncStatusCall).toBeDefined();
+		expect(syncStatusCall[1].ok).toBe(true);
+		expect(syncStatusCall[1].timestamp).toBeDefined();
+
 		expect(result).toEqual(apiResult);
 	});
 
@@ -428,6 +436,25 @@ describe('syncWithRetry', () => {
 			'Sync failed after 3 attempts'
 		);
 		expect(client.syncToServer).toHaveBeenCalledTimes(3);
+	});
+
+	test('should persist failure syncStatus metadata after retries exhausted (#130)', async () => {
+		client.syncToServer = jest.fn().mockRejectedValue(new Error('network down'));
+		const storage = createMockStorage();
+
+		await expect(client.syncWithRetry(storage, 2)).rejects.toThrow(
+			'Sync failed after 2 attempts'
+		);
+
+		// Verify setMetadata was called with syncStatus
+		const syncStatusCall = storage.setMetadata.mock.calls.find(
+			([key]) => key === 'syncStatus'
+		);
+		expect(syncStatusCall).toBeDefined();
+		expect(syncStatusCall[1].ok).toBe(false);
+		expect(syncStatusCall[1].message).toBe('network down');
+		expect(syncStatusCall[1].attempts).toBe(2);
+		expect(syncStatusCall[1].timestamp).toBeDefined();
 	});
 
 	test('should default to 3 retries', async () => {

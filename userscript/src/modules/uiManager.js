@@ -85,6 +85,15 @@ class UIManager {
 			inventory: { page: 0, sortField: 'name', sortDir: 'asc', filter: '' },
 			mail:      { page: 0, sortField: 'receivedAt', sortDir: 'desc', filter: '' },
 		};
+
+		/**
+		 * Monotonically increasing counter — incremented at the start of
+		 * each `renderView()` call. If a prior async render is still in
+		 * flight when a newer one starts, the stale render detects the
+		 * mismatch and silently discards itself. (#134)
+		 * @type {number}
+		 */
+		this._renderGeneration = 0;
 	}
 
 	/**
@@ -450,60 +459,79 @@ class UIManager {
 	 * @param {string} view - The view name
 	 */
 	async renderView(view) {
+		// Concurrency guard: discard stale async renders when the user
+		// switches tabs faster than the previous render can complete (#134)
+		const gen = ++this._renderGeneration;
+
 		const content = this.overlay.querySelector('#oj-content');
 		content.innerHTML = '<div class="oj-loading">Loading...</div>';
 
 		try {
+			let html;
 			switch (view) {
 				case 'dashboard':
-					content.innerHTML = await this.renderDashboard();
+					html = await this.renderDashboard();
 					break;
 				case 'activity':
-					content.innerHTML = await this.renderActivity();
+					html = await this.renderActivity();
 					break;
 				case 'heroes':
-					content.innerHTML = await this.renderHeroes();
-					this._attachDataBrowserListeners('heroes');
+					html = await this.renderHeroes();
 					break;
 				case 'titans':
-					content.innerHTML = await this.renderTitans();
-					this._attachDataBrowserListeners('titans');
+					html = await this.renderTitans();
 					break;
 				case 'pets':
-					content.innerHTML = await this.renderPets();
-					this._attachDataBrowserListeners('pets');
+					html = await this.renderPets();
 					break;
 				case 'upgrades':
-					content.innerHTML = await this.renderUpgrades();
-					this._attachDataBrowserListeners('upgrades');
+					html = await this.renderUpgrades();
 					break;
 				case 'battles':
-					content.innerHTML = await this.renderBattles();
-					this._attachDataBrowserListeners('battles');
+					html = await this.renderBattles();
 					break;
 				case 'chests':
-					content.innerHTML = await this.renderChests();
-					this._attachDataBrowserListeners('chests');
+					html = await this.renderChests();
 					break;
 				case 'inventory':
-					content.innerHTML = await this.renderInventory();
-					this._attachDataBrowserListeners('inventory');
+					html = await this.renderInventory();
 					break;
 				case 'mail':
-					content.innerHTML = await this.renderMail();
+					html = await this.renderMail();
 					break;
 				case 'apilog':
-					content.innerHTML = this.renderApiLog();
+					html = this.renderApiLog();
 					break;
 				case 'resources':
-					content.innerHTML = await this.renderResources();
+					html = await this.renderResources();
 					break;
 				case 'settings':
-					content.innerHTML = this.renderSettings();
-					this.attachSettingsEventListeners();
+					html = this.renderSettings();
 					break;
 				default:
-					content.innerHTML = '<p class="oj-empty">Unknown view</p>';
+					html = '<p class="oj-empty">Unknown view</p>';
+			}
+
+			// If another render started while we were awaiting, discard this one (#134)
+			if (gen !== this._renderGeneration) return;
+
+			content.innerHTML = html;
+
+			// Post-render hooks (attach event listeners to the new DOM)
+			switch (view) {
+				case 'heroes':
+				case 'titans':
+				case 'pets':
+				case 'upgrades':
+				case 'battles':
+				case 'chests':
+				case 'inventory':
+				case 'mail':
+					this._attachDataBrowserListeners(view);
+					break;
+				case 'settings':
+					this.attachSettingsEventListeners();
+					break;
 			}
 		} catch (err) {
 			console.error('[OrganizedJihad] Error rendering view:', view, err);
@@ -718,6 +746,12 @@ class UIManager {
 
 		// Error count from tracker
 		const errorCount = this.gameTracker?.errorCount || 0;
+
+		// Sync status from syncClient (#130)
+		let syncStatus = {};
+		try {
+			syncStatus = (await this.idbStorage.getMetadata('syncStatus', null)) || {};
+		} catch { /* empty */ }
 
 		// Last snapshot time
 		const lastSnapshotTime = player.timestamp
@@ -983,6 +1017,12 @@ class UIManager {
 						<div class="oj-status-row">
 							<span>Last Snapshot</span>
 							<span class="oj-mono">${lastSnapshotTime}</span>
+						</div>
+						<div class="oj-status-row">
+							<span>API Sync</span>
+							${syncStatus.timestamp
+								? `<span class="${syncStatus.ok ? 'oj-status-ok' : 'oj-status-err'}" title="${this._escapeHtml(syncStatus.message || '')}">${syncStatus.ok ? '\u2705' : '\u274C'} ${new Date(syncStatus.timestamp).toLocaleTimeString()}${!syncStatus.ok ? ` \u2014 ${this._escapeHtml(syncStatus.message || 'Error')}` : ''}</span>`
+								: '<span style="color:#888">Not synced</span>'}
 						</div>
 						${errorCount > 0 ? `<div class="oj-status-row"><span>Errors</span><span class="oj-status-err">${errorCount}</span></div>` : ''}
 						<div class="oj-status-row">

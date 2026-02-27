@@ -274,6 +274,13 @@ class SyncClient {
 			// Update last sync timestamp in local storage
 			await storage.setMetadata('lastSync', result.timestamp);
 
+			// Persist sync status for the dashboard status panel (#130)
+			await storage.setMetadata('syncStatus', {
+				ok: true,
+				timestamp: new Date().toISOString(),
+				message: `Synced ${Object.values(result.importedCounts || {}).reduce((a, b) => a + b, 0)} records`,
+			});
+
 			console.log('[OrganizedJihad] Sync completed successfully:', result);
 			return result;
 		} catch (error) {
@@ -283,7 +290,10 @@ class SyncClient {
 	}
 
 	/**
-	 * Auto-sync with retry logic
+	 * Auto-sync with retry logic.
+	 * On final failure, persists the error to IDB so the dashboard can
+	 * show a user-visible indicator instead of silently swallowing it (#130).
+	 *
 	 * @param {IndexedDBStorage} storage - IndexedDB storage instance
 	 * @param {number} maxRetries - Maximum retry attempts
 	 * @returns {Promise<object>} - Sync result
@@ -306,6 +316,18 @@ class SyncClient {
 					await new Promise((resolve) => setTimeout(resolve, delay));
 				}
 			}
+		}
+
+		// All retries exhausted — persist failure so the UI can surface it (#130)
+		try {
+			await storage.setMetadata('syncStatus', {
+				ok: false,
+				timestamp: new Date().toISOString(),
+				message: lastError?.message || 'Unknown error',
+				attempts: maxRetries,
+			});
+		} catch {
+			// If even the metadata write fails, nothing more we can do
 		}
 
 		throw new Error(`Sync failed after ${maxRetries} attempts: ${lastError.message}`);

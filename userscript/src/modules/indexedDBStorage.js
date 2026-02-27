@@ -53,6 +53,13 @@ class IndexedDBStorage {
 		this.dbName = 'OrganizedJihad';
 		this.version = 11; // v11: Added adventureGuide store for node recommendations (#131)
 		this.db = null;
+		/**
+		 * True when the browser has closed the connection (via db.onclose) or
+		 * another tab triggered a version change (via db.onversionchange).
+		 * CRUD methods check this flag and transparently reconnect.
+		 * @type {boolean}
+		 */
+		this._dbClosed = false;
 		/** @type {Promise<IDBDatabase>} Resolves once the DB is open and upgraded. */
 		this.initPromise = this._openDatabase();
 	}
@@ -70,6 +77,39 @@ class IndexedDBStorage {
 	}
 
 	/**
+	 * Re-open the database after an unexpected close or version-change event.
+	 * Replaces `initPromise` so that in-flight and future CRUD calls
+	 * transparently wait for the new connection.
+	 *
+	 * @returns {Promise<IDBDatabase>}
+	 * @private
+	 */
+	_reconnect() {
+		console.log('[IndexedDBStorage] Reconnecting to IndexedDB…');
+		this.initPromise = this._openDatabase();
+		return this.initPromise;
+	}
+
+	/**
+	 * Ensure a live database connection is available before creating a
+	 * transaction. If the connection was closed (by the browser or by a
+	 * version-change from another tab), this transparently reconnects.
+	 *
+	 * Every CRUD method should `await this._ensureDb()` instead of the
+	 * bare `await this.initPromise`.
+	 *
+	 * @returns {Promise<IDBDatabase>}
+	 * @private
+	 */
+	async _ensureDb() {
+		await this.initPromise;
+		if (this._dbClosed) {
+			return this._reconnect();
+		}
+		return this.db;
+	}
+
+	/**
 	 * Open the IndexedDB database (called once from the constructor).
 	 * @returns {Promise<IDBDatabase>}
 	 * @private
@@ -81,6 +121,34 @@ class IndexedDBStorage {
 			request.onerror = () => reject(request.error);
 			request.onsuccess = () => {
 				this.db = request.result;
+				this._dbClosed = false;
+
+				// --- Defensive handlers for connection loss (#129) ---
+
+				/**
+				 * Fired when the browser unexpectedly closes the connection
+				 * (e.g. the storage backend is reclaimed, or the profile is
+				 * deleted). Mark closed so _ensureDb() will reconnect on the
+				 * next CRUD call.
+				 */
+				this.db.onclose = () => {
+					console.warn('[IndexedDBStorage] Database connection closed unexpectedly — will reconnect on next operation');
+					this._dbClosed = true;
+				};
+
+				/**
+				 * Fired when another tab (or this tab after a page reload)
+				 * opens the same database with a higher version number. The
+				 * spec requires us to close our connection so the upgrade can
+				 * proceed. The next CRUD call will transparently reconnect
+				 * at the new version.
+				 */
+				this.db.onversionchange = () => {
+					console.warn('[IndexedDBStorage] Database version change detected (another tab upgraded) — closing connection');
+					this.db.close();
+					this._dbClosed = true;
+				};
+
 				resolve(this.db);
 			};
 
@@ -456,7 +524,7 @@ class IndexedDBStorage {
 	 * @returns {Promise<number>} - ID of added record
 	 */
 	async add(storeName, data) {
-		await this.initPromise;
+		await this._ensureDb();
 		return new Promise((resolve, reject) => {
 			const transaction = this.db.transaction([storeName], 'readwrite');
 			const store = transaction.objectStore(storeName);
@@ -474,7 +542,7 @@ class IndexedDBStorage {
 	 * @returns {Promise<number>} - ID of updated record
 	 */
 	async put(storeName, data) {
-		await this.initPromise;
+		await this._ensureDb();
 		return new Promise((resolve, reject) => {
 			const transaction = this.db.transaction([storeName], 'readwrite');
 			const store = transaction.objectStore(storeName);
@@ -492,7 +560,7 @@ class IndexedDBStorage {
 	 * @returns {Promise<object>} - Retrieved record
 	 */
 	async get(storeName, key) {
-		await this.initPromise;
+		await this._ensureDb();
 		return new Promise((resolve, reject) => {
 			const transaction = this.db.transaction([storeName], 'readonly');
 			const store = transaction.objectStore(storeName);
@@ -510,7 +578,7 @@ class IndexedDBStorage {
 	 * @returns {Promise<Array>} - Array of records
 	 */
 	async getAll(storeName, limit = null) {
-		await this.initPromise;
+		await this._ensureDb();
 		return new Promise((resolve, reject) => {
 			const transaction = this.db.transaction([storeName], 'readonly');
 			const store = transaction.objectStore(storeName);
@@ -529,7 +597,7 @@ class IndexedDBStorage {
 	 * @returns {Promise<Array>} - Matching records
 	 */
 	async getByIndex(storeName, indexName, value) {
-		await this.initPromise;
+		await this._ensureDb();
 		return new Promise((resolve, reject) => {
 			const transaction = this.db.transaction([storeName], 'readonly');
 			const store = transaction.objectStore(storeName);
@@ -556,7 +624,7 @@ class IndexedDBStorage {
 	 * @returns {Promise<Array>} - Page of records
 	 */
 	async getPage(storeName, opts = {}) {
-		await this.initPromise;
+		await this._ensureDb();
 		const { offset = 0, limit = 25, indexName = null, direction = 'prev' } = opts;
 
 		return new Promise((resolve, reject) => {
@@ -596,7 +664,7 @@ class IndexedDBStorage {
 	 * @returns {Promise<void>}
 	 */
 	async delete(storeName, key) {
-		await this.initPromise;
+		await this._ensureDb();
 		return new Promise((resolve, reject) => {
 			const transaction = this.db.transaction([storeName], 'readwrite');
 			const store = transaction.objectStore(storeName);
@@ -613,7 +681,7 @@ class IndexedDBStorage {
 	 * @returns {Promise<void>}
 	 */
 	async clear(storeName) {
-		await this.initPromise;
+		await this._ensureDb();
 		return new Promise((resolve, reject) => {
 			const transaction = this.db.transaction([storeName], 'readwrite');
 			const store = transaction.objectStore(storeName);
@@ -630,7 +698,7 @@ class IndexedDBStorage {
 	 * @returns {Promise<number>} - Record count
 	 */
 	async count(storeName) {
-		await this.initPromise;
+		await this._ensureDb();
 		return new Promise((resolve, reject) => {
 			const transaction = this.db.transaction([storeName], 'readonly');
 			const store = transaction.objectStore(storeName);
@@ -670,7 +738,7 @@ class IndexedDBStorage {
 	 * @returns {Promise<Array>}
 	 */
 	async getRecentSnapshots(limit = 10) {
-		await this.initPromise;
+		await this._ensureDb();
 		return new Promise((resolve, reject) => {
 			const transaction = this.db.transaction(['snapshots'], 'readonly');
 			const store = transaction.objectStore('snapshots');
@@ -728,7 +796,7 @@ class IndexedDBStorage {
 	 */
 	async saveAPILogs(logData) {
 		try {
-			await this.initPromise;
+			await this._ensureDb();
 
 			// Delegate to put() which already uses proper Promise wrapping (#84)
 			await this.put('metadata', {
@@ -749,7 +817,7 @@ class IndexedDBStorage {
 	 */
 	async getAPILogs() {
 		try {
-			await this.initPromise;
+			await this._ensureDb();
 
 			const data = await this.get('metadata', 'apiMonitorLogs');
 			return data ? data.value : null;
@@ -768,7 +836,7 @@ class IndexedDBStorage {
 	 */
 	async saveAPILogEntries(logEntries) {
 		try {
-			await this.initPromise;
+			await this._ensureDb();
 
 			// Use proper Promise wrapping for IDB transaction (#84)
 			return new Promise((resolve, reject) => {
@@ -802,7 +870,7 @@ class IndexedDBStorage {
 	 */
 	async getAPILogEntries(options = {}) {
 		try {
-			await this.initPromise;
+			await this._ensureDb();
 
 			const limit = options.limit || 1000;
 			let entries = await this.getAll('apiLogs', limit);
@@ -832,7 +900,7 @@ class IndexedDBStorage {
 	 */
 	async clearOldAPILogs(keepCount = 5000) {
 		try {
-			await this.initPromise;
+			await this._ensureDb();
 
 			const allEntries = await this.getAll('apiLogs');
 
@@ -929,7 +997,7 @@ class IndexedDBStorage {
 	 * @returns {Promise<Object<string, number>>} Map of storeName → deletedCount
 	 */
 	async purgeOldRecords(retentionOverrides = {}) {
-		await this.initPromise;
+		await this._ensureDb();
 		const retention = { ...IndexedDBStorage.DEFAULT_RETENTION, ...retentionOverrides };
 		const summary = {};
 		const now = Date.now();
@@ -1016,7 +1084,7 @@ class IndexedDBStorage {
 	 * @returns {Promise<Object<string, number>>} Map of storeName → recordCount
 	 */
 	async getStorageStats() {
-		await this.initPromise;
+		await this._ensureDb();
 		const stats = {};
 		const storeNames = Array.from(this.db.objectStoreNames);
 
@@ -1039,7 +1107,7 @@ class IndexedDBStorage {
 	 * @returns {Promise<Object>} { storeName: [...records], _meta: { exportedAt, version } }
 	 */
 	async exportAllStores(storeNames) {
-		await this.initPromise;
+		await this._ensureDb();
 		const names = storeNames || Array.from(this.db.objectStoreNames);
 		const result = {
 			_meta: {
@@ -1071,7 +1139,7 @@ class IndexedDBStorage {
 	 * @returns {Promise<Object>} Summary { imported: { storeName: count }, errors: [...] }
 	 */
 	async importStores(data, options = {}) {
-		await this.initPromise;
+		await this._ensureDb();
 		const { overwrite = false } = options;
 		const validStores = Array.from(this.db.objectStoreNames);
 		const summary = { imported: {}, skipped: {}, errors: [] };
@@ -1122,7 +1190,7 @@ class IndexedDBStorage {
 	 * @returns {Promise<string[]>} Array of store names
 	 */
 	async getStoreNames() {
-		await this.initPromise;
+		await this._ensureDb();
 		return Array.from(this.db.objectStoreNames);
 	}
 }

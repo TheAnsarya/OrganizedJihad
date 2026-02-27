@@ -178,6 +178,9 @@ move the application badge to the top-left, but to the right of the `Hero Wars D
 
 continue working issues and making new ones;
 
+(userscript) Change the pets icon to an emoji for a single paw; This isn't tracking any battles at all, figure out the api calls and tracking strategy for tracking and displaying battle information, and recording outr battles and other people's teams in arena, gw, cow, grand arena, aoc, and tracking battles in campaign and Adventure (and track the other teams, what are they and how did they do and how did we beat them, so, especially in Adventures, we can add reccomendations for teams to beat the adventure nodes; continue;
+
+(userscript) continue working issues and making new ones;
 
 
 

@@ -30,6 +30,10 @@ describe('IndexedDBStorage', () => {
 
 	afterEach(async () => {
 		if (storage?.db) {
+			// Clear defensive handlers before teardown so deleteDatabase
+			// doesn't trigger onversionchange → close → reconnect loops (#129)
+			storage.db.onversionchange = null;
+			storage.db.onclose = null;
 			storage.db.close();
 		}
 		// Delete the database so each test starts fresh
@@ -498,6 +502,72 @@ describe('IndexedDBStorage', () => {
 			expect(names).toContain('errorLog');
 			expect(names).toContain('mailRewards');
 			expect(names.length).toBe(38);
+		});
+	});
+
+	// ─── Defensive Handlers (#129) ───────────────────────────────────────
+
+	describe('Defensive IDB Handlers (#129)', () => {
+		test('should register db.onclose handler after opening', async () => {
+			expect(typeof storage.db.onclose).toBe('function');
+		});
+
+		test('should register db.onversionchange handler after opening', async () => {
+			expect(typeof storage.db.onversionchange).toBe('function');
+		});
+
+		test('should initialise _dbClosed to false', () => {
+			expect(storage._dbClosed).toBe(false);
+		});
+
+		test('db.onclose should set _dbClosed flag', () => {
+			// Simulate browser closing the connection
+			storage.db.onclose();
+			expect(storage._dbClosed).toBe(true);
+		});
+
+		test('db.onversionchange should close db and set _dbClosed flag', () => {
+			const closeSpy = jest.spyOn(storage.db, 'close');
+			storage.db.onversionchange();
+			expect(closeSpy).toHaveBeenCalled();
+			expect(storage._dbClosed).toBe(true);
+			closeSpy.mockRestore();
+		});
+
+		test('_ensureDb should reconnect after db.onclose fires', async () => {
+			// Actually close the connection, then set the flag (mimics browser behaviour)
+			storage.db.close();
+			storage._dbClosed = true;
+
+			// _ensureDb should transparently reconnect
+			const db = await storage._ensureDb();
+			expect(db).toBeDefined();
+			expect(db.name).toBe('OrganizedJihad');
+			expect(storage._dbClosed).toBe(false);
+		});
+
+		test('CRUD methods should work after reconnect', async () => {
+			// Close the connection and set flag, simulating browser eviction
+			storage.db.close();
+			storage._dbClosed = true;
+
+			// add() should still succeed — it calls _ensureDb() internally
+			const id = await storage.add('metadata', { key: 'reconnect-test', value: 42 });
+			expect(id).toBeDefined();
+
+			// Verify the data is actually there
+			const record = await storage.get('metadata', 'reconnect-test');
+			expect(record.value).toBe(42);
+		});
+
+		test('_reconnect should replace initPromise', async () => {
+			const originalPromise = storage.initPromise;
+			storage.db.close();
+			storage._dbClosed = true;
+			const reconnected = storage._reconnect();
+			expect(storage.initPromise).not.toBe(originalPromise);
+			await reconnected;
+			expect(storage._dbClosed).toBe(false);
 		});
 	});
 });
