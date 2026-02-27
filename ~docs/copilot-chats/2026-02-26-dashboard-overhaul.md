@@ -285,3 +285,69 @@ Analyzed the second API samples file (`hw-api-samples-2026-02-27 (2).json`) cont
 
 ### Commits
 - `96e40e0` — Fix #121: Track 30 new API methods from second samples export
+
+---
+
+## Session 7: Bug Fixes, Dashboard Staleness, Cleanup & Constants Extraction
+
+**Date**: 2026-02-27
+
+### Summary
+Comprehensive codebase audit → created 8 new issues → fixed 7 of them in this session. Focus areas: duplicate handler bugs, dashboard staleness indicators, page unload cleanup, activity feed count mismatch, and magic number extraction.
+
+### Issues Created
+- **#122** (Bug): Duplicate handler registrations for towerGetState, dungeonEnd, titanDungeonEnd — **CLOSED**
+- **#123** (Enhancement): Dashboard staleness indicators for metadata-backed cards — **CLOSED**
+- **#124** (Bug): Activity tab shows misleading event count (200 fetched, 100 rendered) — **CLOSED**
+- **#125** (Testing): Phase 12 + Phase 13 handler test coverage — still open
+- **#126** (Bug): Duplicate of #127 — closed as not planned
+- **#127** (Bug): beforeunload handler doesn't call destroy() on modules — **CLOSED**
+- **#128** (Enhancement): Extract hardcoded fetch/display limits to named constants — **CLOSED**
+- **#129** (Enhancement): IndexedDB missing close()/onclose/onversionchange — open
+- **#130** (Enhancement): No user-visible feedback when API sync fails — open
+
+### Changes Made
+
+#### gameTracker.js
+- Removed original weak `towerGetState` handler (kept Phase 12 version with richer metadata)
+- Removed Phase 12 duplicate `dungeonEnd` and `titanDungeonEnd` handlers (core handlers cover via array registrations)
+
+#### uiManager.js
+- Added `_timeAgo(timestamp)` helper — returns relative time strings ("just now", "3m ago", "2h ago", "1d ago", "2w ago")
+- Added `_stalenessTag(lastUpdate)` helper — returns small HTML div with relative time, red if >24h stale
+- Added staleness tags to **19 dashboard cards**: Daily Quests, Guild Quests, Guild War, CoW, Raid Boss, Arena, Grand Arena, Titan Arena, Campaign, Battle Pass, Gacha, Guild Activity, Tower, Expeditions, Outland, Adventures, Workshop Buffs, Invasion
+- Fixed activity feed header: now shows "showing 100 of 200 events" instead of misleading "200 events"
+- Extracted `displayLimit` constant for the activity feed
+- Added 7 named constants: `FETCH_LIMIT_LARGE` (5000), `FETCH_LIMIT_DROPS` (50000), `FETCH_LIMIT_MEDIUM` (500), `FETCH_LIMIT_ACTIVITY` (200), `FETCH_LIMIT_TRANSACTIONS` (100), `FETCH_LIMIT_API_LOGS` (50), `DISPLAY_LIMIT_ACTIVITY` (100)
+- Replaced all 17 magic number `getAll()` calls with named constants
+
+#### index.js
+- Added `_destroyables` array in the outer IIFE scope
+- `beforeunload` handler now calls `destroy()` on gameTracker, notificationManager, domTargeting, gameOverlay
+- Registered all destroyable modules after construction in `setupUI()`
+
+#### gameOverlay.js
+- Refactored `_bindHotkey()` to store handler reference for removal
+- Added `destroy()` method: removes hotkey listener, removes panel from DOM
+
+#### ArenaTracker.js
+- Extracted `MAX_ENCOUNTER_HISTORY = 500` constant
+
+### Files Modified
+- `userscript/src/modules/gameTracker.js`
+- `userscript/src/modules/uiManager.js`
+- `userscript/src/modules/gameOverlay.js`
+- `userscript/src/modules/trackers/ArenaTracker.js`
+- `userscript/src/index.js`
+- `userscript/package.json`
+
+### Stats
+- **Tests**: 581/581 passing
+- **Build**: v0.9.54
+- **Issues closed this session**: #122, #123, #124, #127, #128
+- **Issues still open**: #99, #102, #125, #129, #130
+
+### Commits
+- `d87fbd6` — Fix #122 #123 #124: Remove duplicate handlers, add dashboard staleness indicators, fix activity feed count
+- `a58b7f3` — Fix #127: Add proper beforeunload cleanup + Grand Arena staleness tag
+- `7b0d24a` — Fix #128: Extract hardcoded fetch/display limits to named constants
