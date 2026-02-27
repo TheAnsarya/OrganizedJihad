@@ -32,7 +32,7 @@ A multi-tier game tracking solution for Hero Wars that captures, stores, and ana
 - **C# Version**: Latest (C# 13+)
 - **Modern Standards**: Use ES2024+ features for JavaScript, async/await, optional chaining, nullish coalescing
 - **Comments**: Comprehensive comments including XML docs for C#, JSDoc for JS, inline explanations
-- **Package Manager**: Use `yarn` instead of `npm` for userscript
+- **Package Manager**: **ALWAYS use `yarn`** — never use `npm` or `npx`. Use `yarn` for install/add/remove, `yarn <script>` for scripts, and `yarn dlx` instead of `npx` for one-off executables.
 - **Quote Style**: Single quotes for JS strings
 - **Semicolons**: Always use semicolons
 - **Naming**: PascalCase for public members, `_camelCase` for private fields, `I` prefix for interfaces

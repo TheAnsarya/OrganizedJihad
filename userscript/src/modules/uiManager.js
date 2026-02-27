@@ -538,7 +538,9 @@ class UIManager {
 			gold: playerData?.gold ?? latestSnapshot?.gold ?? 0,
 			starMoney: playerData?.starMoney ?? playerData?.emeralds ?? latestSnapshot?.emeralds ?? 0,
 			emeralds: playerData?.starMoney ?? playerData?.emeralds ?? latestSnapshot?.emeralds ?? 0,
+			// Energy comes from refillable[id=1].amount — stored in playerData.stamina (#116)
 			stamina: playerData?.stamina ?? latestSnapshot?.stamina ?? 0,
+			bottledEnergy: playerData?.bottledEnergy ?? latestSnapshot?.bottledEnergy ?? 0,
 		};
 		const playerName = player.playerName || pdPlayer.name || player.name || null;
 		const playerLevel = pdPlayer.level || player.level || 0;
@@ -555,36 +557,52 @@ class UIManager {
 		todayStart.setHours(0, 0, 0, 0);
 		const todayISO = todayStart.toISOString();
 
-		let dailyQuestsToday = 0;
-		let guildQuestsToday = 0;
+		// Quest totals from questGetAll metadata (#117, #118)
+		let questSummary = {};
+		try {
+			questSummary = (await this.idbStorage.getMetadata('questSummary', null)) || {};
+		} catch { /* empty */ }
+		const dailyQuestsCompleted = questSummary.dailyCompleted || 0;
+		const dailyQuestsTotal = questSummary.dailyTotal || 0;
+		const guildQuestsCompleted = questSummary.guildCompleted || 0;
+		const guildQuestsTotal = questSummary.guildTotal || 0;
+
+		// Guild War data from clanWarGetBriefInfo (#119)
+		let gwBrief = {};
+		try {
+			gwBrief = (await this.idbStorage.getMetadata('guildWarBrief', null)) || {};
+		} catch { /* empty */ }
+		// tries is remaining attacks; GW gives 2 attacks Mon-Fri
+		// When no active war, triesRemaining defaults to 0
+		const gwAttacksMax = 2;
+		const gwAttacksUsed = gwBrief.hasActiveWar ? (gwAttacksMax - (gwBrief.triesRemaining ?? 0)) : 0;
+
+		// Clash of Worlds data from crossClanWar_getInfo (#119)
+		let cowData = {};
+		try {
+			cowData = (await this.idbStorage.getMetadata('cowData', null)) || {};
+		} catch { /* empty */ }
+		const cowHeroUsed = cowData.heroAttacksMax ? (cowData.heroAttacksMax - (cowData.heroAttacksRemaining ?? 0)) : 0;
+		const cowTitanUsed = cowData.titanAttacksMax ? (cowData.titanAttacksMax - (cowData.titanAttacksRemaining ?? 0)) : 0;
+
+		// Raid Boss data from clanRaid_getInfo (#120)
+		let raidBoss = {};
+		try {
+			raidBoss = (await this.idbStorage.getMetadata('currentRaidBoss', null)) || {};
+		} catch { /* empty */ }
+		const raidBossLevel = raidBoss.bossLevel || 0;
+		const raidBossAttacksUsed = raidBoss.attemptsUsed || 0;
+		const raidBossAttacksMax = raidBoss.attemptsMax || 5;
+		const raidMyDamage = raidBoss.myDamage || 0;
+
 		let guildWarBattlesToday = 0;
-		let guildRaidBattlesToday = 0;
 		let guildRaidMinionToday = 0;
-		let guildRaidBossToday = 0;
-
-		try {
-			const dq = await this.idbStorage.getAll('dailyQuestCompletions');
-			dailyQuestsToday = dq.filter((q) => q.completedAt >= todayISO).length;
-		} catch { /* empty */ }
-
-		try {
-			const gq = await this.idbStorage.getAll('guildQuestCompletions');
-			guildQuestsToday = gq.filter((q) => q.completedAt >= todayISO).length;
-		} catch { /* empty */ }
 
 		try {
 			const battles = await this.idbStorage.getAll('battles');
 			const todayBattles = battles.filter((b) => b.timestamp >= todayISO);
 			guildWarBattlesToday = todayBattles.filter((b) => b.battleType === 'GuildWar').length;
-			// Guild Raid: split into minion attacks vs boss attacks (#110)
-			// RaidBoss battles where mission/bossId indicates boss type
-			const raidBattles = todayBattles.filter((b) => b.battleType === 'RaidBoss');
-			guildRaidBattlesToday = raidBattles.length;
-			// Boss battles have higher bossId or specific markers — approximate by counting all
-			// Minion attacks (9 max per day) vs Guild Boss attacks (5 max per day)
-			// Without explicit boss type markers, show total raid attacks
-			guildRaidMinionToday = raidBattles.length; // Will be refined when API data distinguishes types
-			guildRaidBossToday = 0; // Placeholder until boss type tracking is added
+			guildRaidMinionToday = todayBattles.filter((b) => b.battleType === 'RaidBoss').length;
 		} catch { /* empty */ }
 
 		// Gather counts from actual IndexedDB stores
@@ -617,6 +635,14 @@ class UIManager {
 		const gold = player.gold ? Number(player.gold).toLocaleString() : '0';
 		const emeralds = Number(player.starMoney || player.emeralds || 0).toLocaleString();
 		const energy = Number(player.stamina || 0).toLocaleString();
+		const bottledEnergy = Number(player.bottledEnergy || 0).toLocaleString();
+
+		// ── Inline SVG icons for resources (cross-browser safe) ──────
+		// Unicode emojis like 🪙 (U+1FA99) don't render in many browsers.
+		// CSS hue-rotate on 💎 produces pink not green. Use inline SVGs instead.
+		const goldIcon = '<svg viewBox="0 0 24 24" width="20" height="20" style="vertical-align:middle"><circle cx="12" cy="12" r="10" fill="#FFD54F" stroke="#FFA000" stroke-width="1.5"/><text x="12" y="16" text-anchor="middle" font-size="12" font-weight="bold" fill="#E65100">$</text></svg>';
+		const emeraldIcon = '<svg viewBox="0 0 24 24" width="20" height="20" style="vertical-align:middle"><polygon points="12,2 22,8 22,16 12,22 2,16 2,8" fill="#43A047" stroke="#2E7D32" stroke-width="1.5"/><polygon points="12,5 18,9 18,15 12,19 6,15 6,9" fill="#66BB6A" stroke="#43A047" stroke-width="0.5"/></svg>';
+		const energyIcon = '<svg viewBox="0 0 24 24" width="20" height="20" style="vertical-align:middle"><polygon points="13,2 3,14 12,14 11,22 21,10 12,10" fill="#FFD600" stroke="#F9A825" stroke-width="1"/></svg>';
 
 		// ── Completion bar helper (inline, dark theme) ───────────────
 		const _miniBar = (pct, color) => {
@@ -641,19 +667,19 @@ class UIManager {
 					</div>
 					<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px">
 						<div style="flex:1;min-width:100px;background:#2a2a2e;border-radius:6px;padding:8px;text-align:center">
-							<div style="font-size:18px">\uD83E\uDE99</div>
+							<div style="font-size:18px">${goldIcon}</div>
 							<div style="font-size:14px;font-weight:700;color:#ffd54f">${gold}</div>
 							<div style="font-size:10px;color:#888">Gold</div>
 						</div>
 						<div style="flex:1;min-width:100px;background:#2a2a2e;border-radius:6px;padding:8px;text-align:center">
-							<div style="font-size:18px;filter:hue-rotate(100deg) saturate(2.5) brightness(1.1)">\uD83D\uDC8E</div>
+							<div style="font-size:18px">${emeraldIcon}</div>
 							<div style="font-size:14px;font-weight:700;color:#66bb6a">${emeralds}</div>
 							<div style="font-size:10px;color:#888">Emeralds</div>
 						</div>
 						<div style="flex:1;min-width:100px;background:#2a2a2e;border-radius:6px;padding:8px;text-align:center">
-							<div style="font-size:18px">\u26A1</div>
+							<div style="font-size:18px">${energyIcon}</div>
 							<div style="font-size:14px;font-weight:700;color:#4fc3f7">${energy}</div>
-							<div style="font-size:10px;color:#888">Energy</div>
+							<div style="font-size:10px;color:#888">Energy${bottledEnergy !== '0' ? ` <span style="color:#aaa">(${bottledEnergy} \uD83C\uDF76)</span>` : ''}</div>
 						</div>
 						<div style="flex:1;min-width:100px;background:#2a2a2e;border-radius:6px;padding:8px">
 							<div style="font-size:12px;margin-bottom:4px">\uD83E\uDDB8 Heroes</div>
@@ -680,23 +706,29 @@ class UIManager {
 					<div style="display:flex;gap:6px;flex-wrap:wrap">
 						<div style="flex:1;min-width:100px;background:#2a2a2e;border-radius:6px;padding:6px 8px;text-align:center">
 							<div style="font-size:14px">\u2705</div>
-							<div style="font-size:16px;font-weight:700;color:#81c784">${dailyQuestsToday} today</div>
+							<div style="font-size:16px;font-weight:700;color:#81c784">${dailyQuestsCompleted}/${dailyQuestsTotal || '?'}</div>
 							<div style="font-size:10px;color:#888">Daily Quests</div>
 						</div>
 						<div style="flex:1;min-width:100px;background:#2a2a2e;border-radius:6px;padding:6px 8px;text-align:center">
 							<div style="font-size:14px">\uD83C\uDFF0</div>
-							<div style="font-size:16px;font-weight:700;color:#ffb74d">${guildQuestsToday} today</div>
+							<div style="font-size:16px;font-weight:700;color:#ffb74d">${guildQuestsCompleted}/${guildQuestsTotal || '?'}</div>
 							<div style="font-size:10px;color:#888">Guild Quests</div>
 						</div>
 						<div style="flex:1;min-width:100px;background:#2a2a2e;border-radius:6px;padding:6px 8px;text-align:center">
 							<div style="font-size:14px">\u2694\uFE0F</div>
-							<div style="font-size:16px;font-weight:700;color:#ef9a9a">${guildWarBattlesToday}/3</div>
+							<div style="font-size:16px;font-weight:700;color:#ef9a9a">${gwBrief.hasActiveWar ? `${gwAttacksUsed}/${gwAttacksMax}` : 'No War'}</div>
 							<div style="font-size:10px;color:#888">Guild War</div>
 						</div>
 						<div style="flex:1;min-width:100px;background:#2a2a2e;border-radius:6px;padding:6px 8px;text-align:center">
+							<div style="font-size:14px">\uD83C\uDF0D</div>
+							<div style="font-size:14px;font-weight:700;color:#ce93d8">${cowData.isActive ? `\uD83E\uDDB8${cowHeroUsed}/3 \uD83D\uDCA0${cowTitanUsed}/2` : 'No CoW'}</div>
+							<div style="font-size:10px;color:#888">Clash of Worlds</div>
+						</div>
+						<div style="flex:1;min-width:100px;background:#2a2a2e;border-radius:6px;padding:6px 8px;text-align:center">
 							<div style="font-size:14px">\uD83D\uDC32</div>
-							<div style="font-size:14px;font-weight:700;color:#4fc3f7">${guildRaidMinionToday}/9</div>
-							<div style="font-size:10px;color:#888">Raid Attacks</div>
+							<div style="font-size:14px;font-weight:700;color:#4fc3f7">${raidBossAttacksUsed}/${raidBossAttacksMax}</div>
+							<div style="font-size:10px;color:#888">Raid Boss${raidBossLevel ? ` (Lv${raidBossLevel})` : ''}</div>
+							${raidMyDamage > 0 ? `<div style="font-size:9px;color:#aaa">${raidMyDamage.toLocaleString()} dmg</div>` : ''}
 						</div>
 					</div>
 				</div>`
@@ -2960,6 +2992,21 @@ class UIManager {
 				</div>
 
 				<div class="oj-settings-group">
+					<h4>API Sample Collector</h4>
+					<p class="oj-muted" style="margin:0 0 8px;font-size:11px">
+						Captures one complete, untruncated API response per method.
+						Play the game (visit all screens), then export for AI analysis.
+					</p>
+					<div id="oj-api-sample-stats" style="font-size:11px;color:#aaa;margin-bottom:6px">
+						${this.gameTracker.getApiSampleCount()} methods sampled this session
+					</div>
+					<div class="oj-btn-row">
+						<button class="oj-btn" id="oj-export-api-samples">\uD83E\uDDEA Export API Samples</button>
+						<button class="oj-btn oj-btn-danger" id="oj-clear-api-samples">\uD83D\uDD04 Reset Samples</button>
+					</div>
+				</div>
+
+				<div class="oj-settings-group">
 					<h4>Storage Usage</h4>
 					<div id="oj-storage-stats" style="font-size:11px;color:#aaa">Loading...</div>
 				</div>
@@ -2980,7 +3027,7 @@ class UIManager {
 
 				<div class="oj-settings-group">
 					<h4>About</h4>
-					<p>OrganizedJihad \u2014 Hero Wars Tracker v0.9.2</p>
+					<p>OrganizedJihad \u2014 Hero Wars Tracker v${__OJ_VERSION__}</p>
 					<p class="oj-muted">Tracks gameplay data locally via IndexedDB. Optional C# API sync.</p>
 				</div>
 			</div>

@@ -136,6 +136,9 @@ describe('GameTracker', () => {
 
 	describe('trackPlayerData', () => {
 		test('should save a player snapshot to snapshots store', async () => {
+			// API structure matches real userGetInfo response:
+			// - No top-level `stamina` field — energy is in refillable array
+			// - refillable[id=1] = campaign energy, refillable[id=49] = bottled energy
 			const data = {
 				userId: 12345,
 				name: 'TestPlayer',
@@ -144,7 +147,11 @@ describe('GameTracker', () => {
 				power: 1500000,
 				gold: 5000000,
 				starMoney: 99999,
-				stamina: 120,
+				refillable: [
+					{ id: 1, amount: 120, lastRefill: 1000000, boughtToday: 0 },
+					{ id: 49, amount: 365, lastRefill: 1000000, boughtToday: 0 },
+					{ id: 5, amount: 1, lastRefill: 1000000, boughtToday: 0 },
+				],
 				clanTitle: 'MyGuild',
 				clanId: 888,
 			};
@@ -162,6 +169,7 @@ describe('GameTracker', () => {
 					gold: 5000000,
 					emeralds: 99999,
 					stamina: 120,
+					bottledEnergy: 365,
 					guildName: 'MyGuild',
 					guildId: 888,
 				}),

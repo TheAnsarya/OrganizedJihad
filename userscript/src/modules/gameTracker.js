@@ -1613,7 +1613,49 @@ class GameTracker {
 			await this.trackGuildWarParticipation(data);
 		}, 'trackGuildWarInfo', { category: 'guild' });
 
-		this.registerHandler('bossRaidGetInfo', async (_call, _args, data) => {
+		// ── Guild War Brief Info (#119) ─────────────────────────────────
+		// clanWarGetBriefInfo returns remaining attack tries and war status.
+		// Response: { tries, targets, arePointsMax, hasActiveWar, nextWarTime }
+		this.registerHandler('clanWarGetBriefInfo', async (_call, _args, data) => {
+			await this.storage.setMetadata('guildWarBrief', {
+				triesRemaining: data.tries ?? 0,
+				targets: data.targets ?? 0,
+				arePointsMax: data.arePointsMax ?? false,
+				hasActiveWar: data.hasActiveWar ?? false,
+				nextWarTime: data.nextWarTime || 0,
+				nearestWarEndTime: data.nearestWarEndTime || 0,
+				lastUpdate: Date.now(),
+			});
+			console.log(`[OrganizedJihad] GW brief: ${data.tries ?? 0} tries remaining, active: ${data.hasActiveWar}`);
+		}, 'trackGuildWarBrief', { category: 'guild' });
+
+		// ── Clash of Worlds (CoW) (#119) ────────────────────────────────
+		// crossClanWar_getInfo returns full CoW state including hero/titan attack usage.
+		// Response: { war: { myTries: { heroes, titans, usedHeroes, usedTitans }, enemyClan, points, enemyPoints } }
+		this.registerHandler('crossClanWar_getInfo', async (_call, _args, data) => {
+			const myTries = data.war?.myTries || {};
+			await this.storage.setMetadata('cowData', {
+				heroAttacksRemaining: myTries.heroes ?? 0,
+				titanAttacksRemaining: myTries.titans ?? 0,
+				heroAttacksMax: 3, // CoW always has 3 hero + 2 titan attacks
+				titanAttacksMax: 2,
+				usedHeroes: myTries.usedHeroes || [],
+				usedTitans: myTries.usedTitans || [],
+				ourPoints: data.war?.points || '0',
+				enemyPoints: data.war?.enemyPoints || '0',
+				enemyClan: data.war?.enemyClan?.title || null,
+				isActive: !!data.war,
+				rating: data.rating || '0',
+				division: data.division || 0,
+				league: data.league || 0,
+				lastUpdate: Date.now(),
+			});
+			console.log(`[OrganizedJihad] CoW: heroes ${3 - (myTries.heroes ?? 3)}/3, titans ${2 - (myTries.titans ?? 2)}/2`);
+		}, 'trackCowData', { category: 'guild' });
+
+		// NOTE: The actual API method is `clanRaid_getInfo`, NOT `bossRaidGetInfo` (#120)
+		// Confirmed via API Sample Collector — see ~docs/api-samples/
+		this.registerHandler('clanRaid_getInfo', async (_call, _args, data) => {
 			await this.trackRaidBossInfo(data);
 			await this.trackGuildRaidParticipation(data);
 		}, 'trackRaidBossInfo', { category: 'guild' });
@@ -2030,14 +2072,27 @@ class GameTracker {
 		const grandArenaRank = data.grandArenaRank || this.lastKnownGrandArenaRank || 0;
 		const titanArenaRank = data.titanArenaRank || this.lastKnownTitanArenaRank || 0;
 
+		// ── Energy extraction from refillable array (#116) ─────────────
+		// The userGetInfo API has NO top-level `stamina` or `energy` field.
+		// Energy is stored inside the `refillable` array:
+		//   refillable[id=1].amount  → current campaign energy (stamina)
+		//   refillable[id=49].amount → bottled energy consumables
+		//   refillable[id=5].amount  → arena attempts
+		// Each entry: { id: number, amount: number, lastRefill: number, boughtToday: number }
+		const refillables = Array.isArray(data.refillable) ? data.refillable : [];
+		const energyEntry = refillables.find((r) => r.id === 1);
+		const bottledEnergyEntry = refillables.find((r) => r.id === 49);
+		const currentEnergy = energyEntry?.amount ?? 0;
+		const bottledEnergy = bottledEnergyEntry?.amount ?? 0;
+
 		// ── Deduplication: skip if key fields unchanged since last call ───
 		// userGetInfo fires on nearly every API batch, so this prevents
 		// writing an identical snapshot row every few seconds.
 		// Note: API field is `starMoney` (camelCase), not `starmoney`
 		const playerKey = this._computeDataFingerprint([
 			data.userId, data.level, data.vipLevel, data.power,
-			data.gold, data.starMoney, data.stamina, data.clanId,
-			arenaRank, grandArenaRank, titanArenaRank,
+			data.gold, data.starMoney, currentEnergy, bottledEnergy,
+			data.clanId, arenaRank, grandArenaRank, titanArenaRank,
 		]);
 		if (playerKey === this._lastPlayerKey) {
 			return; // Identical to previous snapshot — skip write
@@ -2057,7 +2112,8 @@ class GameTracker {
 			teamPower: data.power || 0,
 			gold: data.gold || 0,
 			emeralds: data.starMoney || 0,
-			stamina: data.stamina || 0,
+			stamina: currentEnergy,
+			bottledEnergy: bottledEnergy,
 			guildName: data.clanTitle || null,
 			guildId: data.clanId || null,
 			arenaRank: arenaRank,
@@ -2081,7 +2137,8 @@ class GameTracker {
 			gold: data.gold || 0,
 			starMoney: data.starMoney || 0,
 			emeralds: data.starMoney || 0,
-			stamina: data.stamina || 0,
+			stamina: currentEnergy,
+			bottledEnergy: bottledEnergy,
 			clanId: data.clanId || null,
 			clanTitle: data.clanTitle || null,
 			vipLevel: data.vipLevel || 0,
@@ -2091,7 +2148,7 @@ class GameTracker {
 		console.log('[OrganizedJihad] Player snapshot saved:', snapshot.playerName, 'Level', snapshot.level);
 
 		// Live activity event
-		await this._logActivity('info', `Player snapshot: ${snapshot.playerName} (Lv${snapshot.level}, ${snapshot.gold?.toLocaleString()} gold, ${snapshot.emeralds?.toLocaleString()} emeralds, ${snapshot.stamina || 0} energy)`);
+		await this._logActivity('info', `Player snapshot: ${snapshot.playerName} (Lv${snapshot.level}, ${snapshot.gold?.toLocaleString()} gold, ${snapshot.emeralds?.toLocaleString()} emeralds, ${currentEnergy} energy, ${bottledEnergy} bottled)`);
 	}
 
 	/**
@@ -2940,17 +2997,31 @@ class GameTracker {
 	 * @private
 	 */
 	async trackRaidBossInfo(data) {
+		// clanRaid_getInfo response structure (from API samples):
+		//   boss: { level: 140, teams: [{ statLevel, team, unitLevel, states: [...] }] }
+		//   stats: { currentBoss: "2", points: "16606", bossKilled: [], weekStart }
+		//   userStats: { damage: "0", points: "800", usedHeroes: [] }
+		//   attempts: 0           ← boss attacks used today
+		//   bossAttempts: 5       ← max boss attacks per day
+		//   nodes: { "1": {...}, ... "9": {...} }  ← minion nodes
+		//   coins: 800            ← raid coins earned
 		const bossData = {
-			bossId: data.bossId || data.boss?.id,
-			bossLevel: data.bossLevel || data.boss?.level,
-			bossHealth: data.bossHealth || data.boss?.health,
-			maxHealth: data.maxHealth || data.boss?.maxHealth,
-			myDamage: data.myDamage || 0,
-			totalDamage: data.totalDamage || 0,
+			bossLevel: data.boss?.level || 0,
+			currentBoss: data.stats?.currentBoss || '0',
+			clanPoints: data.stats?.points || '0',
+			bossKilled: data.stats?.bossKilled || [],
+			myDamage: parseInt(data.userStats?.damage || '0', 10),
+			myPoints: parseInt(data.userStats?.points || '0', 10),
+			usedHeroes: data.userStats?.usedHeroes || [],
+			attemptsUsed: data.attempts || 0,
+			attemptsMax: data.bossAttempts || 5,
+			coins: data.coins || 0,
+			nodeCount: Object.keys(data.nodes || {}).length,
 			timestamp: Date.now(),
 		};
 
 		await this.storage.setMetadata('currentRaidBoss', bossData);
+		console.log(`[OrganizedJihad] Raid boss info: Level ${bossData.bossLevel}, boss #${bossData.currentBoss}, attacks ${bossData.attemptsUsed}/${bossData.attemptsMax}, damage ${bossData.myDamage}`);
 	}
 
 	/**
@@ -4031,14 +4102,47 @@ class GameTracker {
 	 * @private
 	 */
 	async trackQuestsData(data) {
-		const quests = data.map((quest) => ({
+		// questGetAll returns a flat array of ALL quests (daily, guild, battlepass, raid, story).
+		// Quest type identification (from API samples):
+		//   - Daily quests: ID 10001-10999 (tracked via questFarm)
+		//   - Guild quests: ID 20000xxx, reward has `clanQuestsPoints`, has `order` field
+		//   - Battle Pass: ID 1797xxxxxx+, reward has `battlePassExp`
+		//   - Clan Raid: ID 11xxx, has `order` field, consumable rewards
+		//   - Story/regular: everything else
+		// State: 1 = in-progress, 2 = completed/claimable
+		const quests = Array.isArray(data) ? data : [];
+
+		// Categorize quests for dashboard display (#117, #118)
+		const dailyQuests = quests.filter((q) => {
+			const id = q.id || 0;
+			return id >= 10001 && id <= 10999;
+		});
+		const guildQuests = quests.filter((q) => {
+			const id = q.id || 0;
+			return id >= 20000000 && id <= 20999999;
+		});
+
+		// Save categorized quest summary for dashboard
+		await this.storage.setMetadata('questSummary', {
+			dailyTotal: dailyQuests.length,
+			dailyCompleted: dailyQuests.filter((q) => q.state === 2).length,
+			guildTotal: guildQuests.length,
+			guildCompleted: guildQuests.filter((q) => q.state === 2).length,
+			allTotal: quests.length,
+			allCompleted: quests.filter((q) => q.state === 2).length,
+			lastUpdate: Date.now(),
+		});
+
+		// Also save the full quests array for detailed views
+		const questsData = quests.map((quest) => ({
 			id: quest.id,
-			state: quest.state, // 0=locked, 1=available, 2=ready to collect
+			state: quest.state,
 			progress: quest.progress || 0,
 			lastUpdate: Date.now(),
 		}));
+		await this.storage.setMetadata('questsData', questsData);
 
-		await this.storage.setMetadata('questsData', quests);
+		console.log(`[OrganizedJihad] Quests: ${dailyQuests.filter((q) => q.state === 2).length}/${dailyQuests.length} daily, ${guildQuests.filter((q) => q.state === 2).length}/${guildQuests.length} guild`);
 	}
 
 	/**
