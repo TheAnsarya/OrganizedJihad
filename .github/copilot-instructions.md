@@ -255,7 +255,7 @@ OrganizedJihad/
 5. ✅ Daily/Guild quest tracking
 6. ✅ Inventory usage tracking
 7. ✅ Mail tracking and reward collection
-8. ✅ API handler coverage — 109 handlers covering 128+ unique API methods
+8. ✅ API handler coverage — 190+ handler registrations covering virtually all known API methods
 9. ✅ Dashboard overhaul — player info, arena ranks, campaign, battle pass, gacha, guild activity
 10. ✅ Pets tab — avatars, Color column, soul stones progress
 11. ✅ Titans tab — avatars, artifacts, totem stats

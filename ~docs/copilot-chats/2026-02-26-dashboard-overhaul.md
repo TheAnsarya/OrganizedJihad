@@ -243,3 +243,45 @@ Two bugs found in `domTargeting.js` and `index.js`:
 
 ### Commits
 - `73b8a70` — fix: keep OJ badge visible during battles, fix battle end detection
+
+---
+
+## Session 6: Phase 13 — 30 New API Methods from Second Samples Export
+
+**Date**: 2026-02-27
+**Issue**: [#121](https://github.com/TheAnsarya/OrganizedJihad/issues/121) — Track 30 new API methods from second samples export
+
+### Summary
+
+Analyzed the second API samples file (`hw-api-samples-2026-02-27 (2).json`) containing 89 API methods. Cross-referenced with the ~160 existing handler registrations and found **30 unhandled methods**. Triaged them into high-value (metadata cache + dashboard), medium-value (metadata cache), and low-value (no-op) categories. Implemented all 30 handlers and added a new dashboard card row.
+
+### What Was Done
+
+1. **Analyzed** second API samples export: 89 methods total, 59 already handled, 30 new
+2. **Created** GitHub issue #121 with full triage breakdown
+3. **Implemented 30 handlers** in gameTracker.js (Phase 13 block):
+   - **High-value (11)**: `bossGetAll`, `towerGetInfo`, `expeditionGet`, `invasion_getInfo`, `workshopBuff_getInfo`, `battlePass_getSpecial`, `battlePass_farmReward`, `pet_getChest`, `adventure_getActiveData`, `adventure_getPassed`, `adventure_find`
+   - **Medium-value (10)**: `adventureSolo_getActiveData`, `chatsGetAll`, `titanArenaCheckForgotten`, `titanArenaGetChestReward`, `userGetAvailableAvatarFrames`, `userGetAvailableAvatars`, `userGetAvailableStickers`, `telegramQuestGetInfo`, `rewardedVideo_boxyGetInfo`, `saleShowcase_rewardInfo`
+   - **Low-value no-ops (10)**: `getTime`, `registration`, `tutorialGetInfo`, `splitGetAll`, `stashClient`, `freebieHaveGroup`, `mechanicAvailability`, `mechanicsBan_getInfo`, `playable_getAvailable`, `userMergeGetStatus`
+4. **Dashboard cards** added: Tower Floor, Expeditions, Outland Chests, Adventures, Workshop Buffs, Cosmetics (avatars/frames/stickers), Invasion
+5. **Updated** API-Call-Reference.md — rewrote unhandled section (virtually all methods now covered)
+
+### Files Modified
+- `userscript/src/modules/gameTracker.js` — 30 Phase 13 handler registrations (~250 lines)
+- `userscript/src/modules/uiManager.js` — New metadata loads + dashboard card row
+- `~docs/API-Call-Reference.md` — Updated unhandled section to reflect near-complete coverage
+- `~docs/copilot-chats/2026-02-26-dashboard-overhaul.md` — This session log
+
+### Key Decisions
+- **No-op handlers** for 10 system/config endpoints suppress "unhandled" API log noise without storing useless data
+- **Metadata cache** pattern used for all high/medium-value handlers (consistent with Phase 12)
+- **Outland boss chests** displayed as `collected/max` (3 chests per boss × boss count)
+- **Cosmetics** aggregated into single card with avatar/frame/sticker sub-counts
+
+### Stats
+- **Tests**: 581/581 passing (no new tests in this session — handlers are metadata-only)
+- **Build**: v0.9.46
+- **Handler registrations**: ~190+ covering virtually all known API methods
+
+### Commits
+- `96e40e0` — Fix #121: Track 30 new API methods from second samples export

@@ -1675,142 +1675,26 @@ All titan upgrade handlers write to → **IDB** `titanUpgrades`.
 
 ## 15. Unhandled but Captured Methods
 
-The API sample collector captured 112 methods. Our userscript handles ~91 handler
-registrations covering ~65+ unique API methods. The following captured methods are
-**not intercepted** by the userscript (potential future tracking targets):
+> **Updated after Phase 13 (#121)**: Of 112 originally captured methods, the userscript
+> now has **~190+ handler registrations** covering virtually all methods from both
+> API sample exports. As of v0.9.46, only the following remain without handlers:
 
-### Account / Settings
+| Method | Description | Reason |
+|--------|-------------|--------|
+| `demoBattles_getAll` | Demo battle configurations | Low value — tutorial/demo data |
 
-| Method | Description |
-|--------|-------------|
-| `settingsGetAll` | User preferences (33 keys: sounds, music, speed toggles, confirmation days) |
-| `registration` | Initial account registration data |
-| `userGetAvailableAvatars` | Available avatar frames |
-| `userGetAvailableAvatarFrames` | Available avatar frames list |
-| `userGetAvailableStickers` | Available stickers |
-| `userMergeGetStatus` | Account merge status |
-| `getTime` | Server time sync |
-| `tutorialGetInfo` | Tutorial state |
+All other previously-unhandled methods were addressed in:
 
-### Arena / Rankings
-
-| Method | Description |
-|--------|-------------|
-| `arenaGetAll` | Full arena state: rank, teams, coins, win/loss stats |
-| `titanArenaGetStatus` | Full titan arena state: rank, tier, score, 9 rivals with teams |
-| `titanArenaCheckForgotten` | Check for forgotten titan arena |
-| `titanArenaGetChestReward` | Titan arena chest rewards |
-| `topGet` | Leaderboard data |
-| `heroRating_getInfo` | Hero power ratings |
-| `hallOfFameGetTrophies` | Hall of Fame trophies |
-| `powerTournament_getState` | Power Tournament state |
-
-### Guild Extended
-
-| Method | Description |
-|--------|-------------|
-| `clanGetActivityStat` | `{ clanActivity, dungeonActivity, stat: {...} }` |
-| `clanGetWeeklyStat` | Weekly guild stats |
-| `clanGetOnline` | Currently online members |
-| `clanGetLog` | Guild activity log |
-| `clanGetActivityRewardTable` | Activity reward tiers |
-| `clanGetAvailableDailyGifts` | Available guild gifts |
-| `clanInvites_getUserInbox` | Pending guild invitations |
-| `clanWarGetDefence` | Full defense setup (40 slots, teams per member) |
-| `clanWarGetWarlordInfo` | Full war info + defense teams (47KB) |
-| `clanWarGetLeagueInfo` | War league standings |
-| `clanRaidSubscription_getInfo` | Raid subscription status |
-| `clanRaid_ratingInfo` | Raid leaderboard |
-| `clan_prestigeGetInfo` | Prestige info |
-
-### Cross-Server War
-
-| Method | Description |
-|--------|-------------|
-| `crossClanWar_getBriefInfo` | `{ status, hasActiveWar, heroTries, titanTries, heroTargets, titanTargets }` |
-| `crossClanWar_getAttackMap` | Attack plan visualization |
-| `crossClanWar_getDefencePlan` | Defense formation |
-| `crossClanWar_getSettings` | CoW settings |
-
-### Shopping / Economy
-
-| Method | Description |
-|--------|-------------|
-| `shopGetAll` | All 26 shops with slots, prices, availability |
-| `shopGet` | Single shop state |
-| `billingGetAll` | Purchase history |
-| `billingGetLast` | Latest purchase |
-| `specialOffer_getAll` | Active special offers |
-| `bundleGetAllAvailableId` | Available bundles |
-| `coopBundle_getInfo` | Co-op bundle info |
-| `subscriptionGetInfo` | VIP subscription data |
-
-### Game Data
-
-| Method | Description |
-|--------|-------------|
-| `missionGetAll` | All 220 missions: stars, attempts, wins |
-| `teamGetAll` | Saved team configurations |
-| `teamGetFavor` | Favorite teams |
-| `team_getBanners` | Team banners |
-| `team_getMaxUpgrade` | Max upgrade levels |
-| `roleAscension_getAll` | All ascension tiers |
-| `idle_getAll` | AFK/idle reward data |
-
-### Titans Extended
-
-| Method | Description |
-|--------|-------------|
-| `titanGetSummoningCircle` | Summoning circle state |
-| `titanUseSummonCircle` | Use summoning circle |
-| `titanSpirit_getAll` | All titan spirit data |
-| `artifactGetChestLevel` | Artifact chest pity level |
-| `titanArtifactGetChest` | Titan artifact chest info |
-
-### Events / Season
-
-| Method | Description |
-|--------|-------------|
-| `battlePass_getInfo` | Battle pass: `{id, clientData, battlePass: {exp, rewards, quests}}` |
-| `questGetEvents` | Event-specific quests |
-| `seasonAdventure_getInfo` | Season adventure data |
-| `newYear_getInfo` | Holiday event info |
-| `eventPicker_getInfo` | Event picker choices |
-
-### Social / Chat
-
-| Method | Description |
-|--------|-------------|
-| `chatGetAll` | Full chat history (50 messages, user profiles) |
-| `chatsGetAll` | Multi-channel: clan + xgvg |
-| `chatGetInfo` | Chat config (ban, blacklist, settings) |
-| `chatGetTalks` | DM conversations (65 talks with last message) |
-| `friendsGetInfo` | Friends list |
-| `socialQuestGetInfo` | Social quests |
-| `telegramQuestGetInfo` | Telegram-linked quests |
-| `freebieHaveGroup` | Freebie groups |
-
-### Misc
-
-| Method | Description |
-|--------|-------------|
-| `buffs_getInfo` | Active buffs |
-| `demoBattles_getAll` | Demo battle configs |
-| `mechanicAvailability` | Feature availability flags |
-| `mechanicsBan_getInfo` | Banned mechanics |
-| `playable_getAvailable` | Available playable content |
-| `rewardedVideo_boxyGetInfo` | Ad reward info |
-| `splitGetAll` | A/B test split assignments |
-| `stashClient` | Client stash data |
-| `stronghold_getInfo` | Stronghold info |
-| `banner_getAll` | Active banners |
-| `ascensionChest_getInfo` | Ascension chest data |
-| `campaignStoryGetList` | Campaign story progression |
-| `gacha_getInfo` | Gacha machine: pity counter, wishlist, next milestone |
-| `inventoryExchangeTitanStones` | Titan stone exchange |
-| `zeppelinGiftGet` | Zeppelin gift |
-| `adventureSolo_getActiveData` | Solo adventure |
-| `adventure_*` (6 methods) | Adventure lobby, join, battle, turns, find, passed |
+- **Phase 12** (#112): Guild war defense/warlord/league, weekly stats, guild log,
+  leaderboards, hero ratings, event quests, special offers, CoW, titan summoning,
+  tower state, dungeons, shops, billing, bundles, subscriptions, prestige, banners,
+  campaign story, social quests, idle, teams, buffs, stronghold, zeppelin, etc.
+- **Phase 13** (#121): 30 new methods — boss outland, tower state, expeditions,
+  invasion, workshop buffs, special battle pass, pet chest, adventures (co-op + solo),
+  chat summary, titan arena forgotten/chest, cosmetics (avatars/frames/stickers),
+  telegram quests, rewarded video, sale showcase, plus 10 system no-ops (getTime,
+  registration, tutorialGetInfo, splitGetAll, stashClient, freebieHaveGroup,
+  mechanicAvailability, mechanicsBan_getInfo, playable_getAvailable, userMergeGetStatus).
 
 ---
 
