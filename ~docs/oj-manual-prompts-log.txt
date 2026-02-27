@@ -174,8 +174,9 @@ The `Settings` tab => `About` section says  `Hero Wars Tracker v0.9.2` but it's 
 
 (userscript) See if we've got more api cals to track and show in UI, `C:\Users\me\source\repos\OrganizedJihad\~docs\api-samples\hw-api-samples-2026-02-27 (2).json` make issues, implement issues and update docs and chat/session logs, and plans, and issues, etc; continue;
 
+move the application badge to the top-left, but to the right of the `Hero Wars Dominion Era` logo
 
-
+continue working issues and making new ones;
 
 
 

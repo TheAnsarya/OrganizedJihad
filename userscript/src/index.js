@@ -201,8 +201,7 @@ import './styles/main.css';
 			#oj-status-badge {
 				position: fixed;
 				top: 8px;
-				left: 50%;
-				transform: translateX(-50%);
+				left: 200px;
 				display: flex;
 				align-items: center;
 				gap: 8px;
@@ -225,7 +224,7 @@ import './styles/main.css';
 			#oj-status-badge:hover {
 				background: #4d1a50;
 				box-shadow: 0 4px 24px rgba(59, 20, 61, 0.8), 0 0 12px rgba(200, 150, 255, 0.15);
-				transform: translateX(-50%) translateY(-1px);
+				transform: translateY(-1px);
 			}
 			.oj-badge-logo {
 				font-size: 15px;
