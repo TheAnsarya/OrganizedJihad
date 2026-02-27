@@ -210,3 +210,36 @@ Added ~50 new handler registrations covering:
 
 ### Commits
 - `df9d791` — feat: add 50+ new API handlers for comprehensive tracking
+
+---
+
+## Session 5 — Fix Badge Disappearing During Battles
+
+**Date**: 2026-02-26
+
+### Problem
+The OrganizedJihad status badge at the top center of the screen disappeared whenever the user entered an Arena or Grand Arena battle. The badge should always remain visible.
+
+### Root Cause
+Two bugs found in `domTargeting.js` and `index.js`:
+
+1. **Badge auto-hide**: The status badge was registered with `domTargeting.registerElement(statusBadge)` which auto-hides all registered elements during battles. Since the badge should always be visible, it should never have been registered.
+
+2. **Wrong battle end API names**: `BATTLE_END_CALLS` contained incorrect API names (`arenaResult`, `grandArenaResult`, `titanArenaResult`, `clanWarResult`, `clanRaidResult`, `towerResult`, `missionResult`) that the game never sends. The correct names are `arenaEnd`, `grandArenaEnd`, `titanArenaEnd`, etc. This meant the game state was never transitioning back from BATTLE → IDLE, and overlays would stay hidden permanently after a battle.
+
+### Fix
+- Removed badge from `domTargeting.registerElement()` — overlays still auto-hide, but badge stays visible
+- Fixed all `BATTLE_END_CALLS` to use correct API method names
+- Added missing battle start/end calls for dungeons, clash, tournament, expedition, raid boss, and clan dungeon
+
+### Files Modified
+- `userscript/src/index.js` — Removed badge from auto-hide registration
+- `userscript/src/modules/domTargeting.js` — Fixed BATTLE_START_CALLS and BATTLE_END_CALLS
+- `userscript/tests/domTargeting.test.js` — Updated test arrays to match correct API names
+
+### Stats
+- **Tests**: 581/581 passing (+12 new battle call coverage tests)
+- **Build**: v0.9.45
+
+### Commits
+- `73b8a70` — fix: keep OJ badge visible during battles, fix battle end detection
