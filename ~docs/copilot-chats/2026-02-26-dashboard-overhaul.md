@@ -98,3 +98,61 @@ IndexedDB storage mappings, metadata keys, and UI consumers.
   `clanWarGetWarlordInfo` (47KB defense data), `battlePass_getInfo`, `teamGetAll`
 - `refillable` array has 59 entries — only IDs 1 and 49 are mapped (energy, bottled energy)
   - ID 5 = arena attempts, rest need mapping
+
+---
+
+## Session 3: Comprehensive API Tracking Implementation (#112)
+
+### Summary
+Implemented 20+ new API handlers for previously-unhandled methods, closed issues #113-#120,
+and added new dashboard cards for arena ranks, campaign progress, battle pass, titan arena,
+gacha pity counter, and guild activity stats.
+
+### Issues Closed
+- #113 [Epic] Dashboard Player Info Overhaul (Phase 10)
+- #114 Fix Gold emoji not rendering on dashboard
+- #115 Fix Emerald emoji showing pink instead of green
+- #116 Fix Energy showing 0 + add bottled energy count
+- #117 Daily Quests: show X/Y completion format
+- #118 Guild Quests: show X/Y format + fix 111 count
+- #119 Guild War: dynamic attacks + Clash of Worlds progress
+- #120 Raid: show boss info + damage totals + fix handler
+
+### New Handlers Added to gameTracker.js
+1. `arenaGetAll` → Arena/GA ranks, total wins/losses, defense teams
+2. `missionGetAll` → Campaign progress (220 missions, stars)
+3. `titanArenaGetStatus` → Titan Arena rank, tier, daily/weekly scores
+4. `battlePass_getInfo` → Battle pass level, XP, ticket type, rewards claimed
+5. `crossClanWar_getBriefInfo` → CoW brief status, merges with existing cowData
+6. `clanGetActivityStat` → Guild activity/dungeon points, weekly totals
+7. `gacha_getInfo` → Gacha pity counter, total pulls, next milestone
+8. `teamGetAll` → 30+ named team compositions (arena, GW, CoW, raids)
+9. `shopGetAll` → All 26 shops, slot counts, bought/available items
+10. `friendsGetInfo` → Friends list (account/user counts)
+11. `buffs_getInfo` → Active buffs
+12. `ascensionChest_getInfo` → Ascension chest data
+13. `stronghold_getInfo` → Stronghold info
+14. `idle_getAll` → AFK/idle reward data
+15. `chatGetAll` → Full chat history
+16. `chatGetTalks` → DM conversations
+17. `roleAscension_getAll` → All ascension tiers
+18. `titanSpirit_getAll` → Titan spirit data
+
+### New Dashboard Cards
+- **Arena Rank**: Shows current arena rank with all-time win rate
+- **Grand Arena**: Grand Arena rank
+- **Titan Arena**: Rank + tier + daily score
+- **Campaign Stars**: X/Y stars + ★★★ mission count
+- **Battle Pass**: Level + ticket type + XP earned
+- **Gacha Pity**: Pulls until next pity milestone + total pulls
+- **Guild Activity** (conditional row): Today's activity, dungeon activity, weekly total
+
+### Files Modified
+- `userscript/src/modules/gameTracker.js` — 20+ new handler registrations (~280 lines added)
+- `userscript/src/modules/uiManager.js` — New dashboard metadata reads + 3 rows of cards
+
+### Tests
+- 569/569 passing, 16 suites
+
+### Commits
+- `b82b1ea` — feat: add 20+ new API handlers + dashboard cards (#112)
