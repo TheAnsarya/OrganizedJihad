@@ -1990,10 +1990,8 @@ class GameTracker {
 			}
 		}, 'trackSeerFarm', { category: 'quests' });
 
-		// ── Tower Get State (#112) ──────────────────────────────────────
-		this.registerHandler('towerGetState', async (_call, _args, data) => {
-			await this._trackGenericEvent('tower', 'towerState', {}, data);
-		}, 'trackTowerState', { category: 'battles' });
+		// NOTE: towerGetState handler is defined below in Phase 12 block
+		// with richer metadata caching (floor, teamHealth, etc.)
 
 		// ── Clash of Worlds (#112) ──────────────────────────────────────
 		this.registerHandler(['clashGetInfo', 'clashBattle', 'clashEnd'], async (callName, args, data) => {
@@ -2570,15 +2568,9 @@ class GameTracker {
 			});
 		}, 'trackTowerState', { category: 'player' });
 
-		// ── Dungeon State ───────────────────────────────────────────────
-		// dungeonEnd and titanDungeonEnd — battle completion tracking
-		this.registerHandler('dungeonEnd', async (callName, args, data) => {
-			await this.trackBattleResult(callName, args, data);
-		}, 'trackDungeonEnd', { category: 'battles' });
-
-		this.registerHandler('titanDungeonEnd', async (callName, args, data) => {
-			await this.trackBattleResult(callName, args, data);
-		}, 'trackTitanDungeonEnd', { category: 'battles' });
+		// NOTE: dungeonEnd/titanDungeonEnd already registered in core
+		// battle handlers above as ['dungeonBattle','dungeonEnd'] and
+		// ['titanDungeonBattle','titanDungeonEnd']
 
 		// ── Titan Summoning Circle ──────────────────────────────────────
 		this.registerHandler('titanGetSummoningCircle', async (_call, _args, data) => {

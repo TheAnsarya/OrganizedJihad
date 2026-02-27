@@ -783,27 +783,32 @@ class UIManager {
 							<div style="font-size:14px">\u2705</div>
 							<div style="font-size:16px;font-weight:700;color:#81c784">${dailyQuestsCompleted}/${dailyQuestsTotal || '?'}</div>
 							<div style="font-size:10px;color:#888">Daily Quests</div>
+							${this._stalenessTag(questSummary.lastUpdate)}
 						</div>
 						<div style="flex:1;min-width:100px;background:#2a2a2e;border-radius:6px;padding:6px 8px;text-align:center">
 							<div style="font-size:14px">\uD83C\uDFF0</div>
 							<div style="font-size:16px;font-weight:700;color:#ffb74d">${guildQuestsCompleted}/${guildQuestsTotal || '?'}</div>
 							<div style="font-size:10px;color:#888">Guild Quests</div>
+							${this._stalenessTag(questSummary.lastUpdate)}
 						</div>
 						<div style="flex:1;min-width:100px;background:#2a2a2e;border-radius:6px;padding:6px 8px;text-align:center">
 							<div style="font-size:14px">\u2694\uFE0F</div>
 							<div style="font-size:16px;font-weight:700;color:#ef9a9a">${gwBrief.hasActiveWar ? `${gwAttacksUsed}/${gwAttacksMax}` : 'No War'}</div>
 							<div style="font-size:10px;color:#888">Guild War</div>
+							${this._stalenessTag(gwBrief.lastUpdate)}
 						</div>
 						<div style="flex:1;min-width:100px;background:#2a2a2e;border-radius:6px;padding:6px 8px;text-align:center">
 							<div style="font-size:14px">\uD83C\uDF0D</div>
 							<div style="font-size:14px;font-weight:700;color:#ce93d8">${cowData.isActive ? `\uD83E\uDDB8${cowHeroUsed}/3 \uD83D\uDCA0${cowTitanUsed}/2` : 'No CoW'}</div>
 							<div style="font-size:10px;color:#888">Clash of Worlds</div>
+							${this._stalenessTag(cowData.lastUpdate)}
 						</div>
 						<div style="flex:1;min-width:100px;background:#2a2a2e;border-radius:6px;padding:6px 8px;text-align:center">
 							<div style="font-size:14px">\uD83D\uDC32</div>
 							<div style="font-size:14px;font-weight:700;color:#4fc3f7">${raidBossAttacksUsed}/${raidBossAttacksMax}</div>
 							<div style="font-size:10px;color:#888">Raid Boss${raidBossLevel ? ` (Lv${raidBossLevel})` : ''}</div>
 							${raidMyDamage > 0 ? `<div style="font-size:9px;color:#aaa">${raidMyDamage.toLocaleString()} dmg</div>` : ''}
+							${this._stalenessTag(raidBoss.lastUpdate)}
 						</div>
 					</div>
 					<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px">
@@ -812,6 +817,7 @@ class UIManager {
 							<div style="font-size:16px;font-weight:700;color:#4fc3f7">${arenaStats.arenaPlace ? `#${arenaStats.arenaPlace}` : '\u2014'}</div>
 							<div style="font-size:10px;color:#888">Arena Rank</div>
 							${arenaStats.totalBattles ? `<div style="font-size:9px;color:#aaa">${arenaStats.winRate}% WR (${arenaStats.totalWins}/${arenaStats.totalBattles})</div>` : ''}
+							${this._stalenessTag(arenaStats.lastUpdate)}
 						</div>
 						<div style="flex:1;min-width:100px;background:#2a2a2e;border-radius:6px;padding:6px 8px;text-align:center">
 							<div style="font-size:14px">\uD83C\uDFDF\uFE0F</div>
@@ -823,24 +829,28 @@ class UIManager {
 							<div style="font-size:16px;font-weight:700;color:#ce93d8">${titanArenaStats.rank ? `#${titanArenaStats.rank}` : '\u2014'}</div>
 							<div style="font-size:10px;color:#888">Titan Arena</div>
 							${titanArenaStats.tier ? `<div style="font-size:9px;color:#aaa">T${titanArenaStats.tier} · ${titanArenaStats.dailyScore?.toLocaleString() || 0} today</div>` : ''}
+							${this._stalenessTag(titanArenaStats.lastUpdate)}
 						</div>
 						<div style="flex:1;min-width:100px;background:#2a2a2e;border-radius:6px;padding:6px 8px;text-align:center">
 							<div style="font-size:14px">\uD83D\uDDFA\uFE0F</div>
 							<div style="font-size:14px;font-weight:700;color:#81c784">${campaignProgress.totalStars ? `${campaignProgress.totalStars}/${campaignProgress.maxStars}` : '\u2014'}</div>
 							<div style="font-size:10px;color:#888">Campaign Stars</div>
 							${campaignProgress.threeStarMissions ? `<div style="font-size:9px;color:#aaa">${campaignProgress.threeStarMissions}/${campaignProgress.totalMissions} ★★★</div>` : ''}
+							${this._stalenessTag(campaignProgress.lastUpdate)}
 						</div>
 						<div style="flex:1;min-width:100px;background:#2a2a2e;border-radius:6px;padding:6px 8px;text-align:center">
 							<div style="font-size:14px">\uD83C\uDFAB</div>
 							<div style="font-size:14px;font-weight:700;color:#fff176">${battlePassData.currentLevel ? `Lv${battlePassData.currentLevel}` : '\u2014'}</div>
 							<div style="font-size:10px;color:#888">Battle Pass${battlePassData.ticketLabel ? ` (${battlePassData.ticketLabel})` : ''}</div>
 							${battlePassData.exp ? `<div style="font-size:9px;color:#aaa">${battlePassData.exp?.toLocaleString()} XP</div>` : ''}
+							${this._stalenessTag(battlePassData.lastUpdate)}
 						</div>
 						<div style="flex:1;min-width:100px;background:#2a2a2e;border-radius:6px;padding:6px 8px;text-align:center">
 							<div style="font-size:14px">\uD83C\uDFB0</div>
 							<div style="font-size:14px;font-weight:700;color:#ef9a9a">${gachaData.pullsUntilPity != null && gachaData.pullsUntilPity >= 0 ? gachaData.pullsUntilPity : '\u2014'}</div>
 							<div style="font-size:10px;color:#888">Pity Counter</div>
 							${gachaData.totalOpenings ? `<div style="font-size:9px;color:#aaa">${gachaData.totalOpenings?.toLocaleString()} total pulls</div>` : ''}
+							${this._stalenessTag(gachaData.lastUpdate)}
 						</div>
 					</div>
 					${guildActivity.todayActivity ? `<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px">
@@ -848,6 +858,7 @@ class UIManager {
 							<div style="font-size:14px">\u2B50</div>
 							<div style="font-size:14px;font-weight:700;color:#90caf9">${guildActivity.todayActivity.toLocaleString()}</div>
 							<div style="font-size:10px;color:#888">Guild Activity Today</div>
+							${this._stalenessTag(guildActivity.lastUpdate)}
 						</div>
 						<div style="flex:1;min-width:140px;background:#2a2a2e;border-radius:6px;padding:6px 8px;text-align:center">
 							<div style="font-size:14px">\uD83C\uDFF0</div>
@@ -866,28 +877,33 @@ class UIManager {
 							<div style="font-size:16px;font-weight:700;color:#b39ddb">F${towerState.floorNumber}</div>
 							<div style="font-size:10px;color:#888">Tower Floor</div>
 							<div style="font-size:9px;color:#aaa">${Number(towerState.points || 0).toLocaleString()} pts${towerState.maySkipFloor ? ` · Skip\u2264${towerState.maySkipFloor}` : ''}</div>
+							${this._stalenessTag(towerState.lastUpdate)}
 						</div>` : ''}
 						${expeditionSlots.totalSlots ? `<div style="flex:1;min-width:100px;background:#2a2a2e;border-radius:6px;padding:6px 8px;text-align:center">
 							<div style="font-size:14px">\u26F5</div>
 							<div style="font-size:16px;font-weight:700;color:#80cbc4">${expeditionSlots.completeCount}/${expeditionSlots.totalSlots}</div>
 							<div style="font-size:10px;color:#888">Expeditions</div>
 							${expeditionSlots.activeCount ? `<div style="font-size:9px;color:#aaa">${expeditionSlots.activeCount} active</div>` : ''}
+							${this._stalenessTag(expeditionSlots.lastUpdate)}
 						</div>` : ''}
 						${outlandBosses.bossCount ? `<div style="flex:1;min-width:100px;background:#2a2a2e;border-radius:6px;padding:6px 8px;text-align:center">
 							<div style="font-size:14px">\uD83D\uDC80</div>
 							<div style="font-size:16px;font-weight:700;color:#ef9a9a">${outlandBosses.totalChests}/${outlandBosses.bossCount * 3}</div>
 							<div style="font-size:10px;color:#888">Outland Chests</div>
+							${this._stalenessTag(outlandBosses.lastUpdate)}
 						</div>` : ''}
 						${adventurePassed.totalAdventures ? `<div style="flex:1;min-width:100px;background:#2a2a2e;border-radius:6px;padding:6px 8px;text-align:center">
 							<div style="font-size:14px">\uD83D\uDDFA\uFE0F</div>
 							<div style="font-size:16px;font-weight:700;color:#a5d6a7">${adventurePassed.totalCompletions}</div>
 							<div style="font-size:10px;color:#888">Adventures</div>
 							<div style="font-size:9px;color:#aaa">${adventurePassed.totalAdventures} maps</div>
+							${this._stalenessTag(adventurePassed.lastUpdate)}
 						</div>` : ''}
 						${workshopBuffs.totalBuffs ? `<div style="flex:1;min-width:100px;background:#2a2a2e;border-radius:6px;padding:6px 8px;text-align:center">
 							<div style="font-size:14px">\uD83D\uDD27</div>
 							<div style="font-size:16px;font-weight:700;color:#ffcc80">${workshopBuffs.activeBuffs}/${workshopBuffs.totalBuffs}</div>
 							<div style="font-size:10px;color:#888">Workshop Buffs</div>
+							${this._stalenessTag(workshopBuffs.lastUpdate)}
 						</div>` : ''}
 						${(cosmeticCounts.avatars + cosmeticCounts.frames + cosmeticCounts.stickers) > 0 ? `<div style="flex:1;min-width:100px;background:#2a2a2e;border-radius:6px;padding:6px 8px;text-align:center">
 							<div style="font-size:14px">\uD83C\uDFA8</div>
@@ -900,6 +916,7 @@ class UIManager {
 							<div style="font-size:16px;font-weight:700;color:#ff8a65">Active</div>
 							<div style="font-size:10px;color:#888">Invasion</div>
 							${invasionData.bestPlace ? `<div style="font-size:9px;color:#aaa">Best: #${invasionData.bestPlace}</div>` : ''}
+							${this._stalenessTag(invasionData.lastUpdate)}
 						</div>` : ''}
 					</div>` : ''}
 				</div>`
@@ -1221,7 +1238,8 @@ class UIManager {
 		}
 
 		// Render color-coded activity events
-		const rows = events.slice(0, 100).map((evt) => {
+		const displayLimit = 100;
+		const rows = events.slice(0, displayLimit).map((evt) => {
 			const time = evt.timestamp ? new Date(evt.timestamp).toLocaleTimeString() : '\u2014';
 			const colorClass = this._activityColorClass(evt);
 			const icon = this._activityIcon(evt);
@@ -1236,7 +1254,7 @@ class UIManager {
 
 		return `
 			<div class="oj-activity">
-				<h3>\uD83D\uDCE1 Live Activity Feed <span class="oj-muted">(${events.length} events)</span></h3>
+				<h3>\uD83D\uDCE1 Live Activity Feed <span class="oj-muted">(showing ${Math.min(events.length, displayLimit)} of ${events.length} events)</span></h3>
 				<div class="oj-activity-list">${rows}</div>
 			</div>
 		`;
@@ -3989,6 +4007,44 @@ class UIManager {
 		const div = document.createElement('div');
 		div.textContent = str;
 		return div.innerHTML;
+	}
+
+	/**
+	 * Format a timestamp as a human-readable relative time string (#123).
+	 * Returns empty string if timestamp is falsy.
+	 *
+	 * @param {number|null} timestamp - Unix timestamp in ms (from Date.now())
+	 * @returns {string} Relative time string, e.g. "2m ago", "3h ago", "1d ago"
+	 */
+	_timeAgo(timestamp) {
+		if (!timestamp) return '';
+		const diff = Date.now() - timestamp;
+		if (diff < 0) return 'just now';
+		const secs = Math.floor(diff / 1000);
+		if (secs < 60) return 'just now';
+		const mins = Math.floor(secs / 60);
+		if (mins < 60) return `${mins}m ago`;
+		const hours = Math.floor(mins / 60);
+		if (hours < 24) return `${hours}h ago`;
+		const days = Math.floor(hours / 24);
+		if (days < 7) return `${days}d ago`;
+		return `${Math.floor(days / 7)}w ago`;
+	}
+
+	/**
+	 * Render a tiny staleness indicator for dashboard cards (#123).
+	 * Shows the relative time in a muted style. Warns if data is stale (>24h).
+	 *
+	 * @param {number|null} lastUpdate - Timestamp from metadata `lastUpdate`
+	 * @returns {string} HTML string for the staleness indicator
+	 */
+	_stalenessTag(lastUpdate) {
+		if (!lastUpdate) return '';
+		const ago = this._timeAgo(lastUpdate);
+		if (!ago) return '';
+		const isStale = (Date.now() - lastUpdate) > 24 * 60 * 60 * 1000;
+		const color = isStale ? '#ef9a9a' : '#666';
+		return `<div style="font-size:8px;color:${color};margin-top:1px">${ago}</div>`;
 	}
 
 	/**
