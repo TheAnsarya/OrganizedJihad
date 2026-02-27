@@ -536,6 +536,67 @@ class IndexedDBStorage {
 	}
 
 	/**
+	 * Add multiple records in a single IDB transaction.
+	 * Much faster than calling `add()` per record because it avoids
+	 * per-record transaction overhead. ConstraintErrors on individual
+	 * writes are silently skipped (prevents duplicates without aborting). (#141)
+	 *
+	 * @param {string} storeName - Object store name
+	 * @param {Array<object>} records - Array of records to insert
+	 * @returns {Promise<number[]>} - Array of generated keys (0 for skipped records)
+	 */
+	async addBatch(storeName, records) {
+		if (!records || records.length === 0) return [];
+		await this._ensureDb();
+		return new Promise((resolve, reject) => {
+			const transaction = this.db.transaction([storeName], 'readwrite');
+			const store = transaction.objectStore(storeName);
+			const keys = new Array(records.length).fill(0);
+
+			for (let i = 0; i < records.length; i++) {
+				const req = store.add(records[i]);
+				const idx = i;
+				req.onsuccess = () => { keys[idx] = req.result; };
+				req.onerror = (e) => {
+					// Swallow ConstraintError (duplicate) without aborting tx
+					if (req.error?.name === 'ConstraintError') {
+						e.preventDefault();
+					}
+				};
+			}
+
+			transaction.oncomplete = () => resolve(keys);
+			transaction.onerror = () => reject(transaction.error);
+		});
+	}
+
+	/**
+	 * Put multiple records (upsert) in a single IDB transaction. (#141)
+	 *
+	 * @param {string} storeName - Object store name
+	 * @param {Array<object>} records - Array of records to upsert
+	 * @returns {Promise<number[]>} - Array of generated/existing keys
+	 */
+	async putBatch(storeName, records) {
+		if (!records || records.length === 0) return [];
+		await this._ensureDb();
+		return new Promise((resolve, reject) => {
+			const transaction = this.db.transaction([storeName], 'readwrite');
+			const store = transaction.objectStore(storeName);
+			const keys = new Array(records.length).fill(0);
+
+			for (let i = 0; i < records.length; i++) {
+				const req = store.put(records[i]);
+				const idx = i;
+				req.onsuccess = () => { keys[idx] = req.result; };
+			}
+
+			transaction.oncomplete = () => resolve(keys);
+			transaction.onerror = () => reject(transaction.error);
+		});
+	}
+
+	/**
 	 * Update or insert a record (upsert)
 	 * @param {string} storeName - Object store name
 	 * @param {object} data - Data to put

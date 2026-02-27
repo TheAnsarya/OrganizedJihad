@@ -49,7 +49,9 @@ describe('GameTracker', () => {
 			init: jest.fn().mockResolvedValue(true),
 			initPromise: Promise.resolve(true),
 			add: jest.fn().mockResolvedValue(1),
+			addBatch: jest.fn().mockResolvedValue([]),
 			put: jest.fn().mockResolvedValue(1),
+			putBatch: jest.fn().mockResolvedValue([]),
 			get: jest.fn().mockResolvedValue(undefined),
 			getAll: jest.fn().mockResolvedValue([]),
 			getByIndex: jest.fn().mockResolvedValue([]),
@@ -612,7 +614,7 @@ describe('GameTracker', () => {
 
 			await tracker.trackConsumableOpening(args, data, 'artifactChest');
 
-			// 1 chest record + 2 consumableRewards drops + 1 activityEvent + 1 resource transaction (gold)
+			// Chest record still uses single add()
 			expect(mockStorage.add).toHaveBeenCalledWith(
 				'chests',
 				expect.objectContaining({
@@ -623,26 +625,25 @@ describe('GameTracker', () => {
 				}),
 			);
 
-			expect(mockStorage.add).toHaveBeenCalledWith(
+			// Drops now use addBatch() (#141)
+			expect(mockStorage.addBatch).toHaveBeenCalledWith(
 				'consumableRewards',
-				expect.objectContaining({
-					sourceType: 'artifactChest',
-					sourceId: '100',
-					itemType: 'consumable',
-					itemId: '45',
-					quantity: 1,
-					openingId: 42,
-				}),
-			);
-
-			expect(mockStorage.add).toHaveBeenCalledWith(
-				'consumableRewards',
-				expect.objectContaining({
-					itemType: 'gold',
-					itemId: 'gold',
-					quantity: 500,
-					openingId: 42,
-				}),
+				expect.arrayContaining([
+					expect.objectContaining({
+						sourceType: 'artifactChest',
+						sourceId: '100',
+						itemType: 'consumable',
+						itemId: '45',
+						quantity: 1,
+						openingId: 42,
+					}),
+					expect.objectContaining({
+						itemType: 'gold',
+						itemId: 'gold',
+						quantity: 500,
+						openingId: 42,
+					}),
+				]),
 			);
 		});
 

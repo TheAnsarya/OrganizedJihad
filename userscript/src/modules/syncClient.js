@@ -90,7 +90,16 @@ class SyncClient {
 	}
 
 	/**
-	 * Sync data from browser to API
+	 * Sync data from browser to API.
+	 * Uses incremental sync: only sends records newer than the last
+	 * successful sync timestamp, keeping payloads small. (#135, #140)
+	 *
+	 * Stores with a `timestamp` index use `getByIndexRange()`.
+	 * Stores with other time-like indexes (completedAt, purchasedAt, claimedAt)
+	 * also use bounded queries. Small mutable stores (opponents, missionProgress,
+	 * towerProgress, goals, events) always send all records since they're
+	 * upsert-based and tiny.
+	 *
 	 * @param {IndexedDBStorage} storage - IndexedDB storage instance
 	 * @returns {Promise<object>} - Sync result with counts
 	 */
@@ -98,11 +107,38 @@ class SyncClient {
 		console.log('[OrganizedJihad] Starting sync to server...');
 
 		try {
-			// Gather all data from IndexedDB — Phase 1-7 entities
-			const [snapshots, battles, chests, opponents, goals, events] = await Promise.all([
-				storage.getAll('snapshots'),
-				storage.getAll('battles'),
-				storage.getAll('chests'),
+			// ── Determine incremental boundary ─────────────────────────
+			const lastSync = await storage.getMetadata('lastSync', null);
+			const hasLastSync = !!lastSync;
+			// Some stores use epoch-ms timestamps (chests), so pre-compute both formats
+			const lastSyncEpoch = hasLastSync ? new Date(lastSync).getTime() : 0;
+
+			/**
+			 * Helper: fetch records newer than lastSync via an index, or
+			 * fall back to getAll() on the very first sync.
+			 * @param {string} store - IDB store name
+			 * @param {string} indexName - Index to range-query
+			 * @param {'iso'|'epoch'} format - Timestamp format used in the store
+			 * @returns {Promise<Array>}
+			 */
+			const getSince = (store, indexName = 'timestamp', format = 'iso') => {
+				if (!hasLastSync) return storage.getAll(store);
+				const lower = format === 'epoch' ? lastSyncEpoch : lastSync;
+				return storage.getByIndexRange(store, indexName, {
+					lower,
+					lowerOpen: true,
+				});
+			};
+
+			// ── Gather data — bounded queries where possible ───────────
+			const [snapshots, battles, chests] = await Promise.all([
+				getSince('snapshots'),
+				getSince('battles'),
+				getSince('chests', 'timestamp', 'epoch'), // chests store uses Date.now() (numeric)
+			]);
+
+			// Small mutable / non-timestamped stores — always send all
+			const [opponents, goals, events] = await Promise.all([
 				storage.getAll('opponents'),
 				storage.getAll('goals'),
 				storage.getAll('events'),
@@ -127,36 +163,60 @@ class SyncClient {
 
 			// Get all new entity types added in Phase 7
 			// Decompress hero/titan compressed batch records (#43)
-			const heroesRaw = await storage.getAll('heroes');
+			const heroesRaw = await getSince('heroes');
 			const heroes = decompressHeroStore(heroesRaw);
-			const titansRaw = await storage.getAll('titans');
+			const titansRaw = await getSince('titans');
 			const titans = decompressTitanStore(titansRaw);
-			const pets = await storage.getAll('pets');
-			const inventorySnapshots = await storage.getAll('inventory');
+			const pets = await getSince('pets');
+			const inventorySnapshots = await getSince('inventory');
 			const currentInventory =
 				inventorySnapshots.length > 0
 					? inventorySnapshots.reduce((latest, current) =>
 							new Date(current.timestamp) > new Date(latest.timestamp) ? current : latest
 						)
 					: null;
-			const questCompletions = await storage.getAll('questCompletions');
+
+			// Stores with non-standard time indexes
+			const questCompletions = hasLastSync
+				? await storage.getByIndexRange('questCompletions', 'completedAt', { lower: lastSync, lowerOpen: true })
+				: await storage.getAll('questCompletions');
+
+			// Mutable keyed stores — always send all (tiny)
 			const missionProgress = await storage.getAll('missionProgress');
-			const shopPurchases = await storage.getAll('shopPurchases');
 			const towerProgress = await storage.getAll('towerProgress');
-			const expeditionBattles = await storage.getAll('expeditionBattles');
-			const resourceTransactions = await storage.getAll('resourceTransactions');
-			const guildActivities = await storage.getAll('guildActivities');
+
+			const shopPurchases = hasLastSync
+				? await storage.getByIndexRange('shopPurchases', 'purchasedAt', { lower: lastSync, lowerOpen: true })
+				: await storage.getAll('shopPurchases');
+
+			const [expeditionBattles, resourceTransactions, guildActivities] = await Promise.all([
+				getSince('expeditionBattles'),
+				getSince('resourceTransactions'),
+				getSince('guildActivities'),
+			]);
 
 			// Phase 8: Gather upgrade, daily activity, and inventory tracking data
-			const [heroUpgrades, titanUpgrades, dailyQuestCompletions, guildQuestCompletions, loginRewards, inventoryItemUsages, equipmentChanges] =
+			// Stores with `timestamp` index use incremental query;
+			// stores with `completedAt`/`claimedAt` indexes use those instead.
+			const [heroUpgrades, titanUpgrades, inventoryItemUsages, equipmentChanges] =
 				await Promise.all([
-					storage.getAll('heroUpgrades'),
-					storage.getAll('titanUpgrades'),
-					storage.getAll('dailyQuestCompletions'),
-					storage.getAll('guildQuestCompletions'),
-					storage.getAll('loginRewards'),
-					storage.getAll('inventoryItemUsages'),
-					storage.getAll('equipmentChanges'),
+					getSince('heroUpgrades'),
+					getSince('titanUpgrades'),
+					getSince('inventoryItemUsages'),
+					getSince('equipmentChanges'),
+				]);
+
+			const [dailyQuestCompletions, guildQuestCompletions, loginRewards] =
+				await Promise.all([
+					hasLastSync
+						? storage.getByIndexRange('dailyQuestCompletions', 'completedAt', { lower: lastSync, lowerOpen: true })
+						: storage.getAll('dailyQuestCompletions'),
+					hasLastSync
+						? storage.getByIndexRange('guildQuestCompletions', 'completedAt', { lower: lastSync, lowerOpen: true })
+						: storage.getAll('guildQuestCompletions'),
+					hasLastSync
+						? storage.getByIndexRange('loginRewards', 'claimedAt', { lower: lastSync, lowerOpen: true })
+						: storage.getAll('loginRewards'),
 				]);
 
 			// Categorize hero upgrades by type in a single pass (#136)
@@ -274,8 +334,9 @@ class SyncClient {
 
 			const result = await response.json();
 
-			// Update last sync timestamp in local storage
-			await storage.setMetadata('lastSync', result.timestamp);
+			// Update last sync timestamp in local storage.
+			// API returns camelCase `syncTimestamp` (C# SyncTimestamp via ASP.NET serialization).
+			await storage.setMetadata('lastSync', result.syncTimestamp);
 
 			// Persist sync status for the dashboard status panel (#130)
 			await storage.setMetadata('syncStatus', {

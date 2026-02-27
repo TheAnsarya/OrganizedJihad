@@ -51,6 +51,10 @@ function createMockStorage(overrides = {}) {
 
 	return {
 		getAll: jest.fn((storeName) => Promise.resolve(stores[storeName] || [])),
+		// getByIndexRange returns the same data as getAll for mock purposes;
+		// real filtering is tested in indexedDBStorage tests. (#135/#140)
+		getByIndexRange: jest.fn((storeName) => Promise.resolve(stores[storeName] || [])),
+		getMetadata: jest.fn(() => Promise.resolve(null)),
 		setMetadata: jest.fn(() => Promise.resolve()),
 	};
 }
@@ -267,7 +271,7 @@ describe('syncToServer', () => {
 			],
 		});
 
-		const apiResult = { timestamp: '2025-01-02T12:00:00Z', imported: 42 };
+		const apiResult = { syncTimestamp: '2025-01-02T12:00:00Z', imported: 42 };
 		global.fetch.mockResolvedValue({
 			ok: true,
 			json: () => Promise.resolve(apiResult),
@@ -319,8 +323,8 @@ describe('syncToServer', () => {
 		expect(body.titanArtifactUpgrades).toHaveLength(1);
 		expect(body.titanSkinUpgrades).toHaveLength(1);
 
-		// Should update local metadata
-		expect(storage.setMetadata).toHaveBeenCalledWith('lastSync', apiResult.timestamp);
+		// Should update local metadata (API returns camelCase `syncTimestamp`)
+		expect(storage.setMetadata).toHaveBeenCalledWith('lastSync', apiResult.syncTimestamp);
 
 		// Should write success syncStatus (#130)
 		const syncStatusCall = storage.setMetadata.mock.calls.find(
@@ -337,7 +341,7 @@ describe('syncToServer', () => {
 		const storage = createMockStorage();
 		global.fetch.mockResolvedValue({
 			ok: true,
-			json: () => Promise.resolve({ timestamp: 'now' }),
+			json: () => Promise.resolve({ syncTimestamp: 'now' }),
 		});
 
 		await client.syncToServer(storage);
@@ -357,7 +361,7 @@ describe('syncToServer', () => {
 		});
 		global.fetch.mockResolvedValue({
 			ok: true,
-			json: () => Promise.resolve({ timestamp: 'now' }),
+			json: () => Promise.resolve({ syncTimestamp: 'now' }),
 		});
 
 		await client.syncToServer(storage);
@@ -382,6 +386,127 @@ describe('syncToServer', () => {
 		global.fetch.mockRejectedValue(new Error('Network down'));
 
 		await expect(client.syncToServer(storage)).rejects.toThrow('Network down');
+	});
+
+	test('should use getAll for first sync when no lastSync exists (#135)', async () => {
+		const storage = createMockStorage({
+			snapshots: [{ timestamp: '2025-01-01T00:00:00Z', level: 100 }],
+		});
+		// getMetadata returns null → first sync → should call getAll not getByIndexRange
+		storage.getMetadata.mockResolvedValue(null);
+
+		global.fetch.mockResolvedValue({
+			ok: true,
+			json: () => Promise.resolve({ syncTimestamp: '2025-01-01T12:00:00Z' }),
+		});
+
+		await client.syncToServer(storage);
+
+		// getAll should be called for stores on first sync
+		expect(storage.getAll).toHaveBeenCalled();
+		// getByIndexRange should NOT be called when there's no lastSync
+		expect(storage.getByIndexRange).not.toHaveBeenCalled();
+	});
+
+	test('should use getByIndexRange for incremental sync when lastSync exists (#135)', async () => {
+		const lastSyncTs = '2025-01-01T00:00:00Z';
+		const storage = createMockStorage({
+			snapshots: [{ timestamp: '2025-01-02T00:00:00Z', level: 101 }],
+		});
+		storage.getMetadata.mockResolvedValue(lastSyncTs);
+
+		global.fetch.mockResolvedValue({
+			ok: true,
+			json: () => Promise.resolve({ syncTimestamp: '2025-01-02T12:00:00Z' }),
+		});
+
+		await client.syncToServer(storage);
+
+		// getByIndexRange should be called for timestamped stores
+		expect(storage.getByIndexRange).toHaveBeenCalled();
+
+		// Should have been called with the lastSync as lower bound
+		const rangeCall = storage.getByIndexRange.mock.calls.find(
+			([store]) => store === 'snapshots'
+		);
+		expect(rangeCall).toBeDefined();
+		expect(rangeCall[1]).toBe('timestamp');
+		expect(rangeCall[2]).toEqual({ lower: lastSyncTs, lowerOpen: true });
+	});
+
+	test('should pass epoch lower bound for chests store (#140)', async () => {
+		const lastSyncTs = '2025-01-15T12:00:00Z';
+		const lastSyncEpoch = new Date(lastSyncTs).getTime();
+		const storage = createMockStorage({
+			chests: [{ chestType: 'daily', timestamp: Date.now() }],
+		});
+		storage.getMetadata.mockResolvedValue(lastSyncTs);
+
+		global.fetch.mockResolvedValue({
+			ok: true,
+			json: () => Promise.resolve({ syncTimestamp: '2025-01-15T13:00:00Z' }),
+		});
+
+		await client.syncToServer(storage);
+
+		const chestsCall = storage.getByIndexRange.mock.calls.find(
+			([store]) => store === 'chests'
+		);
+		expect(chestsCall).toBeDefined();
+		expect(chestsCall[1]).toBe('timestamp');
+		// Chests use epoch (numeric) lower bound
+		expect(chestsCall[2]).toEqual({ lower: lastSyncEpoch, lowerOpen: true });
+	});
+
+	test('should still use getAll for mutable stores even with lastSync (#135)', async () => {
+		const storage = createMockStorage({
+			opponents: [{ id: 1, name: 'Rival' }],
+			goals: [{ id: 1, target: 'level 120' }],
+			events: [{ id: 1, eventName: 'Holiday' }],
+			missionProgress: [{ missionId: 1, stars: 3 }],
+			towerProgress: [{ floor: 50 }],
+		});
+		storage.getMetadata.mockResolvedValue('2025-01-01T00:00:00Z');
+
+		global.fetch.mockResolvedValue({
+			ok: true,
+			json: () => Promise.resolve({ syncTimestamp: '2025-01-02T00:00:00Z' }),
+		});
+
+		await client.syncToServer(storage);
+
+		// Mutable stores should always use getAll, never getByIndexRange
+		const rangeStores = storage.getByIndexRange.mock.calls.map(([store]) => store);
+		expect(rangeStores).not.toContain('opponents');
+		expect(rangeStores).not.toContain('goals');
+		expect(rangeStores).not.toContain('events');
+		expect(rangeStores).not.toContain('missionProgress');
+		expect(rangeStores).not.toContain('towerProgress');
+
+		// But they SHOULD use getAll
+		const allStores = storage.getAll.mock.calls.map(([store]) => store);
+		expect(allStores).toContain('opponents');
+		expect(allStores).toContain('goals');
+		expect(allStores).toContain('events');
+		expect(allStores).toContain('missionProgress');
+		expect(allStores).toContain('towerProgress');
+	});
+
+	test('should persist syncTimestamp from API response (not timestamp) (#140)', async () => {
+		const storage = createMockStorage();
+		const apiTimestamp = '2025-06-15T10:30:00Z';
+		global.fetch.mockResolvedValue({
+			ok: true,
+			json: () => Promise.resolve({
+				syncTimestamp: apiTimestamp,
+				importedCounts: { snapshots: 1 },
+			}),
+		});
+
+		await client.syncToServer(storage);
+
+		// Should store the API's syncTimestamp (camelCase from ASP.NET)
+		expect(storage.setMetadata).toHaveBeenCalledWith('lastSync', apiTimestamp);
 	});
 });
 

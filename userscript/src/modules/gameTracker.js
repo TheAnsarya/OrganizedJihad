@@ -1385,16 +1385,16 @@ class GameTracker {
 	_topologicalSortMethods(methodNames) {
 		const nameSet = new Set(methodNames);
 
-		// Build dependency graph: method → set of methods it depends on
-		// (only include deps that are actually in this batch)
+		// Build forward deps (method → deps it needs) and reverse map
+		// (dep → methods that depend on it) for O(E) inner loop in Kahn's. (#142)
 		/** @type {Map<string, Set<string>>} */
 		const deps = new Map();
-		/** @type {Map<string, number>} */
-		const inDegree = new Map();
+		/** @type {Map<string, Set<string>>} */
+		const dependents = new Map();
 
 		for (const name of methodNames) {
 			deps.set(name, new Set());
-			inDegree.set(name, 0);
+			dependents.set(name, new Set());
 		}
 
 		for (const name of methodNames) {
@@ -1403,28 +1403,21 @@ class GameTracker {
 				for (const dep of entry.dependsOn || []) {
 					if (nameSet.has(dep) && dep !== name) {
 						deps.get(name).add(dep);
+						dependents.get(dep).add(name);
 					}
 				}
 			}
 		}
 
-		// Compute in-degrees
-		for (const [name, depSet] of deps) {
-			for (const dep of depSet) {
-				inDegree.set(dep, (inDegree.get(dep) || 0)); // ensure dep exists
-				// name depends on dep → dep must come first → name has in-degree from dep
-			}
-		}
-
-		// Invert: for each name, count how many others depend on it
-		// Actually, Kahn's works on in-degree of the node itself.
-		// Edge: dep → name (dep must come before name).
-		// in-degree of name = number of deps it has (in this batch).
+		// in-degree = number of in-batch deps each method has
+		/** @type {Map<string, number>} */
+		const inDegree = new Map();
 		for (const [name, depSet] of deps) {
 			inDegree.set(name, depSet.size);
 		}
 
-		// Kahn's algorithm
+		// Kahn's algorithm — index-based queue avoids O(n) shift(),
+		// Set avoids O(n) includes() checks (#142)
 		const queue = [];
 		for (const [name, degree] of inDegree) {
 			if (degree === 0) {
@@ -1433,28 +1426,32 @@ class GameTracker {
 		}
 
 		const sorted = [];
-		while (queue.length > 0) {
-			const current = queue.shift();
+		const sortedSet = new Set();
+		let qi = 0;
+		while (qi < queue.length) {
+			const current = queue[qi++];
 			sorted.push(current);
+			sortedSet.add(current);
 
-			// For each method that depends on `current`, decrement its in-degree
-			for (const [name, depSet] of deps) {
-				if (depSet.has(current)) {
+			// Only iterate methods that actually depend on `current`
+			for (const dependent of (dependents.get(current) || [])) {
+				const depSet = deps.get(dependent);
+				if (depSet?.has(current)) {
 					depSet.delete(current);
-					const newDegree = depSet.size;
-					inDegree.set(name, newDegree);
-					if (newDegree === 0 && !sorted.includes(name)) {
-						queue.push(name);
+					if (depSet.size === 0 && !sortedSet.has(dependent)) {
+						queue.push(dependent);
 					}
 				}
 			}
 		}
 
 		// Detect cycles: any remaining methods not in sorted
-		const remaining = methodNames.filter((n) => !sorted.includes(n));
-		if (remaining.length > 0) {
-			console.warn(`[OrganizedJihad] Circular handler dependencies detected: ${remaining.join(', ')} — appending in original order`);
-			sorted.push(...remaining);
+		if (sorted.length < methodNames.length) {
+			const remaining = methodNames.filter((n) => !sortedSet.has(n));
+			if (remaining.length > 0) {
+				console.warn(`[OrganizedJihad] Circular handler dependencies detected: ${remaining.join(', ')} — appending in original order`);
+				sorted.push(...remaining);
+			}
 		}
 
 		return sorted;
@@ -3536,10 +3533,8 @@ class GameTracker {
 		}
 		this._lastPetHash = petFingerprint;
 
-		// Store each pet snapshot in IndexedDB pets store
-		for (const pet of pets) {
-			await this.storage.add('pets', pet);
-		}
+		// Store all pet snapshots in a single IDB transaction (#141)
+		await this.storage.addBatch('pets', pets);
 
 		// Also cache lightweight metadata summary for dashboard/quick access
 		const summary = pets.map((p) => ({
@@ -3656,10 +3651,8 @@ class GameTracker {
 			}
 		}
 
-		// Write to IDB
-		for (const entry of rewardEntries) {
-			await this.storage.add('mailRewards', entry);
-		}
+		// Write all reward entries in a single IDB transaction (#141)
+		await this.storage.addBatch('mailRewards', rewardEntries);
 
 		if (rewardEntries.length > 0) {
 			const totalItems = rewardEntries.reduce((s, e) => s + e.quantity, 0);
@@ -4324,21 +4317,20 @@ class GameTracker {
 			console.warn('[OrganizedJihad] Failed to write chest record:', err);
 		}
 
-		// ── 2. Write individual drops to consumableRewards ──────────────
-		for (const drop of drops) {
-			try {
-				await this.storage.add('consumableRewards', {
-					timestamp,
-					sourceType,
-					sourceId,
-					itemType: drop.itemType,
-					itemId: String(drop.itemId),
-					quantity: drop.quantity,
-					openingId: openingId || 0,
-				});
-			} catch (err) {
-				console.warn('[OrganizedJihad] Failed to write drop record:', err);
-			}
+		// ── 2. Write all drops in a single IDB transaction (#141) ──────
+		try {
+			const dropRecords = drops.map((drop) => ({
+				timestamp,
+				sourceType,
+				sourceId,
+				itemType: drop.itemType,
+				itemId: String(drop.itemId),
+				quantity: drop.quantity,
+				openingId: openingId || 0,
+			}));
+			await this.storage.addBatch('consumableRewards', dropRecords);
+		} catch (err) {
+			console.warn('[OrganizedJihad] Failed to write drop records:', err);
 		}
 
 		// ── 3. Mirror to metadata cache (for backward compat) ───────────
@@ -5681,7 +5673,10 @@ class GameTracker {
 			const playerData = await this.storage.getMetadata('playerData', {});
 			const currentPlayerId = playerData.player?.id || 0;
 
-			// Track each guild member
+			// Build all guild member records and snapshots, then batch-write (#141)
+			const guildMemberRecords = [];
+			const snapshotRecords = [];
+
 			for (const [memberId, memberInfo] of Object.entries(members)) {
 				// Skip tracking self (already tracked in playerData)
 				if (parseInt(memberId) === currentPlayerId) continue;
@@ -5711,12 +5706,10 @@ class GameTracker {
 					titanRoster: memberInfo.titans ? JSON.stringify(memberInfo.titans) : null,
 				};
 
-				// Store/update in IndexedDB
-				// Use 'guildMembers' store (upsert by playerId)
-				await this.storage.put('guildMembers', guildMember);
+				guildMemberRecords.push(guildMember);
 
 				// Create historical snapshot for trend tracking
-				const snapshot = {
+				snapshotRecords.push({
 					timestamp: new Date(),
 					playerId: guildMember.playerId,
 					playerName: guildMember.playerName,
@@ -5729,10 +5722,12 @@ class GameTracker {
 					prestige: guildMember.prestige,
 					isOnline: guildMember.isOnline,
 					lastOnline: guildMember.lastOnline,
-				};
-
-				await this.storage.add('guildMemberSnapshots', snapshot);
+				});
 			}
+
+			// Batch upsert current roster + batch insert snapshots (2 txs total)
+			await this.storage.putBatch('guildMembers', guildMemberRecords);
+			await this.storage.addBatch('guildMemberSnapshots', snapshotRecords);
 
 			console.log(`[OrganizedJihad] Tracked ${Object.keys(members).length} guild members from ${guildName}`);
 		} catch (error) {

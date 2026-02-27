@@ -685,4 +685,111 @@ describe('IndexedDBStorage', () => {
 			expect(remaining).toHaveLength(0);
 		});
 	});
+
+	// ─── Batch Operations (#141) ─────────────────────────────────────────
+
+	describe('addBatch', () => {
+		test('should insert multiple records in a single transaction', async () => {
+			const records = [
+				{ heroId: 1, heroName: 'Aurora', playerId: 100, timestamp: '2025-01-01T00:00:00Z', power: 100 },
+				{ heroId: 2, heroName: 'Celeste', playerId: 100, timestamp: '2025-01-01T00:00:00Z', power: 200 },
+				{ heroId: 3, heroName: 'Jorgen', playerId: 100, timestamp: '2025-01-01T00:00:00Z', power: 300 },
+			];
+
+			const keys = await storage.addBatch('heroes', records);
+
+			expect(keys).toHaveLength(3);
+			expect(keys.every((k) => k > 0)).toBe(true);
+
+			const all = await storage.getAll('heroes');
+			expect(all).toHaveLength(3);
+			expect(all.map((h) => h.heroName)).toEqual(['Aurora', 'Celeste', 'Jorgen']);
+		});
+
+		test('should return empty array for empty/null records', async () => {
+			expect(await storage.addBatch('heroes', [])).toEqual([]);
+			expect(await storage.addBatch('heroes', null)).toEqual([]);
+			expect(await storage.addBatch('heroes', undefined)).toEqual([]);
+		});
+
+		test('should return keys matching inserted record count', async () => {
+			// addBatch returns an array of generated keys — one per record
+			const records = [
+				{ heroId: 10, heroName: 'Astaroth', playerId: 100, timestamp: '2025-01-01T00:00:00Z', power: 500 },
+				{ heroId: 20, heroName: 'Martha', playerId: 100, timestamp: '2025-01-01T00:00:00Z', power: 600 },
+			];
+
+			const keys = await storage.addBatch('heroes', records);
+			expect(keys).toHaveLength(2);
+
+			// Each key should be the auto-incremented ID
+			const all = await storage.getAll('heroes');
+			expect(all).toHaveLength(2);
+			expect(all[0].heroName).toBe('Astaroth');
+			expect(all[1].heroName).toBe('Martha');
+		});
+
+		test('should handle large batches efficiently', async () => {
+			const records = Array.from({ length: 100 }, (_, i) => ({
+				heroId: i + 1,
+				heroName: `Hero_${i + 1}`,
+				playerId: 100,
+				timestamp: new Date(2025, 0, 1, 0, 0, i).toISOString(),
+				power: (i + 1) * 10,
+			}));
+
+			const keys = await storage.addBatch('heroes', records);
+
+			expect(keys).toHaveLength(100);
+			const all = await storage.getAll('heroes');
+			expect(all).toHaveLength(100);
+		});
+	});
+
+	describe('putBatch', () => {
+		test('should upsert multiple records in a single transaction', async () => {
+			const records = [
+				{ key: 'a', value: 1 },
+				{ key: 'b', value: 2 },
+				{ key: 'c', value: 3 },
+			];
+
+			const keys = await storage.putBatch('metadata', records);
+
+			expect(keys).toHaveLength(3);
+
+			const a = await storage.get('metadata', 'a');
+			expect(a.value).toBe(1);
+			const c = await storage.get('metadata', 'c');
+			expect(c.value).toBe(3);
+		});
+
+		test('should return empty array for empty/null records', async () => {
+			expect(await storage.putBatch('metadata', [])).toEqual([]);
+			expect(await storage.putBatch('metadata', null)).toEqual([]);
+			expect(await storage.putBatch('metadata', undefined)).toEqual([]);
+		});
+
+		test('should update existing records', async () => {
+			// Insert initial records
+			await storage.put('metadata', { key: 'x', value: 'old' });
+			await storage.put('metadata', { key: 'y', value: 'stale' });
+
+			// Upsert with updated values
+			const keys = await storage.putBatch('metadata', [
+				{ key: 'x', value: 'new' },
+				{ key: 'y', value: 'fresh' },
+				{ key: 'z', value: 'brand-new' },
+			]);
+
+			expect(keys).toHaveLength(3);
+
+			const x = await storage.get('metadata', 'x');
+			expect(x.value).toBe('new');
+			const y = await storage.get('metadata', 'y');
+			expect(y.value).toBe('fresh');
+			const z = await storage.get('metadata', 'z');
+			expect(z.value).toBe('brand-new');
+		});
+	});
 });
