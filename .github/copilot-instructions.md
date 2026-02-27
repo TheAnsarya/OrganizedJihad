@@ -254,7 +254,14 @@ OrganizedJihad/
 4. ✅ Hero/Titan upgrade event tracking
 5. ✅ Daily/Guild quest tracking
 6. ✅ Inventory usage tracking
-7. 🔄 Comprehensive test coverage (552/16 — heroNames, syncClient, apiMonitor added)
-8. 🔄 Performance benchmarking
-9. ⬜ Desktop app data visualization
-10. ⬜ Automated daily report generation
+7. ✅ Mail tracking and reward collection
+8. ✅ API handler coverage — 109 handlers covering 128+ unique API methods
+9. ✅ Dashboard overhaul — player info, arena ranks, campaign, battle pass, gacha, guild activity
+10. ✅ Pets tab — avatars, Color column, soul stones progress
+11. ✅ Titans tab — avatars, artifacts, totem stats
+12. ✅ Battle tracking — damage/healing/petId in compressed teams, expandable detail rows
+13. 🔄 Comprehensive test coverage (569/16 — heroNames, syncClient, apiMonitor added)
+14. 🔄 Performance benchmarking
+15. 🔄 Refactor: Extract gameTracker.js handler groups into tracker modules (#102)
+16. ⬜ Desktop app data visualization
+17. ⬜ Automated daily report generation

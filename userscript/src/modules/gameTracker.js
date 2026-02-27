@@ -2310,6 +2310,511 @@ class GameTracker {
 				lastUpdate: Date.now(),
 			});
 		}, 'trackTitanSpirits', { category: 'player' });
+
+		// ═════════════════════════════════════════════════════════════════
+		// Phase 12: Additional guild, war, rankings, and economy handlers
+		// Covers 57+ previously-unhandled API methods from §15 reference
+		// ═════════════════════════════════════════════════════════════════
+
+		// ── Guild Weekly Stats ──────────────────────────────────────────
+		// clanGetWeeklyStat returns per-member weekly activity across 7 days:
+		// activity points, dungeon, adventure, war, prestige, gifts.
+		this.registerHandler('clanGetWeeklyStat', async (_call, _args, data) => {
+			const members = data.stat || [];
+			const summary = members.map((m) => ({
+				userId: m.id,
+				activity: m.activity || [],
+				dungeonActivity: m.dungeonActivity || [],
+				adventureStat: m.adventureStat || [],
+				clanWarStat: m.clanWarStat || [],
+				prestigeStat: m.prestigeStat || [],
+				clanGifts: m.clanGifts || [],
+			}));
+			await this.storage.setMetadata('guildWeeklyStat', {
+				memberCount: summary.length,
+				members: summary,
+				lastUpdate: Date.now(),
+			});
+			console.log(`[OrganizedJihad] Guild weekly stats: ${summary.length} members`);
+		}, 'trackGuildWeeklyStat', { category: 'guild' });
+
+		// ── Guild Activity Log ──────────────────────────────────────────
+		// clanGetLog returns guild history events: joins, points, prestige.
+		this.registerHandler('clanGetLog', async (_call, _args, data) => {
+			const history = data.history || [];
+			if (history.length > 0) {
+				const existing = (await this.storage.getMetadata('guildLog', null)) || {};
+				const allEntries = [...(existing.entries || [])];
+				const seenIds = new Set(allEntries.map((e) => e.id));
+				let newCount = 0;
+				for (const entry of history) {
+					if (!seenIds.has(entry.id)) {
+						allEntries.push({
+							id: entry.id,
+							userId: entry.userId,
+							event: entry.event,
+							ctime: entry.ctime,
+							details: entry.details || null,
+						});
+						newCount++;
+					}
+				}
+				// Keep last 500 entries to avoid unbounded growth
+				const trimmed = allEntries.slice(-500);
+				await this.storage.setMetadata('guildLog', {
+					entries: trimmed,
+					totalTracked: trimmed.length,
+					lastUpdate: Date.now(),
+				});
+				if (newCount > 0) {
+					console.log(`[OrganizedJihad] Guild log: ${newCount} new entries (${trimmed.length} total)`);
+				}
+			}
+		}, 'trackGuildLog', { category: 'guild' });
+
+		// ── Guild War Defense ───────────────────────────────────────────
+		// clanWarGetDefence returns defense slots (userId assignments)
+		// and team compositions (hero/titan units per player).
+		this.registerHandler('clanWarGetDefence', async (_call, _args, data) => {
+			const slots = data.slots || {};
+			const teams = data.teams || {};
+			const defenseData = {
+				slotCount: Object.keys(slots).length,
+				slots,
+				teamCount: Object.keys(teams).length,
+				lastUpdate: Date.now(),
+			};
+			await this.storage.setMetadata('guildWarDefense', defenseData);
+			console.log(`[OrganizedJihad] GW Defense: ${defenseData.slotCount} slots, ${defenseData.teamCount} teams`);
+		}, 'trackGuildWarDefense', { category: 'guild' });
+
+		// ── Guild War Warlord Info ──────────────────────────────────────
+		// clanWarGetWarlordInfo is a superset of clanWarGetDefence,
+		// also including war schedule (season, day, timing).
+		this.registerHandler('clanWarGetWarlordInfo', async (_call, _args, data) => {
+			const warInfo = data.warInfo || {};
+			const defence = data.defence || {};
+			await this.storage.setMetadata('guildWarWarlord', {
+				season: warInfo.season || 0,
+				day: warInfo.day || 0,
+				endTime: warInfo.endTime || 0,
+				nextWarTime: warInfo.nextWarTime || 0,
+				nextLockTime: warInfo.nextLockTime || 0,
+				defenseSlots: Object.keys(defence.slots || {}).length,
+				defenseTeams: Object.keys(defence.teams || {}).length,
+				lastUpdate: Date.now(),
+			});
+			console.log(`[OrganizedJihad] GW Warlord: season ${warInfo.season}, day ${warInfo.day}`);
+		}, 'trackGuildWarWarlord', { category: 'guild' });
+
+		// ── Guild War League ────────────────────────────────────────────
+		// clanWarGetLeagueInfo returns league position, points, and prev results.
+		this.registerHandler('clanWarGetLeagueInfo', async (_call, _args, data) => {
+			const clanData = data.clanData || {};
+			await this.storage.setMetadata('guildWarLeague', {
+				leagueId: clanData.leagueId || 0,
+				position: clanData.position || 0,
+				points: clanData.points || 0,
+				prevLeague: clanData.prevLeague || 0,
+				prevPosition: clanData.prevPosition || 0,
+				prevPoints: clanData.prevPoints || 0,
+				clanPlace: data.clanPlace || 0,
+				lastUpdate: Date.now(),
+			});
+			console.log(`[OrganizedJihad] GW League: pos #${clanData.position}, ${clanData.points} pts, league ${clanData.leagueId}`);
+		}, 'trackGuildWarLeague', { category: 'guild' });
+
+		// ── Guild Online Status ─────────────────────────────────────────
+		this.registerHandler('clanGetOnline', async (_call, _args, data) => {
+			const users = data.users || {};
+			await this.storage.setMetadata('guildOnline', {
+				onlineCount: Object.keys(users).length,
+				users,
+				lastUpdate: Date.now(),
+			});
+		}, 'trackGuildOnline', { category: 'guild' });
+
+		// ── Leaderboards / Rankings ─────────────────────────────────────
+		// topGet returns rankings for various categories (arena, power, CoW, etc.)
+		// args.type determines the leaderboard type.
+		this.registerHandler('topGet', async (_call, args, data) => {
+			const topType = args.type || 'unknown';
+			const top = data.top || [];
+			const myPlace = data.place || 0;
+			const myScore = data.score || 0;
+			const existing = (await this.storage.getMetadata('leaderboards', null)) || {};
+			existing[topType] = {
+				myPlace,
+				myScore,
+				topEntries: top.slice(0, 20).map((t) => ({
+					place: t.place,
+					itemId: t.itemId,
+					score: t.score,
+				})),
+				lastUpdate: Date.now(),
+			};
+			await this.storage.setMetadata('leaderboards', existing);
+			console.log(`[OrganizedJihad] Leaderboard (${topType}): rank #${myPlace}, score ${myScore}`);
+		}, 'trackLeaderboard', { category: 'player' });
+
+		// ── Hero Rating Info ────────────────────────────────────────────
+		// heroRating_getInfo returns community hero ratings (1-5 stars).
+		this.registerHandler('heroRating_getInfo', async (_call, _args, data) => {
+			await this.storage.setMetadata('heroRating', {
+				userRating: data.userRating || {},
+				communityRating: data.rating || {},
+				lastUpdate: Date.now(),
+			});
+		}, 'trackHeroRating', { category: 'player' });
+
+		// ── Event Quests ────────────────────────────────────────────────
+		// questGetEvents returns active event quest chains with timing.
+		this.registerHandler('questGetEvents', async (_call, _args, data) => {
+			const events = Array.isArray(data) ? data : [];
+			const eventSummary = events.map((e) => ({
+				id: e.id,
+				startTime: e.startTime || 0,
+				endTime: e.endTime || 0,
+				originalId: e.originalId || 0,
+				chainCount: (e.questChains || []).length,
+			}));
+			await this.storage.setMetadata('eventQuests', {
+				events: eventSummary,
+				activeCount: eventSummary.length,
+				lastUpdate: Date.now(),
+			});
+			console.log(`[OrganizedJihad] Event quests: ${eventSummary.length} active events`);
+		}, 'trackEventQuests', { category: 'events' });
+
+		// ── Special Offers ──────────────────────────────────────────────
+		// specialOffer_getAll returns current special offers with pricing.
+		this.registerHandler('specialOffer_getAll', async (_call, _args, data) => {
+			const offers = Array.isArray(data) ? data : [];
+			const offerSummary = offers.map((o) => ({
+				id: o.id,
+				type: o.type || o.offerType || 'unknown',
+				endTime: o.endTime || 0,
+				billingCount: (o.billings || []).length,
+			}));
+			await this.storage.setMetadata('specialOffers', {
+				offers: offerSummary,
+				activeCount: offerSummary.length,
+				lastUpdate: Date.now(),
+			});
+		}, 'trackSpecialOffers', { category: 'economy' });
+
+		// ── Cross-Server War Extended ───────────────────────────────────
+		// crossClanWar_getAttackMap returns CoW battlefield map with targets.
+		this.registerHandler('crossClanWar_getAttackMap', async (_call, _args, data) => {
+			await this.storage.setMetadata('cowAttackMap', {
+				...data,
+				lastUpdate: Date.now(),
+			});
+		}, 'trackCowAttackMap', { category: 'guild' });
+
+		// crossClanWar_getDefencePlan returns CoW defense layout.
+		this.registerHandler('crossClanWar_getDefencePlan', async (_call, _args, data) => {
+			await this.storage.setMetadata('cowDefensePlan', {
+				...data,
+				lastUpdate: Date.now(),
+			});
+		}, 'trackCowDefensePlan', { category: 'guild' });
+
+		// crossClanWar_getSettings returns CoW configuration.
+		this.registerHandler('crossClanWar_getSettings', async (_call, _args, data) => {
+			await this.storage.setMetadata('cowSettings', {
+				...data,
+				lastUpdate: Date.now(),
+			});
+		}, 'trackCowSettings', { category: 'guild' });
+
+		// ── Subscription / Billing Info ──────────────────────────────────
+		this.registerHandler('subscriptionGetInfo', async (_call, _args, data) => {
+			await this.storage.setMetadata('subscriptionInfo', {
+				...data,
+				lastUpdate: Date.now(),
+			});
+		}, 'trackSubscription', { category: 'economy' });
+
+		// ── Guild Prestige ──────────────────────────────────────────────
+		this.registerHandler('clan_prestigeGetInfo', async (_call, _args, data) => {
+			await this.storage.setMetadata('guildPrestige', {
+				...data,
+				lastUpdate: Date.now(),
+			});
+		}, 'trackGuildPrestige', { category: 'guild' });
+
+		// ── Clan Raid Subscription / Rating ──────────────────────────────
+		this.registerHandler('clanRaid_ratingInfo', async (_call, _args, data) => {
+			await this.storage.setMetadata('raidRating', {
+				...data,
+				lastUpdate: Date.now(),
+			});
+		}, 'trackRaidRating', { category: 'guild' });
+
+		this.registerHandler('clanRaidSubscription_getInfo', async (_call, _args, data) => {
+			await this.storage.setMetadata('raidSubscription', {
+				...data,
+				lastUpdate: Date.now(),
+			});
+		}, 'trackRaidSubscription', { category: 'guild' });
+
+		// ── Tower State ─────────────────────────────────────────────────
+		// towerGetState returns current tower floor, HP, etc.
+		this.registerHandler('towerGetState', async (_call, _args, data) => {
+			await this.storage.setMetadata('towerState', {
+				floor: data.floor || data.floorNumber || 0,
+				teamHealth: data.teamHealth || {},
+				...data,
+				lastUpdate: Date.now(),
+			});
+		}, 'trackTowerState', { category: 'player' });
+
+		// ── Dungeon State ───────────────────────────────────────────────
+		// dungeonEnd and titanDungeonEnd — battle completion tracking
+		this.registerHandler('dungeonEnd', async (callName, args, data) => {
+			await this.trackBattleResult(callName, args, data);
+		}, 'trackDungeonEnd', { category: 'battles' });
+
+		this.registerHandler('titanDungeonEnd', async (callName, args, data) => {
+			await this.trackBattleResult(callName, args, data);
+		}, 'trackTitanDungeonEnd', { category: 'battles' });
+
+		// ── Titan Summoning Circle ──────────────────────────────────────
+		this.registerHandler('titanGetSummoningCircle', async (_call, _args, data) => {
+			await this.storage.setMetadata('titanSummonCircle', {
+				...data,
+				lastUpdate: Date.now(),
+			});
+		}, 'trackTitanSummonCircle', { category: 'player' });
+
+		this.registerHandler('titanUseSummonCircle', async (_call, _args, data) => {
+			await this._logActivity('summon', 'Titan summoning circle used');
+			await this.storage.setMetadata('titanSummonCircle', {
+				...data,
+				lastUpdate: Date.now(),
+			});
+		}, 'trackTitanSummonUse', { category: 'player' });
+
+		// ── Artifact Chest Level ────────────────────────────────────────
+		this.registerHandler(['artifactGetChestLevel', 'titanArtifactGetChest'], async (_call, _args, data) => {
+			await this.storage.setMetadata('artifactChestLevel', {
+				...data,
+				lastUpdate: Date.now(),
+			});
+		}, 'trackArtifactChestLevel', { category: 'player' });
+
+		// ── Team Favor / Banners / Max Upgrade ──────────────────────────
+		this.registerHandler('teamGetFavor', async (_call, _args, data) => {
+			await this.storage.setMetadata('teamFavor', {
+				data,
+				lastUpdate: Date.now(),
+			});
+		}, 'trackTeamFavor', { category: 'player' });
+
+		this.registerHandler('team_getBanners', async (_call, _args, data) => {
+			await this.storage.setMetadata('teamBanners', {
+				data,
+				lastUpdate: Date.now(),
+			});
+		}, 'trackTeamBanners', { category: 'player' });
+
+		// ── Power Tournament ────────────────────────────────────────────
+		this.registerHandler('powerTournament_getState', async (_call, _args, data) => {
+			await this.storage.setMetadata('powerTournament', {
+				...data,
+				lastUpdate: Date.now(),
+			});
+		}, 'trackPowerTournament', { category: 'events' });
+
+		// ── Hall of Fame ────────────────────────────────────────────────
+		this.registerHandler('hallOfFameGetTrophies', async (_call, _args, data) => {
+			await this.storage.setMetadata('hallOfFame', {
+				data,
+				lastUpdate: Date.now(),
+			});
+		}, 'trackHallOfFame', { category: 'player' });
+
+		// ── Season Adventure ────────────────────────────────────────────
+		this.registerHandler('seasonAdventure_getInfo', async (_call, _args, data) => {
+			await this.storage.setMetadata('seasonAdventure', {
+				...data,
+				lastUpdate: Date.now(),
+			});
+		}, 'trackSeasonAdventure', { category: 'events' });
+
+		// ── Solo Adventure ──────────────────────────────────────────────
+		this.registerHandler('adventureSolo_getActiveData', async (_call, _args, data) => {
+			await this.storage.setMetadata('soloAdventure', {
+				hasActive: data.hasActive || false,
+				adventureId: data.adventureId || 0,
+				endTime: data.endTime || 0,
+				turns: data.turns || 0,
+				hasRewards: data.hasRewards || false,
+				lastUpdate: Date.now(),
+			});
+		}, 'trackSoloAdventure', { category: 'events' });
+
+		// ── Inventory Stone Exchange ────────────────────────────────────
+		this.registerHandler('inventoryExchangeTitanStones', async (_call, args, data) => {
+			await this._logActivity('exchange', 'Titan stones exchanged', {
+				args,
+			});
+		}, 'trackTitanStoneExchange', { category: 'economy' });
+
+		// ── Zeppelin Gift ───────────────────────────────────────────────
+		this.registerHandler('zeppelinGiftGet', async (_call, _args, data) => {
+			await this._logActivity('reward', 'Zeppelin gift collected', {
+				reward: data.reward || data,
+			});
+		}, 'trackZeppelinGift', { category: 'economy' });
+
+		// ── Settings (read-only, for reference) ─────────────────────────
+		this.registerHandler('settingsGetAll', async (_call, _args, data) => {
+			await this.storage.setMetadata('gameSettings', {
+				data,
+				lastUpdate: Date.now(),
+			});
+		}, 'trackSettings', { category: 'player' });
+
+		// ── Daily Bonus / Login Info ────────────────────────────────────
+		// dailyBonusGetInfo gives login streak, available rewards, etc.
+		// (The handler for dailyBonusFarm already exists for collecting.)
+		this.registerHandler('dailyBonusGetInfo', async (_call, _args, data) => {
+			await this.storage.setMetadata('dailyBonusInfo', {
+				day: data.day || 0,
+				rewardType: data.rewardType || 0,
+				isAvailable: data.isAvailable || false,
+				...data,
+				lastUpdate: Date.now(),
+			});
+		}, 'trackDailyBonusInfo', { category: 'player' });
+
+		// ── Social Quest / Telegram Quest ───────────────────────────────
+		this.registerHandler('socialQuestGetInfo', async (_call, _args, data) => {
+			await this.storage.setMetadata('socialQuest', {
+				...data,
+				lastUpdate: Date.now(),
+			});
+		}, 'trackSocialQuest', { category: 'social' });
+
+		// ── Chat Info (channel details) ─────────────────────────────────
+		this.registerHandler('chatGetInfo', async (_call, _args, data) => {
+			await this.storage.setMetadata('chatInfo', {
+				...data,
+				lastUpdate: Date.now(),
+			});
+		}, 'trackChatInfo', { category: 'social' });
+
+		// ── Banner / Campaign Story ─────────────────────────────────────
+		this.registerHandler('banner_getAll', async (_call, _args, data) => {
+			await this.storage.setMetadata('banners', {
+				data,
+				lastUpdate: Date.now(),
+			});
+		}, 'trackBanners', { category: 'player' });
+
+		this.registerHandler('campaignStoryGetList', async (_call, _args, data) => {
+			await this.storage.setMetadata('campaignStory', {
+				data,
+				lastUpdate: Date.now(),
+			});
+		}, 'trackCampaignStory', { category: 'player' });
+
+		// ── Event Picker ────────────────────────────────────────────────
+		this.registerHandler('eventPicker_getInfo', async (_call, _args, data) => {
+			await this.storage.setMetadata('eventPicker', {
+				...data,
+				lastUpdate: Date.now(),
+			});
+		}, 'trackEventPicker', { category: 'events' });
+
+		// ── New Year Event ──────────────────────────────────────────────
+		this.registerHandler('newYear_getInfo', async (_call, _args, data) => {
+			await this.storage.setMetadata('newYearEvent', {
+				...data,
+				lastUpdate: Date.now(),
+			});
+		}, 'trackNewYearEvent', { category: 'events' });
+
+		// ── Shop individual state ───────────────────────────────────────
+		this.registerHandler('shopGet', async (_call, args, data) => {
+			const shopId = args.shopId || data.id || 'unknown';
+			const slots = data.slots || {};
+			const slotArr = Object.values(slots);
+			const bought = slotArr.filter((s) => s.bought === true || s.bought === 1).length;
+			const existing = (await this.storage.getMetadata('shopData', null)) || {};
+			const shops = existing.shops || {};
+			shops[shopId] = {
+				id: data.id || parseInt(shopId, 10),
+				totalSlots: slotArr.length,
+				boughtCount: bought,
+				availableCount: slotArr.length - bought,
+				refreshTime: data.refreshTime || 0,
+				availableUntil: data.availableUntil || 0,
+				level: data.level || 0,
+			};
+			await this.storage.setMetadata('shopData', {
+				shops,
+				shopCount: Object.keys(shops).length,
+				lastUpdate: Date.now(),
+			});
+		}, 'trackShopDetails', { category: 'economy' });
+
+		// ── Billing catalog ─────────────────────────────────────────────
+		this.registerHandler(['billingGetAll', 'billingGetLast'], async (_call, _args, data) => {
+			await this.storage.setMetadata('billingCatalog', {
+				data,
+				lastUpdate: Date.now(),
+			});
+		}, 'trackBilling', { category: 'economy' });
+
+		// ── Bundle / Coop Bundle ────────────────────────────────────────
+		this.registerHandler('bundleGetAllAvailableId', async (_call, _args, data) => {
+			await this.storage.setMetadata('bundles', {
+				data,
+				lastUpdate: Date.now(),
+			});
+		}, 'trackBundles', { category: 'economy' });
+
+		this.registerHandler('coopBundle_getInfo', async (_call, _args, data) => {
+			await this.storage.setMetadata('coopBundle', {
+				...data,
+				lastUpdate: Date.now(),
+			});
+		}, 'trackCoopBundle', { category: 'economy' });
+
+		// ── Clan Gifts / Invites ────────────────────────────────────────
+		this.registerHandler('clanGetAvailableDailyGifts', async (_call, _args, data) => {
+			await this.storage.setMetadata('guildDailyGifts', {
+				data,
+				lastUpdate: Date.now(),
+			});
+		}, 'trackGuildDailyGifts', { category: 'guild' });
+
+		this.registerHandler('clanInvites_getUserInbox', async (_call, _args, data) => {
+			await this.storage.setMetadata('guildInvites', {
+				data,
+				lastUpdate: Date.now(),
+			});
+		}, 'trackGuildInvites', { category: 'guild' });
+
+		// ── Guild Activity Reward Table ──────────────────────────────────
+		this.registerHandler('clanGetActivityRewardTable', async (_call, _args, data) => {
+			await this.storage.setMetadata('guildActivityRewards', {
+				data,
+				lastUpdate: Date.now(),
+			});
+		}, 'trackGuildActivityRewards', { category: 'guild' });
+
+		// ── Friend Gifts & Hearts (send/receive) ────────────────────────
+		this.registerHandler('friendSendHearts', async (_call, _args, data) => {
+			await this._logActivity('social', 'Hearts sent to friends');
+		}, 'trackFriendSendHearts', { category: 'social' });
+
+		this.registerHandler('friendGetHearts', async (_call, _args, data) => {
+			await this._logActivity('social', 'Hearts received from friends');
+		}, 'trackFriendGetHearts', { category: 'social' });
 	}
 
 	// =====================================================================

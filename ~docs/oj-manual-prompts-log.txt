@@ -142,6 +142,60 @@ When opening the ui on the dashboard, the player component is terrible, instead 
 
 (userscript) make issues and plans and docs, etc, then implement; continue!
 
+(userscript) For the Titans ui tab, `Skill` is not a real thing, remove it, `Skins` doesn't have any data, fix that, capture the skins data, show all three artifacts with colorered borders and a small level number badge in a column, Titans are not showing avatars, fix that; update the "element" column to show Totem stats (star, level, etc); continue; fix ` Pet Soul Stones` numbers, show how many we need, what does `9,624 available` and `2,400 needed to max all` actually mean?; continue;
+
+(userscript) Titans ui tab, the artifacts logos should be next to each other (horizontal, not vertical), and artifacts have border colors based on their star level, not their artifact level which is wrong, star levels should be represented at the top of the aritfact logo with "4 (star emoji)" and the level at the bottom, and the titans avatars are not visible, the file urls are wrong, the `ELEMENT /TOTEM` column should have the totem star level and level number displayed; continue; 
+
+(userscript) Dashboard - the emeralds icon is still blue, but it should be green, emeralds still shows 0 but it should be "24,429", add "Energy" to the second row of cards, and collect the data for energy; keep working through all the data collection and display issues, make plans and issues and docs etc; continue;
+
+(userscript) Dashboard - Player info display - Gold doesn't have an emoji that displays, fix the coin emoji, emeralds emoji is now pink, change it to green, enery is not displaying the right value (showing 0) and should also number of `bottled energy`s, Daily quests shows number completed, but it shouw "out of how many" like "30/40" or whatever the numbers are, Guild Quests says "111 today" (is that right?) also show an "out of how many" like "12/50" or whatever the numbers are, Guild War shows "2/3" but there are only 2 GW attacks per day (Monday-Friday) and it should also show current `Clash of Worlds` progress (hero and titan attack usage), and "Raid Attacks" show show, Raid attacks (showing 0/9 of minion attacks when all 9 are done) and should show Raid Boss info (Is it Osh or Maestro? what level?) and how many Raid Boss attacks you've done (5/5) and how much damage you've done in total; make comprehensive github issues (epics and sub-issues) and plans and 
+documents, code-plans, prompt plans, etc, fix the data collection and ui updates; continue;
+
+(userscript) Can the AI chat not see the actual api calls and responses, so you don't track the data correctly because you can't get example json responses? Is there a way for the userscript to log api calls and responses, with the converted response values and put them into a file or something so that the AI chat can see the file and use it as the basis for fixing these data tracking and api errors?; continue;
+
+
+Where is `Export API Samples` I do not see it, I just did all the api calls, how do I export this data?
+
+The `Settings` tab => `About` section says  `Hero Wars Tracker v0.9.2` but it's supposed to be `Hero Wars Tracker v0.9.34` please update this every version, make the version dynamic; continue;
+
+(all) never use npm or npx, always use yarn, add this to the copilot instructions; continue;
+
+(userscript) The api examples file is at `C:\Users\me\source\repos\OrganizedJihad\~docs\api-samples\hw-api-samples-2026-02-27.json` so use that to continue working on the api data collection and the UI changes we discussed; make issues and plans and docs, etc; continue;
+
+(userscript) make issues and plans and docs, etc, then implement; continue!
+
+(userscript) document every api call we know about with our call and a breakdown/documentation of the response object and how it relates to the UI; focus on the userscript, I do not care about the desktop app right now; continue;
+
+(userscript) work issues and review api call and implement tracking for everything and display on UI correctly, as I instructed; continue;
+
+(userscript) work issues and review api call and implement tracking for everything and display on UI correctly, as I instructed; continue;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
