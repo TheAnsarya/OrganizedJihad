@@ -1868,10 +1868,8 @@ class GameTracker {
 			await this.trackBattleResult(callName, args, data);
 		}, 'trackTitanDungeonBattle', { category: 'battles' });
 
-		// Arena end — standalone battle end signal
-		this.registerHandler('arenaEnd', async (_call, args, data) => {
-			await this.trackArenaBattle(args, data);
-		}, 'trackArenaEnd', { category: 'battles' });
+		// NOTE: arenaEnd is already registered alongside arenaAttack in the Arena
+		// section above (line ~1515). Removed duplicate registration here (#131).
 
 		// ── Pet Upgrade Endpoints (#112) ─────────────────────────────────
 		this.registerHandler('pet_levelUp', async (_call, args, data) => {
@@ -3725,6 +3723,11 @@ class GameTracker {
 
 		// Live activity event
 		await this._logActivity('battle', `${battleType} ${battle.isWin ? 'WIN' : 'LOSS'}`, { isWin: battle.isWin });
+
+		// Adventure Guide: record team compositions per node for recommendations (#131)
+		if (battleType === 'Adventure' && battle.mission) {
+			await this._recordAdventureGuideEntry(battle);
+		}
 	}
 
 	/**
@@ -3777,13 +3780,25 @@ class GameTracker {
 	 * @private
 	 */
 	async trackArenaBattle(args, data) {
+		// Resolve opponent name from cached arena enemies (#131)
+		const opponentName = await this._resolveOpponentName('arenaEnemies', args.enemyUserId);
+
+		// Capture rank before/after if available (#131)
+		const rankBefore = this.lastKnownArenaRank || null;
+		const rankAfter = data.user?.arenaRank || data.arenaRank || null;
+		if (rankAfter) {
+			this.lastKnownArenaRank = rankAfter;
+		}
+
 		const battle = {
 			battleType: 'Arena',
 			opponentId: args.enemyUserId,
-			opponentName: null, // Will be filled from opponents tracking
+			opponentName,
 			isWin: data.result?.win || false,
 			playerPower: data.attackers ? this.calculateTeamPower(data.attackers) : 0,
 			opponentPower: data.defenders ? this.calculateTeamPower(data.defenders) : 0,
+			rankBefore,
+			rankAfter,
 			playerHeroes: data.attackers ? JSON.stringify(this.compressHeroTeam(data.attackers)) : null,
 			opponentHeroes: data.defenders ? JSON.stringify(this.compressHeroTeam(data.defenders)) : null,
 			rewards: data.reward ? JSON.stringify(data.reward) : null,
@@ -3799,11 +3814,12 @@ class GameTracker {
 		await this.storage.add('battles', battle);
 
 		// Live activity event
-		await this._logActivity('battle', `Arena ${battle.isWin ? 'WIN' : 'LOSS'} vs opponent #${battle.opponentId || '?'}`, { isWin: battle.isWin });
+		const arenaOppDisplay = battle.opponentName || `opponent #${battle.opponentId || '?'}`;
+		await this._logActivity('battle', `Arena ${battle.isWin ? 'WIN' : 'LOSS'} vs ${arenaOppDisplay}`, { isWin: battle.isWin });
 
 		// Update opponent record (#51 — fixed param order, boolean→string, use IDB store)
 		await this.updateOpponentRecord('Arena', args.enemyUserId, battle.isWin, {
-			name: data.response?.user?.name,
+			name: battle.opponentName || data.response?.user?.name,
 			power: data.response?.user?.power || battle.opponentPower,
 		});
 
@@ -3859,13 +3875,25 @@ class GameTracker {
 	 * @private
 	 */
 	async trackTitanArenaBattle(args, data) {
+		// Resolve opponent name from cached titan arena enemies (#131)
+		const opponentName = await this._resolveOpponentName('titanArenaEnemies', args.enemyUserId);
+
+		// Capture rank before/after if available (#131)
+		const rankBefore = this.lastKnownTitanArenaRank || null;
+		const rankAfter = data.user?.titanArenaRank || data.titanArenaRank || null;
+		if (rankAfter) {
+			this.lastKnownTitanArenaRank = rankAfter;
+		}
+
 		const battle = {
 			battleType: 'TitanArena',
 			opponentId: args.enemyUserId,
-			opponentName: null,
+			opponentName,
 			isWin: data.result?.win || false,
 			playerPower: data.attackers ? this.calculateTeamPower(data.attackers) : 0,
 			opponentPower: data.defenders ? this.calculateTeamPower(data.defenders) : 0,
+			rankBefore,
+			rankAfter,
 			playerHeroes: data.attackers ? JSON.stringify(this.compressHeroTeam(data.attackers)) : null,
 			opponentHeroes: data.defenders ? JSON.stringify(this.compressHeroTeam(data.defenders)) : null,
 			rewards: data.reward ? JSON.stringify(data.reward) : null,
@@ -3881,12 +3909,13 @@ class GameTracker {
 		await this.storage.add('battles', battle);
 		// #51 — fixed param order, boolean→string, use IDB store
 		await this.updateOpponentRecord('TitanArena', args.enemyUserId, battle.isWin, {
-			name: data.response?.user?.name,
+			name: battle.opponentName || data.response?.user?.name,
 			power: data.response?.user?.power || battle.opponentPower,
 		});
 
 		// Live activity event
-		await this._logActivity('battle', `Titan Arena ${battle.isWin ? 'WIN' : 'LOSS'} vs opponent #${battle.opponentId || '?'}`, { isWin: battle.isWin });
+		const titanOppDisplay = battle.opponentName || `opponent #${battle.opponentId || '?'}`;
+		await this._logActivity('battle', `Titan Arena ${battle.isWin ? 'WIN' : 'LOSS'} vs ${titanOppDisplay}`, { isWin: battle.isWin });
 
 		// Track resource rewards from titan arena battle
 		// Titan Arena rewards: gold, titan tokens/potions
@@ -3943,13 +3972,39 @@ class GameTracker {
 	 * @private
 	 */
 	async trackGrandArenaBattle(args, data) {
+		// Resolve opponent name from cached grand arena enemies (#131)
+		const opponentName = await this._resolveOpponentName('grandArenaEnemies', args.enemyUserId);
+
+		// Capture rank before/after if available (#131)
+		const rankBefore = this.lastKnownGrandArenaRank || null;
+		const rankAfter = data.user?.grandArenaRank || data.grandArenaRank || null;
+		if (rankAfter) {
+			this.lastKnownGrandArenaRank = rankAfter;
+		}
+
+		// Calculate actual power from per-round team data (#131 — was hardcoded to 0)
+		const playerPower = this._calculateMultiTeamPower(data.battles, 'attackers');
+		const opponentPower = this._calculateMultiTeamPower(data.battles, 'defenders');
+
+		// Capture per-round win/loss results (#131)
+		const roundResults = data.battles
+			? data.battles.map((b) => ({
+					win: b.result?.win || false,
+					playerPower: b.attackers ? this.calculateTeamPower(b.attackers) : 0,
+					opponentPower: b.defenders ? this.calculateTeamPower(b.defenders) : 0,
+				}))
+			: null;
+
 		const battle = {
 			battleType: 'GrandArena',
 			opponentId: args.enemyUserId,
-			opponentName: null,
+			opponentName,
 			isWin: data.result?.win || false,
-			playerPower: 0, // Grand arena has multiple teams
-			opponentPower: 0,
+			playerPower,
+			opponentPower,
+			rankBefore,
+			rankAfter,
+			roundResults: roundResults ? JSON.stringify(roundResults) : null,
 			playerHeroes: data.battles
 				? JSON.stringify(data.battles.map((b) => this.compressHeroTeam(b.attackers)))
 				: null,
@@ -3969,12 +4024,13 @@ class GameTracker {
 		await this.storage.add('battles', battle);
 		// #51 — fixed param order, boolean→string, use IDB store
 		await this.updateOpponentRecord('GrandArena', args.enemyUserId, battle.isWin, {
-			name: data.response?.user?.name,
+			name: battle.opponentName || data.response?.user?.name,
 			power: data.response?.user?.power || battle.opponentPower,
 		});
 
 		// Live activity event
-		await this._logActivity('battle', `Grand Arena ${battle.isWin ? 'WIN' : 'LOSS'} vs opponent #${battle.opponentId || '?'}`, { isWin: battle.isWin });
+		const oppDisplay = battle.opponentName || `opponent #${battle.opponentId || '?'}`;
+		await this._logActivity('battle', `Grand Arena ${battle.isWin ? 'WIN' : 'LOSS'} vs ${oppDisplay}`, { isWin: battle.isWin });
 
 		// Track resource rewards from grand arena battle
 		// Grand Arena rewards: gold, trophies, sometimes emeralds
@@ -4027,10 +4083,15 @@ class GameTracker {
 		const isWin = data.result?.win || false;
 		const timestamp = new Date().toISOString();
 
+		// Resolve war context from cached data (#131)
+		const currentWar = await this.storage.getMetadata('currentGuildWar', {});
+
 		const battleRecord = {
 			type: 'guildWar',
 			defenderId: args.defenderId,
 			fortId: args.fortId,
+			warId: currentWar.warId || null,
+			enemyGuildName: currentWar.enemyGuildName || null,
 			result: isWin ? 'victory' : 'defeat',
 			myTeam: data.attackers ? this.compressHeroTeam(data.attackers) : null,
 			enemyTeam: data.defenders ? this.compressHeroTeam(data.defenders) : null,
@@ -4048,13 +4109,19 @@ class GameTracker {
 		await this.storage.setMetadata('guildWarBattleHistory', guildWarHistory);
 
 		// Write to IDB battles store for Battles tab display (#85)
+		// (#131) Include opponentId, warId, and opponent guild name
 		const battle = {
 			battleType: 'GuildWar',
+			opponentId: args.defenderId || null,
+			opponentName: currentWar.enemyGuildName || null,
 			isWin,
+			playerPower: data.attackers ? this.calculateTeamPower(data.attackers) : 0,
+			opponentPower: data.defenders ? this.calculateTeamPower(data.defenders) : 0,
 			playerHeroes: data.attackers ? JSON.stringify(this.compressHeroTeam(data.attackers)) : null,
 			opponentHeroes: data.defenders ? JSON.stringify(this.compressHeroTeam(data.defenders)) : null,
 			rewards: data.reward ? JSON.stringify(data.reward) : null,
 			mission: args.fortId || null,
+			warId: currentWar.warId || null,
 			timestamp,
 		};
 
@@ -4153,9 +4220,11 @@ class GameTracker {
 
 		// Write to IDB battles store for Battles tab display (#85)
 		// Raid boss attacks are always successful (you always deal damage)
+		// (#131) Include damage in the IDB battle record for display
 		const battle = {
 			battleType: 'RaidBoss',
 			isWin: true,
+			damage: data.damage || 0,
 			playerHeroes: data.attackers ? JSON.stringify(this.compressHeroTeam(data.attackers)) : null,
 			opponentHeroes: null,
 			rewards: data.reward ? JSON.stringify(data.reward) : null,
@@ -4981,6 +5050,91 @@ class GameTracker {
 	// =====================================================================
 	// Battle Fingerprinting & Deduplication (#44)
 	// =====================================================================
+
+	/**
+	 * Resolve an opponent's name from cached enemy data (#131).
+	 * When the game sends enemies (via arenaGetEnemies/grandArenaGetEnemies/titanArenaGetEnemies),
+	 * we cache them in metadata. This helper looks up the opponent's name by userId
+	 * so we can populate the opponentName field in battle records.
+	 *
+	 * @param {string} metadataKey - Metadata key for cached enemies ('arenaEnemies', 'grandArenaEnemies', 'titanArenaEnemies')
+	 * @param {string|number} opponentId - The opponent's userId to look up
+	 * @returns {Promise<string|null>} The opponent's name, or null if not found
+	 * @private
+	 */
+	async _resolveOpponentName(metadataKey, opponentId) {
+		if (!opponentId) return null;
+		try {
+			const enemies = await this.storage.getMetadata(metadataKey, []);
+			const match = enemies.find((e) => String(e.userId) === String(opponentId));
+			return match?.name || null;
+		} catch {
+			return null;
+		}
+	}
+
+	/**
+	 * Calculate total power across multiple teams (for Grand Arena).
+	 * Sums power from an array of per-round battle data entries.
+	 *
+	 * @param {Array} battles - Array of battle round objects, each with attackers/defenders
+	 * @param {string} side - 'attackers' or 'defenders'
+	 * @returns {number} Total power across all teams
+	 * @private
+	 */
+	_calculateMultiTeamPower(battles, side) {
+		if (!battles || !Array.isArray(battles)) return 0;
+		return battles.reduce((sum, round) => {
+			return sum + (round[side] ? this.calculateTeamPower(round[side]) : 0);
+		}, 0);
+	}
+
+	/**
+	 * Record an adventure battle to the adventureGuide IDB store (#131).
+	 * This builds a per-node database of team compositions used, so we can
+	 * later show recommendations like "For node X, these teams have won N times".
+	 *
+	 * @param {Object} battle - Battle record from trackBattleResult (already stored in 'battles')
+	 * @private
+	 */
+	async _recordAdventureGuideEntry(battle) {
+		try {
+			const entry = {
+				nodeId: String(battle.mission),
+				isWin: battle.isWin === true,
+				playerHeroes: battle.playerHeroes,
+				opponentHeroes: battle.opponentHeroes,
+				timestamp: battle.timestamp,
+			};
+			await this.storage.add('adventureGuide', entry);
+		} catch (err) {
+			console.warn('[OrganizedJihad] Failed to record adventure guide entry:', err);
+		}
+	}
+
+	/**
+	 * Get adventure node recommendations — teams that have successfully beaten
+	 * a given adventure node. Returns an array of winning team entries, newest first.
+	 *
+	 * @param {string} nodeId - The adventure node/mission ID
+	 * @param {number} [limit=10] - Maximum recommendations to return
+	 * @returns {Promise<Array>} Winning team entries
+	 */
+	async getAdventureRecommendations(nodeId, limit = 10) {
+		try {
+			const allEntries = await this.storage.getByIndex('adventureGuide', 'nodeId', String(nodeId));
+			const wins = allEntries.filter((e) => e.isWin);
+			// Newest first
+			wins.sort((a, b) => {
+				const ta = a.timestamp ? new Date(a.timestamp).getTime() : 0;
+				const tb = b.timestamp ? new Date(b.timestamp).getTime() : 0;
+				return tb - ta;
+			});
+			return wins.slice(0, limit);
+		} catch {
+			return [];
+		}
+	}
 
 	/**
 	 * Generate a stable fingerprint for a battle record to prevent duplicates.

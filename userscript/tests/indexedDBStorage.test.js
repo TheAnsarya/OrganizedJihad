@@ -7,8 +7,8 @@
  *
  * Actual IndexedDBStorage key facts:
  *   - DB name: 'OrganizedJihad'
- *   - Version: 9
- *   - 36 object stores (snapshots, battles, heroes, titans, consumableRewards, errorLog, etc.)
+ *   - Version: 11
+ *   - 38 object stores (snapshots, battles, heroes, titans, consumableRewards, errorLog, adventureGuide, etc.)
  *   - Methods: add, put, get, getAll, getByIndex, delete, clear, ensureDB
  *   - init() is idempotent — returns the single initPromise
  */
@@ -46,7 +46,7 @@ describe('IndexedDBStorage', () => {
 		test('should initialize database successfully', async () => {
 			expect(storage.db).toBeDefined();
 			expect(storage.db.name).toBe('OrganizedJihad');
-			expect(storage.db.version).toBe(10);
+			expect(storage.db.version).toBe(11);
 		});
 
 		test('should create core object stores', async () => {
@@ -139,6 +139,18 @@ describe('IndexedDBStorage', () => {
 			const db1 = await storage.init();
 			const db2 = await storage.init();
 			expect(db1).toBe(db2);
+		});
+
+		test('should create Phase 14 adventureGuide store with indexes (#131)', async () => {
+			const names = Array.from(storage.db.objectStoreNames);
+			expect(names).toContain('adventureGuide');
+
+			const tx = storage.db.transaction('adventureGuide', 'readonly');
+			const store = tx.objectStore('adventureGuide');
+			const indexNames = Array.from(store.indexNames);
+			expect(indexNames).toContain('nodeId');
+			expect(indexNames).toContain('timestamp');
+			expect(indexNames).toContain('isWin');
 		});
 	});
 
@@ -421,7 +433,7 @@ describe('IndexedDBStorage', () => {
 
 			expect(result._meta).toBeDefined();
 			expect(result._meta.exportedAt).toBeDefined();
-			expect(result._meta.version).toBe(10);
+			expect(result._meta.version).toBe(11);
 			expect(result.battles).toHaveLength(1);
 			expect(result.battles[0].type).toBe('arena');
 		});
@@ -485,7 +497,7 @@ describe('IndexedDBStorage', () => {
 			expect(names).toContain('heroes');
 			expect(names).toContain('errorLog');
 			expect(names).toContain('mailRewards');
-			expect(names.length).toBe(37);
+			expect(names.length).toBe(38);
 		});
 	});
 });

@@ -170,7 +170,7 @@ class UIManager {
 					<button class="oj-nav-btn" data-view="activity">Activity</button>
 					<button class="oj-nav-btn" data-view="heroes">Heroes</button>
 					<button class="oj-nav-btn" data-view="titans">Titans</button>
-					<button class="oj-nav-btn" data-view="pets">Pets</button>
+					<button class="oj-nav-btn" data-view="pets">\uD83D\uDC3E Pets</button>
 					<button class="oj-nav-btn" data-view="upgrades">Upgrades</button>
 					<button class="oj-nav-btn" data-view="battles">Battles</button>
 					<button class="oj-nav-btn" data-view="chests">Chests</button>
@@ -1563,6 +1563,27 @@ class UIManager {
 			const opponent = b.opponentName || b.defenderId || b.opponentId || '\u2014';
 			const type = typeLabels[b.battleType] || b.battleType || '\u2014';
 
+			// Rank change display for arena-type battles (#131)
+			let rankHtml = '\u2014';
+			if (b.rankBefore || b.rankAfter) {
+				const before = b.rankBefore ? `#${b.rankBefore}` : '?';
+				const after = b.rankAfter ? `#${b.rankAfter}` : '?';
+				if (b.rankBefore && b.rankAfter) {
+					const delta = b.rankBefore - b.rankAfter; // positive = rank improved (lower number)
+					const cls = delta > 0 ? 'oj-win' : delta < 0 ? 'oj-loss' : 'oj-muted';
+					const arrow = delta > 0 ? '\u25B2' : delta < 0 ? '\u25BC' : '\u25CF';
+					rankHtml = `<span class="${cls}">${before}\u2192${after} ${arrow}</span>`;
+				} else {
+					rankHtml = `${before}\u2192${after}`;
+				}
+			}
+
+			// Raid boss damage display (#131)
+			let raidDmgHtml = '';
+			if (b.battleType === 'RaidBoss' && b.damage > 0) {
+				raidDmgHtml = `<span class="oj-mono oj-dmg">${this._formatCompact(b.damage)}</span>`;
+			}
+
 			// Calculate total damage/healing from compressed team data (#111)
 			let totalDmg = 0;
 			let totalHeal = 0;
@@ -1577,13 +1598,32 @@ class UIManager {
 				}
 			} catch { /* empty */ }
 
-			const dmgCell = totalDmg > 0 ? `<span class="oj-mono oj-dmg">${this._formatCompact(totalDmg)}</span>` : '\u2014';
+			const dmgCell = raidDmgHtml || (totalDmg > 0 ? `<span class="oj-mono oj-dmg">${this._formatCompact(totalDmg)}</span>` : '\u2014');
 			const healCell = totalHeal > 0 ? `<span class="oj-mono oj-heal">${this._formatCompact(totalHeal)}</span>` : '\u2014';
+
+			// Grand Arena per-round results (#131)
+			let roundResultsHtml = '';
+			if (b.battleType === 'GrandArena' && b.roundResults) {
+				try {
+					const rounds = JSON.parse(b.roundResults);
+					const pills = rounds.map((r, i) => {
+						const cls = r.win ? 'oj-win' : 'oj-loss';
+						return `<span class="oj-round-pill ${cls}" title="Round ${i + 1}: ${r.win ? 'Win' : 'Loss'} (${this._formatCompact(r.playerPower || 0)} vs ${this._formatCompact(r.opponentPower || 0)})">R${i + 1} ${r.win ? '\u2714' : '\u2718'}</span>`;
+					}).join(' ');
+					roundResultsHtml = `<div class="oj-round-results">${pills}</div>`;
+				} catch { /* empty */ }
+			}
+
+			// Power display for PvP battles
+			let powerHtml = '';
+			if (b.playerPower || b.opponentPower) {
+				powerHtml = `<span class="oj-mono oj-muted" title="Your power vs opponent power">${this._formatCompact(b.playerPower || 0)} vs ${this._formatCompact(b.opponentPower || 0)}</span>`;
+			}
 
 			// Battle detail row with team compositions and avatars
 			const playerTeamHtml = this._renderBattleTeam(b.playerHeroes, '\uD83D\uDDE1\uFE0F Attack');
 			const opponentTeamHtml = this._renderBattleTeam(b.opponentHeroes, '\uD83D\uDEE1\uFE0F Defense');
-			const hasDetail = playerTeamHtml || opponentTeamHtml;
+			const hasDetail = playerTeamHtml || opponentTeamHtml || roundResultsHtml || powerHtml;
 			const battleId = `battle-${b.timestamp || Math.random()}`;
 
 			return `
@@ -1591,13 +1631,16 @@ class UIManager {
 					<td class="oj-mono">${time}</td>
 					<td>${type}</td>
 					<td>${this._escapeHtml(String(opponent))}</td>
+					<td>${rankHtml}</td>
 					<td>${dmgCell}</td>
 					<td>${healCell}</td>
 					<td>${result}</td>
 				</tr>
 				${hasDetail ? `<tr class="oj-battle-detail" data-detail-for="${battleId}" style="display:none">
-					<td colspan="6">
+					<td colspan="7">
 						<div class="oj-battle-teams">
+							${powerHtml ? `<div class="oj-battle-power">\u26A1 ${powerHtml}</div>` : ''}
+							${roundResultsHtml}
 							${playerTeamHtml}
 							${opponentTeamHtml}
 						</div>
@@ -1605,6 +1648,12 @@ class UIManager {
 				</tr>` : ''}
 			`;
 		}).join('');
+
+		// Adventure Guide panel — shown on Adventure sub-tab (#131)
+		let adventureGuideHtml = '';
+		if (vs.subTab === 'Adventure' && filtered.length > 0) {
+			adventureGuideHtml = this._renderAdventureGuide(filtered);
+		}
 
 		return `
 			<div class="oj-battles" data-browser="battles">
@@ -1615,10 +1664,11 @@ class UIManager {
 					${this._statCard(fWinRate + '%', 'Win Rate', '#2196F3')}
 				</div>
 				<div class="oj-sub-tabs">${pills}</div>
+				${adventureGuideHtml}
 				${this._renderSearchBar(vs.filter, 'Search opponent...')}
 				<table class="oj-table">
 					<thead>
-						<tr><th>Time</th><th>Type</th><th>Opponent</th><th>Dmg</th><th>Heal</th><th>Result</th></tr>
+						<tr><th>Time</th><th>Type</th><th>Opponent</th><th>Rank</th><th>Dmg</th><th>Heal</th><th>Result</th></tr>
 					</thead>
 					<tbody>${rows}</tbody>
 				</table>
@@ -4142,6 +4192,82 @@ class UIManager {
 			`<div class="oj-battle-team-label">${label}</div>` +
 			teamHtmls +
 			`</div>`;
+	}
+
+	/**
+	 * Render an Adventure Guide panel showing per-node win/loss stats
+	 * and recommended teams (#131).
+	 *
+	 * Groups adventure battles by mission (node) ID, computes win rate,
+	 * and displays the most recent winning team for each node.
+	 *
+	 * @param {Array} adventureBattles - Filtered adventure-type battle records
+	 * @returns {string} HTML panel
+	 * @private
+	 */
+	_renderAdventureGuide(adventureBattles) {
+		// Group by node (mission) ID
+		/** @type {Map<string, {wins: number, losses: number, lastWinTeam: string|null, lastEnemyTeam: string|null, lastWinTime: string|null}>} */
+		const nodeMap = new Map();
+
+		for (const b of adventureBattles) {
+			const nodeId = String(b.mission || 'unknown');
+			if (!nodeMap.has(nodeId)) {
+				nodeMap.set(nodeId, { wins: 0, losses: 0, lastWinTeam: null, lastEnemyTeam: null, lastWinTime: null });
+			}
+			const node = nodeMap.get(nodeId);
+			if (b.isWin === true) {
+				node.wins++;
+				// Track the most recent winning team
+				if (!node.lastWinTime || b.timestamp > node.lastWinTime) {
+					node.lastWinTeam = b.playerHeroes;
+					node.lastEnemyTeam = b.opponentHeroes;
+					node.lastWinTime = b.timestamp;
+				}
+			} else {
+				node.losses++;
+			}
+		}
+
+		// Sort nodes: most battles first
+		const sortedNodes = [...nodeMap.entries()].sort((a, b) => {
+			return (b[1].wins + b[1].losses) - (a[1].wins + a[1].losses);
+		});
+
+		// Only show top 20 nodes
+		const displayNodes = sortedNodes.slice(0, 20);
+
+		if (displayNodes.length === 0) return '';
+
+		const nodeRows = displayNodes.map(([nodeId, stats]) => {
+			const total = stats.wins + stats.losses;
+			const wr = total > 0 ? ((stats.wins / total) * 100).toFixed(0) : '0';
+			const wrClass = parseInt(wr, 10) >= 50 ? 'oj-win' : 'oj-loss';
+			const teamHtml = stats.lastWinTeam
+				? this._renderBattleTeam(stats.lastWinTeam, '\u2705 Winning Team')
+				: '<span class="oj-muted">No wins recorded</span>';
+			const enemyHtml = stats.lastEnemyTeam
+				? this._renderBattleTeam(stats.lastEnemyTeam, '\uD83D\uDC7E Enemies')
+				: '';
+
+			return `
+				<div class="oj-adv-node">
+					<div class="oj-adv-node-header">
+						<span class="oj-mono">Node ${this._escapeHtml(nodeId)}</span>
+						<span class="${wrClass}">${stats.wins}W / ${stats.losses}L (${wr}%)</span>
+					</div>
+					<div class="oj-adv-node-teams">${teamHtml}${enemyHtml}</div>
+				</div>
+			`;
+		}).join('');
+
+		return `
+			<div class="oj-adventure-guide">
+				<h4>\uD83D\uDDFA\uFE0F Adventure Guide <span class="oj-muted">(${nodeMap.size} nodes tracked)</span></h4>
+				<p class="oj-muted" style="margin:0 0 8px;font-size:11px">Shows winning teams per adventure node. Expand battle rows for full details.</p>
+				<div class="oj-adv-nodes">${nodeRows}</div>
+			</div>
+		`;
 	}
 
 	/**

@@ -41,12 +41,17 @@
  * - consumableRewards: Individual drop records from chests/loot boxes for
  *   drop-rate analysis. Each record links to a parent chest opening and
  *   records the item type, item ID, quantity, and source.
+ *
+ * NEW in v11 (Phase 14 - Adventure Guide / Battle Tracking Overhaul #131):
+ * - adventureGuide: Per-node winning team recommendations built from
+ *   battle history. Keyed by nodeId (mission ID), stores an array of
+ *   team compositions that have beaten each node.
  */
 
 class IndexedDBStorage {
 	constructor() {
 		this.dbName = 'OrganizedJihad';
-		this.version = 10; // v10: Added mailRewards store for mail tracking (#94)
+		this.version = 11; // v11: Added adventureGuide store for node recommendations (#131)
 		this.db = null;
 		/** @type {Promise<IDBDatabase>} Resolves once the DB is open and upgraded. */
 		this.initPromise = this._openDatabase();
@@ -426,6 +431,19 @@ class IndexedDBStorage {
 					mailStore.createIndex('mailId', 'mailId', { unique: false });
 					mailStore.createIndex('mailType', 'mailType', { unique: false });
 					mailStore.createIndex('playerId', 'playerId', { unique: false });
+				}
+
+				// === Phase 14: Adventure Guide — Node Recommendations (#131) ===
+
+				// Stores successful team compositions per adventure node (mission ID).
+				// When we win a battle with battleType 'Adventure', we record the
+				// player's team and the enemy team for that node. Over time this
+				// builds a database of "teams that work" for each adventure node.
+				if (!db.objectStoreNames.contains('adventureGuide')) {
+					const guideStore = db.createObjectStore('adventureGuide', { keyPath: 'id', autoIncrement: true });
+					guideStore.createIndex('nodeId', 'nodeId', { unique: false });
+					guideStore.createIndex('timestamp', 'timestamp', { unique: false });
+					guideStore.createIndex('isWin', 'isWin', { unique: false });
 				}
 			};
 		});

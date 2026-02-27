@@ -1309,6 +1309,86 @@
 .oj-dmg { color: #ef9a9a; }
 .oj-heal { color: #81c784; }
 
+/* ── Battle round results & power (#131) ─────────────────────────── */
+
+.oj-round-results {
+	display: flex;
+	gap: 6px;
+	margin-bottom: 8px;
+	flex-wrap: wrap;
+}
+
+.oj-round-pill {
+	font-size: 11px;
+	font-weight: 600;
+	padding: 2px 8px;
+	border-radius: 10px;
+	background: rgba(0, 0, 0, 0.3);
+	border: 1px solid rgba(255, 255, 255, 0.1);
+	cursor: default;
+}
+
+.oj-round-pill.oj-win {
+	border-color: rgba(76, 175, 80, 0.4);
+	background: rgba(76, 175, 80, 0.15);
+}
+
+.oj-round-pill.oj-loss {
+	border-color: rgba(244, 67, 54, 0.4);
+	background: rgba(244, 67, 54, 0.15);
+}
+
+.oj-battle-power {
+	font-size: 12px;
+	margin-bottom: 6px;
+	color: rgba(255, 255, 255, 0.7);
+}
+
+/* ── Adventure Guide (#131) ──────────────────────────────────────── */
+
+.oj-adventure-guide {
+	background: rgba(0, 0, 0, 0.2);
+	border: 1px solid rgba(255, 255, 255, 0.08);
+	border-radius: 6px;
+	padding: 10px 12px;
+	margin-bottom: 10px;
+}
+
+.oj-adventure-guide h4 {
+	margin: 0 0 8px;
+	font-size: 13px;
+}
+
+.oj-adv-nodes {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+	max-height: 360px;
+	overflow-y: auto;
+}
+
+.oj-adv-node {
+	background: rgba(255, 255, 255, 0.04);
+	border: 1px solid rgba(255, 255, 255, 0.06);
+	border-radius: 4px;
+	padding: 6px 10px;
+}
+
+.oj-adv-node-header {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	font-size: 12px;
+	font-weight: 600;
+	margin-bottom: 4px;
+}
+
+.oj-adv-node-teams {
+	display: flex;
+	gap: 12px;
+	flex-wrap: wrap;
+}
+
 /* ── Titan Avatar Fallback ───────────────────────────────────────── */
 
 .oj-avatar-fallback {
