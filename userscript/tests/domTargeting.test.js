@@ -233,14 +233,17 @@ describe('DomTargeting', () => {
 	describe('battle API call variants', () => {
 		const battleStartCalls = [
 			'battleStart', 'arenaAttack', 'grandArenaAttack', 'titanArenaAttack',
-			'clanWarAttack', 'clanRaidAttack', 'adventureBattle', 'towerAttack',
-			'missionStart', 'battleGetReplay',
+			'clanWarAttack', 'clanRaidAttack', 'bossRaidAttack', 'adventureBattle',
+			'towerAttack', 'missionStart', 'battleGetReplay',
+			'dungeonBattle', 'titanDungeonBattle', 'clashBattle',
+			'tournamentBattle', 'expeditionBattle', 'clanDungeonBattle',
 		];
 
 		const battleEndCalls = [
-			'battleEnd', 'arenaResult', 'grandArenaResult', 'titanArenaResult',
-			'clanWarResult', 'clanRaidResult', 'adventureEnd', 'towerResult',
-			'missionEnd', 'missionResult',
+			'battleEnd', 'arenaEnd', 'grandArenaEnd', 'titanArenaEnd',
+			'clanWarEnd', 'clanRaidEnd', 'adventureEnd', 'towerEnd',
+			'missionEnd', 'dungeonEnd', 'titanDungeonEnd',
+			'clashEnd', 'tournamentEnd', 'bossEnd', 'expeditionEnd',
 		];
 
 		it.each(battleStartCalls)('should detect %s as battle start', (call) => {

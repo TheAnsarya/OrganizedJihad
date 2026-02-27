@@ -57,24 +57,36 @@ const BATTLE_START_CALLS = new Set([
 	'titanArenaAttack',
 	'clanWarAttack',
 	'clanRaidAttack',
+	'bossRaidAttack',
 	'adventureBattle',
 	'towerAttack',
 	'missionStart',
 	'battleGetReplay',
+	'dungeonBattle',
+	'titanDungeonBattle',
+	'clashBattle',
+	'tournamentBattle',
+	'expeditionBattle',
+	'clanDungeonBattle',
 ]);
 
 /** API call names that indicate a battle has ended */
 const BATTLE_END_CALLS = new Set([
 	'battleEnd',
-	'arenaResult',
-	'grandArenaResult',
-	'titanArenaResult',
-	'clanWarResult',
-	'clanRaidResult',
+	'arenaEnd',
+	'grandArenaEnd',
+	'titanArenaEnd',
+	'clanWarEnd',
+	'clanRaidEnd',
 	'adventureEnd',
-	'towerResult',
+	'towerEnd',
 	'missionEnd',
-	'missionResult',
+	'dungeonEnd',
+	'titanDungeonEnd',
+	'clashEnd',
+	'tournamentEnd',
+	'bossEnd',
+	'expeditionEnd',
 ]);
 
 // ────────────────────────────────────────────────────────────────────────────

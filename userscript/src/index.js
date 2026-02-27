@@ -343,8 +343,10 @@ import './styles/main.css';
 		});
 		domTargeting.init();
 
-		// Register OJ elements for auto-hide during battles
-		domTargeting.registerElement(statusBadge);
+		// Register OJ elements for auto-hide during battles.
+		// The status badge is intentionally NOT registered — it should
+		// always be visible so the user knows the script is active,
+		// even during Arena / Grand Arena / other battles.
 		if (uiManager.overlay) domTargeting.registerElement(uiManager.overlay);
 		if (gameOverlay.panel) domTargeting.registerElement(gameOverlay.panel);
 

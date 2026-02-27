@@ -170,6 +170,7 @@ The `Settings` tab => `About` section says  `Hero Wars Tracker v0.9.2` but it's 
 
 (userscript) work issues and review api call and implement tracking for everything and display on UI correctly, as I instructed; continue;
 
+(userscript) with the current script, if you attack in a battle in Arena, the Organized Jihad badge at the top center disappears, but it shouldn't; same with Guild Arena, make sure the app badge is always there; continue;
 
 
 
