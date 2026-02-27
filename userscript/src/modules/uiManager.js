@@ -641,6 +641,45 @@ class UIManager {
 			gachaData = (await this.idbStorage.getMetadata('gacha_heroGacha', null)) || {};
 		} catch { /* empty */ }
 
+		// ── Phase 13: New metadata caches (#121) ─────────────────────
+		let towerState = {};
+		try {
+			towerState = (await this.idbStorage.getMetadata('towerState', null)) || {};
+		} catch { /* empty */ }
+
+		let expeditionSlots = {};
+		try {
+			expeditionSlots = (await this.idbStorage.getMetadata('expeditionSlots', null)) || {};
+		} catch { /* empty */ }
+
+		let outlandBosses = {};
+		try {
+			outlandBosses = (await this.idbStorage.getMetadata('outlandBosses', null)) || {};
+		} catch { /* empty */ }
+
+		let adventurePassed = {};
+		try {
+			adventurePassed = (await this.idbStorage.getMetadata('adventurePassed', null)) || {};
+		} catch { /* empty */ }
+
+		let workshopBuffs = {};
+		try {
+			workshopBuffs = (await this.idbStorage.getMetadata('workshopBuffs', null)) || {};
+		} catch { /* empty */ }
+
+		let cosmeticCounts = { avatars: 0, frames: 0, stickers: 0 };
+		try {
+			const av = (await this.idbStorage.getMetadata('avatars', null)) || {};
+			const fr = (await this.idbStorage.getMetadata('avatarFrames', null)) || {};
+			const st = (await this.idbStorage.getMetadata('stickers', null)) || {};
+			cosmeticCounts = { avatars: av.count || 0, frames: fr.count || 0, stickers: st.count || 0 };
+		} catch { /* empty */ }
+
+		let invasionData = {};
+		try {
+			invasionData = (await this.idbStorage.getMetadata('invasionData', null)) || {};
+		} catch { /* empty */ }
+
 		// Gather counts from actual IndexedDB stores
 		const snapshotCount = await this._countStore('snapshots');
 		const heroCount = await this._countStore('heroes');
@@ -820,6 +859,48 @@ class UIManager {
 							<div style="font-size:14px;font-weight:700;color:#90caf9">${guildActivity.activitySum?.toLocaleString()}</div>
 							<div style="font-size:10px;color:#888">Weekly Activity</div>
 						</div>
+					</div>` : ''}
+					${(towerState.floorNumber || expeditionSlots.totalSlots || outlandBosses.bossCount || adventurePassed.totalAdventures) ? `<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px">
+						${towerState.floorNumber ? `<div style="flex:1;min-width:100px;background:#2a2a2e;border-radius:6px;padding:6px 8px;text-align:center">
+							<div style="font-size:14px">\uD83C\uDFF0</div>
+							<div style="font-size:16px;font-weight:700;color:#b39ddb">F${towerState.floorNumber}</div>
+							<div style="font-size:10px;color:#888">Tower Floor</div>
+							<div style="font-size:9px;color:#aaa">${Number(towerState.points || 0).toLocaleString()} pts${towerState.maySkipFloor ? ` · Skip\u2264${towerState.maySkipFloor}` : ''}</div>
+						</div>` : ''}
+						${expeditionSlots.totalSlots ? `<div style="flex:1;min-width:100px;background:#2a2a2e;border-radius:6px;padding:6px 8px;text-align:center">
+							<div style="font-size:14px">\u26F5</div>
+							<div style="font-size:16px;font-weight:700;color:#80cbc4">${expeditionSlots.completeCount}/${expeditionSlots.totalSlots}</div>
+							<div style="font-size:10px;color:#888">Expeditions</div>
+							${expeditionSlots.activeCount ? `<div style="font-size:9px;color:#aaa">${expeditionSlots.activeCount} active</div>` : ''}
+						</div>` : ''}
+						${outlandBosses.bossCount ? `<div style="flex:1;min-width:100px;background:#2a2a2e;border-radius:6px;padding:6px 8px;text-align:center">
+							<div style="font-size:14px">\uD83D\uDC80</div>
+							<div style="font-size:16px;font-weight:700;color:#ef9a9a">${outlandBosses.totalChests}/${outlandBosses.bossCount * 3}</div>
+							<div style="font-size:10px;color:#888">Outland Chests</div>
+						</div>` : ''}
+						${adventurePassed.totalAdventures ? `<div style="flex:1;min-width:100px;background:#2a2a2e;border-radius:6px;padding:6px 8px;text-align:center">
+							<div style="font-size:14px">\uD83D\uDDFA\uFE0F</div>
+							<div style="font-size:16px;font-weight:700;color:#a5d6a7">${adventurePassed.totalCompletions}</div>
+							<div style="font-size:10px;color:#888">Adventures</div>
+							<div style="font-size:9px;color:#aaa">${adventurePassed.totalAdventures} maps</div>
+						</div>` : ''}
+						${workshopBuffs.totalBuffs ? `<div style="flex:1;min-width:100px;background:#2a2a2e;border-radius:6px;padding:6px 8px;text-align:center">
+							<div style="font-size:14px">\uD83D\uDD27</div>
+							<div style="font-size:16px;font-weight:700;color:#ffcc80">${workshopBuffs.activeBuffs}/${workshopBuffs.totalBuffs}</div>
+							<div style="font-size:10px;color:#888">Workshop Buffs</div>
+						</div>` : ''}
+						${(cosmeticCounts.avatars + cosmeticCounts.frames + cosmeticCounts.stickers) > 0 ? `<div style="flex:1;min-width:100px;background:#2a2a2e;border-radius:6px;padding:6px 8px;text-align:center">
+							<div style="font-size:14px">\uD83C\uDFA8</div>
+							<div style="font-size:14px;font-weight:700;color:#f48fb1">${cosmeticCounts.avatars + cosmeticCounts.frames + cosmeticCounts.stickers}</div>
+							<div style="font-size:10px;color:#888">Cosmetics</div>
+							<div style="font-size:9px;color:#aaa">${cosmeticCounts.avatars}\uD83D\uDC64 ${cosmeticCounts.frames}\uD83D\uDDBC\uFE0F ${cosmeticCounts.stickers}\u2B50</div>
+						</div>` : ''}
+						${invasionData.id ? `<div style="flex:1;min-width:100px;background:#2a2a2e;border-radius:6px;padding:6px 8px;text-align:center">
+							<div style="font-size:14px">\uD83D\uDE80</div>
+							<div style="font-size:16px;font-weight:700;color:#ff8a65">Active</div>
+							<div style="font-size:10px;color:#888">Invasion</div>
+							${invasionData.bestPlace ? `<div style="font-size:9px;color:#aaa">Best: #${invasionData.bestPlace}</div>` : ''}
+						</div>` : ''}
 					</div>` : ''}
 				</div>`
 			: '';

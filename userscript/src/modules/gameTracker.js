@@ -2815,6 +2815,311 @@ class GameTracker {
 		this.registerHandler('friendGetHearts', async (_call, _args, data) => {
 			await this._logActivity('social', 'Hearts received from friends');
 		}, 'trackFriendGetHearts', { category: 'social' });
+
+		// =============================================================
+		// Phase 13: Second API Samples Analysis (#121)
+		// 30 new API methods discovered in hw-api-samples-2026-02-27 (2).json
+		// =============================================================
+
+		// ── Boss Outland (Outland boss states/chests) ────────────────
+		/** @see https://community.hero-wars.com/discussion/outland-bosses */
+		this.registerHandler('bossGetAll', async (_call, _args, data) => {
+			const bosses = Array.isArray(data) ? data : [];
+			await this.storage.setMetadata('outlandBosses', {
+				bosses: bosses.map((b) => ({
+					id: b.id,
+					bossLevel: b.bossLevel ?? 0,
+					chestNum: b.chestNum ?? 0,
+					chestId: b.chestId ?? 0,
+				})),
+				bossCount: bosses.length,
+				totalChests: bosses.reduce((sum, b) => sum + (b.chestNum ?? 0), 0),
+				lastUpdate: Date.now(),
+			});
+		}, 'trackOutlandBosses', { category: 'pve' });
+
+		// ── Tower Progress (current floor, points, skip eligibility) ─
+		this.registerHandler('towerGetInfo', async (_call, _args, data) => {
+			await this.storage.setMetadata('towerState', {
+				floorNumber: Number(data.floorNumber) || 0,
+				floorType: data.floorType || 'unknown',
+				points: Number(data.points) || 0,
+				maySkipFloor: Number(data.maySkipFloor) || 0,
+				teamLevel: Number(data.teamLevel) || 0,
+				lastUpdate: Date.now(),
+			});
+		}, 'trackTowerState', { category: 'pve' });
+
+		// ── Expedition Slots (active/complete expeditions) ───────────
+		this.registerHandler('expeditionGet', async (_call, _args, data) => {
+			const slots = typeof data === 'object' && data !== null ? Object.values(data) : [];
+			const active = slots.filter((s) => s.status === 1 || s.status === 2);
+			const complete = slots.filter((s) => s.status === 3);
+			await this.storage.setMetadata('expeditionSlots', {
+				slots: slots.map((s) => ({
+					id: s.id,
+					slotId: s.slotId,
+					status: s.status,
+					duration: s.duration ?? 0,
+					endTime: s.endTime ?? 0,
+				})),
+				totalSlots: slots.length,
+				activeCount: active.length,
+				completeCount: complete.length,
+				lastUpdate: Date.now(),
+			});
+		}, 'trackExpeditionSlots', { category: 'pve' });
+
+		// ── Invasion Event Info ──────────────────────────────────────
+		this.registerHandler('invasion_getInfo', async (_call, _args, data) => {
+			await this.storage.setMetadata('invasionData', {
+				id: data.id ?? null,
+				bestPlace: data.bestPlace ?? 0,
+				farmedRewards: Array.isArray(data.farmedRewards) ? data.farmedRewards.length : 0,
+				actions: Array.isArray(data.actions) ? data.actions.map((a) => ({
+					type: a.type,
+					startDate: a.startDate,
+					endDate: a.endDate,
+				})) : [],
+				lastUpdate: Date.now(),
+			});
+		}, 'trackInvasionInfo', { category: 'events' });
+
+		// ── Workshop Buffs (Outland workshop buffs/boosts) ───────────
+		this.registerHandler('workshopBuff_getInfo', async (_call, _args, data) => {
+			const buffs = Array.isArray(data) ? data : [];
+			await this.storage.setMetadata('workshopBuffs', {
+				buffs: buffs.map((b) => ({
+					id: b.id,
+					type: b.type ?? 'unknown',
+					amount: b.amount ?? 0,
+					level: b.level ?? 0,
+					inUse: b.inUse ?? false,
+				})),
+				totalBuffs: buffs.length,
+				activeBuffs: buffs.filter((b) => b.inUse).length,
+				lastUpdate: Date.now(),
+			});
+		}, 'trackWorkshopBuffs', { category: 'pve' });
+
+		// ── Special Battle Pass (event/seasonal battle passes) ───────
+		this.registerHandler('battlePass_getSpecial', async (_call, _args, data) => {
+			const passes = typeof data === 'object' && data !== null ? Object.values(data) : [];
+			const active = passes.filter((p) => {
+				const now = Math.floor(Date.now() / 1000);
+				return p.endDate && p.endDate > now;
+			});
+			await this.storage.setMetadata('battlePassSpecial', {
+				passes: active.map((p) => ({
+					id: p.id,
+					exp: p.exp ?? 0,
+					ticket: p.ticket ?? 0,
+					startDate: p.startDate,
+					endDate: p.endDate,
+				})),
+				activeCount: active.length,
+				lastUpdate: Date.now(),
+			});
+		}, 'trackBattlePassSpecial', { category: 'events' });
+
+		// ── Battle Pass Farm Reward (claimed reward event) ───────────
+		this.registerHandler('battlePass_farmReward', async (_call, _args, data) => {
+			const rewards = Object.entries(data || {}).map(([k, v]) => `${k}: ${v}`).join(', ');
+			await this._logActivity('reward', `Battle Pass reward claimed: ${rewards}`);
+		}, 'trackBattlePassFarmReward', { category: 'economy' });
+
+		// ── Pet Chest Info (pet chest spending/daily pet) ────────────
+		this.registerHandler('pet_getChest', async (_call, _args, data) => {
+			await this.storage.setMetadata('petChest', {
+				starmoneySpent: Number(data.starmoneySpent) || 0,
+				dailyPetId: data.dailyPetId || null,
+				lastUpdate: Date.now(),
+			});
+		}, 'trackPetChest', { category: 'pets' });
+
+		// ── Adventure (Co-op) — Active, Passed, Lobby ───────────────
+		this.registerHandler('adventure_getActiveData', async (_call, _args, data) => {
+			await this.storage.setMetadata('adventureActive', {
+				hasActive: data.hasActive ?? false,
+				hasRewards: data.hasRewards ?? false,
+				lastChatTime: data.lastChatTime ?? null,
+				lastUpdate: Date.now(),
+			});
+		}, 'trackAdventureActive', { category: 'pve' });
+
+		this.registerHandler('adventure_getPassed', async (_call, _args, data) => {
+			const entries = typeof data === 'object' && data !== null ? Object.entries(data) : [];
+			const totalPassed = entries.reduce((sum, [, count]) => sum + (Number(count) || 0), 0);
+			await this.storage.setMetadata('adventurePassed', {
+				adventureMap: data,
+				totalAdventures: entries.length,
+				totalCompletions: totalPassed,
+				lastUpdate: Date.now(),
+			});
+		}, 'trackAdventurePassed', { category: 'pve' });
+
+		this.registerHandler('adventure_find', async (_call, _args, data) => {
+			const lobbies = Array.isArray(data.lobbies) ? data.lobbies : [];
+			await this.storage.setMetadata('adventureLobbies', {
+				lobbyCount: lobbies.length,
+				userCount: Array.isArray(data.users) ? data.users.length : 0,
+				lastUpdate: Date.now(),
+			});
+		}, 'trackAdventureLobbies', { category: 'pve' });
+
+		// ── Solo Adventure ──────────────────────────────────────────
+		this.registerHandler('adventureSolo_getActiveData', async (_call, _args, data) => {
+			await this.storage.setMetadata('adventureSoloActive', {
+				hasActive: data.hasActive ?? false,
+				lastUpdate: Date.now(),
+			});
+		}, 'trackAdventureSoloActive', { category: 'pve' });
+
+		// ── All Chats Summary (channel message counts) ──────────────
+		this.registerHandler('chatsGetAll', async (_call, _args, data) => {
+			const channels = typeof data === 'object' && data !== null ? Object.keys(data) : [];
+			const messageCounts = {};
+			for (const ch of channels) {
+				const chat = data[ch]?.chat;
+				messageCounts[ch] = Array.isArray(chat) ? chat.length : 0;
+			}
+			await this.storage.setMetadata('chatSummary', {
+				channels,
+				messageCounts,
+				totalMessages: Object.values(messageCounts).reduce((s, c) => s + c, 0),
+				lastUpdate: Date.now(),
+			});
+		}, 'trackChatSummary', { category: 'social' });
+
+		// ── Titan Arena — Forgotten check & Chest Rewards ───────────
+		this.registerHandler('titanArenaCheckForgotten', async (_call, _args, data) => {
+			if (data?.result) {
+				await this._logActivity('reminder', 'Forgotten Titan Arena battle detected');
+			}
+		}, 'trackTitanArenaForgotten', { category: 'battles' });
+
+		this.registerHandler('titanArenaGetChestReward', async (_call, _args, data) => {
+			const rewards = Array.isArray(data) ? data : [];
+			if (rewards.length > 0) {
+				await this._logActivity('reward', `Titan Arena chest: ${rewards.length} reward(s)`);
+			}
+		}, 'trackTitanArenaChestReward', { category: 'battles' });
+
+		// ── Cosmetics (Avatars, Frames, Stickers) ───────────────────
+		this.registerHandler('userGetAvailableAvatarFrames', async (_call, _args, data) => {
+			const frames = data?.frames ? Object.keys(data.frames) : [];
+			await this.storage.setMetadata('avatarFrames', {
+				count: frames.length,
+				frameIds: frames.map(Number),
+				lastUpdate: Date.now(),
+			});
+		}, 'trackAvatarFrames', { category: 'cosmetics' });
+
+		this.registerHandler('userGetAvailableAvatars', async (_call, _args, data) => {
+			const avatars = Array.isArray(data) ? data : [];
+			await this.storage.setMetadata('avatars', {
+				count: avatars.length,
+				avatarIds: avatars,
+				lastUpdate: Date.now(),
+			});
+		}, 'trackAvatars', { category: 'cosmetics' });
+
+		this.registerHandler('userGetAvailableStickers', async (_call, _args, data) => {
+			const stickers = Array.isArray(data) ? data : [];
+			await this.storage.setMetadata('stickers', {
+				count: stickers.length,
+				stickerIds: stickers,
+				lastUpdate: Date.now(),
+			});
+		}, 'trackStickers', { category: 'cosmetics' });
+
+		// ── Telegram/Social Quest Info ───────────────────────────────
+		this.registerHandler('telegramQuestGetInfo', async (_call, _args, data) => {
+			const entries = typeof data === 'object' && data !== null ? Object.entries(data) : [];
+			const completed = entries.filter(([, v]) => v === '1' || v === true).length;
+			await this.storage.setMetadata('telegramQuests', {
+				quests: data,
+				totalQuests: entries.length,
+				completedQuests: completed,
+				lastUpdate: Date.now(),
+			});
+		}, 'trackTelegramQuests', { category: 'social' });
+
+		// ── Rewarded Video / Boxy Rewards (Ad rewards) ──────────────
+		this.registerHandler('rewardedVideo_boxyGetInfo', async (_call, _args, data) => {
+			const rewards = Array.isArray(data?.rewards) ? data.rewards : [];
+			const farmed = rewards.filter((r) => r.farmed).length;
+			await this.storage.setMetadata('boxyRewards', {
+				totalSlots: rewards.length,
+				farmedSlots: farmed,
+				remainingSlots: rewards.length - farmed,
+				lastUpdate: Date.now(),
+			});
+		}, 'trackBoxyRewards', { category: 'economy' });
+
+		// ── Sale Showcase ───────────────────────────────────────────
+		this.registerHandler('saleShowcase_rewardInfo', async (_call, _args, data) => {
+			await this.storage.setMetadata('saleShowcase', {
+				nextRefill: data.nextRefill ?? null,
+				hasReward: data.reward != null,
+				lastUpdate: Date.now(),
+			});
+		}, 'trackSaleShowcase', { category: 'economy' });
+
+		// ── Low-value / Config endpoints (suppress "unhandled" noise) ─
+		// These methods return config data, timestamps, or session metadata
+		// that don't warrant individual tracking but should not spam the
+		// unhandled API log.
+
+		/** Server timestamp — fires on every session, no tracking value */
+		this.registerHandler('getTime', async () => {
+			// No-op: server timestamp
+		}, 'ignoreGetTime', { category: 'system' });
+
+		/** Session registration — fires once per login */
+		this.registerHandler('registration', async () => {
+			// No-op: session registration
+		}, 'ignoreRegistration', { category: 'system' });
+
+		/** Tutorial completion flags — static after early game */
+		this.registerHandler('tutorialGetInfo', async () => {
+			// No-op: tutorial flags
+		}, 'ignoreTutorialInfo', { category: 'system' });
+
+		/** A/B test split assignments */
+		this.registerHandler('splitGetAll', async () => {
+			// No-op: A/B test splits
+		}, 'ignoreSplitGetAll', { category: 'system' });
+
+		/** Client stash flags */
+		this.registerHandler('stashClient', async () => {
+			// No-op: client stash flags
+		}, 'ignoreStashClient', { category: 'system' });
+
+		/** Freebie group availability check */
+		this.registerHandler('freebieHaveGroup', async () => {
+			// No-op: freebie group flag
+		}, 'ignoreFreebieHaveGroup', { category: 'system' });
+
+		/** Feature availability flags (which mechanics are enabled) */
+		this.registerHandler('mechanicAvailability', async () => {
+			// No-op: feature flags
+		}, 'ignoreMechanicAvailability', { category: 'system' });
+
+		/** Banned mechanics list (usually empty) */
+		this.registerHandler('mechanicsBan_getInfo', async () => {
+			// No-op: mechanics ban list
+		}, 'ignoreMechanicsBan', { category: 'system' });
+
+		/** Playable character IDs (static roster list) */
+		this.registerHandler('playable_getAvailable', async () => {
+			// No-op: playable character list
+		}, 'ignorePlayableAvailable', { category: 'system' });
+
+		/** Account merge status check */
+		this.registerHandler('userMergeGetStatus', async () => {
+			// No-op: merge status
+		}, 'ignoreUserMergeStatus', { category: 'system' });
 	}
 
 	// =====================================================================
