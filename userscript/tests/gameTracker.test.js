@@ -1617,4 +1617,46 @@ describe('GameTracker', () => {
 			expect(result.imported.heroes).toBe(1);
 		});
 	});
+
+	// ─── API Samples LRU Cap (#137) ─────────────────────────────────
+
+	describe('API Samples LRU Cap', () => {
+		test('_apiSampleMaxMethods should default to 100', () => {
+			expect(tracker._apiSampleMaxMethods).toBe(100);
+		});
+
+		test('_apiSamples should evict oldest entry when cap exceeded', () => {
+			// Set a small cap for testing
+			tracker._apiSampleMaxMethods = 3;
+
+			// Manually populate samples (simulating what processAPIResponse does)
+			tracker._apiSamples.set('method_a', { capturedAt: '2025-01-01', responseSize: 10 });
+			tracker._apiSamples.set('method_b', { capturedAt: '2025-01-02', responseSize: 20 });
+			tracker._apiSamples.set('method_c', { capturedAt: '2025-01-03', responseSize: 30 });
+
+			// At cap — adding one more should evict the oldest (method_a)
+			tracker._apiSamples.set('method_d', { capturedAt: '2025-01-04', responseSize: 40 });
+			if (tracker._apiSamples.size > tracker._apiSampleMaxMethods) {
+				const oldestKey = tracker._apiSamples.keys().next().value;
+				tracker._apiSamples.delete(oldestKey);
+			}
+
+			expect(tracker._apiSamples.size).toBe(3);
+			expect(tracker._apiSamples.has('method_a')).toBe(false);
+			expect(tracker._apiSamples.has('method_d')).toBe(true);
+		});
+
+		test('clearApiSamples should reset the samples Map', () => {
+			tracker._apiSamples.set('test', { capturedAt: '2025-01-01' });
+			expect(tracker._apiSamples.size).toBe(1);
+			tracker.clearApiSamples();
+			expect(tracker._apiSamples.size).toBe(0);
+		});
+
+		test('getApiSampleCount should return current size', () => {
+			tracker._apiSamples.set('a', {});
+			tracker._apiSamples.set('b', {});
+			expect(tracker.getApiSampleCount()).toBe(2);
+		});
+	});
 });

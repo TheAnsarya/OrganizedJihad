@@ -108,12 +108,14 @@ class SyncClient {
 				storage.getAll('events'),
 			]);
 
-			// Separate battles by type
-			const arenaBattles = battles.filter((b) => b.battleType === 'Arena');
-			const grandArenaBattles = battles.filter((b) => b.battleType === 'GrandArena');
-			const titanArenaBattles = battles.filter((b) => b.battleType === 'TitanArena');
-			const guildWarBattles = battles.filter((b) => b.battleType === 'GuildWar');
-			const raidBossAttacks = battles.filter((b) => b.battleType === 'RaidBoss');
+			// Categorize battles by type in a single pass (#136)
+			// Object.groupBy returns { key: [items] } — missing keys default to []
+			const battlesByType = Object.groupBy(battles, (b) => b.battleType);
+			const arenaBattles = battlesByType.Arena ?? [];
+			const grandArenaBattles = battlesByType.GrandArena ?? [];
+			const titanArenaBattles = battlesByType.TitanArena ?? [];
+			const guildWarBattles = battlesByType.GuildWar ?? [];
+			const raidBossAttacks = battlesByType.RaidBoss ?? [];
 
 			// Get the most recent snapshot
 			const currentSnapshot =
@@ -157,22 +159,23 @@ class SyncClient {
 					storage.getAll('equipmentChanges'),
 				]);
 
-			// Split hero upgrades by type to match BrowserSyncData DTO
-			// Each upgrade has an 'upgradeType' discriminator set by UpgradeTracker
-			const heroLevelUpgrades = heroUpgrades.filter((u) => u.upgradeType === 'level');
-			const heroStarUpgrades = heroUpgrades.filter((u) => u.upgradeType === 'star');
-			const heroColorUpgrades = heroUpgrades.filter((u) => u.upgradeType === 'color');
-			const heroSkillUpgrades = heroUpgrades.filter((u) => u.upgradeType === 'skill');
-			const heroArtifactUpgrades = heroUpgrades.filter((u) => u.upgradeType === 'artifact');
-			const heroGlyphUpgrades = heroUpgrades.filter((u) => u.upgradeType === 'glyph');
-			const heroSkinUpgrades = heroUpgrades.filter((u) => u.upgradeType === 'skin');
+			// Categorize hero upgrades by type in a single pass (#136)
+			const heroUpByType = Object.groupBy(heroUpgrades, (u) => u.upgradeType);
+			const heroLevelUpgrades = heroUpByType.level ?? [];
+			const heroStarUpgrades = heroUpByType.star ?? [];
+			const heroColorUpgrades = heroUpByType.color ?? [];
+			const heroSkillUpgrades = heroUpByType.skill ?? [];
+			const heroArtifactUpgrades = heroUpByType.artifact ?? [];
+			const heroGlyphUpgrades = heroUpByType.glyph ?? [];
+			const heroSkinUpgrades = heroUpByType.skin ?? [];
 
-			// Split titan upgrades by type to match BrowserSyncData DTO
-			const titanLevelUpgrades = titanUpgrades.filter((u) => u.upgradeType === 'level');
-			const titanStarUpgrades = titanUpgrades.filter((u) => u.upgradeType === 'star');
-			const titanSkillUpgrades = titanUpgrades.filter((u) => u.upgradeType === 'skill');
-			const titanArtifactUpgrades = titanUpgrades.filter((u) => u.upgradeType === 'artifact');
-			const titanSkinUpgrades = titanUpgrades.filter((u) => u.upgradeType === 'skin');
+			// Categorize titan upgrades by type in a single pass (#136)
+			const titanUpByType = Object.groupBy(titanUpgrades, (u) => u.upgradeType);
+			const titanLevelUpgrades = titanUpByType.level ?? [];
+			const titanStarUpgrades = titanUpByType.star ?? [];
+			const titanSkillUpgrades = titanUpByType.skill ?? [];
+			const titanArtifactUpgrades = titanUpByType.artifact ?? [];
+			const titanSkinUpgrades = titanUpByType.skin ?? [];
 
 			// Build sync payload matching API's BrowserSyncData DTO
 			const syncData = {

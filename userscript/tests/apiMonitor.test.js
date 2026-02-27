@@ -11,7 +11,7 @@
  * Covers: #101
  */
 
-import APIMonitor from '../src/modules/apiMonitor.js';
+import APIMonitor, { RingBuffer } from '../src/modules/apiMonitor.js';
 
 // ═════════════════════════════════════════════════════════════════════
 // Mocks
@@ -50,7 +50,8 @@ describe('APIMonitor constructor', () => {
 	test('should initialize with default state', () => {
 		const monitor = new APIMonitor();
 		expect(monitor.isMonitoring).toBe(false);
-		expect(monitor.requestLog).toEqual([]);
+		expect(monitor.requestLog).toBeInstanceOf(RingBuffer);
+		expect(monitor.requestLog).toHaveLength(0);
 		expect(monitor.maxLogSize).toBe(1000);
 		expect(monitor.discoveredEndpoints).toBeInstanceOf(Map);
 		expect(monitor.discoveredEndpoints.size).toBe(0);
@@ -368,6 +369,8 @@ describe('addToLog', () => {
 	});
 
 	test('should trim log when exceeding maxLogSize', () => {
+		// Re-create ring buffer with smaller capacity to test eviction (#139)
+		monitor.requestLog = new RingBuffer(5);
 		monitor.maxLogSize = 5;
 		for (let i = 0; i < 7; i++) {
 			monitor.addToLog({ id: i });
@@ -574,5 +577,105 @@ describe('exportLogs', () => {
 		expect(data.endpoints[0].name).toBe('testEndpoint');
 		expect(data.logs).toHaveLength(1);
 		expect(monitor.downloadJSON).toHaveBeenCalled();
+	});
+});
+
+// ═════════════════════════════════════════════════════════════════════
+// RingBuffer (#139)
+// ═════════════════════════════════════════════════════════════════════
+
+describe('RingBuffer', () => {
+	test('should start empty', () => {
+		const buf = new RingBuffer(5);
+		expect(buf).toHaveLength(0);
+		expect(buf.toArray()).toEqual([]);
+	});
+
+	test('should accept items up to capacity', () => {
+		const buf = new RingBuffer(3);
+		buf.push('a');
+		buf.push('b');
+		buf.push('c');
+		expect(buf).toHaveLength(3);
+		expect(buf.toArray()).toEqual(['a', 'b', 'c']);
+	});
+
+	test('should evict oldest when exceeding capacity', () => {
+		const buf = new RingBuffer(3);
+		buf.push(1);
+		buf.push(2);
+		buf.push(3);
+		buf.push(4); // evicts 1
+		expect(buf).toHaveLength(3);
+		expect(buf.toArray()).toEqual([2, 3, 4]);
+	});
+
+	test('should support bracket indexing via Proxy', () => {
+		const buf = new RingBuffer(3);
+		buf.push('x');
+		buf.push('y');
+		buf.push('z');
+		expect(buf[0]).toBe('x');
+		expect(buf[1]).toBe('y');
+		expect(buf[2]).toBe('z');
+		expect(buf[3]).toBeUndefined();
+	});
+
+	test('bracket indexing should work after wrap-around', () => {
+		const buf = new RingBuffer(3);
+		buf.push(1);
+		buf.push(2);
+		buf.push(3);
+		buf.push(4); // evicts 1, buf = [2, 3, 4]
+		buf.push(5); // evicts 2, buf = [3, 4, 5]
+		expect(buf[0]).toBe(3);
+		expect(buf[1]).toBe(4);
+		expect(buf[2]).toBe(5);
+	});
+
+	test('slice should work like Array.slice', () => {
+		const buf = new RingBuffer(5);
+		for (let i = 0; i < 7; i++) buf.push(i); // evicts 0, 1 → [2,3,4,5,6]
+		expect(buf.slice(-3)).toEqual([4, 5, 6]);
+		expect(buf.slice(1, 3)).toEqual([3, 4]);
+	});
+
+	test('forEach should iterate in insertion order', () => {
+		const buf = new RingBuffer(3);
+		buf.push('a');
+		buf.push('b');
+		buf.push('c');
+		buf.push('d'); // evicts 'a'
+		const result = [];
+		buf.forEach((v) => result.push(v));
+		expect(result).toEqual(['b', 'c', 'd']);
+	});
+
+	test('should be iterable with spread', () => {
+		const buf = new RingBuffer(3);
+		buf.push(10);
+		buf.push(20);
+		buf.push(30);
+		buf.push(40);
+		expect([...buf]).toEqual([20, 30, 40]);
+	});
+
+	test('clear should reset to empty', () => {
+		const buf = new RingBuffer(3);
+		buf.push(1);
+		buf.push(2);
+		buf.push(3);
+		buf.clear();
+		expect(buf).toHaveLength(0);
+		expect(buf.toArray()).toEqual([]);
+	});
+
+	test('should handle capacity of 1', () => {
+		const buf = new RingBuffer(1);
+		buf.push('first');
+		expect(buf[0]).toBe('first');
+		buf.push('second');
+		expect(buf[0]).toBe('second');
+		expect(buf).toHaveLength(1);
 	});
 });

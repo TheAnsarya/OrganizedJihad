@@ -114,23 +114,46 @@ import './styles/main.css';
 	// ── processAPIResponse wrapper ───────────────────────────────────
 	// Wrap BEFORE init() so the counter starts from the very first
 	// intercepted API call (even those that arrive while IDB opens).
+	//
+	// A sequential queue ensures only one processAPIResponse runs at
+	// a time (#138).  Without this, parallel XHR completions can
+	// interleave async IDB writes and race on dedup fingerprints
+	// (_lastHeroHash, etc.), causing duplicate records.
 	const originalProcessAPI = gameTracker.processAPIResponse.bind(gameTracker);
-	gameTracker.processAPIResponse = async function (request, response) {
+
+	/** @type {Promise<*>} Chains processAPIResponse calls sequentially */
+	let _processingChain = Promise.resolve();
+
+	gameTracker.processAPIResponse = function (request, response) {
 		apiCallCount++;
 
-		// Core processing (writes to IDB, dispatches handlers)
-		const result = await originalProcessAPI(request, response);
+		// Each call chains onto the previous, ensuring serial execution.
+		// We capture the current count so the UI callback sees the
+		// correct value even after queued calls increment it further.
+		const callSnapshot = apiCallCount;
 
-		// Delegate to PHASE 2 UI callback (badge, overlay, etc.)
-		if (onApiProcessed) {
-			try {
-				await onApiProcessed(request, response, apiCallCount);
-			} catch (e) {
-				console.warn('[OrganizedJihad] onApiProcessed callback error:', e);
-			}
-		}
+		_processingChain = _processingChain
+			.then(async () => {
+				// Core processing (writes to IDB, dispatches handlers)
+				const result = await originalProcessAPI(request, response);
 
-		return result;
+				// Delegate to PHASE 2 UI callback (badge, overlay, etc.)
+				if (onApiProcessed) {
+					try {
+						await onApiProcessed(request, response, callSnapshot);
+					} catch (e) {
+						console.warn('[OrganizedJihad] onApiProcessed callback error:', e);
+					}
+				}
+
+				return result;
+			})
+			.catch((err) => {
+				// Log but don't break the chain — next queued call must still run
+				console.error('[OrganizedJihad] processAPIResponse error:', err);
+			});
+
+		return _processingChain;
 	};
 
 	// ── Start interception ───────────────────────────────────────────

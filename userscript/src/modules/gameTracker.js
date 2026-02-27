@@ -192,6 +192,8 @@ class GameTracker {
 		this._apiSamples = new Map();
 		/** @type {number} Max response size (bytes) to store per sample — prevents memory bloat from huge responses */
 		this._apiSampleMaxResponseSize = 500_000; // 500KB per sample
+		/** @type {number} Max number of methods to retain in _apiSamples (#137) — LRU eviction beyond this limit */
+		this._apiSampleMaxMethods = 100;
 
 		// ── Pushd / WebSocket (#38, #39) ────────────────────────────────────
 		/** @type {object|null} Reference to the game's pushd module once found */
@@ -1248,25 +1250,32 @@ class GameTracker {
 			// ── API Sample Collector: store one complete sample per method ──
 			// Only stores the FIRST sample seen for each method (to capture
 			// the "clean" initial response). Call clearApiSamples() to reset.
+			// Evicts the oldest entry when _apiSampleMaxMethods is exceeded (#137).
 			if (callName && responseData && !this._apiSamples.has(callName)) {
 				try {
 					const resStr = JSON.stringify(responseData);
-					if (resStr.length <= this._apiSampleMaxResponseSize) {
-						// Deep-clone via JSON round-trip to detach from live objects
-						this._apiSamples.set(callName, {
+					const sampleEntry = resStr.length <= this._apiSampleMaxResponseSize
+						? {
 							args: JSON.parse(JSON.stringify(args || {})),
 							response: JSON.parse(resStr),
 							capturedAt: new Date().toISOString(),
 							responseSize: resStr.length,
-						});
-					} else {
-						// Too large — store truncation marker with size info
-						this._apiSamples.set(callName, {
+						}
+						: {
+							// Too large — store truncation marker with size info
 							args: JSON.parse(JSON.stringify(args || {})),
 							response: `[too large: ${resStr.length} bytes — increase _apiSampleMaxResponseSize to capture]`,
 							capturedAt: new Date().toISOString(),
 							responseSize: resStr.length,
-						});
+						};
+
+					this._apiSamples.set(callName, sampleEntry);
+
+					// LRU eviction: drop the oldest entry if we exceed the cap (#137)
+					if (this._apiSamples.size > this._apiSampleMaxMethods) {
+						// Map iteration order = insertion order; first key is oldest
+						const oldestKey = this._apiSamples.keys().next().value;
+						this._apiSamples.delete(oldestKey);
 					}
 				} catch { /* ignore unstringifiable responses */ }
 			}
@@ -3587,7 +3596,7 @@ class GameTracker {
 			items: mailItems,
 		});
 
-		this._logActivity('info', `📬 Mail tracked: ${mailItems.length} messages (${mailItems.filter((m) => !m.isRead).length} unread)`);
+		await this._logActivity('info', `📬 Mail tracked: ${mailItems.length} messages (${mailItems.filter((m) => !m.isRead).length} unread)`);
 		console.log(`[OrganizedJihad] Mail tracked: ${mailItems.length} messages`);
 	}
 
@@ -6267,11 +6276,14 @@ class GameTracker {
 			};
 		}
 
-		// Get data from 1 day, 7 days, and 30 days ago
+		// Get snapshot closest to 1 day, 7 days, and 30 days ago.
+		// history is in chronological order (oldest first).  findLast()
+		// returns the NEWEST entry that is at least N ms old — i.e. the
+		// entry closest in time to exactly N days ago (#audit-B1).
 		const now = Date.now();
-		const oneDayAgo = history.find((h) => now - h.timestamp >= 86400000); // 24 hours
-		const sevenDaysAgo = history.find((h) => now - h.timestamp >= 604800000); // 7 days
-		const thirtyDaysAgo = history.find((h) => now - h.timestamp >= 2592000000); // 30 days
+		const oneDayAgo = history.findLast((h) => now - h.timestamp >= 86_400_000); // 24 hours
+		const sevenDaysAgo = history.findLast((h) => now - h.timestamp >= 604_800_000); // 7 days
+		const thirtyDaysAgo = history.findLast((h) => now - h.timestamp >= 2_592_000_000); // 30 days
 
 		const trends = {
 			level: {

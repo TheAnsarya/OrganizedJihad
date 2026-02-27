@@ -26,6 +26,141 @@
 import IndexedDBStorage from './indexedDBStorage.js';
 
 /**
+ * Fixed-capacity ring buffer that replaces push/shift O(n) trimming
+ * with O(1) overwrites (#139).
+ *
+ * Externally it behaves like an array for reads: `.length`, `[index]`,
+ * `.slice()`, `.forEach()`, and spread/iteration all return items in
+ * insertion order.
+ *
+ * Uses a Proxy wrapper so bracket notation (`buf[0]`) resolves to the
+ * correct logical position.
+ *
+ * @class RingBuffer
+ * @template T
+ */
+class RingBuffer {
+	/**
+	 * @param {number} capacity - Maximum number of entries to retain
+	 * @returns {RingBuffer & Array<T>} Proxy-wrapped instance supporting [index] access
+	 */
+	constructor(capacity) {
+		/** @type {number} Max entries */
+		this._capacity = capacity;
+		/** @type {Array<T>} Backing storage */
+		this._buf = [];
+		/** @type {number} Next write position (only used once full) */
+		this._writeIdx = 0;
+		/** @type {boolean} Whether we've wrapped around at least once */
+		this._full = false;
+
+		// Return a Proxy so numeric bracket access works: buf[0], buf[4], etc.
+		// Non-numeric property access (methods, .length) goes straight through.
+		return new Proxy(this, {
+			get(target, prop, receiver) {
+				// Numeric string indices → delegate to logical-order lookup
+				if (typeof prop === 'string' && /^\d+$/.test(prop)) {
+					return target._getLogical(Number(prop));
+				}
+				return Reflect.get(target, prop, receiver);
+			},
+		});
+	}
+
+	/** @returns {number} Number of entries currently stored */
+	get length() {
+		return this._full ? this._capacity : this._buf.length;
+	}
+
+	/**
+	 * Get the item at logical index `i` (0 = oldest, length-1 = newest).
+	 *
+	 * @param {number} i
+	 * @returns {T|undefined}
+	 * @private
+	 */
+	_getLogical(i) {
+		const len = this.length;
+		if (i < 0 || i >= len) return undefined;
+		if (!this._full) return this._buf[i];
+		return this._buf[(this._writeIdx + i) % this._capacity];
+	}
+
+	/**
+	 * Append an entry.  O(1) — overwrites the oldest entry when full.
+	 * @param {T} item
+	 */
+	push(item) {
+		if (!this._full) {
+			this._buf.push(item);
+			if (this._buf.length === this._capacity) {
+				this._full = true;
+				this._writeIdx = 0; // next push wraps to slot 0
+			}
+		} else {
+			this._buf[this._writeIdx] = item;
+			this._writeIdx = (this._writeIdx + 1) % this._capacity;
+		}
+	}
+
+	/**
+	 * Return entries in insertion order as a plain Array.
+	 * @returns {Array<T>}
+	 */
+	toArray() {
+		if (!this._full) return this._buf.slice();
+		// _writeIdx points to the oldest entry (it was the next to be
+		// overwritten), so reading from _writeIdx → end, then 0 → _writeIdx
+		// yields chronological order.
+		return [
+			...this._buf.slice(this._writeIdx),
+			...this._buf.slice(0, this._writeIdx),
+		];
+	}
+
+	/**
+	 * Mimic Array.prototype.slice — operates on the logical
+	 * (insertion-order) view.
+	 *
+	 * @param {number} [start]
+	 * @param {number} [end]
+	 * @returns {Array<T>}
+	 */
+	slice(start, end) {
+		return this.toArray().slice(start, end);
+	}
+
+	/**
+	 * Mimic Array.prototype.forEach in insertion order.
+	 *
+	 * @param {function(T, number, Array<T>): void} fn
+	 */
+	forEach(fn) {
+		this.toArray().forEach(fn);
+	}
+
+	/** Make the ring buffer iterable (for `for..of` and spread). */
+	[Symbol.iterator]() {
+		const arr = this.toArray();
+		let i = 0;
+		return {
+			next() {
+				return i < arr.length
+					? { value: arr[i++], done: false }
+					: { done: true };
+			},
+		};
+	}
+
+	/** Discard all entries. */
+	clear() {
+		this._buf = [];
+		this._writeIdx = 0;
+		this._full = false;
+	}
+}
+
+/**
  * Reference to the page's real `window` object.
  * When TamperMonkey runs with any `@grant`, the script executes in a
  * sandbox where globals like `XMLHttpRequest`, `fetch`, etc. are isolated
@@ -53,8 +188,8 @@ class APIMonitor {
 		// Storage for discovered endpoints and their call counts
 		this.discoveredEndpoints = new Map();
 
-		// Request/response log (limited to last 1000 entries to prevent memory issues)
-		this.requestLog = [];
+		// Request/response log — ring buffer for O(1) push (#139)
+		this.requestLog = new RingBuffer(1000);
 		this.maxLogSize = 1000;
 
 		// Statistics
@@ -436,11 +571,7 @@ class APIMonitor {
 	 */
 	addToLog(entry) {
 		this.requestLog.push(entry);
-
-		// Keep only the most recent entries
-		if (this.requestLog.length > this.maxLogSize) {
-			this.requestLog.shift();
-		}
+		// RingBuffer automatically evicts the oldest entry when full (#139)
 	}
 
 	/**
@@ -522,7 +653,7 @@ class APIMonitor {
 	 * @returns {Array} Request log
 	 */
 	getLogs() {
-		return this.requestLog;
+		return this.requestLog.toArray();
 	}
 
 	/**
@@ -561,7 +692,7 @@ class APIMonitor {
 				stats: this.getStats(),
 			},
 			endpoints: this.getEndpoints(),
-			logs: this.requestLog,
+			logs: this.requestLog.toArray(),
 		};
 
 		const jsonString = JSON.stringify(exportData, null, 2);
@@ -596,7 +727,7 @@ class APIMonitor {
 	 * Clear all logs (useful for starting fresh)
 	 */
 	clearLogs() {
-		this.requestLog = [];
+		this.requestLog.clear();
 		console.log('[APIMonitor] Logs cleared');
 	}
 
@@ -686,10 +817,11 @@ class APIMonitor {
 		} catch { /* best-effort */ }
 
 		this.isMonitoring = false;
-		this.requestLog = [];
+		this.requestLog.clear();
 		this.discoveredEndpoints.clear();
 		this.listeners = [];
 	}
 }
 
 export default APIMonitor;
+export { RingBuffer };

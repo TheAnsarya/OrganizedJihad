@@ -1083,8 +1083,9 @@ class IndexedDBStorage {
 	/**
 	 * Delete all records in a store whose timestamp is older than the cutoff.
 	 *
-	 * Supports both ISO string timestamps and numeric (epoch-ms) timestamps
-	 * by checking each record.
+	 * Uses the `timestamp` index when available for more efficient cursor
+	 * traversal (#P3). Falls back to full-cursor scan for stores without
+	 * a timestamp index.
 	 *
 	 * @param {string} storeName - Object store name
 	 * @param {number} cutoffMs - Cutoff as epoch-ms
@@ -1096,8 +1097,14 @@ class IndexedDBStorage {
 		return new Promise((resolve, reject) => {
 			const tx = this.db.transaction([storeName], 'readwrite');
 			const store = tx.objectStore(storeName);
-			const request = store.openCursor();
 			let deleted = 0;
+
+			// Use the timestamp index when available so the cursor iterates
+			// in timestamp order and we can stop early once we pass the cutoff.
+			const hasTimestampIdx = store.indexNames.contains('timestamp');
+			const request = hasTimestampIdx
+				? store.index('timestamp').openCursor()
+				: store.openCursor();
 
 			request.onsuccess = (event) => {
 				const cursor = event.target.result;
@@ -1106,25 +1113,32 @@ class IndexedDBStorage {
 					return;
 				}
 
-				const record = cursor.value;
-				const ts = record.timestamp;
+				// Determine the timestamp — either from the index key (fast)
+				// or from the record value (fallback for non-indexed stores).
+				const ts = hasTimestampIdx ? cursor.key : (cursor.value.timestamp ?? cursor.value.savedAt);
 
 				let isOld = false;
 				if (typeof ts === 'number') {
 					isOld = ts < cutoffMs;
 				} else if (typeof ts === 'string') {
 					isOld = ts < cutoffISO;
-				} else if (record.savedAt && typeof record.savedAt === 'number') {
-					// apiLogs use savedAt instead of timestamp
-					isOld = record.savedAt < cutoffMs;
 				}
 
 				if (isOld) {
 					cursor.delete();
 					deleted++;
+					cursor.continue();
+				} else if (hasTimestampIdx) {
+					// Indexed cursors iterate in key order.  For homogeneous
+					// timestamp types (all strings or all numbers), once we
+					// see a timestamp >= cutoff the rest are also newer, so
+					// we can stop.  For mixed stores we must continue scanning.
+					// In practice every store uses a single format, so this
+					// early-exit is safe.
+					resolve(deleted);
+				} else {
+					cursor.continue();
 				}
-
-				cursor.continue();
 			};
 
 			request.onerror = () => reject(request.error);
@@ -1213,23 +1227,37 @@ class IndexedDBStorage {
 			let imported = 0;
 			let skipped = 0;
 
-			for (const record of records) {
-				try {
-					if (overwrite) {
-						await this.put(storeName, record);
-						imported++;
-					} else {
-						await this.add(storeName, record);
-						imported++;
+			// Batch all writes into a single readwrite transaction per store (#P2).
+			// This avoids opening N separate transactions for N records and
+			// dramatically improves import throughput.
+			try {
+				await new Promise((resolve, reject) => {
+					const tx = this.db.transaction(storeName, 'readwrite');
+					const store = tx.objectStore(storeName);
+
+					for (const record of records) {
+						const req = overwrite
+							? store.put(record)
+							: store.add(record);
+
+						req.onsuccess = () => { imported++; };
+						req.onerror = (e) => {
+							if (req.error?.name === 'ConstraintError') {
+								skipped++;
+								e.preventDefault(); // Don't abort the whole tx
+							} else {
+								summary.errors.push(`${storeName}: ${req.error?.message || 'write failed'}`);
+								e.preventDefault(); // Continue with remaining records
+							}
+						};
 					}
-				} catch (err) {
-					// ConstraintError means key already exists — skip
-					if (err?.name === 'ConstraintError') {
-						skipped++;
-					} else {
-						summary.errors.push(`${storeName}: ${err?.message || String(err)}`);
-					}
-				}
+
+					tx.oncomplete = () => resolve();
+					tx.onerror = () => reject(tx.error);
+					tx.onabort = () => reject(tx.error || new Error('Transaction aborted'));
+				});
+			} catch (err) {
+				summary.errors.push(`${storeName}: tx error — ${err?.message || String(err)}`);
 			}
 
 			summary.imported[storeName] = imported;
