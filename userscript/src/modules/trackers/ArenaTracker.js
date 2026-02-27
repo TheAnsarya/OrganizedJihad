@@ -14,6 +14,9 @@
  * @module trackers/ArenaTracker
  */
 
+/** @const {number} Maximum number of arena encounters to keep in history */
+const MAX_ENCOUNTER_HISTORY = 500;
+
 /**
  * Arena-specific tracking functionality
  * Extracted from gameTracker.js for better separation of concerns
@@ -71,9 +74,9 @@ class ArenaTracker {
 			enemies.map((e) => ({ ...e, encounter: 'available' }))
 		);
 
-		// Keep last 500 encounters
-		if (encounterHistory.length > 500) {
-			encounterHistory.splice(0, encounterHistory.length - 500);
+		// Keep last MAX_ENCOUNTER_HISTORY encounters
+		if (encounterHistory.length > MAX_ENCOUNTER_HISTORY) {
+			encounterHistory.splice(0, encounterHistory.length - MAX_ENCOUNTER_HISTORY);
 		}
 
 		await this.storage.setMetadata('arenaEncounterHistory', encounterHistory);

@@ -17,6 +17,30 @@ import { decompressHeroStore, decompressTitanStore } from './heroCompression.js'
 import { resolveHeroName } from './heroNames.js';
 import { NOTIFICATION_TYPES } from './notificationManager.js';
 
+// ─── Fetch & Display Limits ──────────────────────────────────────────
+// Named constants for IndexedDB getAll() limits and display caps (#128).
+
+/** @const {number} Default limit for large collections (heroes, battles, titans, upgrades, chests, inventory) */
+const FETCH_LIMIT_LARGE = 5000;
+
+/** @const {number} Limit for consumable reward drops (much higher due to many drops per chest) */
+const FETCH_LIMIT_DROPS = 50000;
+
+/** @const {number} Limit for medium collections (pets, mail rewards) */
+const FETCH_LIMIT_MEDIUM = 500;
+
+/** @const {number} Limit for activity events fetched from IDB */
+const FETCH_LIMIT_ACTIVITY = 200;
+
+/** @const {number} Limit for resource transactions fetched from IDB */
+const FETCH_LIMIT_TRANSACTIONS = 100;
+
+/** @const {number} Limit for API log entries */
+const FETCH_LIMIT_API_LOGS = 50;
+
+/** @const {number} Max activity events to render in the feed */
+const DISPLAY_LIMIT_ACTIVITY = 100;
+
 class UIManager {
 	/**
 	 * @param {import('./storageManager.js').default} prefStorage - Synchronous localStorage wrapper
@@ -1190,7 +1214,7 @@ class UIManager {
 		// Try activityEvents first (richer, color-coded)
 		let events = [];
 		try {
-			events = await this.idbStorage.getAll('activityEvents', 200);
+			events = await this.idbStorage.getAll('activityEvents', FETCH_LIMIT_ACTIVITY);
 			events.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
 		} catch { /* store may not exist yet on older DBs */ }
 
@@ -1198,7 +1222,7 @@ class UIManager {
 		if (events.length === 0) {
 			let logs = [];
 			try {
-				logs = await this.idbStorage.getAll('apiLogs', 50);
+				logs = await this.idbStorage.getAll('apiLogs', FETCH_LIMIT_API_LOGS);
 				logs.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
 			} catch { /* empty */ }
 
@@ -1239,7 +1263,7 @@ class UIManager {
 		}
 
 		// Render color-coded activity events
-		const displayLimit = 100;
+		const displayLimit = DISPLAY_LIMIT_ACTIVITY;
 		const rows = events.slice(0, displayLimit).map((evt) => {
 			const time = evt.timestamp ? new Date(evt.timestamp).toLocaleTimeString() : '\u2014';
 			const colorClass = this._activityColorClass(evt);
@@ -1290,7 +1314,7 @@ class UIManager {
 		// Handles both legacy individual records and compressed batches (#43)
 		if (heroes.length === 0) {
 			try {
-				const raw = await this.idbStorage.getAll('heroes', 5000);
+				const raw = await this.idbStorage.getAll('heroes', FETCH_LIMIT_LARGE);
 				const all = decompressHeroStore(raw);
 				if (all.length > 0) {
 					const byId = {};
@@ -1431,7 +1455,7 @@ class UIManager {
 
 		let allBattles = [];
 		try {
-			allBattles = await this.idbStorage.getAll('battles', 5000);
+			allBattles = await this.idbStorage.getAll('battles', FETCH_LIMIT_LARGE);
 		} catch { /* empty */ }
 
 		// Sort newest first
@@ -1624,7 +1648,7 @@ class UIManager {
 		// Handles both legacy individual records and compressed batches (#43)
 		if (titans.length === 0) {
 			try {
-				const raw = await this.idbStorage.getAll('titans', 5000);
+				const raw = await this.idbStorage.getAll('titans', FETCH_LIMIT_LARGE);
 				const all = decompressTitanStore(raw);
 				if (all.length > 0) {
 					const byId = {};
@@ -1800,7 +1824,7 @@ class UIManager {
 		// Fallback: read from the pets IDB store and deduplicate by petId
 		if (pets.length === 0) {
 			try {
-				const raw = await this.idbStorage.getAll('pets', 500);
+				const raw = await this.idbStorage.getAll('pets', FETCH_LIMIT_MEDIUM);
 				if (raw.length > 0) {
 					const byId = {};
 					for (const p of raw) {
@@ -2036,9 +2060,9 @@ class UIManager {
 
 		try {
 			[heroUpgrades, titanUpgrades, equipChanges] = await Promise.all([
-				this.idbStorage.getAll('heroUpgrades', 5000).catch(() => []),
-				this.idbStorage.getAll('titanUpgrades', 5000).catch(() => []),
-				this.idbStorage.getAll('equipmentChanges', 5000).catch(() => []),
+				this.idbStorage.getAll('heroUpgrades', FETCH_LIMIT_LARGE).catch(() => []),
+				this.idbStorage.getAll('titanUpgrades', FETCH_LIMIT_LARGE).catch(() => []),
+				this.idbStorage.getAll('equipmentChanges', FETCH_LIMIT_LARGE).catch(() => []),
 			]);
 		} catch { /* empty */ }
 
@@ -2198,7 +2222,7 @@ class UIManager {
 		// ── Load chest openings from IDB store first (proper source) ────
 		let chests = [];
 		try {
-			chests = await this.idbStorage.getAll('chests', 5000);
+			chests = await this.idbStorage.getAll('chests', FETCH_LIMIT_LARGE);
 		} catch { /* empty */ }
 
 		// Fallback: metadata cache for pre-Phase-10 data
@@ -2214,7 +2238,7 @@ class UIManager {
 		// ── Load consumableRewards for drop-rate analysis ───────────────
 		let allDrops = [];
 		try {
-			allDrops = await this.idbStorage.getAll('consumableRewards', 50000);
+			allDrops = await this.idbStorage.getAll('consumableRewards', FETCH_LIMIT_DROPS);
 		} catch { /* empty */ }
 
 		// ── Load aggregated drop rates from metadata ────────────────────
@@ -2549,7 +2573,7 @@ class UIManager {
 		// ── Recent item usage history from inventoryItemUsages store ──
 		let usageHtml = '';
 		try {
-			const usages = await this.idbStorage.getAll('inventoryItemUsages', 5000);
+			const usages = await this.idbStorage.getAll('inventoryItemUsages', FETCH_LIMIT_LARGE);
 			if (usages.length > 0) {
 				// Sort by timestamp descending, show last 50
 				usages.sort((a, b) => (b.timestamp || '').localeCompare(a.timestamp || ''));
@@ -2701,7 +2725,7 @@ class UIManager {
 		// Get recent resource transactions
 		let transactions = [];
 		try {
-			transactions = await this.idbStorage.getAll('resourceTransactions', 100);
+			transactions = await this.idbStorage.getAll('resourceTransactions', FETCH_LIMIT_TRANSACTIONS);
 			transactions.sort((a, b) => {
 				const ta = a.timestamp ? new Date(a.timestamp).getTime() : 0;
 				const tb = b.timestamp ? new Date(b.timestamp).getTime() : 0;
@@ -2808,7 +2832,7 @@ class UIManager {
 		// ── Collected rewards from IDB ──────────────────────────────────
 		let rewards = [];
 		try {
-			rewards = await this.idbStorage.getAll('mailRewards', 500);
+			rewards = await this.idbStorage.getAll('mailRewards', FETCH_LIMIT_MEDIUM);
 		} catch { /* empty */ }
 
 		if (!mailData && rewards.length === 0) {
@@ -3834,7 +3858,7 @@ class UIManager {
 
 			// Fallback: IDB store with dedup
 			if (heroes.length === 0) {
-				const raw = await this.idbStorage.getAll('heroes', 5000);
+				const raw = await this.idbStorage.getAll('heroes', FETCH_LIMIT_LARGE);
 				const all = decompressHeroStore(raw);
 				if (all.length > 0) {
 					const byId = {};
@@ -3880,7 +3904,7 @@ class UIManager {
 
 			// Fallback: IDB store with dedup
 			if (titans.length === 0) {
-				const raw = await this.idbStorage.getAll('titans', 5000);
+				const raw = await this.idbStorage.getAll('titans', FETCH_LIMIT_LARGE);
 				const all = decompressTitanStore(raw);
 				if (all.length > 0) {
 					const byId = {};
@@ -3926,7 +3950,7 @@ class UIManager {
 
 			// Fallback: IDB store with dedup
 			if (pets.length === 0) {
-				const raw = await this.idbStorage.getAll('pets', 5000);
+				const raw = await this.idbStorage.getAll('pets', FETCH_LIMIT_LARGE);
 				if (raw.length > 0) {
 					const byId = {};
 					for (const p of raw) {
