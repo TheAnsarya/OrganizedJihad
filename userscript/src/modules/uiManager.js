@@ -605,6 +605,42 @@ class UIManager {
 			guildRaidMinionToday = todayBattles.filter((b) => b.battleType === 'RaidBoss').length;
 		} catch { /* empty */ }
 
+		// ── New: Arena stats from arenaGetAll (#112) ─────────────────
+		let arenaStats = {};
+		try {
+			arenaStats = (await this.idbStorage.getMetadata('arenaStats', null)) || {};
+		} catch { /* empty */ }
+
+		// ── New: Campaign progress from missionGetAll (#112) ─────────
+		let campaignProgress = {};
+		try {
+			campaignProgress = (await this.idbStorage.getMetadata('campaignProgress', null)) || {};
+		} catch { /* empty */ }
+
+		// ── New: Titan Arena stats from titanArenaGetStatus (#112) ───
+		let titanArenaStats = {};
+		try {
+			titanArenaStats = (await this.idbStorage.getMetadata('titanArenaStats', null)) || {};
+		} catch { /* empty */ }
+
+		// ── New: Battle Pass from battlePass_getInfo (#112) ──────────
+		let battlePassData = {};
+		try {
+			battlePassData = (await this.idbStorage.getMetadata('battlePassData', null)) || {};
+		} catch { /* empty */ }
+
+		// ── New: Guild Activity from clanGetActivityStat (#112) ──────
+		let guildActivity = {};
+		try {
+			guildActivity = (await this.idbStorage.getMetadata('guildActivityStats', null)) || {};
+		} catch { /* empty */ }
+
+		// ── New: Gacha pity from gacha_getInfo (#112) ────────────────
+		let gachaData = {};
+		try {
+			gachaData = (await this.idbStorage.getMetadata('gacha_heroGacha', null)) || {};
+		} catch { /* empty */ }
+
 		// Gather counts from actual IndexedDB stores
 		const snapshotCount = await this._countStore('snapshots');
 		const heroCount = await this._countStore('heroes');
@@ -731,6 +767,60 @@ class UIManager {
 							${raidMyDamage > 0 ? `<div style="font-size:9px;color:#aaa">${raidMyDamage.toLocaleString()} dmg</div>` : ''}
 						</div>
 					</div>
+					<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px">
+						<div style="flex:1;min-width:100px;background:#2a2a2e;border-radius:6px;padding:6px 8px;text-align:center">
+							<div style="font-size:14px">\uD83C\uDFC6</div>
+							<div style="font-size:16px;font-weight:700;color:#4fc3f7">${arenaStats.arenaPlace ? `#${arenaStats.arenaPlace}` : '\u2014'}</div>
+							<div style="font-size:10px;color:#888">Arena Rank</div>
+							${arenaStats.totalBattles ? `<div style="font-size:9px;color:#aaa">${arenaStats.winRate}% WR (${arenaStats.totalWins}/${arenaStats.totalBattles})</div>` : ''}
+						</div>
+						<div style="flex:1;min-width:100px;background:#2a2a2e;border-radius:6px;padding:6px 8px;text-align:center">
+							<div style="font-size:14px">\uD83C\uDFDF\uFE0F</div>
+							<div style="font-size:16px;font-weight:700;color:#ffb74d">${arenaStats.grandPlace ? `#${arenaStats.grandPlace}` : '\u2014'}</div>
+							<div style="font-size:10px;color:#888">Grand Arena</div>
+						</div>
+						<div style="flex:1;min-width:100px;background:#2a2a2e;border-radius:6px;padding:6px 8px;text-align:center">
+							<div style="font-size:14px">\uD83D\uDCA0</div>
+							<div style="font-size:16px;font-weight:700;color:#ce93d8">${titanArenaStats.rank ? `#${titanArenaStats.rank}` : '\u2014'}</div>
+							<div style="font-size:10px;color:#888">Titan Arena</div>
+							${titanArenaStats.tier ? `<div style="font-size:9px;color:#aaa">T${titanArenaStats.tier} · ${titanArenaStats.dailyScore?.toLocaleString() || 0} today</div>` : ''}
+						</div>
+						<div style="flex:1;min-width:100px;background:#2a2a2e;border-radius:6px;padding:6px 8px;text-align:center">
+							<div style="font-size:14px">\uD83D\uDDFA\uFE0F</div>
+							<div style="font-size:14px;font-weight:700;color:#81c784">${campaignProgress.totalStars ? `${campaignProgress.totalStars}/${campaignProgress.maxStars}` : '\u2014'}</div>
+							<div style="font-size:10px;color:#888">Campaign Stars</div>
+							${campaignProgress.threeStarMissions ? `<div style="font-size:9px;color:#aaa">${campaignProgress.threeStarMissions}/${campaignProgress.totalMissions} ★★★</div>` : ''}
+						</div>
+						<div style="flex:1;min-width:100px;background:#2a2a2e;border-radius:6px;padding:6px 8px;text-align:center">
+							<div style="font-size:14px">\uD83C\uDFAB</div>
+							<div style="font-size:14px;font-weight:700;color:#fff176">${battlePassData.currentLevel ? `Lv${battlePassData.currentLevel}` : '\u2014'}</div>
+							<div style="font-size:10px;color:#888">Battle Pass${battlePassData.ticketLabel ? ` (${battlePassData.ticketLabel})` : ''}</div>
+							${battlePassData.exp ? `<div style="font-size:9px;color:#aaa">${battlePassData.exp?.toLocaleString()} XP</div>` : ''}
+						</div>
+						<div style="flex:1;min-width:100px;background:#2a2a2e;border-radius:6px;padding:6px 8px;text-align:center">
+							<div style="font-size:14px">\uD83C\uDFB0</div>
+							<div style="font-size:14px;font-weight:700;color:#ef9a9a">${gachaData.pullsUntilPity != null && gachaData.pullsUntilPity >= 0 ? gachaData.pullsUntilPity : '\u2014'}</div>
+							<div style="font-size:10px;color:#888">Pity Counter</div>
+							${gachaData.totalOpenings ? `<div style="font-size:9px;color:#aaa">${gachaData.totalOpenings?.toLocaleString()} total pulls</div>` : ''}
+						</div>
+					</div>
+					${guildActivity.todayActivity ? `<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px">
+						<div style="flex:1;min-width:140px;background:#2a2a2e;border-radius:6px;padding:6px 8px;text-align:center">
+							<div style="font-size:14px">\u2B50</div>
+							<div style="font-size:14px;font-weight:700;color:#90caf9">${guildActivity.todayActivity.toLocaleString()}</div>
+							<div style="font-size:10px;color:#888">Guild Activity Today</div>
+						</div>
+						<div style="flex:1;min-width:140px;background:#2a2a2e;border-radius:6px;padding:6px 8px;text-align:center">
+							<div style="font-size:14px">\uD83C\uDFF0</div>
+							<div style="font-size:14px;font-weight:700;color:#90caf9">${guildActivity.todayDungeonActivity}</div>
+							<div style="font-size:10px;color:#888">Dungeon Activity</div>
+						</div>
+						<div style="flex:1;min-width:140px;background:#2a2a2e;border-radius:6px;padding:6px 8px;text-align:center">
+							<div style="font-size:14px">\uD83D\uDCC8</div>
+							<div style="font-size:14px;font-weight:700;color:#90caf9">${guildActivity.activitySum?.toLocaleString()}</div>
+							<div style="font-size:10px;color:#888">Weekly Activity</div>
+						</div>
+					</div>` : ''}
 				</div>`
 			: '';
 
