@@ -823,6 +823,7 @@ class UIManager {
 							<div style="font-size:14px">\uD83C\uDFDF\uFE0F</div>
 							<div style="font-size:16px;font-weight:700;color:#ffb74d">${arenaStats.grandPlace ? `#${arenaStats.grandPlace}` : '\u2014'}</div>
 							<div style="font-size:10px;color:#888">Grand Arena</div>
+							${this._stalenessTag(arenaStats.lastUpdate)}
 						</div>
 						<div style="flex:1;min-width:100px;background:#2a2a2e;border-radius:6px;padding:6px 8px;text-align:center">
 							<div style="font-size:14px">\uD83D\uDCA0</div>

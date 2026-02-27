@@ -88,6 +88,13 @@ import './styles/main.css';
 	 */
 	let showBadgeError = null;
 
+	/**
+	 * Modules that need cleanup on page unload.
+	 * Each entry should implement a `destroy()` method.
+	 * @type {Array<{ destroy: Function }>}
+	 */
+	const _destroyables = [];
+
 	// ── Storage ──────────────────────────────────────────────────────
 	// IndexedDB constructor starts the DB open asynchronously.
 	// StorageManager uses localStorage (available at document-start).
@@ -439,6 +446,9 @@ import './styles/main.css';
 		}, 60000);
 
 		console.log('[OrganizedJihad] ✅ PHASE 2 complete — Tracker ready');
+
+		// Register modules for cleanup on page unload
+		_destroyables.push(gameTracker, notificationManager, domTargeting, gameOverlay);
 	}
 
 	// ── Entry point ─────────────────────────────────────────────────
@@ -450,10 +460,18 @@ import './styles/main.css';
 		await setupUI();
 	}
 
-	// Cleanup on page unload
+	// Cleanup on page unload — destroy all modules that have active
+	// timers, event listeners, or XHR/WebSocket proxies (#126)
 	window.addEventListener('beforeunload', () => {
 		if (window.organizedJihadSyncInterval) {
 			clearInterval(window.organizedJihadSyncInterval);
+		}
+		for (const mod of _destroyables) {
+			try {
+				mod?.destroy?.();
+			} catch (e) {
+				console.warn('[OrganizedJihad] Cleanup error:', e);
+			}
 		}
 	});
 })();

@@ -221,12 +221,28 @@ class GameOverlay {
 	 * @private
 	 */
 	_bindHotkey() {
-		document.addEventListener('keydown', (e) => {
+		/** @type {(e: KeyboardEvent) => void} */
+		this._hotkeyHandler = (e) => {
 			if (e.altKey && (e.key === 'h' || e.key === 'H')) {
 				e.preventDefault();
 				this.toggle();
 			}
-		});
+		};
+		document.addEventListener('keydown', this._hotkeyHandler);
+	}
+
+	/**
+	 * Clean up DOM elements and event listeners.
+	 */
+	destroy() {
+		if (this._hotkeyHandler) {
+			document.removeEventListener('keydown', this._hotkeyHandler);
+			this._hotkeyHandler = null;
+		}
+		if (this.panel?.parentNode) {
+			this.panel.parentNode.removeChild(this.panel);
+			this.panel = null;
+		}
 	}
 
 	// ─── Private: Data Loading ───────────────────────────────────────────
