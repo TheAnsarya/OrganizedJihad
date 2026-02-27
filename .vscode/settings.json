@@ -1,5 +1,8 @@
 {
 	// Disable diff computation timeout — large files (gameTracker.js, uiManager.js)
 	// were hitting the default 5000ms limit, producing incomplete diffs.
-	"diffEditor.maxComputationTime": 0
+    "diffEditor.maxComputationTime": 0,
+    "cSpell.words": [
+        "userscript"
+    ]
 }
