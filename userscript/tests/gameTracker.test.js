@@ -57,6 +57,7 @@ describe('GameTracker', () => {
 			setMetadata: jest.fn().mockResolvedValue(undefined),
 			delete: jest.fn().mockResolvedValue(undefined),
 			clear: jest.fn().mockResolvedValue(undefined),
+			pruneOldest: jest.fn().mockResolvedValue(0),
 		};
 
 		tracker = new GameTracker(mockStorage);
@@ -424,21 +425,13 @@ describe('GameTracker', () => {
 			);
 		});
 
-		test('should keep only last 200 errors in errorLog store', async () => {
-			// Pre-fill with 205 existing entries
-			const existing = Array.from({ length: 205 }, (_, i) => ({
-				id: i + 1,
-				context: `old_${i}`,
-				message: `error ${i}`,
-				stack: null,
-				timestamp: i,
-			}));
-			mockStorage.getAll.mockResolvedValue(existing);
+		test('should keep only last 200 errors via pruneOldest', async () => {
+			mockStorage.pruneOldest.mockResolvedValue(5);
 
 			await tracker._logError('new_error', new Error('newest'));
 
-			// Should delete the 5 oldest entries (205 > 200)
-			expect(mockStorage.delete).toHaveBeenCalledTimes(5);
+			// Should delegate pruning to pruneOldest with 200 cap
+			expect(mockStorage.pruneOldest).toHaveBeenCalledWith('errorLog', 'timestamp', 200);
 		});
 
 		test('should not throw if _logError itself fails', async () => {
@@ -1450,22 +1443,13 @@ describe('GameTracker', () => {
 			expect(record[1].stack).toHaveLength(500);
 		});
 
-		test('_logError should prune to 200 entries when exceeded', async () => {
-			const oldEntries = Array.from({ length: 205 }, (_, i) => ({
-				id: i + 1,
-				timestamp: i * 1000,
-				context: 'old',
-				message: 'err',
-			}));
-			mockStorage.getAll.mockResolvedValue(oldEntries);
+		test('_logError should prune to 200 entries via pruneOldest', async () => {
+			mockStorage.pruneOldest.mockResolvedValue(5);
 
 			await tracker._logError('ctx', new Error('new'));
 
-			// Should delete the 5 oldest entries (205 > 200)
-			// delete is called for each excess entry
-			expect(mockStorage.delete).toHaveBeenCalledTimes(5);
-			expect(mockStorage.delete).toHaveBeenCalledWith('errorLog', 1);
-			expect(mockStorage.delete).toHaveBeenCalledWith('errorLog', 5);
+			// Should delegate pruning to storage.pruneOldest with cap of 200
+			expect(mockStorage.pruneOldest).toHaveBeenCalledWith('errorLog', 'timestamp', 200);
 		});
 
 		test('_logError should not throw if storage fails', async () => {

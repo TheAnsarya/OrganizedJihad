@@ -436,8 +436,8 @@ import './styles/main.css';
 			window.organizedJihadSyncInterval = syncIntervalId;
 		}
 
-		// Periodic suggestions update
-		setInterval(async () => {
+		// Periodic suggestions update — store interval for cleanup (#133)
+		const suggestionsIntervalId = setInterval(async () => {
 			try {
 				await suggestionsEngine.updateSuggestions();
 			} catch {
@@ -448,7 +448,9 @@ import './styles/main.css';
 		console.log('[OrganizedJihad] ✅ PHASE 2 complete — Tracker ready');
 
 		// Register modules for cleanup on page unload
-		_destroyables.push(gameTracker, notificationManager, domTargeting, gameOverlay);
+		_destroyables.push(gameTracker, notificationManager, domTargeting, gameOverlay, uiManager, apiMonitor);
+		// Store interval ID for cleanup alongside the sync interval
+		window.organizedJihadSuggestionsInterval = suggestionsIntervalId;
 	}
 
 	// ── Entry point ─────────────────────────────────────────────────
@@ -461,10 +463,13 @@ import './styles/main.css';
 	}
 
 	// Cleanup on page unload — destroy all modules that have active
-	// timers, event listeners, or XHR/WebSocket proxies (#126)
+	// timers, event listeners, or XHR/WebSocket proxies (#126, #133)
 	window.addEventListener('beforeunload', () => {
 		if (window.organizedJihadSyncInterval) {
 			clearInterval(window.organizedJihadSyncInterval);
+		}
+		if (window.organizedJihadSuggestionsInterval) {
+			clearInterval(window.organizedJihadSuggestionsInterval);
 		}
 		for (const mod of _destroyables) {
 			try {

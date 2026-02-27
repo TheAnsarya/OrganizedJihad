@@ -94,6 +94,13 @@ class UIManager {
 		 * @type {number}
 		 */
 		this._renderGeneration = 0;
+
+		/**
+		 * Tracked document-level event listeners for cleanup in `destroy()`.
+		 * Each entry is `{ event, handler }` to pass to `removeEventListener`.
+		 * @type {Array<{ event: string, handler: Function }>}
+		 */
+		this._docListeners = [];
 	}
 
 	/**
@@ -109,7 +116,7 @@ class UIManager {
 		}
 
 		// Keyboard shortcut: Ctrl+Shift+O (or Ctrl+Shift+H) (#48)
-		document.addEventListener('keydown', (e) => {
+		this._addDocListener('keydown', (e) => {
 			if (e.ctrlKey && e.shiftKey && (e.key === 'H' || e.key === 'O')) {
 				e.preventDefault();
 				this.toggle();
@@ -279,7 +286,7 @@ class UIManager {
 		});
 
 		// Escape key — close overlay when visible
-		document.addEventListener('keydown', (e) => {
+		this._addDocListener('keydown', (e) => {
 			if (e.key === 'Escape' && this.isVisible) {
 				e.preventDefault();
 				this.hide();
@@ -327,7 +334,7 @@ class UIManager {
 			e.preventDefault();
 		});
 
-		document.addEventListener('mousemove', (e) => {
+		this._addDocListener('mousemove', (e) => {
 			if (!isDragging) return;
 			e.preventDefault();
 
@@ -353,7 +360,7 @@ class UIManager {
 			this.overlay.style.top = newTop + 'px';
 		});
 
-		document.addEventListener('mouseup', () => {
+		this._addDocListener('mouseup', () => {
 			if (!isDragging) return;
 			isDragging = false;
 			header.style.cursor = 'grab';
@@ -401,7 +408,7 @@ class UIManager {
 			e.stopPropagation();
 		});
 
-		document.addEventListener('mousemove', (e) => {
+		this._addDocListener('mousemove', (e) => {
 			if (!isResizing) return;
 			e.preventDefault();
 
@@ -420,7 +427,7 @@ class UIManager {
 			this.overlay.style.maxHeight = 'none';
 		});
 
-		document.addEventListener('mouseup', () => {
+		this._addDocListener('mouseup', () => {
 			if (!isResizing) return;
 			isResizing = false;
 
@@ -649,10 +656,11 @@ class UIManager {
 
 		let guildWarBattlesToday = 0;
 		let guildRaidMinionToday = 0;
+		let allBattles = [];
 
 		try {
-			const battles = await this.idbStorage.getAll('battles');
-			const todayBattles = battles.filter((b) => b.timestamp >= todayISO);
+			allBattles = await this.idbStorage.getAll('battles');
+			const todayBattles = allBattles.filter((b) => b.timestamp >= todayISO);
 			guildWarBattlesToday = todayBattles.filter((b) => b.battleType === 'GuildWar').length;
 			guildRaidMinionToday = todayBattles.filter((b) => b.battleType === 'RaidBoss').length;
 		} catch { /* empty */ }
@@ -759,10 +767,10 @@ class UIManager {
 			: 'None yet';
 
 		// ── Win Rate Statistics (#26) ─────────────────────────────────
-		const winRateSection = await this._renderWinRateCards();
+		const winRateSection = await this._renderWinRateCards(allBattles);
 
 		// ── Daily Summary (#26) ──────────────────────────────────────
-		const dailySummary = await this._renderDailySummary();
+		const dailySummary = await this._renderDailySummary(allBattles);
 
 		// Gold / Emeralds / Energy values
 		const gold = player.gold ? Number(player.gold).toLocaleString() : '0';
@@ -1051,16 +1059,12 @@ class UIManager {
 	 * Render win rate cards for arena, grand arena, and titan arena (#26).
 	 * Shows all-time and last-7-day win percentages with visual bars.
 	 *
+	 * @param {Array} battles - Pre-loaded battles array from renderDashboard
 	 * @returns {Promise<string>} HTML section
 	 * @private
 	 */
-	async _renderWinRateCards() {
-		let battles = [];
-		try {
-			battles = await this.idbStorage.getAll('battles');
-		} catch { return ''; }
-
-		if (battles.length === 0) return '';
+	async _renderWinRateCards(battles = []) {
+		if (!battles || battles.length === 0) return '';
 
 		const now = Date.now();
 		const sevenDaysAgo = now - 7 * 24 * 60 * 60 * 1000;
@@ -1173,11 +1177,13 @@ class UIManager {
 
 	/**
 	 * Render the daily summary section on the dashboard.
+	 * Uses pre-loaded battles and index-range queries for today-only data (#132).
 	 *
+	 * @param {Array} battles - Pre-loaded battles array from renderDashboard
 	 * @returns {Promise<string>} HTML section
 	 * @private
 	 */
-	async _renderDailySummary() {
+	async _renderDailySummary(battles = []) {
 		const todayStart = new Date();
 		todayStart.setHours(0, 0, 0, 0);
 		const todayISO = todayStart.toISOString();
@@ -1188,30 +1194,31 @@ class UIManager {
 		let todayQuests = 0;
 		let todayUpgrades = 0;
 
+		// Battles: filter pre-loaded array (no extra DB call)
 		try {
-			const battles = await this.idbStorage.getAll('battles');
-			const todayB = battles.filter((b) => b.timestamp >= todayISO);
+			const todayB = (battles || []).filter((b) => b.timestamp >= todayISO);
 			todayBattles = todayB.length;
 			todayWins = todayB.filter((b) => b.isWin).length;
 		} catch { /* empty */ }
 
+		// Chests: index-range query on 'timestamp' — only today's records
 		try {
-			const chests = await this.idbStorage.getAll('chests');
-			todayChests = chests.filter((c) => c.openedAt >= todayISO || c.timestamp >= todayISO).length;
+			const todayC = await this.idbStorage.getByIndexRange('chests', 'timestamp', { lower: todayISO });
+			todayChests = todayC.length;
 		} catch { /* empty */ }
 
+		// Quests: index-range query on 'completedAt' — only today's records
 		try {
-			const quests = await this.idbStorage.getAll('dailyQuestCompletions');
-			const guildQ = await this.idbStorage.getAll('guildQuestCompletions');
-			todayQuests = quests.filter((q) => q.completedAt >= todayISO).length
-				+ guildQ.filter((q) => q.completedAt >= todayISO).length;
+			const dailyQ = await this.idbStorage.getByIndexRange('dailyQuestCompletions', 'completedAt', { lower: todayISO });
+			const guildQ = await this.idbStorage.getByIndexRange('guildQuestCompletions', 'completedAt', { lower: todayISO });
+			todayQuests = dailyQ.length + guildQ.length;
 		} catch { /* empty */ }
 
+		// Upgrades: index-range query on 'timestamp' — only today's records
 		try {
-			const upgrades = await this.idbStorage.getAll('heroUpgrades');
-			const titanUp = await this.idbStorage.getAll('titanUpgrades');
-			todayUpgrades = upgrades.filter((u) => u.timestamp >= todayISO).length
-				+ titanUp.filter((u) => u.timestamp >= todayISO).length;
+			const heroUp = await this.idbStorage.getByIndexRange('heroUpgrades', 'timestamp', { lower: todayISO });
+			const titanUp = await this.idbStorage.getByIndexRange('titanUpgrades', 'timestamp', { lower: todayISO });
+			todayUpgrades = heroUp.length + titanUp.length;
 		} catch { /* empty */ }
 
 		if (todayBattles + todayChests + todayQuests + todayUpgrades === 0) return '';
@@ -4392,6 +4399,45 @@ class UIManager {
 			info: '\uD83D\uDCCB',
 		};
 		return icons[evt.eventType] || '\u2022';
+	}
+
+	// =====================================================================
+	// Lifecycle helpers (#133)
+	// =====================================================================
+
+	/**
+	 * Register a document-level event listener *and* track it so
+	 * {@link destroy} can remove it on page unload.
+	 *
+	 * @param {string} event   - DOM event name (e.g. 'keydown')
+	 * @param {Function} handler - Event handler function
+	 * @private
+	 */
+	_addDocListener(event, handler) {
+		document.addEventListener(event, handler);
+		this._docListeners.push({ event, handler });
+	}
+
+	/**
+	 * Tear down the UIManager: remove all document-level event listeners,
+	 * detach the overlay from the DOM, and null out references (#133).
+	 *
+	 * Called automatically via `_destroyables` on `beforeunload`.
+	 */
+	destroy() {
+		// Remove all tracked document-level listeners
+		for (const { event, handler } of this._docListeners) {
+			try {
+				document.removeEventListener(event, handler);
+			} catch { /* best-effort */ }
+		}
+		this._docListeners.length = 0;
+
+		// Remove overlay DOM node
+		if (this.overlay && this.overlay.parentNode) {
+			this.overlay.parentNode.removeChild(this.overlay);
+		}
+		this.overlay = null;
 	}
 }
 

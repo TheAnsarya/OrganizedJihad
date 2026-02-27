@@ -310,16 +310,8 @@ class GameTracker {
 		try {
 			await this.storage.add('activityEvents', entry);
 
-			// Cap at 500 entries — prune oldest
-			const all = await this.storage.getAll('activityEvents');
-			if (all.length > 500) {
-				const toDelete = all
-					.sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0))
-					.slice(0, all.length - 500);
-				for (const old of toDelete) {
-					await this.storage.delete('activityEvents', old.id);
-				}
-			}
+			// Cap at 500 entries — prune oldest in a single cursor pass (#132)
+			await this.storage.pruneOldest('activityEvents', 'timestamp', 500);
 		} catch {
 			// Activity logging is best-effort — don't bubble up
 		}
@@ -356,16 +348,8 @@ class GameTracker {
 				timestamp: Date.now(),
 			});
 
-			// Cap at 200 entries — prune oldest
-			const all = await this.storage.getAll('errorLog');
-			if (all.length > 200) {
-				const toDelete = all
-					.sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0))
-					.slice(0, all.length - 200);
-				for (const old of toDelete) {
-					await this.storage.delete('errorLog', old.id);
-				}
-			}
+			// Cap at 200 entries — prune oldest in a single cursor pass (#132)
+			await this.storage.pruneOldest('errorLog', 'timestamp', 200);
 		} catch {
 			// Error logging itself failed — nothing more we can do
 		}

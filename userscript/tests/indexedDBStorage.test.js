@@ -570,4 +570,119 @@ describe('IndexedDBStorage', () => {
 			expect(storage._dbClosed).toBe(false);
 		});
 	});
+
+	// ─── getByIndexRange (#132) ──────────────────────────────────────────
+
+	describe('getByIndexRange', () => {
+		test('should return records with lower bound', async () => {
+			await storage.add('battles', { battleType: 'Arena', timestamp: '2025-01-01T00:00:00Z', opponentId: 1, isWin: true });
+			await storage.add('battles', { battleType: 'Arena', timestamp: '2025-01-02T00:00:00Z', opponentId: 2, isWin: false });
+			await storage.add('battles', { battleType: 'Arena', timestamp: '2025-01-03T00:00:00Z', opponentId: 3, isWin: true });
+
+			const results = await storage.getByIndexRange('battles', 'timestamp', { lower: '2025-01-02T00:00:00Z' });
+			expect(results).toHaveLength(2);
+		});
+
+		test('should return records with upper bound', async () => {
+			await storage.add('battles', { battleType: 'Arena', timestamp: '2025-01-01T00:00:00Z', opponentId: 1, isWin: true });
+			await storage.add('battles', { battleType: 'Arena', timestamp: '2025-01-02T00:00:00Z', opponentId: 2, isWin: false });
+			await storage.add('battles', { battleType: 'Arena', timestamp: '2025-01-03T00:00:00Z', opponentId: 3, isWin: true });
+
+			const results = await storage.getByIndexRange('battles', 'timestamp', { upper: '2025-01-02T00:00:00Z' });
+			expect(results).toHaveLength(2);
+		});
+
+		test('should return records within bounded range', async () => {
+			await storage.add('battles', { battleType: 'Arena', timestamp: '2025-01-01T00:00:00Z', opponentId: 1, isWin: true });
+			await storage.add('battles', { battleType: 'Arena', timestamp: '2025-01-02T00:00:00Z', opponentId: 2, isWin: false });
+			await storage.add('battles', { battleType: 'Arena', timestamp: '2025-01-03T00:00:00Z', opponentId: 3, isWin: true });
+
+			const results = await storage.getByIndexRange('battles', 'timestamp', {
+				lower: '2025-01-01T12:00:00Z',
+				upper: '2025-01-02T12:00:00Z',
+			});
+			expect(results).toHaveLength(1);
+			expect(results[0].opponentId).toBe(2);
+		});
+
+		test('should return all records when no bounds specified', async () => {
+			await storage.add('battles', { battleType: 'Arena', timestamp: '2025-01-01T00:00:00Z', opponentId: 1, isWin: true });
+			await storage.add('battles', { battleType: 'Arena', timestamp: '2025-01-02T00:00:00Z', opponentId: 2, isWin: false });
+
+			const results = await storage.getByIndexRange('battles', 'timestamp', {});
+			expect(results).toHaveLength(2);
+		});
+
+		test('should honour lowerOpen exclusion', async () => {
+			await storage.add('battles', { battleType: 'Arena', timestamp: '2025-01-01T00:00:00Z', opponentId: 1, isWin: true });
+			await storage.add('battles', { battleType: 'Arena', timestamp: '2025-01-02T00:00:00Z', opponentId: 2, isWin: false });
+
+			const inclusive = await storage.getByIndexRange('battles', 'timestamp', { lower: '2025-01-01T00:00:00Z' });
+			expect(inclusive).toHaveLength(2);
+
+			const exclusive = await storage.getByIndexRange('battles', 'timestamp', { lower: '2025-01-01T00:00:00Z', lowerOpen: true });
+			expect(exclusive).toHaveLength(1);
+			expect(exclusive[0].opponentId).toBe(2);
+		});
+	});
+
+	// ─── pruneOldest (#132) ──────────────────────────────────────────────
+
+	describe('pruneOldest', () => {
+		test('should delete oldest records when store exceeds max', async () => {
+			// Add 5 records with ascending timestamps
+			for (let i = 1; i <= 5; i++) {
+				await storage.add('battles', {
+					battleType: 'Arena',
+					timestamp: `2025-01-0${i}T00:00:00Z`,
+					opponentId: i,
+					isWin: true,
+				});
+			}
+
+			const deleted = await storage.pruneOldest('battles', 'timestamp', 3);
+			expect(deleted).toBe(2);
+
+			const remaining = await storage.getAll('battles');
+			expect(remaining).toHaveLength(3);
+			// Oldest two (opponentId 1, 2) should be gone
+			const ids = remaining.map((r) => r.opponentId).sort();
+			expect(ids).toEqual([3, 4, 5]);
+		});
+
+		test('should return 0 when store is within max', async () => {
+			await storage.add('battles', {
+				battleType: 'Arena', timestamp: '2025-01-01T00:00:00Z',
+				opponentId: 1, isWin: true,
+			});
+
+			const deleted = await storage.pruneOldest('battles', 'timestamp', 10);
+			expect(deleted).toBe(0);
+
+			const remaining = await storage.getAll('battles');
+			expect(remaining).toHaveLength(1);
+		});
+
+		test('should return 0 when store is empty', async () => {
+			const deleted = await storage.pruneOldest('battles', 'timestamp', 10);
+			expect(deleted).toBe(0);
+		});
+
+		test('should delete all excess when maxRecords is 0', async () => {
+			for (let i = 1; i <= 3; i++) {
+				await storage.add('battles', {
+					battleType: 'Arena',
+					timestamp: `2025-01-0${i}T00:00:00Z`,
+					opponentId: i,
+					isWin: true,
+				});
+			}
+
+			const deleted = await storage.pruneOldest('battles', 'timestamp', 0);
+			expect(deleted).toBe(3);
+
+			const remaining = await storage.getAll('battles');
+			expect(remaining).toHaveLength(0);
+		});
+	});
 });

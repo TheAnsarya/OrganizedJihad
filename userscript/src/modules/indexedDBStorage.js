@@ -610,6 +610,45 @@ class IndexedDBStorage {
 	}
 
 	/**
+	 * Query records using an index with an {@link IDBKeyRange} bound.
+	 *
+	 * This is far more efficient than `getAll()` + `.filter()` because
+	 * IndexedDB only materialises matching rows — no full-table scan.
+	 *
+	 * @param {string} storeName  - Object store name
+	 * @param {string} indexName  - Index name (must exist on the store)
+	 * @param {object} [opts]     - Range options
+	 * @param {any}    [opts.lower]      - Lower bound value (inclusive by default)
+	 * @param {any}    [opts.upper]      - Upper bound value (inclusive by default)
+	 * @param {boolean} [opts.lowerOpen=false] - Exclude lower bound
+	 * @param {boolean} [opts.upperOpen=false] - Exclude upper bound
+	 * @returns {Promise<Array>} - Matching records within the range
+	 */
+	async getByIndexRange(storeName, indexName, opts = {}) {
+		await this._ensureDb();
+		const { lower, upper, lowerOpen = false, upperOpen = false } = opts;
+
+		let range = null;
+		if (lower !== undefined && upper !== undefined) {
+			range = IDBKeyRange.bound(lower, upper, lowerOpen, upperOpen);
+		} else if (lower !== undefined) {
+			range = IDBKeyRange.lowerBound(lower, lowerOpen);
+		} else if (upper !== undefined) {
+			range = IDBKeyRange.upperBound(upper, upperOpen);
+		}
+
+		return new Promise((resolve, reject) => {
+			const transaction = this.db.transaction([storeName], 'readonly');
+			const store = transaction.objectStore(storeName);
+			const index = store.index(indexName);
+			const request = index.getAll(range);
+
+			request.onsuccess = () => resolve(request.result);
+			request.onerror = () => reject(request.error);
+		});
+	}
+
+	/**
 	 * Get a paginated slice of records from a store, optionally via an index.
 	 *
 	 * Uses a cursor internally so only the requested page is materialised,
@@ -652,6 +691,47 @@ class IndexedDBStorage {
 				} else {
 					resolve(results);
 				}
+			};
+			request.onerror = () => reject(request.error);
+		});
+	}
+
+	/**
+	 * Cap a store at `maxRecords` by deleting the oldest entries (by index
+	 * order) in a **single** IDB transaction.  Uses `count()` first to
+	 * short-circuit when the store is already within bounds, so no full-
+	 * table scan is needed on the hot path.
+	 *
+	 * Much cheaper than `getAll()` + sort + per-record `delete()`.
+	 *
+	 * @param {string} storeName  - Object store name
+	 * @param {string} indexName  - Index to sort by (ascending oldest→newest)
+	 * @param {number} maxRecords - Maximum records to keep
+	 * @returns {Promise<number>} Number of records deleted
+	 */
+	async pruneOldest(storeName, indexName, maxRecords) {
+		await this._ensureDb();
+
+		const total = await this.count(storeName);
+		const excess = total - maxRecords;
+		if (excess <= 0) return 0;
+
+		return new Promise((resolve, reject) => {
+			const tx = this.db.transaction([storeName], 'readwrite');
+			const store = tx.objectStore(storeName);
+			const index = store.index(indexName);
+			const request = index.openCursor(null, 'next'); // ascending (oldest first)
+			let deleted = 0;
+
+			request.onsuccess = (event) => {
+				const cursor = event.target.result;
+				if (!cursor || deleted >= excess) {
+					resolve(deleted);
+					return;
+				}
+				cursor.delete();
+				deleted++;
+				cursor.continue();
 			};
 			request.onerror = () => reject(request.error);
 		});
@@ -892,41 +972,16 @@ class IndexedDBStorage {
 	}
 
 	/**
-	 * Clear old API log entries to prevent database bloat
-	 * Keeps only the most recent entries
+	 * Clear old API log entries to prevent database bloat.
+	 * Keeps only the most recent entries. Delegates to {@link pruneOldest}
+	 * for efficient cursor-based deletion instead of loading all records.
 	 *
 	 * @param {number} keepCount - Number of entries to keep (default: 5000)
 	 * @returns {Promise<number>} Number of entries deleted
 	 */
 	async clearOldAPILogs(keepCount = 5000) {
 		try {
-			await this._ensureDb();
-
-			const allEntries = await this.getAll('apiLogs');
-
-			if (allEntries.length <= keepCount) {
-				return 0;
-			}
-
-			// Sort by timestamp descending and keep only the newest
-			allEntries.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
-			const entriesToDelete = allEntries.slice(keepCount);
-
-			// Use proper Promise wrapping for IDB transaction (#84)
-			return new Promise((resolve, reject) => {
-				const transaction = this.db.transaction(['apiLogs'], 'readwrite');
-				const apiLogsStore = transaction.objectStore('apiLogs');
-
-				for (const entry of entriesToDelete) {
-					apiLogsStore.delete(entry.id);
-				}
-
-				transaction.oncomplete = () => {
-					console.log(`[IndexedDBStorage] Deleted ${entriesToDelete.length} old API log entries`);
-					resolve(entriesToDelete.length);
-				};
-				transaction.onerror = () => reject(transaction.error);
-			});
+			return await this.pruneOldest('apiLogs', 'timestamp', keepCount);
 		} catch (error) {
 			console.error('[IndexedDBStorage] Failed to clear old API logs:', error);
 			return 0;

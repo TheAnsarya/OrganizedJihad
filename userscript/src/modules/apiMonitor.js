@@ -275,7 +275,7 @@ class APIMonitor {
 		}
 
 		const logEntry = {
-			id: `req_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+			id: `req_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`,
 			type: 'request',
 			timestamp: new Date().toISOString(),
 			method: requestInfo.method,
@@ -338,7 +338,7 @@ class APIMonitor {
 		const duration = responseInfo.endTime - requestInfo.startTime;
 
 		const logEntry = {
-			id: `res_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+			id: `res_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`,
 			type: 'response',
 			timestamp: new Date().toISOString(),
 			url: requestInfo.url,
@@ -612,7 +612,7 @@ class APIMonitor {
 		doc += `- Total Endpoints Discovered: ${this.discoveredEndpoints.size}\n`;
 		doc += `- Total Requests Logged: ${this.stats.totalRequests}\n`;
 		doc += `- Total Responses Logged: ${this.stats.totalResponses}\n`;
-		doc += `- Success Rate: ${((this.stats.successfulRequests / this.stats.totalResponses) * 100).toFixed(2)}%\n\n`;
+		doc += `- Success Rate: ${this.stats.totalResponses > 0 ? ((this.stats.successfulRequests / this.stats.totalResponses) * 100).toFixed(2) : '0.00'}%\n\n`;
 
 		doc += `## Discovered Endpoints\n\n`;
 		doc += `| Endpoint | Call Count | First Seen | Last Seen |\n`;
@@ -653,6 +653,42 @@ class APIMonitor {
 		this.downloadJSON(doc, `herowars-api-docs-${Date.now()}.md`);
 
 		return doc;
+	}
+
+	/**
+	 * Tear down the APIMonitor: restore original XHR and fetch prototypes,
+	 * remove the global console accessor, and clear internal state (#133).
+	 *
+	 * Called automatically via `_destroyables` on `beforeunload`.
+	 */
+	destroy() {
+		// Restore original XMLHttpRequest prototype methods
+		if (this.originalXHR) {
+			try {
+				PAGE_WINDOW.XMLHttpRequest.prototype.open = this.originalXHR.open;
+				PAGE_WINDOW.XMLHttpRequest.prototype.send = this.originalXHR.send;
+				PAGE_WINDOW.XMLHttpRequest.prototype.setRequestHeader = this.originalXHR.setRequestHeader;
+			} catch { /* best-effort */ }
+			this.originalXHR = null;
+		}
+
+		// Restore original fetch
+		if (this.originalFetch) {
+			try {
+				PAGE_WINDOW.fetch = this.originalFetch;
+			} catch { /* best-effort */ }
+			this.originalFetch = null;
+		}
+
+		// Remove global console accessor
+		try {
+			delete PAGE_WINDOW.apiMonitor;
+		} catch { /* best-effort */ }
+
+		this.isMonitoring = false;
+		this.requestLog = [];
+		this.discoveredEndpoints.clear();
+		this.listeners = [];
 	}
 }
 
