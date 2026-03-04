@@ -57,8 +57,12 @@ class GameOverlay {
 	/**
 	 * Initialise the overlay: create the DOM panel, bind the hotkey,
 	 * and restore saved position.
+	 * Idempotent — calling init() multiple times is safe; subsequent
+	 * calls are no-ops.
 	 */
 	init() {
+		if (this.panel) return; // already initialised — idempotency guard
+
 		this._createPanel();
 		this._bindHotkey();
 

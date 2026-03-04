@@ -215,15 +215,25 @@ class GameTracker {
 
 	/**
 	 * Compute a lightweight fingerprint for deduplication.
-	 * Produces a JSON string from the data's key fields. Comparing two
-	 * fingerprints is ~100× cheaper than re-writing to IndexedDB.
+	 * Produces a deterministic JSON string from the data's key fields.
+	 * Uses sorted-key serialisation so objects with the same values but
+	 * different property insertion orders still produce identical hashes.
+	 * Comparing two fingerprints is ~100× cheaper than re-writing to IndexedDB.
 	 *
 	 * @param {*} data - Any JSON-serialisable value
-	 * @returns {string} Deterministic JSON string
+	 * @returns {string} Deterministic JSON string (keys sorted recursively)
 	 * @private
 	 */
 	_computeDataFingerprint(data) {
-		return JSON.stringify(data);
+		return JSON.stringify(data, (_, value) => {
+			if (value && typeof value === 'object' && !Array.isArray(value)) {
+				// Sort object keys for deterministic serialisation
+				return Object.fromEntries(
+					Object.entries(value).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
+				);
+			}
+			return value;
+		});
 	}
 
 	// =====================================================================
@@ -6011,10 +6021,11 @@ class GameTracker {
 
 		// Update historical data
 		const history = await this.storage.getMetadata('gameHistory', []);
+		const heroesArr = Array.isArray(snapshot.heroes) ? snapshot.heroes : [];
 		history.push({
 			timestamp: now,
 			level: snapshot.player.level || 0,
-			power: snapshot.heroes.reduce((sum, h) => sum + h.power, 0),
+			power: heroesArr.reduce((sum, h) => sum + (h?.power || 0), 0),
 			gold: snapshot.player.gold || 0,
 			emeralds: snapshot.player.starmoney || 0,
 		});

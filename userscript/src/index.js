@@ -149,8 +149,16 @@ import './styles/main.css';
 				return result;
 			})
 			.catch((err) => {
-				// Log but don't break the chain — next queued call must still run
+				// Log but don't break the chain — next queued call must still run.
+				// Emit as an activity event so it surfaces in the API Log tab.
 				console.error('[OrganizedJihad] processAPIResponse error:', err);
+				try {
+					gameTracker._emit('error', {
+						source: 'processAPIResponse',
+						message: err?.message || String(err),
+						timestamp: Date.now(),
+					});
+				} catch { /* best-effort */ }
 			});
 
 		return _processingChain;
@@ -330,13 +338,20 @@ import './styles/main.css';
 			showBadgeError(errorCount);
 		}
 
-		window.addEventListener('error', (event) => {
+		/** @type {(event: ErrorEvent) => void} */
+		const _onGlobalError = (event) => {
 			handleGlobalError('error', event.error || event.message);
-		});
-
-		window.addEventListener('unhandledrejection', (event) => {
+		};
+		/** @type {(event: PromiseRejectionEvent) => void} */
+		const _onUnhandledRejection = (event) => {
 			handleGlobalError('rejection', event.reason);
-		});
+		};
+		window.addEventListener('error', _onGlobalError);
+		window.addEventListener('unhandledrejection', _onUnhandledRejection);
+
+		// Store references for cleanup in beforeunload
+		window._ojGlobalErrorHandler = _onGlobalError;
+		window._ojGlobalRejectionHandler = _onUnhandledRejection;
 
 		// ─── Initialize sync client (optional) ──────────────────────
 		const syncClient = new SyncClient('http://localhost:5124');
@@ -493,6 +508,13 @@ import './styles/main.css';
 		}
 		if (window.organizedJihadSuggestionsInterval) {
 			clearInterval(window.organizedJihadSuggestionsInterval);
+		}
+		// Remove global error/rejection listeners to prevent stale closures
+		if (window._ojGlobalErrorHandler) {
+			window.removeEventListener('error', window._ojGlobalErrorHandler);
+		}
+		if (window._ojGlobalRejectionHandler) {
+			window.removeEventListener('unhandledrejection', window._ojGlobalRejectionHandler);
 		}
 		for (const mod of _destroyables) {
 			try {
