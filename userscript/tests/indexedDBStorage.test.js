@@ -792,4 +792,77 @@ describe('IndexedDBStorage', () => {
 			expect(z.value).toBe('brand-new');
 		});
 	});
+
+	// ─── getBattleStats (#150) ───────────────────────────────────────────
+
+	describe('getBattleStats', () => {
+		const seedBattles = async () => {
+			await storage.add('battles', { battleType: 'Arena', timestamp: '2025-01-01T00:00:00Z', opponentId: 1, isWin: true });
+			await storage.add('battles', { battleType: 'Arena', timestamp: '2025-01-02T00:00:00Z', opponentId: 2, isWin: false });
+			await storage.add('battles', { battleType: 'GrandArena', timestamp: '2025-01-03T00:00:00Z', opponentId: 3, isWin: true });
+			await storage.add('battles', { battleType: 'GrandArena', timestamp: '2025-01-04T00:00:00Z', opponentId: 4, isWin: true });
+			await storage.add('battles', { battleType: 'Arena', timestamp: '2025-01-05T00:00:00Z', opponentId: 5, isWin: false });
+		};
+
+		test('should return correct totals without any time bounds', async () => {
+			await seedBattles();
+			const stats = await storage.getBattleStats();
+
+			expect(stats.total).toBe(5);
+			expect(stats.wins).toBe(3);
+			expect(stats.losses).toBe(2);
+		});
+
+		test('should break down stats by battleType', async () => {
+			await seedBattles();
+			const stats = await storage.getBattleStats();
+
+			expect(stats.byType.Arena).toEqual({ total: 3, wins: 1, losses: 2 });
+			expect(stats.byType.GrandArena).toEqual({ total: 2, wins: 2, losses: 0 });
+		});
+
+		test('should return zeroes for empty store', async () => {
+			const stats = await storage.getBattleStats();
+
+			expect(stats.total).toBe(0);
+			expect(stats.wins).toBe(0);
+			expect(stats.losses).toBe(0);
+			expect(stats.byType).toEqual({});
+		});
+
+		test('should filter with since lower bound', async () => {
+			await seedBattles();
+			const stats = await storage.getBattleStats({ since: '2025-01-03T00:00:00Z' });
+
+			// Records on 01-03, 01-04, 01-05
+			expect(stats.total).toBe(3);
+			expect(stats.wins).toBe(2);
+			expect(stats.losses).toBe(1);
+		});
+
+		test('should filter with until upper bound', async () => {
+			await seedBattles();
+			const stats = await storage.getBattleStats({ until: '2025-01-02T00:00:00Z' });
+
+			// Records on 01-01, 01-02
+			expect(stats.total).toBe(2);
+			expect(stats.wins).toBe(1);
+			expect(stats.losses).toBe(1);
+		});
+
+		test('should filter with bounded range (since + until)', async () => {
+			await seedBattles();
+			const stats = await storage.getBattleStats({
+				since: '2025-01-02T00:00:00Z',
+				until: '2025-01-04T00:00:00Z',
+			});
+
+			// Records on 01-02, 01-03, 01-04
+			expect(stats.total).toBe(3);
+			expect(stats.wins).toBe(2);
+			expect(stats.losses).toBe(1);
+			expect(stats.byType.Arena).toEqual({ total: 1, wins: 0, losses: 1 });
+			expect(stats.byType.GrandArena).toEqual({ total: 2, wins: 2, losses: 0 });
+		});
+	});
 });

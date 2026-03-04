@@ -101,6 +101,16 @@ class UIManager {
 		 * @type {Array<{ event: string, handler: Function }>}
 		 */
 		this._docListeners = [];
+
+		/**
+		 * Cached completion averages to avoid recalculating on every
+		 * dashboard render.  Each entry has `{ value, ts }`.  Invalidates
+		 * after _completionCacheTTL ms (default 60 s).
+		 * @type {{ hero?: {value:number,ts:number}, titan?: {value:number,ts:number}, pet?: {value:number,ts:number} }}
+		 */
+		this._completionCache = {};
+		/** @type {number} Cache TTL in ms for completion averages */
+		this._completionCacheTTL = 60_000;
 	}
 
 	/**
@@ -126,15 +136,28 @@ class UIManager {
 		// Subscribe to live activity events for real-time feed updates.
 		// When the Activity tab is visible, re-render it on each new event.
 		if (this.gameTracker && typeof this.gameTracker.on === 'function') {
+			// Debounce activity/apiLog renders to 500ms to avoid rapid
+			// re-renders during API bursts (a single response can fire
+			// 5-15+ handler calls, each emitting 'activity').
+			let activityTimer = null;
 			this.gameTracker.on('activity', () => {
 				if (this.isVisible && this.currentView === 'activity') {
-					this.renderView('activity');
+					if (activityTimer) clearTimeout(activityTimer);
+					activityTimer = setTimeout(() => {
+						activityTimer = null;
+						this.renderView('activity');
+					}, 500);
 				}
 			});
-			// Auto-refresh API Log tab when new calls arrive
+			// Auto-refresh API Log tab when new calls arrive (debounced)
+			let apiLogTimer = null;
 			this.gameTracker.on('apiLog', () => {
 				if (this.isVisible && this.currentView === 'apilog') {
-					this.renderView('apilog');
+					if (apiLogTimer) clearTimeout(apiLogTimer);
+					apiLogTimer = setTimeout(() => {
+						apiLogTimer = null;
+						this.renderView('apilog');
+					}, 500);
 				}
 			});
 			// Auto-refresh any data tab when new data arrives (#90)
@@ -656,11 +679,10 @@ class UIManager {
 
 		let guildWarBattlesToday = 0;
 		let guildRaidMinionToday = 0;
-		let allBattles = [];
 
 		try {
-			allBattles = await this.idbStorage.getAll('battles');
-			const todayBattles = allBattles.filter((b) => b.timestamp >= todayISO);
+			// Only load today's battles via timestamp index instead of entire store (#150)
+			const todayBattles = await this.idbStorage.getByIndexRange('battles', 'timestamp', { lower: todayISO });
 			guildWarBattlesToday = todayBattles.filter((b) => b.battleType === 'GuildWar').length;
 			guildRaidMinionToday = todayBattles.filter((b) => b.battleType === 'RaidBoss').length;
 		} catch { /* empty */ }
@@ -2332,17 +2354,24 @@ class UIManager {
 			} catch { /* empty */ }
 		}
 
-		// ── Load consumableRewards for drop-rate analysis ───────────────
-		let allDrops = [];
-		try {
-			allDrops = await this.idbStorage.getAll('consumableRewards', FETCH_LIMIT_DROPS);
-		} catch { /* empty */ }
-
 		// ── Load aggregated drop rates from metadata ────────────────────
 		let dropRates = {};
 		try {
 			dropRates = (await this.idbStorage.getMetadata('chestDropRates', null)) || {};
 		} catch { /* empty */ }
+
+		// Defer heavy consumableRewards load until we know it's needed.
+		// This avoids fetching up to 50,000 records when pre-aggregated
+		// drop rates already exist (#150 performance).
+		let allDrops = [];
+		let _dropsLoaded = false;
+		const _ensureDrops = async () => {
+			if (_dropsLoaded) return;
+			_dropsLoaded = true;
+			try {
+				allDrops = await this.idbStorage.getAll('consumableRewards', FETCH_LIMIT_DROPS);
+			} catch { /* empty */ }
+		};
 
 		if (chests.length === 0 && Object.keys(dropRates).length === 0) {
 			return `
@@ -2429,6 +2458,9 @@ class UIManager {
 		}
 
 		// Also build a drop-rate section from raw consumableRewards data if available
+		if (!dropRateHtml) {
+			await _ensureDrops();
+		}
 		if (allDrops.length > 0 && !dropRateHtml) {
 			// Group by sourceType+sourceId → itemType+itemId
 			const grouped = {};
@@ -2534,7 +2566,7 @@ class UIManager {
 
 		return `
 			<div class="oj-chests" data-browser="chests">
-				<h3>\uD83C\uDF81 Chests & Drop Rates <span class="oj-muted">(${chests.length} openings \u2022 ${allDrops.length} drops tracked)</span></h3>
+				<h3>\uD83C\uDF81 Chests & Drop Rates <span class="oj-muted">(${chests.length} openings${_dropsLoaded ? ` \u2022 ${allDrops.length} drops tracked` : ''})</span></h3>
 				<div class="oj-pills">${typePills}</div>
 				${dropRateHtml}
 				<h4 class="oj-section-sub">Opening History</h4>
@@ -3944,11 +3976,14 @@ class UIManager {
 	 * @private
 	 */
 	async _calcAverageHeroCompletion() {
+		const cached = this._completionCache.hero;
+		if (cached && (Date.now() - cached.ts) < this._completionCacheTTL) return cached.value;
+
 		try {
 			let heroes = [];
 
 			// Try metadata cache first
-			const cached = await this.idbStorage.getMetadata('heroesData', null);
+			const meta = await this.idbStorage.getMetadata('heroesData', null);
 			if (Array.isArray(cached) && cached.length > 0) {
 				heroes = cached;
 			}
@@ -3975,7 +4010,9 @@ class UIManager {
 			for (const h of heroes) {
 				total += HeroCompletionCalculator.calculateCompletion(h).overall;
 			}
-			return total / heroes.length;
+			const avg = total / heroes.length;
+			this._completionCache.hero = { value: avg, ts: Date.now() };
+			return avg;
 		} catch {
 			return 0;
 		}
@@ -3990,13 +4027,16 @@ class UIManager {
 	 * @private
 	 */
 	async _calcAverageTitanCompletion() {
+		const cached = this._completionCache.titan;
+		if (cached && (Date.now() - cached.ts) < this._completionCacheTTL) return cached.value;
+
 		try {
 			let titans = [];
 
 			// Try metadata cache first
-			const cached = await this.idbStorage.getMetadata('titansData', null);
-			if (Array.isArray(cached) && cached.length > 0) {
-				titans = cached;
+			const meta = await this.idbStorage.getMetadata('titansData', null);
+			if (Array.isArray(meta) && meta.length > 0) {
+				titans = meta;
 			}
 
 			// Fallback: IDB store with dedup
@@ -4021,7 +4061,9 @@ class UIManager {
 			for (const t of titans) {
 				total += TitanCompletionCalculator.calculateCompletion(t).overall;
 			}
-			return total / titans.length;
+			const avg = total / titans.length;
+			this._completionCache.titan = { value: avg, ts: Date.now() };
+			return avg;
 		} catch {
 			return 0;
 		}
@@ -4036,13 +4078,16 @@ class UIManager {
 	 * @private
 	 */
 	async _calcAveragePetCompletion() {
+		const cached = this._completionCache.pet;
+		if (cached && (Date.now() - cached.ts) < this._completionCacheTTL) return cached.value;
+
 		try {
 			let pets = [];
 
 			// Try metadata cache first
-			const cached = await this.idbStorage.getMetadata('petsData', null);
-			if (Array.isArray(cached) && cached.length > 0) {
-				pets = cached;
+			const meta = await this.idbStorage.getMetadata('petsData', null);
+			if (Array.isArray(meta) && meta.length > 0) {
+				pets = meta;
 			}
 
 			// Fallback: IDB store with dedup
@@ -4066,7 +4111,9 @@ class UIManager {
 			for (const p of pets) {
 				total += PetCompletionCalculator.calculateCompletion(p).overall;
 			}
-			return total / pets.length;
+			const avg = total / pets.length;
+			this._completionCache.pet = { value: avg, ts: Date.now() };
+			return avg;
 		} catch {
 			return 0;
 		}
@@ -4122,13 +4169,20 @@ class UIManager {
 	/**
 	 * Escape HTML to prevent XSS in rendered content.
 	 *
+	 * Uses pure string replacement instead of DOM element allocation
+	 * for better performance — avoids creating a throwaway element on
+	 * every call (48+ call sites, many inside .map() loops).
+	 *
 	 * @param {string} str - Raw string
 	 * @returns {string} HTML-safe string
 	 */
 	_escapeHtml(str) {
-		const div = document.createElement('div');
-		div.textContent = str;
-		return div.innerHTML;
+		return String(str)
+			.replace(/&/g, '&amp;')
+			.replace(/</g, '&lt;')
+			.replace(/>/g, '&gt;')
+			.replace(/"/g, '&quot;')
+			.replace(/'/g, '&#39;');
 	}
 
 	/**

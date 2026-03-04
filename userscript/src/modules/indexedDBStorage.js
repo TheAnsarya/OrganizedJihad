@@ -901,31 +901,79 @@ class IndexedDBStorage {
 	}
 
 	/**
-	 * Get battle statistics
-	 * @returns {Promise<object>} - Battle stats
+	 * Get battle statistics using an IndexedDB cursor to avoid loading
+	 * every record into memory at once (fixes #150).
+	 *
+	 * An optional time boundary limits the scan to recent records,
+	 * keeping both CPU and memory use proportional to the window size
+	 * rather than total store size.
+	 *
+	 * @param {object}  [opts]              - Options
+	 * @param {string}  [opts.since]        - ISO-8601 lower bound on timestamp (inclusive)
+	 * @param {string}  [opts.until]        - ISO-8601 upper bound on timestamp (inclusive)
+	 * @returns {Promise<object>} - Battle stats (total, wins, losses, byType)
 	 */
-	async getBattleStats() {
-		const battles = await this.getAll('battles');
-		const stats = {
-			total: battles.length,
-			wins: battles.filter((b) => b.isWin).length,
-			losses: battles.filter((b) => !b.isWin).length,
-			byType: {},
-		};
+	async getBattleStats(opts = {}) {
+		await this._ensureDb();
 
-		for (const battle of battles) {
-			if (!stats.byType[battle.battleType]) {
-				stats.byType[battle.battleType] = { total: 0, wins: 0, losses: 0 };
-			}
-			stats.byType[battle.battleType].total++;
-			if (battle.isWin) {
-				stats.byType[battle.battleType].wins++;
-			} else {
-				stats.byType[battle.battleType].losses++;
-			}
+		const { since, until } = opts;
+
+		// Build an optional IDBKeyRange on the 'timestamp' index
+		let range = null;
+		if (since && until) {
+			range = IDBKeyRange.bound(since, until);
+		} else if (since) {
+			range = IDBKeyRange.lowerBound(since);
+		} else if (until) {
+			range = IDBKeyRange.upperBound(until);
 		}
 
-		return stats;
+		return new Promise((resolve, reject) => {
+			const transaction = this.db.transaction(['battles'], 'readonly');
+			const store = transaction.objectStore('battles');
+			// When a time range is specified, walk the 'timestamp' index;
+			// otherwise iterate the raw store (no index needed).
+			const source = range ? store.index('timestamp') : store;
+			const request = source.openCursor(range);
+
+			const stats = {
+				total: 0,
+				wins: 0,
+				losses: 0,
+				byType: {},
+			};
+
+			request.onsuccess = (event) => {
+				const cursor = event.target.result;
+				if (cursor) {
+					const battle = cursor.value;
+					stats.total++;
+					if (battle.isWin) {
+						stats.wins++;
+					} else {
+						stats.losses++;
+					}
+
+					const type = battle.battleType;
+					if (!stats.byType[type]) {
+						stats.byType[type] = { total: 0, wins: 0, losses: 0 };
+					}
+					stats.byType[type].total++;
+					if (battle.isWin) {
+						stats.byType[type].wins++;
+					} else {
+						stats.byType[type].losses++;
+					}
+
+					cursor.continue();
+				} else {
+					// Cursor exhausted — return accumulated stats
+					resolve(stats);
+				}
+			};
+
+			request.onerror = () => reject(request.error);
+		});
 	}
 
 	/**
