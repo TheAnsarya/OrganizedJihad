@@ -100,7 +100,8 @@ class StorageManager {
 	clearAll() {
 		const keys = this.listKeys();
 		keys.forEach((key) => {
-			const cleanKey = key.replace(this.prefix, '');
+			// Use slice to strip exactly the prefix from the start (#149)
+			const cleanKey = key.slice(this.prefix.length);
 			this.delete(cleanKey);
 		});
 	}
@@ -112,7 +113,8 @@ class StorageManager {
 		const data = {};
 		const keys = this.listKeys();
 		keys.forEach((key) => {
-			const cleanKey = key.replace(this.prefix, '');
+			// Use slice to strip exactly the prefix from the start (#149)
+			const cleanKey = key.slice(this.prefix.length);
 			data[cleanKey] = this.get(cleanKey);
 		});
 		return data;

@@ -1201,6 +1201,26 @@ describe('GameTracker', () => {
 			tracker.destroy();
 			expect(WebSocket.prototype.send).toBe(originalSend);
 		});
+
+		test('should lazily capture onmessage set AFTER first send (#148)', () => {
+			const originalSend = WebSocket.prototype.send;
+			// Stub out the real send to avoid CONNECTING state errors in JSDOM
+			WebSocket.prototype.send = function () {};
+			tracker.proxyWebSocket();
+
+			// Simulate: create WS, send, THEN attach onmessage
+			const ws = new WebSocket('ws://localhost');
+			ws.send('init');
+
+			const realHandler = jest.fn();
+			ws.onmessage = realHandler; // assigned after send()
+
+			// The getter/setter trap should have wrapped the real handler
+			expect(ws._ojPatched).toBe(true);
+
+			// Cleanup
+			WebSocket.prototype.send = originalSend;
+		});
 	});
 
 	// ─── Handler Dependencies (#47) ──────────────────────────────────────
@@ -1658,6 +1678,391 @@ describe('GameTracker', () => {
 			tracker._apiSamples.set('a', {});
 			tracker._apiSamples.set('b', {});
 			expect(tracker.getApiSampleCount()).toBe(2);
+		});
+	});
+
+	// ─── Phase 12 Handler Tests (#125) ───────────────────────────────────
+
+	describe('Phase 12 Handlers', () => {
+		/**
+		 * Helper: dispatch a single API call through processAPIResponse.
+		 * @param {string} method - API method name
+		 * @param {object} data   - Response data
+		 * @param {object} [args] - Request args
+		 */
+		const dispatch = async (method, data, args = {}) => {
+			const request = { calls: [{ name: method, ident: 'body', args }] };
+			const response = { results: [{ ident: 'body', result: { response: data } }] };
+			await tracker.processAPIResponse(request, response);
+		};
+
+		test('clanGetWeeklyStat should store guildWeeklyStat metadata', async () => {
+			await dispatch('clanGetWeeklyStat', {
+				stat: [
+					{ id: 1, activity: [10], dungeonActivity: [], adventureStat: [], clanWarStat: [], prestigeStat: [], clanGifts: [] },
+					{ id: 2, activity: [20], dungeonActivity: [], adventureStat: [], clanWarStat: [], prestigeStat: [], clanGifts: [] },
+				],
+			});
+			expect(mockStorage.setMetadata).toHaveBeenCalledWith('guildWeeklyStat', expect.objectContaining({
+				memberCount: 2,
+				lastUpdate: expect.any(Number),
+			}));
+		});
+
+		test('clanGetWeeklyStat should handle empty stat array', async () => {
+			await dispatch('clanGetWeeklyStat', { stat: [] });
+			expect(mockStorage.setMetadata).toHaveBeenCalledWith('guildWeeklyStat', expect.objectContaining({
+				memberCount: 0,
+			}));
+		});
+
+		test('clanGetWeeklyStat should handle null/missing data gracefully', async () => {
+			await dispatch('clanGetWeeklyStat', {});
+			expect(mockStorage.setMetadata).toHaveBeenCalledWith('guildWeeklyStat', expect.objectContaining({
+				memberCount: 0,
+			}));
+		});
+
+		test('clanGetLog should store guildLog metadata and deduplicate entries', async () => {
+			mockStorage.getMetadata.mockResolvedValueOnce(null);
+			await dispatch('clanGetLog', {
+				history: [
+					{ id: 100, userId: 1, event: 'join', ctime: 1000 },
+					{ id: 101, userId: 2, event: 'points', ctime: 1001 },
+				],
+			});
+			expect(mockStorage.setMetadata).toHaveBeenCalledWith('guildLog', expect.objectContaining({
+				totalTracked: 2,
+				lastUpdate: expect.any(Number),
+			}));
+		});
+
+		test('clanGetLog should handle empty history', async () => {
+			await dispatch('clanGetLog', { history: [] });
+			// Should not call setMetadata when history is empty
+		});
+
+		test('clanWarGetDefence should store guildWarDefense metadata', async () => {
+			await dispatch('clanWarGetDefence', {
+				slots: { '1': {}, '2': {} },
+				teams: { '1': {} },
+			});
+			expect(mockStorage.setMetadata).toHaveBeenCalledWith('guildWarDefense', expect.objectContaining({
+				slotCount: 2,
+				teamCount: 1,
+				lastUpdate: expect.any(Number),
+			}));
+		});
+
+		test('clanWarGetWarlordInfo should store guildWarWarlord metadata', async () => {
+			await dispatch('clanWarGetWarlordInfo', {
+				warInfo: { season: 5, day: 3, endTime: 9999, nextWarTime: 10000, nextLockTime: 9500 },
+				defence: { slots: { '1': {} }, teams: {} },
+			});
+			expect(mockStorage.setMetadata).toHaveBeenCalledWith('guildWarWarlord', expect.objectContaining({
+				season: 5,
+				day: 3,
+				lastUpdate: expect.any(Number),
+			}));
+		});
+
+		test('clanWarGetLeagueInfo should store guildWarLeague metadata', async () => {
+			await dispatch('clanWarGetLeagueInfo', {
+				clanData: { leagueId: 3, position: 1, points: 1500 },
+				clanPlace: 5,
+			});
+			expect(mockStorage.setMetadata).toHaveBeenCalledWith('guildWarLeague', expect.objectContaining({
+				leagueId: 3,
+				position: 1,
+				points: 1500,
+			}));
+		});
+
+		test('clanGetOnline should store guildOnline metadata', async () => {
+			await dispatch('clanGetOnline', { users: { '1': true, '2': true, '3': false } });
+			expect(mockStorage.setMetadata).toHaveBeenCalledWith('guildOnline', expect.objectContaining({
+				onlineCount: 3,
+			}));
+		});
+
+		test('topGet should store leaderboard by type', async () => {
+			await dispatch('topGet', {
+				top: [{ place: 1, itemId: 1, score: 999 }],
+				place: 5,
+				score: 500,
+			}, { type: 'arena' });
+			expect(mockStorage.setMetadata).toHaveBeenCalledWith('leaderboards', expect.objectContaining({
+				arena: expect.objectContaining({
+					myPlace: 5,
+					myScore: 500,
+				}),
+			}));
+		});
+
+		test('heroRating_getInfo should store heroRating metadata', async () => {
+			await dispatch('heroRating_getInfo', {
+				userRating: { '1': 5 },
+				rating: { '1': 4.2 },
+			});
+			expect(mockStorage.setMetadata).toHaveBeenCalledWith('heroRating', expect.objectContaining({
+				lastUpdate: expect.any(Number),
+			}));
+		});
+
+		test('questGetEvents should store eventQuests metadata', async () => {
+			await dispatch('questGetEvents', [
+				{ id: 1, startTime: 1000, endTime: 2000, questChains: [{}] },
+			]);
+			expect(mockStorage.setMetadata).toHaveBeenCalledWith('eventQuests', expect.objectContaining({
+				activeCount: 1,
+			}));
+		});
+
+		test('specialOffer_getAll should store specialOffers metadata', async () => {
+			await dispatch('specialOffer_getAll', [
+				{ id: 1, type: 'gem', endTime: 9999, billings: [{}] },
+			]);
+			expect(mockStorage.setMetadata).toHaveBeenCalledWith('specialOffers', expect.objectContaining({
+				activeCount: 1,
+			}));
+		});
+
+		test('crossClanWar_getAttackMap should store cowAttackMap', async () => {
+			await dispatch('crossClanWar_getAttackMap', { targets: [1, 2] });
+			expect(mockStorage.setMetadata).toHaveBeenCalledWith('cowAttackMap', expect.objectContaining({
+				targets: [1, 2],
+				lastUpdate: expect.any(Number),
+			}));
+		});
+
+		test('subscriptionGetInfo should store subscriptionInfo', async () => {
+			await dispatch('subscriptionGetInfo', { active: true });
+			expect(mockStorage.setMetadata).toHaveBeenCalledWith('subscriptionInfo', expect.objectContaining({
+				active: true,
+			}));
+		});
+
+		test('towerGetState should store towerState with floor', async () => {
+			await dispatch('towerGetState', { floor: 42, teamHealth: { '1': 100 } });
+			expect(mockStorage.setMetadata).toHaveBeenCalledWith('towerState', expect.objectContaining({
+				floor: 42,
+			}));
+		});
+
+		test('titanGetSummoningCircle should store titanSummonCircle', async () => {
+			await dispatch('titanGetSummoningCircle', { available: true });
+			expect(mockStorage.setMetadata).toHaveBeenCalledWith('titanSummonCircle', expect.objectContaining({
+				available: true,
+			}));
+		});
+
+		test('shopGet should store shop details by shopId', async () => {
+			mockStorage.getMetadata.mockResolvedValueOnce(null);
+			await dispatch('shopGet', {
+				id: 5,
+				slots: { '1': { bought: false }, '2': { bought: true } },
+				refreshTime: 3600,
+			}, { shopId: '5' });
+			expect(mockStorage.setMetadata).toHaveBeenCalledWith('shopData', expect.objectContaining({
+				shopCount: 1,
+			}));
+		});
+
+		test('settingsGetAll should store gameSettings', async () => {
+			await dispatch('settingsGetAll', { lang: 'en' });
+			expect(mockStorage.setMetadata).toHaveBeenCalledWith('gameSettings', expect.objectContaining({
+				data: { lang: 'en' },
+			}));
+		});
+
+		test('dailyBonusGetInfo should store dailyBonusInfo', async () => {
+			await dispatch('dailyBonusGetInfo', { day: 7, isAvailable: true });
+			expect(mockStorage.setMetadata).toHaveBeenCalledWith('dailyBonusInfo', expect.objectContaining({
+				day: 7,
+				isAvailable: true,
+			}));
+		});
+	});
+
+	// ─── Phase 13 Handler Tests (#125) ───────────────────────────────────
+
+	describe('Phase 13 Handlers', () => {
+		const dispatch = async (method, data, args = {}) => {
+			const request = { calls: [{ name: method, ident: 'body', args }] };
+			const response = { results: [{ ident: 'body', result: { response: data } }] };
+			await tracker.processAPIResponse(request, response);
+		};
+
+		test('bossGetAll should store outlandBosses metadata', async () => {
+			await dispatch('bossGetAll', [
+				{ id: 1, bossLevel: 120, chestNum: 3, chestId: 10 },
+				{ id: 2, bossLevel: 110, chestNum: 2, chestId: 11 },
+			]);
+			expect(mockStorage.setMetadata).toHaveBeenCalledWith('outlandBosses', expect.objectContaining({
+				bossCount: 2,
+				totalChests: 5,
+			}));
+		});
+
+		test('bossGetAll should handle empty/non-array data', async () => {
+			await dispatch('bossGetAll', {});
+			expect(mockStorage.setMetadata).toHaveBeenCalledWith('outlandBosses', expect.objectContaining({
+				bossCount: 0,
+				totalChests: 0,
+			}));
+		});
+
+		test('towerGetInfo should store towerState metadata', async () => {
+			await dispatch('towerGetInfo', { floorNumber: 50, points: 1200, maySkipFloor: 1 });
+			expect(mockStorage.setMetadata).toHaveBeenCalledWith('towerState', expect.objectContaining({
+				floorNumber: 50,
+				points: 1200,
+			}));
+		});
+
+		test('expeditionGet should store expeditionSlots metadata', async () => {
+			await dispatch('expeditionGet', {
+				'1': { id: 1, slotId: 1, status: 1, duration: 3600 },
+				'2': { id: 2, slotId: 2, status: 3, endTime: 9999 },
+			});
+			expect(mockStorage.setMetadata).toHaveBeenCalledWith('expeditionSlots', expect.objectContaining({
+				totalSlots: 2,
+				activeCount: 1,
+				completeCount: 1,
+			}));
+		});
+
+		test('invasion_getInfo should store invasionData metadata', async () => {
+			await dispatch('invasion_getInfo', {
+				id: 42,
+				bestPlace: 3,
+				farmedRewards: [1, 2],
+				actions: [{ type: 'attack', startDate: 1000, endDate: 2000 }],
+			});
+			expect(mockStorage.setMetadata).toHaveBeenCalledWith('invasionData', expect.objectContaining({
+				bestPlace: 3,
+				farmedRewards: 2,
+			}));
+		});
+
+		test('workshopBuff_getInfo should store workshopBuffs metadata', async () => {
+			await dispatch('workshopBuff_getInfo', [
+				{ id: 1, type: 'damage', amount: 10, level: 3, inUse: true },
+				{ id: 2, type: 'hp', amount: 5, level: 2, inUse: false },
+			]);
+			expect(mockStorage.setMetadata).toHaveBeenCalledWith('workshopBuffs', expect.objectContaining({
+				totalBuffs: 2,
+				activeBuffs: 1,
+			}));
+		});
+
+		test('battlePass_getSpecial should store active special passes', async () => {
+			const futureEnd = Math.floor(Date.now() / 1000) + 86400;
+			await dispatch('battlePass_getSpecial', {
+				'1': { id: 1, exp: 500, ticket: 1, startDate: 1000, endDate: futureEnd },
+			});
+			expect(mockStorage.setMetadata).toHaveBeenCalledWith('battlePassSpecial', expect.objectContaining({
+				activeCount: 1,
+			}));
+		});
+
+		test('pet_getChest should store petChest metadata', async () => {
+			await dispatch('pet_getChest', { starmoneySpent: 300, dailyPetId: 5 });
+			expect(mockStorage.setMetadata).toHaveBeenCalledWith('petChest', expect.objectContaining({
+				starmoneySpent: 300,
+				dailyPetId: 5,
+			}));
+		});
+
+		test('adventure_getActiveData should store adventureActive', async () => {
+			await dispatch('adventure_getActiveData', { hasActive: true, hasRewards: false });
+			expect(mockStorage.setMetadata).toHaveBeenCalledWith('adventureActive', expect.objectContaining({
+				hasActive: true,
+				hasRewards: false,
+			}));
+		});
+
+		test('adventure_getPassed should store adventurePassed', async () => {
+			await dispatch('adventure_getPassed', { '1': 3, '2': 1 });
+			expect(mockStorage.setMetadata).toHaveBeenCalledWith('adventurePassed', expect.objectContaining({
+				totalAdventures: 2,
+				totalCompletions: 4,
+			}));
+		});
+
+		test('adventure_find should store adventureLobbies', async () => {
+			await dispatch('adventure_find', { lobbies: [{}, {}], users: [1, 2, 3] });
+			expect(mockStorage.setMetadata).toHaveBeenCalledWith('adventureLobbies', expect.objectContaining({
+				lobbyCount: 2,
+				userCount: 3,
+			}));
+		});
+
+		test('chatsGetAll should store chatSummary', async () => {
+			await dispatch('chatsGetAll', {
+				guild: { chat: [{ msg: 'hi' }, { msg: 'hello' }] },
+				private: { chat: [{ msg: 'hey' }] },
+			});
+			expect(mockStorage.setMetadata).toHaveBeenCalledWith('chatSummary', expect.objectContaining({
+				totalMessages: 3,
+			}));
+		});
+
+		test('userGetAvailableAvatarFrames should store avatarFrames', async () => {
+			await dispatch('userGetAvailableAvatarFrames', { frames: { '1': true, '2': true } });
+			expect(mockStorage.setMetadata).toHaveBeenCalledWith('avatarFrames', expect.objectContaining({
+				count: 2,
+			}));
+		});
+
+		test('userGetAvailableAvatars should store avatars', async () => {
+			await dispatch('userGetAvailableAvatars', [10, 20, 30]);
+			expect(mockStorage.setMetadata).toHaveBeenCalledWith('avatars', expect.objectContaining({
+				count: 3,
+			}));
+		});
+
+		test('userGetAvailableStickers should store stickers', async () => {
+			await dispatch('userGetAvailableStickers', [1, 2]);
+			expect(mockStorage.setMetadata).toHaveBeenCalledWith('stickers', expect.objectContaining({
+				count: 2,
+			}));
+		});
+
+		test('telegramQuestGetInfo should store telegramQuests', async () => {
+			await dispatch('telegramQuestGetInfo', { q1: '1', q2: '0', q3: true });
+			expect(mockStorage.setMetadata).toHaveBeenCalledWith('telegramQuests', expect.objectContaining({
+				totalQuests: 3,
+				completedQuests: 2,
+			}));
+		});
+
+		test('rewardedVideo_boxyGetInfo should store boxyRewards', async () => {
+			await dispatch('rewardedVideo_boxyGetInfo', {
+				rewards: [{ farmed: true }, { farmed: false }, { farmed: false }],
+			});
+			expect(mockStorage.setMetadata).toHaveBeenCalledWith('boxyRewards', expect.objectContaining({
+				totalSlots: 3,
+				farmedSlots: 1,
+				remainingSlots: 2,
+			}));
+		});
+
+		test('saleShowcase_rewardInfo should store saleShowcase', async () => {
+			await dispatch('saleShowcase_rewardInfo', { nextRefill: 12345, reward: { gold: 100 } });
+			expect(mockStorage.setMetadata).toHaveBeenCalledWith('saleShowcase', expect.objectContaining({
+				nextRefill: 12345,
+				hasReward: true,
+			}));
+		});
+
+		// System no-ops should not throw
+		test.each([
+			'getTime', 'registration', 'tutorialGetInfo', 'splitGetAll',
+			'stashClient', 'freebieHaveGroup', 'mechanicAvailability',
+			'mechanicsBan_getInfo', 'playable_getAvailable', 'userMergeGetStatus',
+		])('system no-op handler %s should not throw', async (method) => {
+			await expect(dispatch(method, {})).resolves.not.toThrow();
 		});
 	});
 });

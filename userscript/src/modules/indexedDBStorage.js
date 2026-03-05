@@ -558,9 +558,11 @@ class IndexedDBStorage {
 				const idx = i;
 				req.onsuccess = () => { keys[idx] = req.result; };
 				req.onerror = (e) => {
-					// Swallow ConstraintError (duplicate) without aborting tx
-					if (req.error?.name === 'ConstraintError') {
-						e.preventDefault();
+					// Prevent any individual add() error from aborting
+					// the entire transaction — committed writes survive. (#151)
+					e.preventDefault();
+					if (req.error?.name !== 'ConstraintError') {
+						console.warn(`[OJ] addBatch: non-duplicate error on record ${idx}:`, req.error);
 					}
 				};
 			}

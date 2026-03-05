@@ -61,6 +61,13 @@ const TRACKING_CATEGORIES = {
 	guild: 'Guild & Chat',
 	quests: 'Quests & Daily',
 	upgrades: 'Hero/Titan Upgrades',
+	events: 'Events & Seasonal',
+	economy: 'Economy & Shops',
+	pve: 'PvE & Expeditions',
+	pets: 'Pets',
+	cosmetics: 'Cosmetics',
+	social: 'Social & Chat',
+	system: 'System (no-ops)',
 };
 
 /**
@@ -789,28 +796,37 @@ class GameTracker {
 		const originalSend = this._originalWsSend;
 
 		PAGE_WINDOW.WebSocket.prototype.send = function (data) {
-			// On first send, wrap onmessage to filter duplicate login events
+			// On first send, install a getter/setter trap on onmessage
+			// so the game's handler is lazily captured even if assigned
+			// after the first send() call. (#148)
 			if (!this._ojPatched) {
-				const originalOnMessage = this.onmessage;
+				let _gameHandler = this.onmessage; // may be null
 
-				this.onmessage = function (msgEvent) {
-					try {
-						const parsed = JSON.parse(msgEvent.data);
-						// Filter duplicate iframeEvent.login messages
-						if (parsed?.result?.type === 'iframeEvent.login') {
-							if (this._ojSeenLogin) {
-								return; // suppress duplicate
+				Object.defineProperty(this, 'onmessage', {
+					get() { return _gameHandler; },
+					set(fn) {
+						// Wrap whatever the game assigns
+						_gameHandler = function (msgEvent) {
+							try {
+								const parsed = JSON.parse(msgEvent.data);
+								// Filter duplicate iframeEvent.login messages
+								if (parsed?.result?.type === 'iframeEvent.login') {
+									if (this._ojSeenLogin) {
+										return; // suppress duplicate
+									}
+									this._ojSeenLogin = true;
+								}
+							} catch {
+								// Not JSON — pass through
 							}
-							this._ojSeenLogin = true;
-						}
-					} catch {
-						// Not JSON — pass through
-					}
 
-					if (originalOnMessage) {
-						return originalOnMessage.apply(this, arguments);
-					}
-				};
+							if (fn) {
+								return fn.apply(this, arguments);
+							}
+						}.bind(this);
+					},
+					configurable: true,
+				});
 
 				this._ojPatched = true;
 			}

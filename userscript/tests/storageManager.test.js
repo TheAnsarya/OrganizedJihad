@@ -199,4 +199,43 @@ describe('StorageManager', () => {
 			expect(result).toEqual({ foo: 'bar' });
 		});
 	});
+
+	// ─── #149 — prefix stripping edge cases ──────────────────────────────
+
+	describe('Prefix edge cases (#149)', () => {
+		test('clearAll should delete keys even if value contains prefix string', () => {
+			// Key whose *value* contains the prefix substring
+			sm.set('organizedJihad_x', 'nested');
+			// Normal key
+			sm.set('normal', 42);
+
+			sm.clearAll();
+
+			expect(sm.get('organizedJihad_x')).toBeNull();
+			expect(sm.get('normal')).toBeNull();
+		});
+
+		test('exportData should produce correct keys for edge-case names', () => {
+			sm.set('organizedJihad_extra', { deep: true });
+			sm.set('plain', 123);
+
+			const exported = sm.exportData();
+
+			// The key "organizedJihad_extra" is stored as
+			// "organizedJihad_organizedJihad_extra" in localStorage.
+			// exportData must strip only the leading prefix, yielding
+			// "organizedJihad_extra" — NOT "extra" (old replace bug).
+			expect(exported).toHaveProperty('organizedJihad_extra');
+			expect(exported).toHaveProperty('plain');
+			expect(exported['organizedJihad_extra']).toEqual({ deep: true });
+		});
+
+		test('round-trip with edge-case key names', () => {
+			sm.set('organizedJihad_clash', 'val');
+			const exported = sm.exportData();
+			sm.clearAll();
+			sm.importData(exported);
+			expect(sm.get('organizedJihad_clash')).toBe('val');
+		});
+	});
 });
