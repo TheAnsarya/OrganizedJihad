@@ -10,6 +10,7 @@
  */
 
 import HeroCompletionCalculator from './helpers/HeroCompletionCalculator.js';
+import HeroMaterialRequirementsCalculator from './helpers/HeroMaterialRequirementsCalculator.js';
 import TitanCompletionCalculator from './helpers/TitanCompletionCalculator.js';
 import PetCompletionCalculator from './helpers/PetCompletionCalculator.js';
 import { TRACKING_CATEGORIES } from './gameTracker.js';
@@ -2091,6 +2092,30 @@ class UIManager {
 			completionMap[key] = Calc.calculateCompletion(h);
 		}
 
+		// Build projected overall item requirements for remaining hero progression.
+		let requirementsProjection = null;
+		try {
+			const [heroUpgrades, equipmentChanges, inventoryItemUsages] = await Promise.all([
+				this.idbStorage.getAll('heroUpgrades', FETCH_LIMIT_LARGE).catch(() => []),
+				this.idbStorage.getAll('equipmentChanges', FETCH_LIMIT_LARGE).catch(() => []),
+				this.idbStorage.getAll('inventoryItemUsages', FETCH_LIMIT_LARGE).catch(() => []),
+			]);
+
+			requirementsProjection = HeroMaterialRequirementsCalculator.calculateProjectedRequirements({
+				heroes,
+				heroUpgrades,
+				equipmentChanges,
+				inventoryItemUsages,
+				targetLevel: HeroCompletionCalculator.MAX_LEVEL,
+				targetColorRank: 19,
+				topItemLimit: 24,
+			});
+		} catch {
+			requirementsProjection = null;
+		}
+
+		const requirementsPanelHtml = this._renderHeroRequirementsPanel(requirementsProjection);
+
 		// Filter
 		if (vs.filter) {
 			const q = vs.filter.toLowerCase();
@@ -2170,6 +2195,7 @@ class UIManager {
 		return `
 			<div class="oj-heroes" data-browser="heroes">
 				<h3>\uD83E\uDDB8 Heroes <span class="oj-muted">(${totalCount} \u2022 ${totalPower.toLocaleString()} power \u2022 avg ${Calc.formatPercent(avgCompletion)} complete)</span></h3>
+				${requirementsPanelHtml}
 				${this._renderSearchBar(vs.filter)}
 				<table class="oj-table oj-sortable">
 					<thead>
@@ -2186,6 +2212,67 @@ class UIManager {
 					<tbody>${rows}</tbody>
 				</table>
 				${this._renderPagination(vs.page, totalPages, totalCount)}
+			</div>
+		`;
+	}
+
+	/**
+	 * Render a projected overall item requirements panel for hero progression.
+	 *
+	 * @param {object|null} projection - Projection payload from HeroMaterialRequirementsCalculator
+	 * @returns {string} HTML panel markup
+	 * @private
+	 */
+	_renderHeroRequirementsPanel(projection) {
+		if (!projection) {
+			return '';
+		}
+
+		const topItems = Array.isArray(projection.items) ? projection.items : [];
+		const confidencePct = Math.round((projection.confidenceScore || 0) * 100);
+		const hasSignal = topItems.length > 0;
+		const confidenceColor = confidencePct >= 70
+			? '#81c784'
+			: (confidencePct >= 40 ? '#ffb74d' : '#ef9a9a');
+
+		const itemRows = topItems.map((entry) => {
+			const levelPart = Number(entry.levelProjected || 0);
+			const colorPart = Number(entry.colorProjected || 0);
+			const qty = Number(entry.quantity || 0);
+			const mix = [];
+			if (levelPart > 0) mix.push(`Lv ${levelPart.toLocaleString()}`);
+			if (colorPart > 0) mix.push(`Rank ${colorPart.toLocaleString()}`);
+			const mixLabel = mix.length > 0 ? mix.join(' • ') : 'Projected';
+
+			return `<tr>` +
+				`<td class="oj-mono">${this._escapeHtml(String(entry.itemId || 'unknown_item'))}</td>` +
+				`<td class="oj-num"><strong>${qty.toLocaleString()}</strong></td>` +
+				`<td class="oj-muted" style="font-size:11px">${this._escapeHtml(mixLabel)}</td>` +
+			`</tr>`;
+		}).join('');
+
+		const coverage = projection.coverage || {};
+		const totalNeeds = Number(projection.totalProjectedItems || 0).toLocaleString();
+
+		return `
+			<div class="oj-section" style="margin-bottom:10px;padding:10px 12px">
+				<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap">
+					<div>
+						<div style="font-size:13px;font-weight:700;color:#e0e0e0">\uD83E\uDDFE Overall Items Needed To Max Heroes</div>
+						<div class="oj-muted" style="font-size:11px">Target: level ${projection.targetLevel}, ${this._escapeHtml(projection.targetColorName || `Rank ${projection.targetColorRank}`)} • ${projection.heroCount} heroes</div>
+					</div>
+					<div style="font-size:12px;color:${confidenceColor};font-weight:700">Confidence ${confidencePct}%</div>
+				</div>
+				<div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:8px;margin-bottom:8px">
+					<div class="oj-muted" style="font-size:11px">Level gaps: <strong>${Number(projection.totalLevelDeficit || 0).toLocaleString()}</strong></div>
+					<div class="oj-muted" style="font-size:11px">Rank gaps: <strong>${Number(projection.totalColorDeficit || 0).toLocaleString()}</strong></div>
+					<div class="oj-muted" style="font-size:11px">Projected total: <strong>${totalNeeds}</strong></div>
+					<div class="oj-muted" style="font-size:11px">Signals: lvlUp ${Number(coverage.levelUpgradeSamples || 0)}, colorUp ${Number(coverage.colorUpgradeSamples || 0)}, equip ${Number(coverage.equipmentChangeSamples || 0)}, itemUse ${Number(coverage.itemUsageSamples || 0)}</div>
+				</div>
+				${hasSignal
+					? `<table class="oj-table" style="margin-top:4px"><thead><tr><th>Item ID</th><th>Qty</th><th>Mix</th></tr></thead><tbody>${itemRows}</tbody></table>`
+					: `<p class="oj-empty" style="margin:0">Not enough tracked upgrade/equipment history yet to estimate concrete item IDs. Keep playing with tracking enabled and this panel will auto-fill.</p>`
+				}
 			</div>
 		`;
 	}
@@ -5074,7 +5161,7 @@ class UIManager {
 			3: 'Blue', 4: 'Blue+1', 5: 'Blue+2',
 			6: 'Violet', 7: 'Violet+1', 8: 'Violet+2', 9: 'Violet+3',
 			10: 'Orange', 11: 'Orange+1', 12: 'Orange+2', 13: 'Orange+3', 14: 'Orange+4',
-			15: 'Red', 16: 'Red+1', 17: 'Red+2', 18: 'Red+2 (Max)',
+			15: 'Red', 16: 'Red+1', 17: 'Red+2', 18: 'Red+2 (Legacy Max)', 19: 'Red+3',
 		};
 		const num = typeof color === 'string' ? parseInt(color, 10) : color;
 		return names[num] ?? (color != null ? `Rank ${color}` : '\u2014');
