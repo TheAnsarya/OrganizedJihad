@@ -55,6 +55,8 @@ const TEAM_RECOMMENDATION_BACKTEST_URL = 'http://localhost:5124/api/sync/teams/r
 const TEAM_RECOMMENDATION_CALIBRATION_URL = 'http://localhost:5124/api/sync/teams/recommendations/calibration';
 /** @const {string} Local API endpoint for persisted team recommendation trend preferences */
 const TEAM_RECOMMENDATION_PREFERENCES_URL = 'http://localhost:5124/api/sync/teams/recommendations/preferences';
+/** @const {string} Local API endpoint for quick install health checks */
+const SYNC_HEALTH_URL = 'http://localhost:5124/api/sync/health';
 
 /** @const {string} Local API endpoint for curated external tools catalog */
 const TOOLS_CATALOG_URL = 'http://localhost:5124/api/sync/tools/catalog';
@@ -4170,6 +4172,15 @@ class UIManager {
 				</div>
 
 				<div class="oj-settings-group">
+					<h4>First-Run Health Check</h4>
+					<p class="oj-muted" style="margin:0 0 8px;font-size:11px">Validate API connectivity and local capture status after installation.</p>
+					<div class="oj-btn-row">
+						<button class="oj-btn" id="oj-install-health-check">Run Health Check</button>
+					</div>
+					<div id="oj-install-health-output" style="font-size:11px;color:#aaa;margin-top:8px"></div>
+				</div>
+
+				<div class="oj-settings-group">
 					<h4>Keyboard Shortcuts</h4>
 					<div class="oj-shortcut-list">
 						<div class="oj-shortcut-row">
@@ -4430,6 +4441,14 @@ class UIManager {
 
 		// ── Load storage stats asynchronously ───────────────────────────
 		this._loadStorageStats();
+
+		// ── First-run install health check ──────────────────────────────
+		const healthBtn = this.overlay.querySelector('#oj-install-health-check');
+		if (healthBtn) {
+			healthBtn.addEventListener('click', () => {
+				this._runInstallHealthCheck();
+			});
+		}
 	}
 
 	/**
@@ -4476,6 +4495,97 @@ class UIManager {
 			`;
 		} catch (err) {
 			el.textContent = 'Failed to load stats';
+		}
+	}
+
+	/**
+	 * Run a quick first-run health check for local setup verification.
+	 *
+	 * @private
+	 */
+	async _runInstallHealthCheck() {
+		const output = this.overlay?.querySelector('#oj-install-health-output');
+		const button = this.overlay?.querySelector('#oj-install-health-check');
+		if (!output || !button) {
+			return;
+		}
+
+		button.disabled = true;
+		button.textContent = 'Checking...';
+		output.textContent = 'Running checks...';
+
+		try {
+			const [apiOk, stats, currentPlayerId] = await Promise.all([
+				this._checkLocalApiHealth(),
+				this.idbStorage.getStorageStats().catch(() => ({})),
+				this.idbStorage.getMetadata('currentPlayerId', 'unknown').catch(() => 'unknown'),
+			]);
+
+			const totalRecords = Object.values(stats).reduce((sum, value) => sum + Math.max(0, Number(value) || 0), 0);
+			const snapshots = Number(stats.snapshots || 0);
+			const heroRows = Number(stats.heroes || 0);
+			const playerBound = currentPlayerId && currentPlayerId !== 'unknown';
+
+			const checks = [
+				{
+					label: 'Local API reachable (http://localhost:5124)',
+					ok: apiOk,
+					hint: 'Run Install-OrganizedJihad.ps1 or start api with dotnet run --project api.',
+				},
+				{
+					label: 'Game account detected',
+					ok: playerBound,
+					hint: 'Open Hero Wars and wait for userGetInfo to be captured.',
+				},
+				{
+					label: 'Snapshot data captured',
+					ok: snapshots > 0,
+					hint: 'Play for 10-30 seconds to trigger initial API calls.',
+				},
+				{
+					label: 'Hero roster captured',
+					ok: heroRows > 0,
+					hint: 'Open the Heroes screen once to capture roster data.',
+				},
+			];
+
+			const passed = checks.filter((c) => c.ok).length;
+			const rows = checks.map((check) => {
+				const icon = check.ok ? 'OK' : 'FAIL';
+				const color = check.ok ? '#81c784' : '#ef9a9a';
+				const hint = check.ok ? '' : `<div style="color:#999;font-size:10px;margin-left:18px">${this._escapeHtml(check.hint)}</div>`;
+				return `<div style="margin-bottom:4px"><span style="color:${color}">${icon}</span> ${this._escapeHtml(check.label)}</div>${hint}`;
+			}).join('');
+
+			output.innerHTML =
+				`<div style="margin-bottom:6px"><strong>${passed}/${checks.length}</strong> checks passed • ` +
+				`${totalRecords.toLocaleString()} records captured locally</div>` +
+				rows;
+		} catch (err) {
+			output.textContent = 'Health check failed. See console for details.';
+			console.error('[OrganizedJihad] Health check failed:', err);
+		} finally {
+			button.disabled = false;
+			button.textContent = 'Run Health Check';
+		}
+	}
+
+	/**
+	 * Check whether local sync API responds to /health.
+	 *
+	 * @returns {Promise<boolean>} True when local API is reachable
+	 * @private
+	 */
+	async _checkLocalApiHealth() {
+		try {
+			const response = await fetch(SYNC_HEALTH_URL, {
+				method: 'GET',
+				headers: { 'Accept': 'application/json' },
+				cache: 'no-store',
+			});
+			return response.ok;
+		} catch {
+			return false;
 		}
 	}
 

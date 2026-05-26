@@ -140,6 +140,8 @@ This produces `userscript/dist/organized-jihad.user.js` — a single bundled JS 
    - When API calls start, it turns **green** and shows the call count
    - Click the badge to open the full **overlay panel**
    - Press `Ctrl+Shift+H` to toggle it
+5. Open **Settings** in the overlay and click **Run Health Check** under **First-Run Health Check**.
+   - This validates API reachability, account detection, and whether initial snapshot/hero data has been captured.
 
 ---
 

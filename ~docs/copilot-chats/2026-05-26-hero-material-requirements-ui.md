@@ -94,3 +94,36 @@
 - Icon enrichment for requirements table labels.
 - API/desktop parity endpoint and shared contract for projections.
 - Installer UX extras (post-install health summary and shortcuts).
+
+---
+
+## Session
+- Date: 2026-05-26
+- Session Number: 5
+- Scope: Improve installation simplicity with one-click first-run validation.
+
+## Summary
+- Added a new Settings action: `Run Health Check` in a `First-Run Health Check` section.
+- Implemented local checks for API reachability, account detection, snapshot capture, and hero roster capture.
+- Added pass/fail output with inline hints to reduce setup troubleshooting time.
+- Updated install guide to include health-check verification step.
+- Created a dedicated issue for this installer UX slice: #180.
+
+## Files Modified
+- userscript/src/modules/uiManager.js
+- userscript/INSTALL.md
+- userscript/package.json
+
+## Issues Referenced
+- #179 Hero material requirements projection/UI
+- #180 Improve userscript installation UX with first-run health checks
+
+## Validation
+- yarn test --runInBand: passed (17 suites, 694 tests)
+- yarn build: passed
+
+## Deferred Follow-up (Updated)
+- Deterministic per-hero recipe catalog ingestion for exact ingredient trees.
+- Icon enrichment for requirements table labels.
+- API/desktop parity endpoint and shared contract for projections.
+- Installer UX shortcut actions (open diagnostics and API endpoint directly).
