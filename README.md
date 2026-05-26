@@ -39,6 +39,28 @@ See [Tracking Reference](~docs/plans/tracking-reference.md) for the complete dat
 - [Yarn](https://yarnpkg.com/) package manager
 - [TamperMonkey](https://www.tampermonkey.net/) browser extension
 
+### One-Command Windows Install / Upgrade
+
+Run this from the repository root:
+
+```powershell
+pwsh -ExecutionPolicy Bypass -File .\Install-OrganizedJihad.ps1
+```
+
+What it does:
+
+- Builds the latest TamperMonkey userscript bundle
+- Publishes the API backend as a self-contained Windows executable
+- Installs/updates artifacts in `%LOCALAPPDATA%\OrganizedJihad`
+- Registers `OrganizedJihad.Api.Autostart` scheduled task (runs on logon)
+- Opens Tampermonkey extension install pages and opens the latest userscript file for import/update
+
+Optional flags:
+
+- `-SkipTampermonkeyBootstrap` to skip opening extension/script pages
+- `-SkipYarnInstall` to skip `yarn install` during repeat installs
+- `-InstallRoot "D:\Apps\OrganizedJihad"` to customize install location
+
 ### Build & Run
 
 ```powershell

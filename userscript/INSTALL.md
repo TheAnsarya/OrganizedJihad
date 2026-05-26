@@ -1,5 +1,23 @@
 # OrganizedJihad Userscript — Installation & Quick Start Guide
 
+## Fastest Windows Setup (Installer + Upgrade)
+
+From the repository root, run:
+
+```powershell
+pwsh -ExecutionPolicy Bypass -File .\Install-OrganizedJihad.ps1
+```
+
+This installer will:
+
+- build the latest userscript (`userscript/dist/organized-jihad.user.js`)
+- publish and install/update the API backend
+- register API startup task (`OrganizedJihad.Api.Autostart`)
+- open Tampermonkey extension install pages
+- open the generated `.user.js` file so Tampermonkey can install/update the script
+
+Use `-SkipTampermonkeyBootstrap` if you only want backend/userscript artifact updates.
+
 ## Prerequisites
 
 - **Browser**: Chrome, Edge, Firefox, or any Chromium-based browser

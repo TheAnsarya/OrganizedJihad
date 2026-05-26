@@ -186,6 +186,82 @@ continue working issues and making new ones;
 
 (userscript) continue working issues and making new ones;
 
+(userscript) continue working issues and making new ones;
+
+(userscript) continue working issues and making new ones;
+
+(userscript) continue working issues and making new ones; make chat/session logs, plans, issues, etc;
+
+--- Claudse 4.5
+
+go
+
+continue working issues and make new ones; go!; continue;
+
+continue working issues and make new ones; go!; continue;
+
+continue working issues and make new ones; go!; continue;
+
+[OJ] work through current issues and make any new ones you discover work for; continue;
+
+[OJ] work through current issues and make any new ones you discover work for; continue;
+
+[OJ] Implement performance improvements, review the issues for them; continue;
+
+[OJ] work through current issues and make any new ones you discover work for; test and benchmark everything; continue;
+
+[OJ] Search for battle simulation code online, and incorporate it, track all items and chests and their rewards, track and save the stats and progress for everything in the game, heros/titans/artifacts/glyphs/totems/fusions/etc; continue; make issues and epics and docs and plans implement everything, we want all stats tracked, our status tracked, and all chests tracked with what they produce, and find all the tools and such on the internet for the HeroWars game and make our own battle simulator and other tools, so we can display recommendations in the UI, figure out how to do that; make issues and then implement them! continue;
+
+yes, do the next two recommended things: Next step I can do now: implement #159 parity matrix and close any real chest/item reward gaps from userscript -> sync payload -> API -> DB -> UI. After that: scaffold #160 simulator core (feature extraction + Monte Carlo shell + evaluation harness) and wire first recommendation cards into UI for #161.; continue, find all the other gaps and problems and fix them; continue;
+
+yes, do the three Next Steps: Add API tests for reward replay dedupe and fallback reward-to-opening matching. Add simulator calibration tests against historical outcomes (Brier/MAE thresholds). Mirror recommendation cards in desktop UI to complete #161 parity across surfaces.; continue;
+
+continue;
+
+[OJ] Search for battle simulation code online, and incorporate it, track all items and chests and their rewards, track and save the stats and progress for everything in the game, heros/titans/artifacts/glyphs/totems/fusions/etc; continue; make issues and epics and docs and plans implement everything, we want all stats tracked, our status tracked, and all chests tracked with what they produce, and find all the tools and such on the internet for the HeroWars game and make our own battle simulator and other tools, so we can display recommendations in the UI, figure out how to do that; make issues and then implement them! continue;
+
+continue;
+continue;
+continue;
+continue;
+
+[OJ] Make a plan document for continuing current work later, then work on the new effort: Use the Battle Simulator and knowledge of the exact state of our current Heroes/Titans and other resources we can pull from other internet sources to create a Team Recommendation Engine so we can show recommended teams for Arena, Grand Arena, GW, CoW, campaign, adventure, etc in the on screen Web UI when playing HeroWars; create epics, for backend and the engine and the UI and make plans and issues and docs and start working on the implementation; continue;
+
+continue;
+continue;
+continue;
+
+[OJ] Use the Battle Simulator and knowledge of the exact state of our current Heroes/Titans and ***other resources we can pull from other internet sources*** to create a Team Recommendation Engine so we can show recommended teams for Arena, Grand Arena, GW, CoW, campaign, adventure, etc in the on screen Web UI when playing HeroWars; and make plans and issues and docs and start working on the implementation; continue;
+
+continue;
+continue;
+continue;
+
+[OJ] git commit everything in logical batches; Make sure the tampermonkey script is fully up to date not just the desktop app, making new issues and implementing them, including showing the recommended teams for various battles; Create a stable complete build, and a single simple install file that updates when an earlier version is already installed. It should set everything up, get the server running on system startup, and install the tampermonkey browser extension and also the tampermonkey script we've created; continue;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
