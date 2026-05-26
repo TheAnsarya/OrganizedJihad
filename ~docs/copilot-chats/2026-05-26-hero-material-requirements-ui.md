@@ -127,3 +127,36 @@
 - Icon enrichment for requirements table labels.
 - API/desktop parity endpoint and shared contract for projections.
 - Installer UX shortcut actions (open diagnostics and API endpoint directly).
+
+---
+
+## Session
+- Date: 2026-05-26
+- Session Number: 6
+- Scope: Add installer UX shortcut actions for first-run troubleshooting.
+
+## Summary
+- Added first-run health-check quick actions in Settings:
+	- Open API Log (jumps overlay to API Log tab)
+	- Open API Health URL
+	- Open API Docs URL
+- Kept health-check flow lightweight and local-only.
+- Updated install guide to mention new shortcut actions.
+
+## Files Modified
+- userscript/src/modules/uiManager.js
+- userscript/INSTALL.md
+- userscript/package.json
+
+## Issues Referenced
+- #181 Add installer UX shortcuts in first-run health check panel
+
+## Validation
+- yarn test --runInBand: passed
+- yarn build: passed
+
+## Deferred Follow-up (Updated)
+- Deterministic per-hero recipe catalog ingestion for exact ingredient trees.
+- Icon enrichment for requirements table labels.
+- API/desktop parity endpoint and shared contract for projections.
+- Optional desktop-app surface for first-run health diagnostics.

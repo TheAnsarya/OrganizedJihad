@@ -57,6 +57,8 @@ const TEAM_RECOMMENDATION_CALIBRATION_URL = 'http://localhost:5124/api/sync/team
 const TEAM_RECOMMENDATION_PREFERENCES_URL = 'http://localhost:5124/api/sync/teams/recommendations/preferences';
 /** @const {string} Local API endpoint for quick install health checks */
 const SYNC_HEALTH_URL = 'http://localhost:5124/api/sync/health';
+/** @const {string} Local API docs endpoint for quick setup diagnostics */
+const SYNC_DOCS_URL = 'http://localhost:5124/api/sync';
 
 /** @const {string} Local API endpoint for curated external tools catalog */
 const TOOLS_CATALOG_URL = 'http://localhost:5124/api/sync/tools/catalog';
@@ -4176,6 +4178,11 @@ class UIManager {
 					<p class="oj-muted" style="margin:0 0 8px;font-size:11px">Validate API connectivity and local capture status after installation.</p>
 					<div class="oj-btn-row">
 						<button class="oj-btn" id="oj-install-health-check">Run Health Check</button>
+						<button class="oj-btn" id="oj-health-open-apilog">Open API Log</button>
+					</div>
+					<div class="oj-btn-row" style="margin-top:6px">
+						<button class="oj-btn" id="oj-health-open-api-health">Open API Health URL</button>
+						<button class="oj-btn" id="oj-health-open-api-docs">Open API Docs URL</button>
 					</div>
 					<div id="oj-install-health-output" style="font-size:11px;color:#aaa;margin-top:8px"></div>
 				</div>
@@ -4449,6 +4456,27 @@ class UIManager {
 				this._runInstallHealthCheck();
 			});
 		}
+
+		const openApiLogBtn = this.overlay.querySelector('#oj-health-open-apilog');
+		if (openApiLogBtn) {
+			openApiLogBtn.addEventListener('click', () => {
+				this.switchView('apilog');
+			});
+		}
+
+		const openApiHealthBtn = this.overlay.querySelector('#oj-health-open-api-health');
+		if (openApiHealthBtn) {
+			openApiHealthBtn.addEventListener('click', () => {
+				this._openExternalUrl(SYNC_HEALTH_URL);
+			});
+		}
+
+		const openApiDocsBtn = this.overlay.querySelector('#oj-health-open-api-docs');
+		if (openApiDocsBtn) {
+			openApiDocsBtn.addEventListener('click', () => {
+				this._openExternalUrl(SYNC_DOCS_URL);
+			});
+		}
 	}
 
 	/**
@@ -4586,6 +4614,24 @@ class UIManager {
 			return response.ok;
 		} catch {
 			return false;
+		}
+	}
+
+	/**
+	 * Open an external troubleshooting URL in a new tab.
+	 *
+	 * @param {string} url - Absolute URL to open
+	 * @private
+	 */
+	_openExternalUrl(url) {
+		if (!url) {
+			return;
+		}
+
+		try {
+			window.open(url, '_blank', 'noopener,noreferrer');
+		} catch (err) {
+			console.error('[OrganizedJihad] Failed to open URL:', url, err);
 		}
 	}
 
