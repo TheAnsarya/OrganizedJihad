@@ -47,6 +47,13 @@ A multi-tier game tracking solution for Hero Wars that captures, stores, and ana
 3. **Commit messages**: Reference issue number (e.g., `Fix #42: Add battle tracking`)
 4. **Prompt tracking**: Log significant AI-assisted sessions in `~docs/copilot-chats/`
 
+## AI Workflow Overrides (Repository-Specific)
+
+- `~docs/oj-manual-prompts-log.txt` is a manually maintained file.
+- AI MUST NEVER edit, stage, or commit `~docs/oj-manual-prompts-log.txt`.
+- AI should ignore that file if it appears modified and continue with requested work (including push/PR/commits) without pausing for confirmation.
+- For unrelated dirty files in general, prefer continuing by committing only intended files (do not block unless the user explicitly asks for a full-clean-tree gate).
+
 ---
 
 ## Session Logging (MANDATORY)
