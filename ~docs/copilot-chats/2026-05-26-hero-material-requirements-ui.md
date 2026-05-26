@@ -68,3 +68,29 @@
 - Item name/icon resolution for human-readable requirements table entries.
 - API/desktop parity endpoint and shared contract for projections.
 - Installer UX extras (post-install health summary and shortcuts).
+
+---
+
+## Session
+- Date: 2026-05-26
+- Session Number: 4
+- Scope: Improve readability of requirements panel by resolving item IDs into names when possible.
+
+## Summary
+- Added item name mapping in Heroes requirements flow by reusing parsed inventory metadata.
+- Requirements table now renders each row with item ID and a readable label.
+- Added fallback prettifier for non-mapped IDs (snake/kebab IDs become title-cased labels).
+
+## Files Modified
+- userscript/src/modules/uiManager.js
+- userscript/package.json
+
+## Validation
+- yarn test --runInBand: passed (17 suites, 694 tests)
+- yarn build: passed
+
+## Deferred Follow-up (Updated)
+- Deterministic per-hero recipe catalog ingestion for exact ingredient trees.
+- Icon enrichment for requirements table labels.
+- API/desktop parity endpoint and shared contract for projections.
+- Installer UX extras (post-install health summary and shortcuts).

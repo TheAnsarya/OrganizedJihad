@@ -2094,6 +2094,7 @@ class UIManager {
 
 		// Build projected overall item requirements for remaining hero progression.
 		let requirementsProjection = null;
+		let requirementItemNames = {};
 		try {
 			const [heroUpgrades, equipmentChanges, inventoryItemUsages, inventoryData] = await Promise.all([
 				this.idbStorage.getAll('heroUpgrades', FETCH_LIMIT_LARGE).catch(() => []),
@@ -2101,6 +2102,16 @@ class UIManager {
 				this.idbStorage.getAll('inventoryItemUsages', FETCH_LIMIT_LARGE).catch(() => []),
 				this.idbStorage.getMetadata('inventoryData', {}).catch(() => ({})),
 			]);
+
+			const parsedInventory = this._parseRawInventory(inventoryData || {});
+			requirementItemNames = parsedInventory.reduce((acc, item) => {
+				const itemId = String(item.itemId || '').trim();
+				if (!itemId) {
+					return acc;
+				}
+				acc[itemId] = item.name || `Item #${itemId}`;
+				return acc;
+			}, {});
 
 			requirementsProjection = HeroMaterialRequirementsCalculator.calculateProjectedRequirements({
 				heroes,
@@ -2114,9 +2125,10 @@ class UIManager {
 			});
 		} catch {
 			requirementsProjection = null;
+			requirementItemNames = {};
 		}
 
-		const requirementsPanelHtml = this._renderHeroRequirementsPanel(requirementsProjection);
+		const requirementsPanelHtml = this._renderHeroRequirementsPanel(requirementsProjection, requirementItemNames);
 
 		// Filter
 		if (vs.filter) {
@@ -2222,10 +2234,11 @@ class UIManager {
 	 * Render a projected overall item requirements panel for hero progression.
 	 *
 	 * @param {object|null} projection - Projection payload from HeroMaterialRequirementsCalculator
+	 * @param {Record<string, string>} itemNameMap - Optional map from item ID to human-readable name
 	 * @returns {string} HTML panel markup
 	 * @private
 	 */
-	_renderHeroRequirementsPanel(projection) {
+	_renderHeroRequirementsPanel(projection, itemNameMap = {}) {
 		if (!projection) {
 			return '';
 		}
@@ -2248,9 +2261,11 @@ class UIManager {
 			if (colorPart > 0) mix.push(`Rank ${colorPart.toLocaleString()}`);
 			const mixLabel = mix.length > 0 ? mix.join(' • ') : 'Projected';
 			const shortageStyle = shortage > 0 ? 'color:#ef9a9a;font-weight:700' : 'color:#a5d6a7;font-weight:700';
+			const itemId = String(entry.itemId || 'unknown_item');
+			const resolvedName = itemNameMap[itemId] || this._prettifyProjectedItemId(itemId);
 
 			return `<tr>` +
-				`<td class="oj-mono">${this._escapeHtml(String(entry.itemId || 'unknown_item'))}</td>` +
+				`<td><div class="oj-mono" style="font-size:11px">${this._escapeHtml(itemId)}</div><div>${this._escapeHtml(resolvedName)}</div></td>` +
 				`<td class="oj-num"><strong>${needed.toLocaleString()}</strong></td>` +
 				`<td class="oj-num">${owned.toLocaleString()}</td>` +
 				`<td class="oj-num" style="${shortageStyle}">${shortage.toLocaleString()}</td>` +
@@ -2281,11 +2296,36 @@ class UIManager {
 					<div class="oj-muted" style="font-size:11px">Signals: lvlUp ${Number(coverage.levelUpgradeSamples || 0)}, colorUp ${Number(coverage.colorUpgradeSamples || 0)}, equip ${Number(coverage.equipmentChangeSamples || 0)}, itemUse ${Number(coverage.itemUsageSamples || 0)}</div>
 				</div>
 				${hasSignal
-					? `<table class="oj-table" style="margin-top:4px"><thead><tr><th>Item ID</th><th>Needed</th><th>Owned</th><th>Shortage</th><th>Mix</th></tr></thead><tbody>${itemRows}</tbody></table>`
+					? `<table class="oj-table" style="margin-top:4px"><thead><tr><th>Item</th><th>Needed</th><th>Owned</th><th>Shortage</th><th>Mix</th></tr></thead><tbody>${itemRows}</tbody></table>`
 					: `<p class="oj-empty" style="margin:0">Not enough tracked upgrade/equipment history yet to estimate concrete item IDs. Keep playing with tracking enabled and this panel will auto-fill.</p>`
 				}
 			</div>
 		`;
+	}
+
+	/**
+	 * Convert item IDs into readable fallback labels when no inventory name mapping exists.
+	 *
+	 * @param {string} itemId - Raw item ID
+	 * @returns {string} Human-readable label
+	 * @private
+	 */
+	_prettifyProjectedItemId(itemId) {
+		if (!itemId) {
+			return 'Unknown Item';
+		}
+
+		const fromSnake = itemId
+			.replace(/^[a-z]+_/, '')
+			.replace(/[_-]+/g, ' ')
+			.replace(/\b\w/g, (c) => c.toUpperCase())
+			.trim();
+
+		if (fromSnake) {
+			return fromSnake;
+		}
+
+		return `Item ${itemId}`;
 	}
 
 	/**
