@@ -47,12 +47,20 @@ Run this from the repository root:
 pwsh -ExecutionPolicy Bypass -File .\Install-OrganizedJihad.ps1
 ```
 
+Or double-click:
+
+```
+Install-OrganizedJihad.cmd
+```
+
 What it does:
 
 - Builds the latest TamperMonkey userscript bundle
 - Publishes the API backend as a self-contained Windows executable
 - Installs/updates artifacts in `%LOCALAPPDATA%\OrganizedJihad`
 - Registers `OrganizedJihad.Api.Autostart` scheduled task (runs on logon)
+- Registers `OrganizedJihad.Api.Autostart` for system startup + logon when installer is run as Administrator
+- Falls back to logon startup when not elevated
 - Opens Tampermonkey extension install pages and opens the latest userscript file for import/update
 
 Optional flags:

@@ -8,11 +8,19 @@ From the repository root, run:
 pwsh -ExecutionPolicy Bypass -File .\Install-OrganizedJihad.ps1
 ```
 
+Or double-click:
+
+```
+Install-OrganizedJihad.cmd
+```
+
 This installer will:
 
 - build the latest userscript (`userscript/dist/organized-jihad.user.js`)
 - publish and install/update the API backend
 - register API startup task (`OrganizedJihad.Api.Autostart`)
+   - when elevated: system startup + logon triggers
+   - when not elevated: logon fallback trigger
 - open Tampermonkey extension install pages
 - open the generated `.user.js` file so Tampermonkey can install/update the script
 

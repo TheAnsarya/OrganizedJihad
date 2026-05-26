@@ -30,6 +30,12 @@ function Ensure-Directory {
 	}
 }
 
+function Test-IsAdministrator {
+	$currentIdentity = [Security.Principal.WindowsIdentity]::GetCurrent()
+	$principal = New-Object Security.Principal.WindowsPrincipal($currentIdentity)
+	return $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+}
+
 function Ensure-AutostartTask {
 	param(
 		[string]$TaskName,
@@ -40,12 +46,24 @@ function Ensure-AutostartTask {
 
 	$action = New-ScheduledTaskAction -Execute $ExecutablePath -Argument "--urls $ApiUrlValue" -WorkingDirectory $WorkingDirectory
 	$settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -StartWhenAvailable -MultipleInstances IgnoreNew
+	$elevated = Test-IsAdministrator
 
-	$principal = New-ScheduledTaskPrincipal -UserId "$env:USERDOMAIN\$env:USERNAME" -LogonType Interactive -RunLevel Highest
-	$trigger = New-ScheduledTaskTrigger -AtLogOn
+	if ($elevated) {
+		$principal = New-ScheduledTaskPrincipal -UserId 'SYSTEM' -LogonType ServiceAccount -RunLevel Highest
+		$triggers = @(
+			(New-ScheduledTaskTrigger -AtStartup),
+			(New-ScheduledTaskTrigger -AtLogOn)
+		)
 
-	Register-ScheduledTask -TaskName $TaskName -Action $action -Trigger $trigger -Settings $settings -Principal $principal -Force | Out-Null
-	Write-Step "Registered startup task '$TaskName' (on logon)."
+		Register-ScheduledTask -TaskName $TaskName -Action $action -Trigger $triggers -Settings $settings -Principal $principal -Force | Out-Null
+		Write-Step "Registered startup task '$TaskName' (system startup + logon, running as SYSTEM)."
+	} else {
+		$principal = New-ScheduledTaskPrincipal -UserId "$env:USERDOMAIN\$env:USERNAME" -LogonType Interactive -RunLevel Highest
+		$trigger = New-ScheduledTaskTrigger -AtLogOn
+
+		Register-ScheduledTask -TaskName $TaskName -Action $action -Trigger $trigger -Settings $settings -Principal $principal -Force | Out-Null
+		Write-Step "Registered startup task '$TaskName' (logon fallback; run installer as Administrator for system startup registration)."
+	}
 
 	try {
 		Start-ScheduledTask -TaskName $TaskName
