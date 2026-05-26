@@ -3,6 +3,7 @@
 @using OrganizedJihad.Data.Models
 @using Microsoft.EntityFrameworkCore
 @inject IDbContextFactory<GameDatabaseContext> DbFactory
+@inject NavigationManager NavigationManager
 
 <PageTitle>Battles - OrganizedJihad</PageTitle>
 
@@ -106,6 +107,20 @@
 				<button class="btn btn-outline-secondary" @onclick="ClearFilters">Clear</button>
 			</div>
 		</div>
+
+		@if (!string.IsNullOrWhiteSpace(QueryTeam)) {
+			<div class="row mb-3">
+				<div class="col-12">
+					<div class="alert alert-primary py-2 d-flex justify-content-between align-items-center">
+						<div>
+							<strong>Recommendation Filter Active:</strong>
+							Showing Arena samples for selected team key.
+						</div>
+						<a class="btn btn-sm btn-outline-primary" href="/battles">Clear Team Filter</a>
+					</div>
+				</div>
+			</div>
+		}
 
 		<!-- Win Rate Summary -->
 		@if (FilteredRows.Any()) {
@@ -421,6 +436,15 @@
 	private DateTime? DateFrom { get; set; }
 	private DateTime? DateTo { get; set; }
 
+	[SupplyParameterFromQuery(Name = "type")]
+	public string? QueryType { get; set; }
+
+	[SupplyParameterFromQuery(Name = "outcome")]
+	public string? QueryOutcome { get; set; }
+
+	[SupplyParameterFromQuery(Name = "team")]
+	public string? QueryTeam { get; set; }
+
 	// Raw data
 	private List<ArenaBattle> ArenaBattles { get; set; } = new();
 	private List<GrandArenaBattle> GrandArenaBattles { get; set; } = new();
@@ -444,8 +468,25 @@
 		RaidBossAttacks.Count + ExpeditionBattles.Count;
 
 	protected override async Task OnInitializedAsync() {
+		ApplyQueryFilters();
 		await LoadData();
 		IsLoading = false;
+	}
+
+	private void ApplyQueryFilters() {
+		if (!string.IsNullOrWhiteSpace(QueryType)) {
+			var normalizedType = QueryType.Trim().ToLowerInvariant();
+			if (normalizedType == "arena" || normalizedType == "grand_arena" || normalizedType == "titan_arena" || normalizedType == "guild_war" || normalizedType == "raid_boss" || normalizedType == "expedition") {
+				SelectedType = normalizedType;
+			}
+		}
+
+		if (!string.IsNullOrWhiteSpace(QueryOutcome)) {
+			var normalizedOutcome = QueryOutcome.Trim().ToLowerInvariant();
+			if (normalizedOutcome == "win" || normalizedOutcome == "loss") {
+				SelectedOutcome = normalizedOutcome;
+			}
+		}
 	}
 
 	private async Task LoadData() {
@@ -472,6 +513,12 @@
 		FilteredArena = ApplyDateFilter(ArenaBattles, b => b.Timestamp);
 		if (SelectedOutcome == "win") FilteredArena = FilteredArena.Where(b => b.IsWin).ToList();
 		else if (SelectedOutcome == "loss") FilteredArena = FilteredArena.Where(b => !b.IsWin).ToList();
+		if (!string.IsNullOrWhiteSpace(QueryTeam)) {
+			var targetTeam = NormalizeTeamKey(Uri.UnescapeDataString(QueryTeam));
+			FilteredArena = FilteredArena
+				.Where(b => NormalizeTeamKey(b.OurTeam) == targetTeam)
+				.ToList();
+		}
 
 		// Grand Arena
 		FilteredGrandArena = ApplyDateFilter(GrandArenaBattles, b => b.Timestamp);
@@ -517,11 +564,24 @@
 	}
 
 	private void ClearFilters() {
+		if (!string.IsNullOrWhiteSpace(QueryType) || !string.IsNullOrWhiteSpace(QueryOutcome) || !string.IsNullOrWhiteSpace(QueryTeam)) {
+			NavigationManager.NavigateTo("/battles", forceLoad: false);
+			return;
+		}
+
 		SelectedType = "";
 		SelectedOutcome = "";
 		DateFrom = null;
 		DateTo = null;
 		ApplyFilters();
+	}
+
+	private static string NormalizeTeamKey(string? teamKey) {
+		if (string.IsNullOrWhiteSpace(teamKey)) {
+			return "[unknown]";
+		}
+
+		return teamKey.Trim();
 	}
 
 	/// <summary>

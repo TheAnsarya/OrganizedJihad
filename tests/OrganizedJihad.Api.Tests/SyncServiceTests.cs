@@ -327,6 +327,104 @@ public class SyncServiceTests : IDisposable {
 	// ==========================================================================
 
 	/// <summary>
+	/// Verifies that replaying the same chest + consumable reward payload does not duplicate ChestDrop rows.
+	/// Ensures #159 parity path remains idempotent across incremental sync replays.
+	/// </summary>
+	[Fact]
+	public async Task Import_Should_Deduplicate_ConsumableRewards_On_Replay() {
+		// Arrange
+		var timestamp = DateTime.UtcNow;
+		var syncData = new BrowserSyncData {
+			ChestOpenings = [
+				new ChestOpening {
+					Id = 1001,
+					Timestamp = timestamp,
+					ChestType = "towerChest",
+					OpenMethod = "tracked",
+					Quantity = 1,
+				}
+			],
+			ConsumableRewards = [
+				new ConsumableRewardSyncRecord {
+					Timestamp = timestamp,
+					SourceType = "towerChest",
+					SourceId = "tower-1",
+					ItemType = "coin",
+					ItemId = "gold",
+					Quantity = 5000,
+					OpeningId = 1001,
+				}
+			],
+			Heroes = [],
+			Titans = []
+		};
+
+		// Act - import identical payload twice
+		await _service.ImportBrowserDataAsync(syncData);
+		var replayCounts = await _service.ImportBrowserDataAsync(syncData);
+
+		// Assert - replay import should not create new openings or drops
+		replayCounts.ChestOpenings.Should().Be(0);
+		replayCounts.ConsumableRewards.Should().Be(0);
+
+		await using var context = await _contextFactory.CreateDbContextAsync();
+		var openingCount = await context.ChestOpenings.CountAsync();
+		var dropCount = await context.ChestDrops.CountAsync();
+
+		openingCount.Should().Be(1);
+		dropCount.Should().Be(1);
+	}
+
+	/// <summary>
+	/// Verifies fallback reward-to-opening matching by Timestamp + SourceType
+	/// when OpeningId cannot be mapped from the current payload.
+	/// </summary>
+	[Fact]
+	public async Task Import_Should_Map_ConsumableRewards_By_Fallback_When_OpeningId_Missing() {
+		// Arrange - first import opening only
+		var timestamp = DateTime.UtcNow;
+		await _service.ImportBrowserDataAsync(new BrowserSyncData {
+			ChestOpenings = [
+				new ChestOpening {
+					Timestamp = timestamp,
+					ChestType = "artifactChest",
+					OpenMethod = "tracked",
+					Quantity = 1,
+				}
+			],
+			Heroes = [],
+			Titans = []
+		});
+
+		// Act - import reward with unmapped opening id, should attach via fallback query
+		var counts = await _service.ImportBrowserDataAsync(new BrowserSyncData {
+			ConsumableRewards = [
+				new ConsumableRewardSyncRecord {
+					Timestamp = timestamp,
+					SourceType = "artifactChest",
+					SourceId = "artifact-1",
+					ItemType = "fragmentHero",
+					ItemId = "hero_81",
+					Quantity = 5,
+					OpeningId = 999999,
+				}
+			],
+			Heroes = [],
+			Titans = []
+		});
+
+		// Assert
+		counts.ConsumableRewards.Should().Be(1);
+
+		await using var context = await _contextFactory.CreateDbContextAsync();
+		var opening = await context.ChestOpenings
+			.Include(c => c.Drops)
+			.SingleAsync(c => c.ChestType == "artifactChest" && c.Timestamp == timestamp);
+
+		opening.Drops.Should().ContainSingle(d => d.ItemType == "fragmentHero" && d.ItemId == "hero_81" && d.Quantity == 5);
+	}
+
+	/// <summary>
 	/// Verifies that importing duplicate hero upgrades does not create duplicate records.
 	/// </summary>
 	[Fact]

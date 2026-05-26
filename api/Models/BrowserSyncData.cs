@@ -60,6 +60,12 @@ public class BrowserSyncData {
 	public List<ChestOpening>? ChestOpenings { get; set; }
 
 	/// <summary>
+	/// Normalized per-item rewards extracted from consumables/chest openings.
+	/// Used to reconstruct chest drop rows when browser payloads do not embed Drops.
+	/// </summary>
+	public List<ConsumableRewardSyncRecord>? ConsumableRewards { get; set; }
+
+	/// <summary>
 	/// Tracked opponents encountered in any arena type.
 	/// </summary>
 	public List<Opponent>? Opponents { get; set; }
@@ -276,6 +282,7 @@ public class ImportCounts {
 	public int GuildWarBattles { get; set; }
 	public int RaidBossAttacks { get; set; }
 	public int ChestOpenings { get; set; }
+	public int ConsumableRewards { get; set; }
 	public int Opponents { get; set; }
 	public int Goals { get; set; }
 	public int CalendarEvents { get; set; }
@@ -334,6 +341,7 @@ public class DatabaseStats {
 	public int TotalGuildWarBattles { get; set; }
 	public int TotalRaidBossAttacks { get; set; }
 	public int TotalChestOpenings { get; set; }
+	public int TotalChestDrops { get; set; }
 	public int TotalOpponents { get; set; }
 	public int TotalGoals { get; set; }
 	public int TotalCalendarEvents { get; set; }
@@ -381,7 +389,7 @@ public class DatabaseStats {
 
 	public int TotalRecords => TotalSnapshots + TotalArenaBattles + TotalGrandArenaBattles +
 								TotalTitanArenaBattles + TotalGuildWarBattles + TotalRaidBossAttacks +
-								TotalChestOpenings + TotalOpponents + TotalGoals + TotalCalendarEvents +
+								TotalChestOpenings + TotalChestDrops + TotalOpponents + TotalGoals + TotalCalendarEvents +
 								TotalHeroes + TotalTitans + TotalPets + TotalInventorySnapshots +
 								TotalQuestCompletions + TotalMissionProgress + TotalShopPurchases +
 								TotalTowerProgress + TotalExpeditionBattles + TotalResourceTransactions +
@@ -397,4 +405,46 @@ public class DatabaseStats {
 	public DateTime? OldestSnapshot { get; set; }
 	public DateTime? NewestSnapshot { get; set; }
 	public DateTime? LastSync { get; set; }
+}
+
+/// <summary>
+/// Normalized reward row emitted by the userscript for each dropped item.
+/// These records are mapped to ChestDrop entities server-side.
+/// </summary>
+public class ConsumableRewardSyncRecord {
+	/// <summary>
+	/// Timestamp of the reward event.
+	/// </summary>
+	public DateTime Timestamp { get; set; }
+
+	/// <summary>
+	/// Source type from userscript (e.g., genericChest, artifactChest, towerChest).
+	/// </summary>
+	public string SourceType { get; set; } = string.Empty;
+
+	/// <summary>
+	/// Source identifier from userscript (chest/consumable ID).
+	/// </summary>
+	public string SourceId { get; set; } = string.Empty;
+
+	/// <summary>
+	/// Reward category (consumable, gear, coin, fragmentHero, etc.).
+	/// </summary>
+	public string ItemType { get; set; } = string.Empty;
+
+	/// <summary>
+	/// Item identifier within the category.
+	/// </summary>
+	public string ItemId { get; set; } = string.Empty;
+
+	/// <summary>
+	/// Quantity received.
+	/// </summary>
+	public int Quantity { get; set; }
+
+	/// <summary>
+	/// Local userscript opening ID from the chests store.
+	/// Used as a join key against ChestOpenings in the same payload.
+	/// </summary>
+	public int OpeningId { get; set; }
 }

@@ -17,6 +17,7 @@ namespace OrganizedJihad.Api.Controllers;
 /// - GET /api/sync/stats - Get database statistics
 /// - GET /api/sync/snapshots - Get recent player snapshots
 /// - GET /api/sync/battles - Get recent battle history
+/// - GET /api/sync/battles/recommendations - Get ranked battle team recommendations
 /// - GET /api/sync/opponents - Get all tracked opponents
 /// - GET /api/sync/hero-upgrades - Get hero upgrade history
 /// - GET /api/sync/titan-upgrades - Get titan upgrade history
@@ -308,6 +309,187 @@ public class SyncController : ControllerBase {
 	}
 
 	/// <summary>
+	/// Get ranked battle recommendations from historical results.
+	/// </summary>
+	/// <param name="battleType">Battle type: arena, grandarena, titanarena</param>
+	/// <param name="opponentId">Optional opponent ID filter</param>
+	/// <param name="opponentPower">Optional opponent power center value</param>
+	/// <param name="powerWindow">Power range (+/-) used with opponentPower (default: 100000)</param>
+	/// <param name="minSamples">Minimum battles required per candidate team (default: 2)</param>
+	/// <param name="limit">Maximum teams to return (default: 5)</param>
+	/// <returns>Ranked candidate teams with win-rate metrics and confidence</returns>
+	/// <response code="200">Returns recommendation payload</response>
+	/// <response code="500">Error occurred while generating recommendations</response>
+	/// <remarks>
+	/// GET: api/sync/battles/recommendations?battleType=arena&amp;opponentPower=500000&amp;limit=5
+	///
+	/// Uses historical battle outcomes and ranks team candidates by a composite
+	/// score built from recency-weighted win rate and sample confidence.
+	/// </remarks>
+	[HttpGet("battles/recommendations")]
+	[ProducesResponseType(typeof(BattleRecommendationResponse), StatusCodes.Status200OK)]
+	[ProducesResponseType(typeof(object), StatusCodes.Status500InternalServerError)]
+	public async Task<IActionResult> GetBattleRecommendations(
+		[FromQuery] string battleType = "arena",
+		[FromQuery] long? opponentId = null,
+		[FromQuery] int? opponentPower = null,
+		[FromQuery] int powerWindow = 100000,
+		[FromQuery] int minSamples = 2,
+		[FromQuery] int limit = 5) {
+		try {
+			var result = await _syncService.GetBattleRecommendationsAsync(
+				battleType,
+				opponentId,
+				opponentPower,
+				powerWindow,
+				minSamples,
+				limit
+			);
+
+			return Ok(result);
+		} catch (Exception ex) {
+			_logger.LogError(ex, "Error retrieving battle recommendations");
+			return StatusCode(500, new { error = ex.Message });
+		}
+	}
+
+	/// <summary>
+	/// Get Team Recommendation Engine output for a gameplay mode.
+	/// </summary>
+	/// <param name="mode">Mode: arena, grandarena, guildwar, cow, campaign, adventure</param>
+	/// <param name="objective">Objective: balanced, offense, defense, speed, sustain</param>
+	/// <param name="limit">Maximum teams to return (default: 3)</param>
+	/// <param name="minSamples">Minimum historical samples required for history-derived teams (default: 2)</param>
+	/// <param name="preferredTrendWindowDays">Optional calibration trend window override (7, 30, 90)</param>
+	/// <returns>Ranked recommendations with readiness and confidence metrics</returns>
+	[HttpGet("teams/recommendations")]
+	[ProducesResponseType(typeof(TeamRecommendationEngineResponse), StatusCodes.Status200OK)]
+	[ProducesResponseType(typeof(object), StatusCodes.Status500InternalServerError)]
+	public async Task<IActionResult> GetTeamRecommendations(
+		[FromQuery] string mode = "arena",
+		[FromQuery] string objective = "balanced",
+		[FromQuery] int limit = 3,
+		[FromQuery] int minSamples = 2,
+		[FromQuery] int? preferredTrendWindowDays = null
+	) {
+		try {
+			var result = await _syncService.GetTeamRecommendationsAsync(mode, objective, limit, minSamples, preferredTrendWindowDays);
+			return Ok(result);
+		} catch (Exception ex) {
+			_logger.LogError(ex, "Error retrieving team recommendations for mode {Mode}", mode);
+			return StatusCode(500, new { error = ex.Message });
+		}
+	}
+
+	/// <summary>
+	/// Get Team Recommendation Engine profile metadata for mode/objective controls.
+	/// </summary>
+	/// <returns>Mode/objective options with profile weights and defaults</returns>
+	[HttpGet("teams/recommendations/profiles")]
+	[ProducesResponseType(typeof(TeamRecommendationProfileMetadataResponse), StatusCodes.Status200OK)]
+	[ProducesResponseType(typeof(object), StatusCodes.Status500InternalServerError)]
+	public async Task<IActionResult> GetTeamRecommendationProfiles() {
+		try {
+			var result = await _syncService.GetTeamRecommendationProfileMetadataAsync();
+			return Ok(result);
+		} catch (Exception ex) {
+			_logger.LogError(ex, "Error retrieving team recommendation profile metadata");
+			return StatusCode(500, new { error = ex.Message });
+		}
+	}
+
+	/// <summary>
+	/// Get persisted Team Recommendation trend-window preferences by mode.
+	/// </summary>
+	/// <returns>Mode trend preferences with supported window options</returns>
+	[HttpGet("teams/recommendations/preferences")]
+	[ProducesResponseType(typeof(TeamRecommendationTrendPreferenceResponse), StatusCodes.Status200OK)]
+	[ProducesResponseType(typeof(object), StatusCodes.Status500InternalServerError)]
+	public async Task<IActionResult> GetTeamRecommendationPreferences() {
+		try {
+			var result = await _syncService.GetTeamRecommendationTrendPreferencesAsync();
+			return Ok(result);
+		} catch (Exception ex) {
+			_logger.LogError(ex, "Error retrieving team recommendation trend preferences");
+			return StatusCode(500, new { error = ex.Message });
+		}
+	}
+
+	/// <summary>
+	/// Save Team Recommendation preferred trend window for a mode.
+	/// </summary>
+	/// <param name="request">Mode and preferred trend window payload</param>
+	/// <returns>Updated mode trend preferences</returns>
+	[HttpPut("teams/recommendations/preferences")]
+	[ProducesResponseType(typeof(TeamRecommendationTrendPreferenceResponse), StatusCodes.Status200OK)]
+	[ProducesResponseType(typeof(object), StatusCodes.Status400BadRequest)]
+	[ProducesResponseType(typeof(object), StatusCodes.Status500InternalServerError)]
+	public async Task<IActionResult> SaveTeamRecommendationPreferences([FromBody] TeamRecommendationTrendPreferenceUpdateRequest request) {
+		if (request == null) {
+			return BadRequest(new { error = "Request payload is required." });
+		}
+
+		if (request.PreferredTrendWindowDays is not (7 or 30 or 90)) {
+			return BadRequest(new { error = "preferredTrendWindowDays must be one of: 7, 30, 90." });
+		}
+
+		try {
+			var result = await _syncService.SetTeamRecommendationTrendPreferenceAsync(request.Mode, request.PreferredTrendWindowDays);
+			return Ok(result);
+		} catch (Exception ex) {
+			_logger.LogError(ex, "Error saving team recommendation trend preference for mode {Mode}", request.Mode);
+			return StatusCode(500, new { error = ex.Message });
+		}
+	}
+
+	/// <summary>
+	/// Backtest Team Recommendation Engine calibration against historical battle outcomes.
+	/// </summary>
+	/// <param name="mode">Mode: arena or grandarena (currently supported)</param>
+	/// <param name="objective">Objective: balanced, offense, defense, speed, sustain</param>
+	/// <param name="lookbackDays">Historical window in days (1-120)</param>
+	/// <param name="limit">Recommendation cards to evaluate (1-10)</param>
+	/// <param name="minSamples">Minimum samples for recommendation generation</param>
+	/// <returns>Calibration summary and per-team backtest metrics</returns>
+	[HttpGet("teams/recommendations/backtest")]
+	[ProducesResponseType(typeof(TeamRecommendationBacktestResponse), StatusCodes.Status200OK)]
+	[ProducesResponseType(typeof(object), StatusCodes.Status500InternalServerError)]
+	public async Task<IActionResult> GetTeamRecommendationBacktest(
+		[FromQuery] string mode = "arena",
+		[FromQuery] string objective = "balanced",
+		[FromQuery] int lookbackDays = 14,
+		[FromQuery] int limit = 3,
+		[FromQuery] int minSamples = 2
+	) {
+		try {
+			var result = await _syncService.GetTeamRecommendationBacktestAsync(mode, objective, lookbackDays, limit, minSamples);
+			return Ok(result);
+		} catch (Exception ex) {
+			_logger.LogError(ex, "Error running team recommendation backtest for mode {Mode}", mode);
+			return StatusCode(500, new { error = ex.Message });
+		}
+	}
+
+	/// <summary>
+	/// Get persisted calibration metadata for Team Recommendation friction scaling.
+	/// </summary>
+	/// <param name="mode">Mode: arena, grandarena, guildwar, cow, campaign, adventure</param>
+	/// <param name="preferredTrendWindowDays">Optional preferred trend window override (7, 30, 90)</param>
+	/// <returns>Mode calibration state and suggested friction scale</returns>
+	[HttpGet("teams/recommendations/calibration")]
+	[ProducesResponseType(typeof(TeamRecommendationCalibrationResponse), StatusCodes.Status200OK)]
+	[ProducesResponseType(typeof(object), StatusCodes.Status500InternalServerError)]
+	public async Task<IActionResult> GetTeamRecommendationCalibration([FromQuery] string mode = "arena", [FromQuery] int? preferredTrendWindowDays = null) {
+		try {
+			var result = await _syncService.GetTeamRecommendationCalibrationAsync(mode, preferredTrendWindowDays);
+			return Ok(result);
+		} catch (Exception ex) {
+			_logger.LogError(ex, "Error retrieving team recommendation calibration metadata for mode {Mode}", mode);
+			return StatusCode(500, new { error = ex.Message });
+		}
+	}
+
+	/// <summary>
 	/// Get all tracked opponents from all arena types.
 	/// </summary>
 	/// <returns>List of all unique opponents encountered</returns>
@@ -334,6 +516,61 @@ public class SyncController : ControllerBase {
 			return Ok(opponents);
 		} catch (Exception ex) {
 			_logger.LogError(ex, "Error retrieving opponents");
+			return StatusCode(500, new { error = ex.Message });
+		}
+	}
+
+	/// <summary>
+	/// Get a curated catalog of external Hero Wars tools for research and operator workflows.
+	/// </summary>
+	/// <returns>External tool metadata catalog</returns>
+	/// <response code="200">Returns tool catalog payload</response>
+	/// <response code="500">Error occurred while building tool catalog</response>
+	/// <remarks>
+	/// GET: api/sync/tools/catalog
+	///
+	/// This endpoint returns metadata references only and does not include copied third-party code.
+	/// </remarks>
+	[HttpGet("tools/catalog")]
+	[ProducesResponseType(typeof(ToolCatalogResponse), StatusCodes.Status200OK)]
+	[ProducesResponseType(typeof(object), StatusCodes.Status500InternalServerError)]
+	public IActionResult GetToolCatalog(
+		[FromQuery] double? minConfidence = null,
+		[FromQuery] bool includeStale = true,
+		[FromQuery] string? category = null,
+		[FromQuery] string? verificationStatus = null,
+		[FromQuery] string? sort = null
+	) {
+		try {
+			var result = _syncService.GetExternalToolCatalog(
+				minConfidence,
+				includeStale,
+				category,
+				verificationStatus,
+				sort
+			);
+			return Ok(result);
+		} catch (Exception ex) {
+			_logger.LogError(ex, "Error retrieving external tool catalog");
+			return StatusCode(500, new { error = ex.Message });
+		}
+	}
+
+	/// <summary>
+	/// Get supported filter/sort metadata for the external tool catalog endpoint.
+	/// </summary>
+	/// <returns>Tool catalog filter metadata</returns>
+	/// <response code="200">Returns supported categories, statuses, and sort options</response>
+	/// <response code="500">Error occurred while building filter metadata</response>
+	[HttpGet("tools/catalog/filters")]
+	[ProducesResponseType(typeof(ToolCatalogFilterMetadataResponse), StatusCodes.Status200OK)]
+	[ProducesResponseType(typeof(object), StatusCodes.Status500InternalServerError)]
+	public IActionResult GetToolCatalogFilters() {
+		try {
+			var result = _syncService.GetExternalToolCatalogFilterMetadata();
+			return Ok(result);
+		} catch (Exception ex) {
+			_logger.LogError(ex, "Error retrieving external tool catalog filter metadata");
 			return StatusCode(500, new { error = ex.Message });
 		}
 	}

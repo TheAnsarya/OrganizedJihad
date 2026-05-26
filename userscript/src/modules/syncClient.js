@@ -131,11 +131,41 @@ class SyncClient {
 			};
 
 			// ── Gather data — bounded queries where possible ───────────
-			const [snapshots, battles, chests] = await Promise.all([
+			const [snapshots, battles, chests, consumableRewards] = await Promise.all([
 				getSince('snapshots'),
 				getSince('battles'),
 				getSince('chests', 'timestamp', 'epoch'), // chests store uses Date.now() (numeric)
+				getSince('consumableRewards', 'timestamp', 'epoch'),
 			]);
+
+			const toIso = (value) => {
+				const asNumber = Number(value);
+				if (!Number.isNaN(asNumber) && asNumber > 0) {
+					return new Date(asNumber).toISOString();
+				}
+				const parsed = new Date(value);
+				return Number.isNaN(parsed.getTime())
+					? new Date().toISOString()
+					: parsed.toISOString();
+			};
+
+			const normalizedChests = chests.map((c) => ({
+				...c,
+				timestamp: toIso(c.timestamp),
+				chestType: c.chestType || c.sourceType || 'unknown',
+				openMethod: c.openMethod || 'tracked',
+				quantity: c.quantity || 1,
+			}));
+
+			const normalizedConsumableRewards = consumableRewards.map((r) => ({
+				timestamp: toIso(r.timestamp),
+				sourceType: r.sourceType || 'unknown',
+				sourceId: String(r.sourceId || 'unknown'),
+				itemType: r.itemType || 'unknown',
+				itemId: String(r.itemId || 'unknown'),
+				quantity: Number(r.quantity || 0),
+				openingId: Number(r.openingId || 0),
+			}));
 
 			// Small mutable / non-timestamped stores — always send all
 			const [opponents, goals, events] = await Promise.all([
@@ -246,7 +276,8 @@ class SyncClient {
 				titanArenaBattles,
 				guildWarBattles,
 				raidBossAttacks,
-				chestOpenings: chests,
+				chestOpenings: normalizedChests,
+				consumableRewards: normalizedConsumableRewards,
 				opponents,
 				goals,
 				calendarEvents: events,
@@ -292,7 +323,8 @@ class SyncClient {
 				titanArenaBattles: titanArenaBattles.length,
 				guildWarBattles: guildWarBattles.length,
 				raidBossAttacks: raidBossAttacks.length,
-				chestOpenings: chests.length,
+				chestOpenings: normalizedChests.length,
+				consumableRewards: normalizedConsumableRewards.length,
 				opponents: opponents.length,
 				goals: goals.length,
 				calendarEvents: events.length,

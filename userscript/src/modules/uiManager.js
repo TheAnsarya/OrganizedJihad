@@ -38,6 +38,35 @@ const FETCH_LIMIT_TRANSACTIONS = 100;
 /** @const {number} Limit for API log entries */
 const FETCH_LIMIT_API_LOGS = 50;
 
+/** @const {string} Local API endpoint for battle recommendations */
+const BATTLE_RECOMMENDATIONS_URL = 'http://localhost:5124/api/sync/battles/recommendations?battleType=arena&limit=3&minSamples=2';
+
+/** @const {string} Local API endpoint for mode-aware team recommendation engine */
+const TEAM_RECOMMENDATIONS_URL = 'http://localhost:5124/api/sync/teams/recommendations';
+
+/** @const {string} Local API endpoint for team recommendation profile metadata */
+const TEAM_RECOMMENDATION_PROFILES_URL = 'http://localhost:5124/api/sync/teams/recommendations/profiles';
+
+/** @const {string} Local API endpoint for team recommendation backtest calibration */
+const TEAM_RECOMMENDATION_BACKTEST_URL = 'http://localhost:5124/api/sync/teams/recommendations/backtest';
+
+/** @const {string} Local API endpoint for persisted team recommendation calibration metadata */
+const TEAM_RECOMMENDATION_CALIBRATION_URL = 'http://localhost:5124/api/sync/teams/recommendations/calibration';
+/** @const {string} Local API endpoint for persisted team recommendation trend preferences */
+const TEAM_RECOMMENDATION_PREFERENCES_URL = 'http://localhost:5124/api/sync/teams/recommendations/preferences';
+
+/** @const {string} Local API endpoint for curated external tools catalog */
+const TOOLS_CATALOG_URL = 'http://localhost:5124/api/sync/tools/catalog';
+
+/** @const {string} Local API endpoint for external tools catalog filter metadata */
+const TOOLS_CATALOG_FILTERS_URL = 'http://localhost:5124/api/sync/tools/catalog/filters';
+
+/** @const {number} Recommendation cache TTL in ms */
+const RECOMMENDATIONS_CACHE_TTL_MS = 5 * 60 * 1000;
+
+/** @const {number} External tools catalog cache TTL in ms */
+const TOOLS_CATALOG_CACHE_TTL_MS = 30 * 60 * 1000;
+
 /** @const {number} Max activity events to render in the feed */
 const DISPLAY_LIMIT_ACTIVITY = 100;
 
@@ -549,6 +578,9 @@ class UIManager {
 
 			// Post-render hooks (attach event listeners to the new DOM)
 			switch (view) {
+				case 'dashboard':
+					this.attachDashboardEventListeners();
+					break;
 				case 'heroes':
 				case 'titans':
 				case 'pets':
@@ -572,6 +604,52 @@ class UIManager {
 					<p class="oj-muted">Check the console for details.</p>
 				</div>
 			`;
+		}
+	}
+
+	/**
+	 * Attach dashboard-specific controls.
+	 */
+	attachDashboardEventListeners() {
+		const statusFilter = this.overlay?.querySelector('#oj-tools-status-filter');
+		if (statusFilter) {
+			statusFilter.addEventListener('change', (e) => {
+				this.prefStorage.set('toolsCatalogStatusFilter', e.target.value || '');
+				this.renderView('dashboard');
+			});
+		}
+
+		const teamMode = this.overlay?.querySelector('#oj-team-mode-filter');
+		if (teamMode) {
+			teamMode.addEventListener('change', (e) => {
+				this.prefStorage.set('teamRecommendationsMode', e.target.value || 'arena');
+				this.renderView('dashboard');
+			});
+		}
+
+		const teamObjective = this.overlay?.querySelector('#oj-team-objective-filter');
+		if (teamObjective) {
+			teamObjective.addEventListener('change', (e) => {
+				this.prefStorage.set('teamRecommendationsObjective', e.target.value || 'balanced');
+				this.renderView('dashboard');
+			});
+		}
+
+		const teamTrendWindow = this.overlay?.querySelector('#oj-team-trend-window-filter');
+		if (teamTrendWindow) {
+			teamTrendWindow.addEventListener('change', (e) => {
+				const selectedPreference = e.target.value || 'auto';
+				const selectedMode = this.prefStorage.get('teamRecommendationsMode', 'arena');
+				const defaultWindow = Number(e.target?.dataset?.defaultWindow || 30);
+				const configuredWindow = Number(selectedPreference);
+				const resolvedWindow = selectedPreference === 'auto'
+					? defaultWindow
+					: (Number.isFinite(configuredWindow) ? configuredWindow : defaultWindow);
+
+				this.prefStorage.set('teamRecommendationsTrendWindow', selectedPreference);
+				this._saveTeamRecommendationTrendPreference(selectedMode, resolvedWindow);
+				this.renderView('dashboard');
+			});
 		}
 	}
 
@@ -1064,6 +1142,12 @@ class UIManager {
 
 				${await this._renderSuggestionsSection()}
 
+				${await this._renderBattleRecommendationsSection()}
+
+				${await this._renderTeamRecommendationEngineSection()}
+
+				${await this._renderExternalToolsSection()}
+
 				<div class="oj-section">
 					<h3>\uD83C\uDFAF Quick Tips</h3>
 					<ul class="oj-tips">
@@ -1194,6 +1278,599 @@ class UIManager {
 			</div>`;
 		} catch {
 			return '';
+		}
+	}
+
+	/**
+	 * Render battle recommendation cards sourced from API recommendations (#161).
+	 * Uses metadata cache and degrades silently when API is unavailable.
+	 *
+	 * @returns {Promise<string>} HTML section
+	 * @private
+	 */
+	async _renderBattleRecommendationsSection() {
+		try {
+			const payload = await this._getBattleRecommendationsPayload();
+			const recs = Array.isArray(payload?.recommendations) ? payload.recommendations : [];
+			if (recs.length === 0) return '';
+
+			const rows = recs.slice(0, 3).map((rec, index) => {
+				const sim = Number(rec.simulatedWinProbability || 0);
+				const low = Number(rec.simulationConfidenceLow || 0);
+				const high = Number(rec.simulationConfidenceHigh || 0);
+				const wr = Number(rec.weightedWinRate || rec.winRate || 0);
+				const preview = this._escapeHtml(rec.teamPreview || rec.teamKey || 'Unknown Team');
+				const rationale = this._escapeHtml(rec.rationale || 'No rationale available.');
+
+				return `<div style="padding:8px;border:1px solid #2f3f5a;border-radius:8px;background:#182234;margin-top:${index === 0 ? '0' : '6px'}">
+					<div style="display:flex;justify-content:space-between;align-items:baseline;gap:8px">
+						<div style="font-size:12px;font-weight:700;color:#9ed0ff">${preview}</div>
+						<div style="font-size:11px;color:#8ec5ff">Sim ${(sim * 100).toFixed(1)}%</div>
+					</div>
+					<div style="font-size:11px;color:#9fb4cf;margin-top:4px">Weighted ${(wr * 100).toFixed(1)}% • CI ${(low * 100).toFixed(1)}-${(high * 100).toFixed(1)}%</div>
+					<div style="font-size:11px;color:#8c8c8c;margin-top:4px">${rationale}</div>
+				</div>`;
+			}).join('');
+
+			return `<div class="oj-section">
+				<h3>\uD83E\uDDE0 Arena Recommendations</h3>
+				${rows}
+			</div>`;
+		} catch {
+			return '';
+		}
+	}
+
+	/**
+	 * Get recommendations from cache/API for dashboard cards.
+	 *
+	 * @returns {Promise<object|null>} API payload or cached payload
+	 * @private
+	 */
+	async _getBattleRecommendationsPayload() {
+		const cacheKey = 'battleRecommendations:arena';
+		const now = Date.now();
+
+		let cached = null;
+		try {
+			cached = await this.idbStorage.getMetadata(cacheKey, null);
+			if (cached?.timestamp && (now - cached.timestamp) < RECOMMENDATIONS_CACHE_TTL_MS && cached?.payload) {
+				return cached.payload;
+			}
+		} catch {
+			cached = null;
+		}
+
+		try {
+			const response = await fetch(BATTLE_RECOMMENDATIONS_URL);
+			if (!response.ok) throw new Error(`HTTP ${response.status}`);
+
+			const payload = await response.json();
+			await this.idbStorage.setMetadata(cacheKey, { timestamp: now, payload });
+			return payload;
+		} catch {
+			return cached?.payload || null;
+		}
+	}
+
+	/**
+	 * Render Team Recommendation Engine cards for the selected mode/objective.
+	 *
+	 * @returns {Promise<string>} HTML section
+	 * @private
+	 */
+	async _renderTeamRecommendationEngineSection() {
+		try {
+			const selectedMode = this.prefStorage.get('teamRecommendationsMode', 'arena');
+			const selectedObjective = this.prefStorage.get('teamRecommendationsObjective', 'balanced');
+			const selectedTrendWindowPreference = this.prefStorage.get('teamRecommendationsTrendWindow', 'auto');
+			const profileMetadata = await this._getTeamRecommendationProfileMetadata();
+			const modeOptions = Array.isArray(profileMetadata?.modes) && profileMetadata.modes.length > 0
+				? profileMetadata.modes
+				: [
+					{ value: 'arena', label: 'Arena', preferredTrendWindowDays: 7, supportedTrendWindowDays: [7, 30, 90] },
+					{ value: 'grandarena', label: 'Grand Arena', preferredTrendWindowDays: 30, supportedTrendWindowDays: [7, 30, 90] },
+					{ value: 'guildwar', label: 'Guild War', preferredTrendWindowDays: 30, supportedTrendWindowDays: [7, 30, 90] },
+					{ value: 'cow', label: 'CoW', preferredTrendWindowDays: 90, supportedTrendWindowDays: [7, 30, 90] },
+					{ value: 'campaign', label: 'Campaign', preferredTrendWindowDays: 30, supportedTrendWindowDays: [7, 30, 90] },
+					{ value: 'adventure', label: 'Adventure', preferredTrendWindowDays: 30, supportedTrendWindowDays: [7, 30, 90] },
+				];
+			const modeOption = modeOptions.find((mode) => mode.value === selectedMode) || null;
+			const defaultTrendWindowDays = Number(modeOption?.preferredTrendWindowDays || 30);
+			const configuredTrendWindowDays = Number(selectedTrendWindowPreference);
+			const trendWindowDays = selectedTrendWindowPreference === 'auto'
+				? defaultTrendWindowDays
+				: (Number.isFinite(configuredTrendWindowDays) ? configuredTrendWindowDays : defaultTrendWindowDays);
+
+			const backtest = await this._getTeamRecommendationBacktestPayload(selectedMode, selectedObjective);
+			const calibration = await this._getTeamRecommendationCalibrationPayload(selectedMode, trendWindowDays);
+			const payload = await this._getTeamRecommendationEnginePayload(selectedMode, selectedObjective, trendWindowDays);
+			const recs = Array.isArray(payload?.recommendations) ? payload.recommendations : [];
+			if (recs.length === 0) return '';
+
+			const objectiveOptions = Array.isArray(profileMetadata?.objectives) && profileMetadata.objectives.length > 0
+				? profileMetadata.objectives
+				: [
+					{ value: 'balanced', label: 'Balanced' },
+					{ value: 'offense', label: 'Offense' },
+					{ value: 'defense', label: 'Defense' },
+					{ value: 'speed', label: 'Speed' },
+					{ value: 'sustain', label: 'Sustain' },
+				];
+
+			const selectedProfile = Array.isArray(profileMetadata?.profiles)
+				? profileMetadata.profiles.find((p) => p.mode === selectedMode && p.objective === selectedObjective)
+				: null;
+			const profileSummary = selectedProfile
+				? `weights W:${(Number(selectedProfile.winWeight || 0) * 100).toFixed(0)} R:${(Number(selectedProfile.readinessWeight || 0) * 100).toFixed(0)} C:${(Number(selectedProfile.confidenceWeight || 0) * 100).toFixed(0)}`
+				: 'profile weights unavailable';
+			const calibrationSummary = backtest && typeof backtest === 'object' && (backtest.calibrationQuality || backtest.note)
+				? (() => {
+					const quality = this._escapeHtml(String(backtest.calibrationQuality || 'no-data'));
+					const mae = Number(backtest.meanAbsoluteError || 0);
+					const matchedSamples = Number(backtest.matchedBattleSamples || 0);
+					const matchedTeams = Number(backtest.matchedTeamCount || 0);
+					const evaluatedTeams = Number(backtest.evaluatedTeamCount || 0);
+					const note = typeof backtest.note === 'string' && backtest.note.trim()
+						? ` • ${this._escapeHtml(backtest.note)}`
+						: '';
+					const trends = Array.isArray(calibration?.trendWindows) ? calibration.trendWindows : [];
+					const preferredWindowDays = Number(calibration?.preferredTrendWindowDays || trendWindowDays || 30);
+					const preferredTrend = trends.find((t) => Number(t?.windowDays) === preferredWindowDays) || null;
+					const trendScale = Number(preferredTrend?.suggestedFrictionScale);
+					const trendSamples = Number(preferredTrend?.samples || 0);
+					const fallbackScale = Number(calibration?.suggestedFrictionScale || 1);
+					const resolvedScale = Number.isFinite(trendScale) && trendScale > 0 ? trendScale : fallbackScale;
+					const scaleText = Number.isFinite(resolvedScale)
+						? ` • frictionScale${preferredWindowDays}d ${resolvedScale.toFixed(2)}${trendSamples > 0 ? ` (${trendSamples} obs)` : ''}`
+						: '';
+					return `calibration ${quality} • MAE ${(mae * 100).toFixed(1)}% • matches ${matchedSamples} samples / ${matchedTeams}/${evaluatedTeams} teams${scaleText}${note}`;
+				})()
+				: 'calibration unavailable';
+			const trendWindowOptions = Array.isArray(modeOption?.supportedTrendWindowDays) && modeOption.supportedTrendWindowDays.length > 0
+				? modeOption.supportedTrendWindowDays
+				: [7, 30, 90];
+
+			const rows = recs.slice(0, 3).map((rec, index) => {
+				const win = Number(rec.estimatedWinProbability || 0);
+				const ready = Number(rec.readinessScore || 0);
+				const confidence = Number(rec.confidenceScore || 0);
+				const finalScore = Number(rec.finalScore || 0);
+				const profile = this._escapeHtml(rec.modeProfile || 'default');
+				const topProvenance = Array.isArray(rec.provenance) && rec.provenance.length > 0
+					? rec.provenance[0]
+					: null;
+				const provenanceText = topProvenance
+					? `${this._escapeHtml(topProvenance.sourceName || 'source')} ${(Number(topProvenance.confidence || 0) * 100).toFixed(0)}%`
+					: 'no provenance';
+				const provenanceRows = Array.isArray(rec.provenance)
+					? rec.provenance.slice(0, 5).map((entry) => {
+						const sourceName = this._escapeHtml(entry?.sourceName || 'unknown source');
+						const sourceType = this._escapeHtml(entry?.sourceType || 'signal');
+						const entryConfidence = (Number(entry?.confidence || 0) * 100).toFixed(0);
+						const detail = this._escapeHtml(entry?.detail || 'no detail');
+						const contribution = entry?.contribution && typeof entry.contribution === 'object'
+							? entry.contribution
+							: null;
+						const contributionRows = contribution
+							? [
+								typeof contribution.winProbability === 'number' ? `W ${(contribution.winProbability * 100).toFixed(1)}%` : '',
+								typeof contribution.readiness === 'number' ? `R ${(contribution.readiness * 100).toFixed(1)}%` : '',
+								typeof contribution.confidence === 'number' ? `C ${(contribution.confidence * 100).toFixed(1)}%` : '',
+								typeof contribution.winWeight === 'number' ? `wW ${(contribution.winWeight * 100).toFixed(0)}%` : '',
+								typeof contribution.readinessWeight === 'number' ? `wR ${(contribution.readinessWeight * 100).toFixed(0)}%` : '',
+								typeof contribution.confidenceWeight === 'number' ? `wC ${(contribution.confidenceWeight * 100).toFixed(0)}%` : '',
+								typeof contribution.baseScore === 'number' ? `base ${(contribution.baseScore * 100).toFixed(1)}%` : '',
+								typeof contribution.externalBonus === 'number' ? `bonus ${(contribution.externalBonus * 100).toFixed(1)}%` : '',
+								typeof contribution.finalScore === 'number' ? `final ${(contribution.finalScore * 100).toFixed(1)}%` : '',
+								typeof contribution.externalModeWeight === 'number' ? `modeW ${(contribution.externalModeWeight * 100).toFixed(0)}%` : '',
+								typeof contribution.sourceScale === 'number' ? `scale ${(contribution.sourceScale * 100).toFixed(0)}%` : '',
+								typeof contribution.sourceConfidence === 'number' ? `srcConf ${(contribution.sourceConfidence * 100).toFixed(0)}%` : '',
+								typeof contribution.frictionPenalty === 'number' ? `friction ${(contribution.frictionPenalty * 100).toFixed(1)}%` : '',
+								typeof contribution.resourcePressure === 'number' ? `pressure ${(contribution.resourcePressure * 100).toFixed(0)}%` : '',
+							].filter(Boolean)
+							: [];
+						const sourceUrl = typeof entry?.sourceUrl === 'string' && entry.sourceUrl.trim()
+							? `<a href="${this._escapeHtml(entry.sourceUrl)}" target="_blank" rel="noopener noreferrer" style="color:#95d5b2;text-decoration:none">source</a>`
+							: '';
+
+						return `<div style="padding:4px 0;border-top:1px dashed #2d5845">
+							<div style="display:flex;justify-content:space-between;gap:8px;align-items:baseline">
+								<div style="font-size:10px;color:#9fd8bc">${sourceName} <span style="color:#739b89">(${sourceType})</span></div>
+								<div style="font-size:10px;color:#8ac9a8">${entryConfidence}% ${sourceUrl}</div>
+							</div>
+							<div style="font-size:10px;color:#7f9f92;margin-top:2px">${detail}</div>
+							${contributionRows.length > 0 ? `<div style="font-size:10px;color:#86b9a1;margin-top:2px">${this._escapeHtml(contributionRows.join(' • '))}</div>` : ''}
+						</div>`;
+					}).join('')
+					: '';
+				const preview = this._escapeHtml(rec.teamPreview || 'Unknown Team');
+				const rationale = this._escapeHtml(rec.rationale || 'No rationale available.');
+
+				return `<div style="padding:8px;border:1px solid #2f5a3f;border-radius:8px;background:#182b24;margin-top:${index === 0 ? '0' : '6px'}">
+					<div style="display:flex;justify-content:space-between;align-items:baseline;gap:8px">
+						<div style="font-size:12px;font-weight:700;color:#a8e6c8">${preview}</div>
+						<div style="font-size:11px;color:#8ad4ac">${this._escapeHtml(rec.source || 'engine')}</div>
+					</div>
+					<div style="font-size:10px;color:#7cc1a0;margin-top:2px">profile ${profile}</div>
+					<div style="font-size:11px;color:#9fc7b2;margin-top:4px">Win ${(win * 100).toFixed(1)}% • Ready ${(ready * 100).toFixed(0)}% • Conf ${(confidence * 100).toFixed(0)}% • Final ${(finalScore * 100).toFixed(1)}%</div>
+					<div style="font-size:10px;color:#7f9f92;margin-top:2px">${provenanceText}</div>
+					<div style="font-size:11px;color:#8c8c8c;margin-top:4px">${rationale}</div>
+					${provenanceRows ? `<details style="margin-top:6px">
+						<summary style="cursor:pointer;font-size:10px;color:#95d5b2">Provenance details</summary>
+						<div style="margin-top:4px;background:#13261f;border:1px solid #2a4739;border-radius:6px;padding:4px 6px">${provenanceRows}</div>
+					</details>` : ''}
+				</div>`;
+			}).join('');
+
+			return `<div class="oj-section">
+				<h3>🧠 Team Recommendation Engine</h3>
+				<div style="font-size:10px;color:#7dbba0;margin:2px 0 6px 0">${this._escapeHtml(profileSummary)}</div>
+				<div style="font-size:10px;color:#8bc9b0;margin:2px 0 6px 0">${calibrationSummary}</div>
+				<div style="margin:4px 0 8px 0;display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+					<label for="oj-team-mode-filter" style="font-size:11px;color:#a7b3bb">Mode</label>
+					<select id="oj-team-mode-filter" style="background:#1f252b;border:1px solid #37474f;color:#cfd8dc;border-radius:6px;padding:3px 6px;font-size:11px">
+						${modeOptions.map((mode) => {
+							const value = this._escapeHtml(mode.value || 'arena');
+							const label = this._escapeHtml(mode.label || mode.value || 'arena');
+							return `<option value="${value}" ${selectedMode === mode.value ? 'selected' : ''}>${label}</option>`;
+						}).join('')}
+					</select>
+					<label for="oj-team-objective-filter" style="font-size:11px;color:#a7b3bb">Objective</label>
+					<select id="oj-team-objective-filter" style="background:#1f252b;border:1px solid #37474f;color:#cfd8dc;border-radius:6px;padding:3px 6px;font-size:11px">
+						${objectiveOptions.map((obj) => {
+							const value = this._escapeHtml(obj.value || 'balanced');
+							const label = this._escapeHtml(obj.label || obj.value || 'balanced');
+							return `<option value="${value}" ${selectedObjective === obj.value ? 'selected' : ''}>${label}</option>`;
+						}).join('')}
+					</select>
+					<label for="oj-team-trend-window-filter" style="font-size:11px;color:#a7b3bb">Trend</label>
+					<select id="oj-team-trend-window-filter" data-default-window="${this._escapeHtml(String(defaultTrendWindowDays))}" style="background:#1f252b;border:1px solid #37474f;color:#cfd8dc;border-radius:6px;padding:3px 6px;font-size:11px">
+						<option value="auto" ${selectedTrendWindowPreference === 'auto' ? 'selected' : ''}>Auto (${defaultTrendWindowDays}d)</option>
+						${trendWindowOptions.map((windowDays) => {
+							const numericDays = Number(windowDays || 0);
+							const value = Number.isFinite(numericDays) && numericDays > 0 ? String(numericDays) : '30';
+							return `<option value="${value}" ${selectedTrendWindowPreference === value ? 'selected' : ''}>${this._escapeHtml(value)}d</option>`;
+						}).join('')}
+					</select>
+				</div>
+				${rows}
+			</div>`;
+		} catch {
+			return '';
+		}
+	}
+
+	/**
+	 * Save Team Recommendation trend window preference for a mode.
+	 *
+	 * @param {string} mode - Gameplay mode
+	 * @param {number} trendWindowDays - Preferred trend window in days
+	 * @returns {Promise<void>}
+	 * @private
+	 */
+	async _saveTeamRecommendationTrendPreference(mode, trendWindowDays) {
+		const normalizedMode = typeof mode === 'string' && mode.trim() ? mode.trim() : 'arena';
+		const resolvedWindowDays = Number(trendWindowDays || 30);
+		if (![7, 30, 90].includes(resolvedWindowDays)) {
+			return;
+		}
+
+		try {
+			const response = await fetch(TEAM_RECOMMENDATION_PREFERENCES_URL, {
+				method: 'PUT',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({
+					mode: normalizedMode,
+					preferredTrendWindowDays: resolvedWindowDays,
+				}),
+			});
+
+			if (!response.ok) {
+				throw new Error(`HTTP ${response.status}`);
+			}
+
+			// Refresh profile metadata cache so Auto mode reflects persisted preferences on next render.
+			await this.idbStorage.setMetadata('teamRecommendationProfiles:metadata', {
+				timestamp: 0,
+				payload: null,
+			});
+		} catch {
+			// Ignore preference persistence failures; local preference still drives UI behavior.
+		}
+	}
+
+	/**
+	 * Get Team Recommendation profile metadata from cache/API.
+	 *
+	 * @returns {Promise<object|null>} Profile metadata payload or cached payload
+	 * @private
+	 */
+	async _getTeamRecommendationProfileMetadata() {
+		const cacheKey = 'teamRecommendationProfiles:metadata';
+		const now = Date.now();
+
+		let cached = null;
+		try {
+			cached = await this.idbStorage.getMetadata(cacheKey, null);
+			if (cached?.timestamp && (now - cached.timestamp) < TOOLS_CATALOG_CACHE_TTL_MS && cached?.payload) {
+				return cached.payload;
+			}
+		} catch {
+			cached = null;
+		}
+
+		try {
+			const response = await fetch(TEAM_RECOMMENDATION_PROFILES_URL);
+			if (!response.ok) throw new Error(`HTTP ${response.status}`);
+
+			const payload = await response.json();
+			await this.idbStorage.setMetadata(cacheKey, { timestamp: now, payload });
+			return payload;
+		} catch {
+			return cached?.payload || null;
+		}
+	}
+
+	/**
+	 * Get Team Recommendation Engine payload from cache/API.
+	 *
+	 * @param {string} mode - Gameplay mode
+	 * @param {string} objective - Objective profile
+	 * @param {number} trendWindowDays - Preferred calibration trend window days
+	 * @returns {Promise<object|null>} API payload or cached payload
+	 * @private
+	 */
+	async _getTeamRecommendationEnginePayload(mode, objective, trendWindowDays = 30) {
+		const cacheKey = `teamRecommendations:${mode}:${objective}:${trendWindowDays}`;
+		const now = Date.now();
+
+		let cached = null;
+		try {
+			cached = await this.idbStorage.getMetadata(cacheKey, null);
+			if (cached?.timestamp && (now - cached.timestamp) < RECOMMENDATIONS_CACHE_TTL_MS && cached?.payload) {
+				return cached.payload;
+			}
+		} catch {
+			cached = null;
+		}
+
+		try {
+			const url = new URL(TEAM_RECOMMENDATIONS_URL);
+			url.searchParams.set('mode', mode || 'arena');
+			url.searchParams.set('objective', objective || 'balanced');
+			url.searchParams.set('limit', '3');
+			url.searchParams.set('minSamples', '2');
+			url.searchParams.set('preferredTrendWindowDays', String(Math.max(1, Number(trendWindowDays || 30))));
+
+			const response = await fetch(url.toString());
+			if (!response.ok) throw new Error(`HTTP ${response.status}`);
+
+			const payload = await response.json();
+			await this.idbStorage.setMetadata(cacheKey, { timestamp: now, payload });
+			return payload;
+		} catch {
+			return cached?.payload || null;
+		}
+	}
+
+	/**
+	 * Get Team Recommendation backtest calibration payload from cache/API.
+	 *
+	 * @param {string} mode - Gameplay mode
+	 * @param {string} objective - Objective profile
+	 * @returns {Promise<object|null>} API payload or cached payload
+	 * @private
+	 */
+	async _getTeamRecommendationBacktestPayload(mode, objective) {
+		const cacheKey = `teamRecommendationBacktest:${mode}:${objective}`;
+		const now = Date.now();
+
+		let cached = null;
+		try {
+			cached = await this.idbStorage.getMetadata(cacheKey, null);
+			if (cached?.timestamp && (now - cached.timestamp) < RECOMMENDATIONS_CACHE_TTL_MS && cached?.payload) {
+				return cached.payload;
+			}
+		} catch {
+			cached = null;
+		}
+
+		try {
+			const url = new URL(TEAM_RECOMMENDATION_BACKTEST_URL);
+			url.searchParams.set('mode', mode || 'arena');
+			url.searchParams.set('objective', objective || 'balanced');
+			url.searchParams.set('lookbackDays', '30');
+			url.searchParams.set('limit', '3');
+			url.searchParams.set('minSamples', '2');
+
+			const response = await fetch(url.toString());
+			if (!response.ok) throw new Error(`HTTP ${response.status}`);
+
+			const payload = await response.json();
+			await this.idbStorage.setMetadata(cacheKey, { timestamp: now, payload });
+			return payload;
+		} catch {
+			return cached?.payload || null;
+		}
+	}
+
+	/**
+	 * Get Team Recommendation persisted calibration metadata from cache/API.
+	 *
+	 * @param {string} mode - Gameplay mode
+	 * @param {number} trendWindowDays - Preferred calibration trend window days
+	 * @returns {Promise<object|null>} API payload or cached payload
+	 * @private
+	 */
+	async _getTeamRecommendationCalibrationPayload(mode, trendWindowDays = 30) {
+		const cacheKey = `teamRecommendationCalibration:${mode}:${trendWindowDays}`;
+		const now = Date.now();
+
+		let cached = null;
+		try {
+			cached = await this.idbStorage.getMetadata(cacheKey, null);
+			if (cached?.timestamp && (now - cached.timestamp) < RECOMMENDATIONS_CACHE_TTL_MS && cached?.payload) {
+				return cached.payload;
+			}
+		} catch {
+			cached = null;
+		}
+
+		try {
+			const url = new URL(TEAM_RECOMMENDATION_CALIBRATION_URL);
+			url.searchParams.set('mode', mode || 'arena');
+			url.searchParams.set('preferredTrendWindowDays', String(Math.max(1, Number(trendWindowDays || 30))));
+
+			const response = await fetch(url.toString());
+			if (!response.ok) throw new Error(`HTTP ${response.status}`);
+
+			const payload = await response.json();
+			await this.idbStorage.setMetadata(cacheKey, { timestamp: now, payload });
+			return payload;
+		} catch {
+			return cached?.payload || null;
+		}
+	}
+
+	/**
+	 * Render curated external tool references with verification metadata.
+	 *
+	 * @returns {Promise<string>} HTML section
+	 * @private
+	 */
+	async _renderExternalToolsSection() {
+		try {
+			const metadata = await this._getExternalToolsFilterMetadata();
+			const payload = await this._getExternalToolsCatalogPayload();
+			const tools = Array.isArray(payload?.tools) ? payload.tools : [];
+			if (tools.length === 0) return '';
+			const selectedStatus = this.prefStorage.get('toolsCatalogStatusFilter', '');
+			const statusOptions = Array.isArray(metadata?.verificationStatuses) && metadata.verificationStatuses.length > 0
+				? metadata.verificationStatuses
+				: ['verified', 'partial', 'unverified', 'stale'];
+
+			const rows = tools.slice(0, 4).map((tool) => {
+				const status = (tool.verificationStatus || 'unknown').toLowerCase();
+				const confidence = Number(tool.confidenceScore || 0);
+				const reviewed = tool.lastReviewedUtc ? new Date(tool.lastReviewedUtc) : null;
+				const ageDays = reviewed ? Math.floor((Date.now() - reviewed.getTime()) / (24 * 60 * 60 * 1000)) : 9999;
+				const staleTag = ageDays > 90 ? ' • stale' : '';
+				const statusColor = status === 'verified'
+					? '#81c784'
+					: status === 'partial'
+						? '#ffb74d'
+						: '#ef5350';
+
+				return `<div style="padding:8px;border:1px solid #37474f;border-radius:8px;background:#1f252b;margin-top:6px">
+					<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px">
+						<div style="font-size:12px;font-weight:700;color:#cfd8dc">${this._escapeHtml(tool.name || 'Unknown Tool')}</div>
+						<span style="font-size:10px;color:${statusColor}">${this._escapeHtml(status)} ${(confidence * 100).toFixed(0)}%</span>
+					</div>
+					<div style="font-size:11px;color:#a7b3bb;margin-top:3px">${this._escapeHtml(tool.category || 'tool')} • reviewed ${reviewed ? reviewed.toISOString().slice(0, 10) : 'n/a'}${staleTag}</div>
+					<div style="font-size:11px;color:#93a1aa;margin-top:4px">${this._escapeHtml(tool.capabilities || '')}</div>
+					<div style="font-size:10px;color:#7f8b92;margin-top:3px">${this._escapeHtml(tool.caveats || '')}</div>
+					<div style="margin-top:6px"><a href="${this._escapeHtml(tool.url || '#')}" target="_blank" rel="noopener noreferrer" style="font-size:11px;color:#64b5f6">Open Tool</a></div>
+				</div>`;
+			}).join('');
+
+			return `<div class="oj-section">
+				<h3>\uD83E\uDDF0 External Tools</h3>
+				<div style="margin:4px 0 8px 0;display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+					<label for="oj-tools-status-filter" style="font-size:11px;color:#a7b3bb">Status</label>
+					<select id="oj-tools-status-filter" style="background:#1f252b;border:1px solid #37474f;color:#cfd8dc;border-radius:6px;padding:3px 6px;font-size:11px">
+						<option value="" ${selectedStatus === '' ? 'selected' : ''}>all</option>
+						${statusOptions.map((status) => `<option value="${this._escapeHtml(status)}" ${selectedStatus === status ? 'selected' : ''}>${this._escapeHtml(status)}</option>`).join('')}
+					</select>
+				</div>
+				${rows}
+				${tools.length > 4 ? `<div style="font-size:11px;color:#888;margin-top:6px;text-align:center">+ ${tools.length - 4} more in desktop Settings</div>` : ''}
+			</div>`;
+		} catch {
+			return '';
+		}
+	}
+
+	/**
+	 * Get external tools catalog payload from cache/API.
+	 *
+	 * @returns {Promise<object|null>} API payload or cached payload
+	 * @private
+	 */
+	async _getExternalToolsCatalogPayload() {
+		const metadata = await this._getExternalToolsFilterMetadata();
+		const selectedStatus = this.prefStorage.get('toolsCatalogStatusFilter', '');
+		const cacheKey = `toolsCatalog:external:${selectedStatus || 'all'}`;
+		const now = Date.now();
+
+		let cached = null;
+		try {
+			cached = await this.idbStorage.getMetadata(cacheKey, null);
+			if (cached?.timestamp && (now - cached.timestamp) < TOOLS_CATALOG_CACHE_TTL_MS && cached?.payload) {
+				return cached.payload;
+			}
+		} catch {
+			cached = null;
+		}
+
+		try {
+			const url = new URL(TOOLS_CATALOG_URL);
+			const defaultMinConfidence = Number(metadata?.defaultMinConfidence);
+			const normalizedMinConfidence = Number.isFinite(defaultMinConfidence)
+				? Math.max(0, Math.min(1, defaultMinConfidence))
+				: 0.65;
+			url.searchParams.set('minConfidence', normalizedMinConfidence.toFixed(2));
+			url.searchParams.set('includeStale', metadata?.defaultIncludeStale ? 'true' : 'false');
+			url.searchParams.set('sort', metadata?.defaultSort || 'confidence');
+			if (selectedStatus) {
+				url.searchParams.set('verificationStatus', selectedStatus);
+			}
+
+			const response = await fetch(url.toString());
+			if (!response.ok) throw new Error(`HTTP ${response.status}`);
+
+			const payload = await response.json();
+			await this.idbStorage.setMetadata(cacheKey, { timestamp: now, payload });
+			return payload;
+		} catch {
+			return cached?.payload || null;
+		}
+	}
+
+	/**
+	 * Get external tools catalog filter metadata from cache/API.
+	 *
+	 * @returns {Promise<object|null>} Filter metadata payload or cached payload
+	 * @private
+	 */
+	async _getExternalToolsFilterMetadata() {
+		const cacheKey = 'toolsCatalog:filters';
+		const now = Date.now();
+
+		let cached = null;
+		try {
+			cached = await this.idbStorage.getMetadata(cacheKey, null);
+			if (cached?.timestamp && (now - cached.timestamp) < TOOLS_CATALOG_CACHE_TTL_MS && cached?.payload) {
+				return cached.payload;
+			}
+		} catch {
+			cached = null;
+		}
+
+		try {
+			const response = await fetch(TOOLS_CATALOG_FILTERS_URL);
+			if (!response.ok) throw new Error(`HTTP ${response.status}`);
+
+			const payload = await response.json();
+			await this.idbStorage.setMetadata(cacheKey, { timestamp: now, payload });
+			return payload;
+		} catch {
+			return cached?.payload || {
+				verificationStatuses: ['verified', 'partial', 'unverified', 'stale'],
+				defaultMinConfidence: 0.65,
+				defaultIncludeStale: false,
+				defaultSort: 'confidence',
+			};
 		}
 	}
 
