@@ -1,21 +1,16 @@
-﻿using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
-using OrganizedJihad.Desktop.Data;
+using OrganizedJihad.Data;
 using OrganizedJihad.Desktop.Services;
 
 namespace OrganizedJihad.Desktop;
 
-public static class MauiProgram
-{
-	public static MauiApp CreateMauiApp()
-	{
+public static class MauiProgram {
+	public static MauiApp CreateMauiApp() {
 		var builder = MauiApp.CreateBuilder();
 		builder
 			.UseMauiApp<App>()
-			.ConfigureFonts(fonts =>
-			{
-				fonts.AddFont("OpenSans-Regular.ttf", "OpenSansRegular");
-			});
+			.ConfigureFonts(fonts => fonts.AddFont("OpenSans-Regular.ttf", "OpenSansRegular"));
 
 		builder.Services.AddMauiBlazorWebView();
 
@@ -26,6 +21,7 @@ public static class MauiProgram
 
 		// Register services
 		builder.Services.AddScoped<SyncService>();
+		builder.Services.AddScoped<RecommendationSettingsService>();
 
 		// TODO: Add API host service once ASP.NET Core hosting is configured
 		// builder.Services.AddSingleton<ApiHostService>();
@@ -49,14 +45,13 @@ public static class MauiProgram
 	/// <summary>
 	/// Initializes the database, creating it if it doesn't exist and applying migrations.
 	/// </summary>
-	private static void InitializeDatabase(IServiceProvider services)
-	{
+	private static void InitializeDatabase(IServiceProvider services) {
 		using var scope = services.CreateScope();
 		var contextFactory = scope.ServiceProvider.GetRequiredService<IDbContextFactory<GameDatabaseContext>>();
 		using var context = contextFactory.CreateDbContext();
 
 		// Create database and apply migrations
-		context.Database.EnsureCreated();
+		context.Database.Migrate();  // Use migrations instead of EnsureCreated
 
 		// Log database location
 		var logger = scope.ServiceProvider.GetRequiredService<ILogger<GameDatabaseContext>>();

@@ -1,8 +1,10 @@
 @page "/"
-@using OrganizedJihad.Desktop.Data
-@using OrganizedJihad.Desktop.Data.Models
+@using OrganizedJihad.Data
+@using OrganizedJihad.Data.Models
 @using Microsoft.EntityFrameworkCore
+@using System.Net.Http.Json
 @inject IDbContextFactory<GameDatabaseContext> DbFactory
+@inject RecommendationSettingsService RecommendationSettings
 
 <PageTitle>Dashboard - OrganizedJihad</PageTitle>
 
@@ -88,7 +90,7 @@
 								{
 									<div class="list-group-item d-flex justify-content-between align-items-center">
 										<div>
-											<strong>@battle.BattleType</strong>
+											<strong>Arena Battle</strong>
 											<br />
 											<small class="text-muted">vs @(battle.OpponentName ?? battle.OpponentId.ToString())</small>
 										</div>
@@ -131,10 +133,10 @@
 										<div>
 											<strong>@chest.ChestType</strong>
 											<br />
-											<small class="text-muted">@chest.OpenedAt.ToString("MMM dd, yyyy HH:mm")</small>
+											<small class="text-muted">@chest.Timestamp.ToString("MMM dd, yyyy HH:mm")</small>
 										</div>
 										<div>
-											<span class="badge bg-info">@chest.ChestDrops.Count items</span>
+											<span class="badge bg-info">@chest.Drops.Count items</span>
 										</div>
 									</div>
 								}
@@ -143,6 +145,58 @@
 						else
 						{
 							<p class="text-muted">No chests opened yet.</p>
+						}
+					</div>
+				</div>
+			</div>
+		</div>
+
+		<div class="row mb-4">
+			<div class="col-12">
+				<div class="card border-primary">
+					<div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+						<h5 class="mb-0">Arena Recommendations</h5>
+						<small>@(RecommendationCards.Any() ? $"Top {RecommendationCards.Count} candidates" : "No candidates") • @RecommendationSource</small>
+					</div>
+					<div class="card-body">
+						<div class="mb-3">
+							<small class="text-muted">Recommendation API: @RecommendationApiBaseUrl</small>
+							<a class="btn btn-sm btn-outline-secondary ms-2" href="/settings">Change</a>
+						</div>
+
+						@if (!string.IsNullOrWhiteSpace(RecommendationStatusMessage))
+						{
+							<div class="alert alert-secondary py-2 mb-3">
+								<small>@RecommendationStatusMessage</small>
+							</div>
+						}
+
+						@if (RecommendationCards.Any())
+						{
+							<div class="row g-3">
+								@foreach (var rec in RecommendationCards)
+								{
+									<div class="col-lg-4 col-md-6">
+										<div class="card h-100 border-0 bg-light">
+											<div class="card-body">
+												<h6 class="card-title mb-1">@rec.TeamPreview</h6>
+												<p class="text-muted small mb-2">@rec.Rationale</p>
+												<div class="small">
+													<div><strong>Sim:</strong> @((rec.SimulatedWinProbability * 100).ToString("F1"))%</div>
+													<div><strong>Weighted:</strong> @((rec.WeightedWinRate * 100).ToString("F1"))%</div>
+													<div><strong>CI:</strong> @((rec.ConfidenceLow * 100).ToString("F1"))% - @((rec.ConfidenceHigh * 100).ToString("F1"))%</div>
+													<div><strong>Samples:</strong> @rec.Battles</div>
+												</div>
+												<a class="btn btn-sm btn-outline-primary mt-2" href="@BuildBattleDrilldownUrl(rec)">View Samples</a>
+											</div>
+										</div>
+									</div>
+								}
+							</div>
+						}
+						else
+						{
+							<p class="text-muted mb-0">No recommendation candidates available yet. Play and sync more arena battles to generate suggestions.</p>
 						}
 					</div>
 				</div>
@@ -162,7 +216,6 @@
 							<div class="row">
 								<div class="col-md-4">
 									<p><strong>Level:</strong> @LatestSnapshot.Level</p>
-									<p><strong>VIP Level:</strong> @LatestSnapshot.VipLevel</p>
 									<p><strong>Team Power:</strong> @LatestSnapshot.TeamPower.ToString("N0")</p>
 								</div>
 								<div class="col-md-4">
@@ -208,10 +261,16 @@
 	private PlayerSnapshot? LatestSnapshot { get; set; }
 	private List<ArenaBattle> RecentBattles { get; set; } = new();
 	private List<ChestOpening> RecentChests { get; set; } = new();
+	private List<ArenaBattle> RecommendationSamplePool { get; set; } = new();
+	private List<RecommendationCard> RecommendationCards { get; set; } = new();
+	private string RecommendationSource { get; set; } = "Local";
+	private string RecommendationStatusMessage { get; set; } = string.Empty;
+	private string RecommendationApiBaseUrl { get; set; } = "http://localhost:5124";
 	private double WinRate { get; set; }
 
 	protected override async Task OnInitializedAsync()
 	{
+		RecommendationApiBaseUrl = RecommendationSettings.GetRecommendationApiBaseUrl();
 		await LoadDashboardData();
 		IsLoading = false;
 	}
@@ -255,7 +314,15 @@
 			.Take(10)
 			.ToListAsync();
 
+		var recommendationSamples = await context.ArenaBattles
+			.AsNoTracking()
+			.OrderByDescending(b => b.Timestamp)
+			.Take(500)
+			.ToListAsync();
+
 		RecentBattles = arenaBattles;
+		RecommendationSamplePool = recommendationSamples;
+		RecommendationCards = await LoadRecommendationCardsAsync(recommendationSamples, LatestSnapshot?.TeamPower);
 
 		// Calculate win rate
 		if (Stats.TotalBattles > 0)
@@ -266,17 +333,17 @@
 
 		// Get recent chests
 		RecentChests = await context.ChestOpenings
-			.Include(c => c.ChestDrops)
-			.OrderByDescending(c => c.OpenedAt)
+			.Include(c => c.Drops)
+			.OrderByDescending(c => c.Timestamp)
 			.Take(10)
 			.ToListAsync();
 
 		// Get last sync metadata
 		var syncMetadata = await context.SyncMetadata
-			.OrderByDescending(m => m.LastSync)
+			.OrderByDescending(m => m.UpdatedAt)
 			.FirstOrDefaultAsync();
 
-		Stats.LastSync = syncMetadata?.LastSync;
+		Stats.LastSync = syncMetadata?.UpdatedAt;
 	}
 
 	private string GetRelativeTime(DateTime timestamp)
@@ -309,5 +376,155 @@
 		public int CalendarEventCount { get; set; }
 		public int TotalBattles { get; set; }
 		public DateTime? LastSync { get; set; }
+	}
+
+	private static List<RecommendationCard> BuildRecommendationCards(IEnumerable<ArenaBattle> battles, int? teamPower) {
+		var now = DateTime.UtcNow;
+
+		return battles
+			.Where(b => !string.IsNullOrWhiteSpace(b.OurTeam))
+			.GroupBy(b => NormalizeTeamKey(b.OurTeam))
+			.Select(group => {
+				var samples = group.ToList();
+				var sampleCount = samples.Count;
+				var wins = samples.Count(b => b.IsWin);
+				var weighted = samples.Select(b => {
+					var ageDays = Math.Max(0, (now - b.Timestamp).TotalDays);
+					var w = Math.Exp(-ageDays / 30d);
+					return new { b.IsWin, Weight = w };
+				}).ToList();
+
+				var weightTotal = weighted.Sum(x => x.Weight);
+				var weightedWins = weighted.Where(x => x.IsWin).Sum(x => x.Weight);
+				var weightedRate = weightTotal <= 0 ? 0 : weightedWins / weightTotal;
+
+				var avgOpponentPower = (int)Math.Round(samples.Average(b => b.OpponentPower));
+				var confidence = Math.Min(1d, sampleCount / 20d);
+				var powerDeltaRatio = avgOpponentPower > 0
+					? ((teamPower ?? avgOpponentPower) - avgOpponentPower) / (double)avgOpponentPower
+					: 0d;
+				powerDeltaRatio = Math.Clamp(powerDeltaRatio, -0.75, 0.75);
+
+				var simulated = Math.Clamp(weightedRate + (powerDeltaRatio * 0.18) + ((confidence - 0.5d) * 0.04), 0.05, 0.95);
+				var stdError = Math.Sqrt((simulated * (1 - simulated)) / Math.Max(1, sampleCount));
+				var low = Math.Clamp(simulated - (1.96 * stdError), 0, 1);
+				var high = Math.Clamp(simulated + (1.96 * stdError), 0, 1);
+				var score = (simulated * 0.75d) + (confidence * 0.25d);
+
+				return new RecommendationCard {
+					TeamKey = group.Key,
+					TeamPreview = BuildTeamPreview(group.Key),
+					Battles = sampleCount,
+					WeightedWinRate = weightedRate,
+					SimulatedWinProbability = simulated,
+					ConfidenceLow = low,
+					ConfidenceHigh = high,
+					Score = score,
+					Rationale = $"{wins}/{sampleCount} wins, avg opponent power {avgOpponentPower:N0}",
+				};
+			})
+			.Where(x => x.Battles >= 2)
+			.OrderByDescending(x => x.Score)
+			.ThenByDescending(x => x.Battles)
+			.Take(3)
+			.ToList();
+	}
+
+	private static string NormalizeTeamKey(string? teamKey) {
+		if (string.IsNullOrWhiteSpace(teamKey)) {
+			return "[unknown]";
+		}
+
+		return teamKey.Trim();
+	}
+
+	private static string BuildTeamPreview(string teamKey) {
+		if (string.IsNullOrWhiteSpace(teamKey) || teamKey == "[unknown]") {
+			return "Unknown Team";
+		}
+
+		if (teamKey.Length <= 42) {
+			return teamKey;
+		}
+
+		return $"{teamKey[..42]}...";
+	}
+
+	private static string BuildBattleDrilldownUrl(RecommendationCard recommendation) {
+		var encodedTeam = Uri.EscapeDataString(recommendation.TeamKey);
+		return $"/battles?type=arena&team={encodedTeam}";
+	}
+
+	private async Task<List<RecommendationCard>> LoadRecommendationCardsAsync(IEnumerable<ArenaBattle> localSamples, int? teamPower) {
+		try {
+			using var client = new HttpClient {
+				Timeout = TimeSpan.FromSeconds(2),
+			};
+			var endpoint = BuildRecommendationApiEndpoint();
+			var apiResult = await client.GetFromJsonAsync<ApiBattleRecommendationResponse>(
+				endpoint
+			);
+
+			var recommendations = apiResult?.Recommendations;
+			if (recommendations != null && recommendations.Count > 0) {
+				RecommendationSource = "API";
+				RecommendationStatusMessage = string.Empty;
+				return recommendations.Select(r => new RecommendationCard {
+					TeamKey = string.IsNullOrWhiteSpace(r.TeamKey) ? "[unknown]" : r.TeamKey,
+					TeamPreview = string.IsNullOrWhiteSpace(r.TeamPreview) ? BuildTeamPreview(r.TeamKey ?? "[unknown]") : r.TeamPreview,
+					Battles = r.Battles,
+					WeightedWinRate = r.WeightedWinRate,
+					SimulatedWinProbability = r.SimulatedWinProbability,
+					ConfidenceLow = r.SimulationConfidenceLow,
+					ConfidenceHigh = r.SimulationConfidenceHigh,
+					Score = r.Score,
+					Rationale = string.IsNullOrWhiteSpace(r.Rationale) ? "API recommendation" : r.Rationale,
+				}).ToList();
+			}
+		} catch {
+			// Fall through to local recommendation generation.
+		}
+
+		RecommendationSource = "Local Fallback";
+		RecommendationStatusMessage = "API recommendations unavailable; showing local estimates from recent arena history.";
+		return BuildRecommendationCards(localSamples, teamPower);
+	}
+
+	private string BuildRecommendationApiEndpoint() {
+		var baseUrl = RecommendationApiBaseUrl?.Trim();
+		if (string.IsNullOrWhiteSpace(baseUrl)) {
+			baseUrl = "http://localhost:5124";
+		}
+
+		baseUrl = baseUrl.TrimEnd('/');
+		return $"{baseUrl}/api/sync/battles/recommendations?battleType=arena&limit=3&minSamples=2";
+	}
+
+	private sealed class RecommendationCard {
+		public string TeamKey { get; set; } = string.Empty;
+		public string TeamPreview { get; set; } = string.Empty;
+		public int Battles { get; set; }
+		public double WeightedWinRate { get; set; }
+		public double SimulatedWinProbability { get; set; }
+		public double ConfidenceLow { get; set; }
+		public double ConfidenceHigh { get; set; }
+		public double Score { get; set; }
+		public string Rationale { get; set; } = string.Empty;
+	}
+
+	private sealed class ApiBattleRecommendationResponse {
+		public List<ApiBattleRecommendationCandidate> Recommendations { get; set; } = new();
+	}
+
+	private sealed class ApiBattleRecommendationCandidate {
+		public string TeamKey { get; set; } = string.Empty;
+		public string TeamPreview { get; set; } = string.Empty;
+		public int Battles { get; set; }
+		public double WeightedWinRate { get; set; }
+		public double SimulatedWinProbability { get; set; }
+		public double SimulationConfidenceLow { get; set; }
+		public double SimulationConfidenceHigh { get; set; }
+		public double Score { get; set; }
+		public string Rationale { get; set; } = string.Empty;
 	}
 }

@@ -89,11 +89,11 @@ All battles now store:
 ```javascript
 {
   "arena_123456": {
-    battleType: "arena",
-    opponentId: "123456",
-    wins: 15,
-    losses: 3,
-    lastBattle: 1705852800000
+	battleType: "arena",
+	opponentId: "123456",
+	wins: 15,
+	losses: 3,
+	lastBattle: 1705852800000
   }
 }
 ```
@@ -102,20 +102,20 @@ All battles now store:
 ```javascript
 {
   "heroic_chest_001": {
-    chestType: "heroic",
-    chestId: "001",
-    openCount: 250,
-    itemDrops: {
-      "soulstone_hero_001": {
-        type: "soulstone",
-        id: "hero_001",
-        name: "Astaroth Soul Stone",
-        dropCount: 45,
-        totalAmount: 180,
-        dropRate: "18.00%",      // Calculated
-        averageAmount: "4.00"    // Per drop
-      }
-    }
+	chestType: "heroic",
+	chestId: "001",
+	openCount: 250,
+	itemDrops: {
+	  "soulstone_hero_001": {
+		type: "soulstone",
+		id: "hero_001",
+		name: "Astaroth Soul Stone",
+		dropCount: 45,
+		totalAmount: 180,
+		dropRate: "18.00%",      // Calculated
+		averageAmount: "4.00"    // Per drop
+	  }
+	}
   }
 }
 ```
@@ -169,14 +169,14 @@ Implemented Hero Wars Assistant's compression algorithm:
 // Before (full object):
 {
   "hero_001": {
-    id: "hero_001",
-    name: "Astaroth",
-    level: 130,
-    star: 6,
-    color: 5,
-    power: 125000,
-    skills: {...},
-    artifacts: [...]
+	id: "hero_001",
+	name: "Astaroth",
+	level: 130,
+	star: 6,
+	color: 5,
+	power: 125000,
+	skills: {...},
+	artifacts: [...]
   }
 }
 
@@ -261,18 +261,18 @@ The existing proxy pattern now handles all API calls:
 ```javascript
 XMLHttpRequest.prototype.send = function(data) {
   if (isHeroWarsAPI) {
-    // Capture request
-    const requestData = JSON.parse(data);
-    
-    // Proxy onreadystatechange
-    this.onreadystatechange = function() {
-      if (this.readyState === 4 && this.status === 200) {
-        const responseData = JSON.parse(this.responseText);
-        
-        // Process ALL API calls
-        processAPIResponse(requestData, responseData);
-      }
-    };
+	// Capture request
+	const requestData = JSON.parse(data);
+	
+	// Proxy onreadystatechange
+	this.onreadystatechange = function() {
+	  if (this.readyState === 4 && this.status === 200) {
+		const responseData = JSON.parse(this.responseText);
+		
+		// Process ALL API calls
+		processAPIResponse(requestData, responseData);
+	  }
+	};
   }
   
   return originalSend.call(this, data);
@@ -297,10 +297,10 @@ response.results.forEach(result => {
   
   // Route to appropriate handler
   switch(callName) {
-    case 'arenaAttack':
-      trackArenaBattle(args, data);
-      break;
-    // ... 20+ more handlers
+	case 'arenaAttack':
+	  trackArenaBattle(args, data);
+	  break;
+	// ... 20+ more handlers
   }
 });
 ```
@@ -321,7 +321,7 @@ const chestStats = await gameTracker.getChestStatistics();
 Object.entries(chestStats.dropRates).forEach(([chestKey, data]) => {
   console.log(`${chestKey}: ${data.openCount} openings`);
   Object.entries(data.itemProbabilities).forEach(([itemKey, item]) => {
-    console.log(`  ${item.name}: ${item.dropRate}`);
+	console.log(`  ${item.name}: ${item.dropRate}`);
   });
 });
 ```

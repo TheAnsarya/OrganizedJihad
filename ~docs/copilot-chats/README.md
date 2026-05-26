@@ -28,8 +28,33 @@ Each chat log should include:
 
 ## Chat Sessions
 
-### October 21, 2025
-- **[Initial Setup](2025-01-21-initial-setup.md)** - Project creation, configuration, and build setup
+### January 21, 2025
+- **[Initial Setup](2025-01-21-initial-setup.md)** - Project creation, TamperMonkey userscript scaffolding, and initial configuration
+- **[Workspace Restructure](2025-01-21-workspace-restructure.md)** - Reorganized project structure and documentation
+- **[Comprehensive API Tracking](2025-01-21-comprehensive-api-tracking.md)** - Implemented Hero Wars API interception and data extraction
+
+### January 22, 2025
+- **[Sync Service Completion](2025-01-22-sync-service-completion.md)** - Completed API sync service with import methods for all entity types
+- **[Data Layer Refactoring](2025-01-22-data-layer-refactoring.md)** - **Main Session**: Complete database refactoring with Phases 1-6
+  - Phase 1: Created separate Data layer project
+  - Phase 2: Implemented audit infrastructure (interfaces, base classes, interceptor)
+  - Phase 4: Verified API integration
+  - Phase 5: Restored and integrated Desktop app
+  - Phase 6: Verified and tested userscript sync client
+  - Result: 3 projects (Data, API, Desktop) with shared audit infrastructure
+- **[Phase 6 Summary](Phase-6-Summary.md)** - Comprehensive documentation of userscript sync client verification and testing
+
+### January 23, 2025
+- **[Phase 7 Userscript Tracking](2025-01-23-phase-7-userscript-tracking.md)** - **Complete Rewrite**: Comprehensive game data tracking implementation
+  - Updated IndexedDB schema v1 → v2 with 11 new object stores
+  - Implemented Hero tracking (19 properties with individual skills/artifacts)
+  - Implemented Titan tracking (12 properties with element system)
+  - Implemented Pet tracking (8 properties with patronage data)
+  - Implemented InventorySnapshot with denormalized counts
+  - Implemented Quest/Mission/Shop/Tower/Expedition tracking
+  - Implemented Resource Transaction and Guild Activity infrastructure
+  - Updated syncClient to send all 11 new entity types
+  - Result: 549 net lines added, 545KB userscript, 0 errors
 
 ---
 
@@ -71,4 +96,6 @@ Do NOT include:
 
 ---
 
-**Last Updated**: October 21, 2025
+**Last Updated**: January 22, 2025
+**Total Sessions**: 6 sessions across 2 days
+**Major Milestone**: Database refactoring complete - All projects integrated with shared Data layer and audit infrastructure

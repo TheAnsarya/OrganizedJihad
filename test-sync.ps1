@@ -1,0 +1,374 @@
+# Test script for OrganizedJihad API sync functionality
+# Tests all endpoints to verify the sync client works correctly
+
+Write-Host "`n=== OrganizedJihad API Sync Test ===`n" -ForegroundColor Cyan
+
+# Test 1: Health Check
+Write-Host "Test 1: Health Check Endpoint" -ForegroundColor Yellow
+try {
+	$health = Invoke-RestMethod -Uri "http://localhost:5124/api/sync/health" -Method Get
+	Write-Host "✓ Health Check: $($health.status)" -ForegroundColor Green
+	Write-Host "  Version: $($health.version)" -ForegroundColor Gray
+	Write-Host "  Timestamp: $($health.timestamp)" -ForegroundColor Gray
+}
+catch {
+	Write-Host "✗ Health Check Failed: $_" -ForegroundColor Red
+	Write-Host "`nMake sure the API is running with: dotnet run --project api`n" -ForegroundColor Yellow
+	exit 1
+}
+
+# Test 2: Get Last Sync
+Write-Host "`nTest 2: Get Last Sync Timestamp" -ForegroundColor Yellow
+try {
+	$lastSync = Invoke-RestMethod -Uri "http://localhost:5124/api/sync/last-sync" -Method Get
+	if ($lastSync.lastSync) {
+		Write-Host "✓ Last Sync: $($lastSync.lastSync)" -ForegroundColor Green
+	}
+	else {
+		Write-Host "✓ Last Sync: (none yet)" -ForegroundColor Green
+	}
+}
+catch {
+	Write-Host "✗ Last Sync Failed: $_" -ForegroundColor Red
+}
+
+# Test 3: Get Stats
+Write-Host "`nTest 3: Get Database Stats" -ForegroundColor Yellow
+try {
+	$stats = Invoke-RestMethod -Uri "http://localhost:5124/api/sync/stats" -Method Get
+	Write-Host "✓ Database Stats:" -ForegroundColor Green
+	Write-Host "  Total Records: $($stats.totalRecords)" -ForegroundColor Gray
+	Write-Host "  Player Snapshots: $($stats.totalSnapshots)" -ForegroundColor Gray
+	Write-Host "  Arena Battles: $($stats.totalArenaBattles)" -ForegroundColor Gray
+	Write-Host "  Grand Arena Battles: $($stats.totalGrandArenaBattles)" -ForegroundColor Gray
+	Write-Host "  Titan Arena Battles: $($stats.totalTitanArenaBattles)" -ForegroundColor Gray
+	Write-Host "  Guild War Battles: $($stats.totalGuildWarBattles)" -ForegroundColor Gray
+	Write-Host "  Raid Boss Attacks: $($stats.totalRaidBossAttacks)" -ForegroundColor Gray
+	Write-Host "  Chest Openings: $($stats.totalChestOpenings)" -ForegroundColor Gray
+	Write-Host "  Opponents: $($stats.totalOpponents)" -ForegroundColor Gray
+	Write-Host "  Goals: $($stats.totalGoals)" -ForegroundColor Gray
+	Write-Host "  Calendar Events: $($stats.totalCalendarEvents)" -ForegroundColor Gray
+	# Phase 7 entities
+	Write-Host "  Heroes: $($stats.totalHeroes)" -ForegroundColor Gray
+	Write-Host "  Titans: $($stats.totalTitans)" -ForegroundColor Gray
+	Write-Host "  Pets: $($stats.totalPets)" -ForegroundColor Gray
+	Write-Host "  Inventory Snapshots: $($stats.totalInventorySnapshots)" -ForegroundColor Gray
+	Write-Host "  Quest Completions: $($stats.totalQuestCompletions)" -ForegroundColor Gray
+	Write-Host "  Mission Progress: $($stats.totalMissionProgress)" -ForegroundColor Gray
+	Write-Host "  Shop Purchases: $($stats.totalShopPurchases)" -ForegroundColor Gray
+	Write-Host "  Tower Progress: $($stats.totalTowerProgress)" -ForegroundColor Gray
+	Write-Host "  Expedition Battles: $($stats.totalExpeditionBattles)" -ForegroundColor Gray
+	Write-Host "  Resource Transactions: $($stats.totalResourceTransactions)" -ForegroundColor Gray
+	Write-Host "  Guild Activities: $($stats.totalGuildActivities)" -ForegroundColor Gray
+}
+catch {
+	Write-Host "✗ Stats Failed: $_" -ForegroundColor Red
+}
+
+# Test 4: Test Import with Sample Data (including Phase 7 entities)
+Write-Host "`nTest 4: Import Sample Data (Phase 1-7)" -ForegroundColor Yellow
+$sampleData = @{
+	currentSnapshot = @{
+		playerId = 123456789
+		playerName = "TestPlayer"
+		level = 120
+		teamLevel = 150
+		power = 500000
+		arenaRank = 42
+		grandArenaRank = 123
+		titanArenaRank = 456
+		gold = 1000000
+		emeralds = 5000
+		timestamp = (Get-Date).ToUniversalTime().ToString("o")
+	}
+	arenaBattles = @(
+		@{
+			opponentId = 987654321
+			opponentName = "TestOpponent"
+			isWin = $true
+			playerPower = 500000
+			opponentPower = 480000
+			playerHeroes = '["Hero1","Hero2","Hero3","Hero4","Hero5"]'
+			opponentHeroes = '["Hero6","Hero7","Hero8","Hero9","Hero10"]'
+			rewards = '{"gold":1000,"experience":500}'
+			timestamp = (Get-Date).ToUniversalTime().ToString("o")
+		}
+	)
+	grandArenaBattles = @()
+	titanArenaBattles = @()
+	guildWarBattles = @()
+	raidBossAttacks = @()
+	chestOpenings = @(
+		@{
+			chestType = "Heroic"
+			quantity = 1
+			openMethod = "Key"
+			timestamp = (Get-Date).ToUniversalTime().ToString("o")
+			chestDrops = @(
+				@{
+					itemType = "Hero Soul Stone"
+					itemId = 1
+					quantity = 50
+					rarity = "Rare"
+				}
+			)
+		}
+	)
+	opponents = @(
+		@{
+			opponentId = 987654321
+			opponentName = "TestOpponent"
+			level = 118
+			power = 480000
+			lastSeen = (Get-Date).ToUniversalTime().ToString("o")
+			lastBattleType = "Arena"
+			totalBattles = 5
+			totalWins = 3
+			totalLosses = 2
+			winRate = 0.6
+			teamComposition = '["Hero6","Hero7","Hero8","Hero9","Hero10"]'
+		}
+	)
+	goals = @(
+		@{
+			title = "Test Goal"
+			description = "This is a test goal"
+			isShortTerm = $true
+			targetValue = 100
+			currentValue = 50
+			isCompleted = $false
+			createdAt = (Get-Date).ToUniversalTime().ToString("o")
+		}
+	)
+	calendarEvents = @(
+		@{
+			title = "Test Event"
+			description = "This is a test calendar event"
+			eventDate = (Get-Date).AddDays(7).ToUniversalTime().ToString("o")
+			isRecurring = $false
+			isCompleted = $false
+			createdAt = (Get-Date).ToUniversalTime().ToString("o")
+		}
+	)
+	# Phase 7 entities
+	heroes = @(
+		@{
+			heroId = 1
+			heroName = "Astaroth"
+			level = 120
+			stars = 6
+			color = 5
+			power = 85000
+			skins = 3
+			skillLevel1 = 120
+			skillLevel2 = 120
+			skillLevel3 = 115
+			skillLevel4 = 110
+			artifactWeapon = 5
+			artifactBook = 4
+			artifactRing = 6
+			glyphData = '{"health":10,"armor":8,"magicDefense":7}'
+			playerId = 123456789
+			timestamp = (Get-Date).ToUniversalTime().ToString("o")
+		},
+		@{
+			heroId = 2
+			heroName = "Martha"
+			level = 118
+			stars = 6
+			color = 5
+			power = 82000
+			skins = 2
+			skillLevel1 = 118
+			skillLevel2 = 118
+			skillLevel3 = 115
+			skillLevel4 = 112
+			artifactWeapon = 4
+			artifactBook = 6
+			artifactRing = 5
+			glyphData = '{"health":9,"armor":7,"magicDefense":8}'
+			playerId = 123456789
+			timestamp = (Get-Date).ToUniversalTime().ToString("o")
+		}
+	)
+	titans = @(
+		@{
+			titanId = 1
+			titanName = "Hyperion"
+			level = 100
+			stars = 5
+			power = 120000
+			skillLevel = 100
+			artifactData = '{"weapon":{"level":45,"power":5000}}'
+			summonStars = 150
+			element = "fire"
+			skinLevel = 2
+			playerId = 123456789
+			timestamp = (Get-Date).ToUniversalTime().ToString("o")
+		}
+	)
+	pets = @(
+		@{
+			petId = 1
+			petName = "Albus"
+			stars = 6
+			power = 15000
+			level = 60
+			patronageData = '{"heroIds":[1,2,3]}'
+			playerId = 123456789
+			timestamp = (Get-Date).ToUniversalTime().ToString("o")
+		}
+	)
+	currentInventory = @{
+		inventoryData = '{"gold":1000000,"emeralds":5000}'
+		totalHeroSoulStones = 5000
+		totalTitanSoulStones = 3000
+		totalPetSoulStones = 2000
+		totalEvolutionItems = 500
+		totalConsumables = 300
+		totalChests = 20
+		playerId = 123456789
+		timestamp = (Get-Date).ToUniversalTime().ToString("o")
+	}
+	questCompletions = @(
+		@{
+			completedAt = (Get-Date).ToUniversalTime().ToString("o")
+			questType = "daily"
+			questId = "daily_1"
+			questName = "Win 3 Arena Battles"
+			rewardData = '{"gold":10000,"experience":500}'
+			playerId = 123456789
+		}
+	)
+	missionProgress = @(
+		@{
+			missionId = "campaign_1_normal"
+			missionName = "Campaign 1 - Normal"
+			stars = 3
+			highestLevel = 5
+			isHeroic = $false
+			lastCompleted = (Get-Date).ToUniversalTime().ToString("o")
+			completionCount = 12
+			playerId = 123456789
+		}
+	)
+	shopPurchases = @(
+		@{
+			purchasedAt = (Get-Date).ToUniversalTime().ToString("o")
+			shopType = "arena"
+			itemId = "item_123"
+			itemName = "Hero Soul Stone: Astaroth"
+			quantity = 10
+			costType = "arena_coins"
+			costAmount = 100
+			playerId = 123456789
+		}
+	)
+	towerProgress = @(
+		@{
+			towerType = "regular"
+			highestFloor = 75
+			lastUpdate = (Get-Date).ToUniversalTime().ToString("o")
+			floorData = '{"currentFloor":75,"lastReward":"gold"}'
+			playerId = 123456789
+		}
+	)
+	expeditionBattles = @(
+		@{
+			timestamp = (Get-Date).ToUniversalTime().ToString("o")
+			expeditionId = "exp_1"
+			bossId = 1
+			bossName = "Expedition Boss 1"
+			isWin = $true
+			teamComposition = '["Astaroth","Martha","Celeste","Jorgen","Helios"]'
+			damageDealt = 500000
+			rewardData = '{"gold":50000}'
+			playerId = 123456789
+		}
+	)
+	resourceTransactions = @(
+		@{
+			timestamp = (Get-Date).ToUniversalTime().ToString("o")
+			resourceType = "gold"
+			amount = 10000
+			source = "quest"
+			sourceDetail = "Daily Quest Completion"
+			playerId = 123456789
+		}
+	)
+	guildActivities = @(
+		@{
+			timestamp = (Get-Date).ToUniversalTime().ToString("o")
+			guildId = 999
+			guildName = "Test Guild"
+			activityType = "donation"
+			activityData = '{"amount":10000,"type":"gold"}'
+			playerId = 123456789
+		}
+	)
+} | ConvertTo-Json -Depth 10
+
+try {
+	$importResult = Invoke-RestMethod -Uri "http://localhost:5124/api/sync/import" -Method Post -Body $sampleData -ContentType "application/json"
+	Write-Host "✓ Import Successful!" -ForegroundColor Green
+	Write-Host "  Success: $($importResult.success)" -ForegroundColor Gray
+	Write-Host "  Message: $($importResult.message)" -ForegroundColor Gray
+	Write-Host "  Sync Timestamp: $($importResult.syncTimestamp)" -ForegroundColor Gray
+	Write-Host "  Imported Counts (Phase 1-6):" -ForegroundColor Gray
+	Write-Host "    Player Snapshots: $($importResult.importedCounts.playerSnapshots)" -ForegroundColor Gray
+	Write-Host "    Arena Battles: $($importResult.importedCounts.arenaBattles)" -ForegroundColor Gray
+	Write-Host "    Chest Openings: $($importResult.importedCounts.chestOpenings)" -ForegroundColor Gray
+	Write-Host "    Opponents: $($importResult.importedCounts.opponents)" -ForegroundColor Gray
+	Write-Host "    Goals: $($importResult.importedCounts.goals)" -ForegroundColor Gray
+	Write-Host "    Calendar Events: $($importResult.importedCounts.calendarEvents)" -ForegroundColor Gray
+	Write-Host "  Imported Counts (Phase 7):" -ForegroundColor Gray
+	Write-Host "    Heroes: $($importResult.importedCounts.heroes)" -ForegroundColor Gray
+	Write-Host "    Titans: $($importResult.importedCounts.titans)" -ForegroundColor Gray
+	Write-Host "    Pets: $($importResult.importedCounts.pets)" -ForegroundColor Gray
+	Write-Host "    Inventory: $($importResult.importedCounts.inventory)" -ForegroundColor Gray
+	Write-Host "    Quest Completions: $($importResult.importedCounts.questCompletions)" -ForegroundColor Gray
+	Write-Host "    Mission Progress: $($importResult.importedCounts.missionProgress)" -ForegroundColor Gray
+	Write-Host "    Shop Purchases: $($importResult.importedCounts.shopPurchases)" -ForegroundColor Gray
+	Write-Host "    Tower Progress: $($importResult.importedCounts.towerProgress)" -ForegroundColor Gray
+	Write-Host "    Expedition Battles: $($importResult.importedCounts.expeditionBattles)" -ForegroundColor Gray
+	Write-Host "    Resource Transactions: $($importResult.importedCounts.resourceTransactions)" -ForegroundColor Gray
+	Write-Host "    Guild Activities: $($importResult.importedCounts.guildActivities)" -ForegroundColor Gray
+}
+catch {
+	Write-Host "✗ Import Failed: $_" -ForegroundColor Red
+	if ($_.ErrorDetails.Message) {
+		Write-Host "  Error Details: $($_.ErrorDetails.Message)" -ForegroundColor Red
+	}
+}
+
+# Test 5: Verify Stats Updated
+Write-Host "`nTest 5: Verify Database Updated (All Phases)" -ForegroundColor Yellow
+try {
+	$statsAfter = Invoke-RestMethod -Uri "http://localhost:5124/api/sync/stats" -Method Get
+	Write-Host "✓ Updated Database Stats:" -ForegroundColor Green
+	Write-Host "  Total Records: $($statsAfter.totalRecords)" -ForegroundColor Gray
+	Write-Host "  Phase 1-6 Entities:" -ForegroundColor Cyan
+	Write-Host "    Player Snapshots: $($statsAfter.totalSnapshots)" -ForegroundColor Gray
+	Write-Host "    Arena Battles: $($statsAfter.totalArenaBattles)" -ForegroundColor Gray
+	Write-Host "    Chest Openings: $($statsAfter.totalChestOpenings)" -ForegroundColor Gray
+	Write-Host "    Opponents: $($statsAfter.totalOpponents)" -ForegroundColor Gray
+	Write-Host "    Goals: $($statsAfter.totalGoals)" -ForegroundColor Gray
+	Write-Host "    Calendar Events: $($statsAfter.totalCalendarEvents)" -ForegroundColor Gray
+	Write-Host "  Phase 7 Entities:" -ForegroundColor Cyan
+	Write-Host "    Heroes: $($statsAfter.totalHeroes)" -ForegroundColor Gray
+	Write-Host "    Titans: $($statsAfter.totalTitans)" -ForegroundColor Gray
+	Write-Host "    Pets: $($statsAfter.totalPets)" -ForegroundColor Gray
+	Write-Host "    Inventory Snapshots: $($statsAfter.totalInventorySnapshots)" -ForegroundColor Gray
+	Write-Host "    Quest Completions: $($statsAfter.totalQuestCompletions)" -ForegroundColor Gray
+	Write-Host "    Mission Progress: $($statsAfter.totalMissionProgress)" -ForegroundColor Gray
+	Write-Host "    Shop Purchases: $($statsAfter.totalShopPurchases)" -ForegroundColor Gray
+	Write-Host "    Tower Progress: $($statsAfter.totalTowerProgress)" -ForegroundColor Gray
+	Write-Host "    Expedition Battles: $($statsAfter.totalExpeditionBattles)" -ForegroundColor Gray
+	Write-Host "    Resource Transactions: $($statsAfter.totalResourceTransactions)" -ForegroundColor Gray
+	Write-Host "    Guild Activities: $($statsAfter.totalGuildActivities)" -ForegroundColor Gray
+}
+catch {
+	Write-Host "✗ Stats Verification Failed: $_" -ForegroundColor Red
+}
+
+Write-Host "`n=== All Tests Complete! ===`n" -ForegroundColor Cyan

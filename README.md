@@ -1,308 +1,180 @@
-# OrganizedJihad - Hero Wars Workspace# OrganizedJihad - Hero Wars Tracker
+# OrganizedJihad (OJ) - Hero Wars Comprehensive Tracker
 
+A multi-tier game tracking solution for [Hero Wars](https://hero-wars.com) that captures, stores, and analyzes **all** gameplay data — account state, battles, hero/titan upgrades, inventory usage, daily/guild quests, chest rewards, shop purchases, resource transactions, and more.
 
+## Architecture
 
-A collection of tools and projects for tracking and managing Hero Wars gameplay.A comprehensive TamperMonkey userscript for tracking and managing your Hero Wars gameplay with an interactive browser overlay.
+OJ is a three-tier system:
 
+| Tier | Technology | Purpose |
+|------|-----------|---------|
+| **1 - Browser Userscript** | TamperMonkey + Webpack 5 | Intercepts game API traffic in real time |
+| **2 - Desktop App** | .NET MAUI Blazor Hybrid | View, analyze, and explore tracked data |
+| **3 - API Backend** | ASP.NET Core Web API | Receives sync payloads, persists to SQLite via EF Core |
 
+See [Architecture Details](~docs/plans/architecture.md) for the full design.
 
-## 📁 Project Structure## Features
+## What We Track
 
+- **Account State** — Player snapshots (level, power, resources, ranks), full inventory snapshots
+- **Battles** — Arena, Grand Arena, Titan Arena, Guild War, Raid Boss, Expedition (teams, outcomes, rank changes, damage)
+- **Heroes** — Snapshots, level-ups, star promotions, color evolutions, skill upgrades, artifact upgrades
+- **Titans** — Snapshots, level-ups, star promotions, element tracking (auto-resolved from ID)
+- **Pets** — Snapshots, star/power/level tracking, patronage data
+- **Chests** — Every chest opened with individual drop tracking (item name, rarity, quantity, percentages)
+- **Resources** — Every gain/spend of emeralds, gold, arena coins, guild coins, tower coins, titan coins with source tracking
+- **Shop Purchases** — Arena shop, guild shop, tower shop, merchant, outland, titan shop
+- **Inventory** — Item usage (consumables, potions, scrolls), equipment changes (equip/upgrade/evolve)
+- **Daily Activities** — Daily quests, guild quests, login rewards, mission progress, tower progress
+- **Guild** — Member roster tracking, war/raid/dungeon participation, titanite transactions, chat archiving
 
+See [Tracking Reference](~docs/plans/tracking-reference.md) for the complete data model.
 
-```- **Game Data Tracking**: Automatically tracks heroes, resources, battles, and game events
+## Quick Start
 
-OrganizedJihad/- **Goals Management**: Set and track short-term and long-term goals with progress tracking
+### Prerequisites
 
-├── userscript/              # Main TamperMonkey userscript- **Calendar & Events**: Track game events, daily tasks, and custom reminders
+- [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0)
+- [Node.js 20+](https://nodejs.org/)
+- [Yarn](https://yarnpkg.com/) package manager
+- [TamperMonkey](https://www.tampermonkey.net/) browser extension
 
-│   ├── src/                # Source code modules- **Smart Suggestions**: Get intelligent recommendations based on your gameplay patterns
+### One-Command Windows Install / Upgrade
 
-│   ├── dist/               # Compiled userscript output- **Detailed Reports**: View comprehensive statistics and progress reports
-
-│   └── package.json        # Dependencies and scripts- **Data Export/Import**: Backup and restore your tracking data
-
-│- **Customizable UI**: Draggable overlay with multiple views and themes
-
-├── ~docs/                  # Documentation and research
-
-│   ├── API-Integration-Research.md## Installation
-
-│   └── copilot-chats/      # Development chat history
-
-│### Prerequisites
-
-├── ~reference-code/        # Reference implementations (gitignored)
-
-│   └── Hero Wars extensions for analysis1. Install [TamperMonkey](https://www.tampermonkey.net/) browser extension:
-
-│   - [Chrome](https://chrome.google.com/webstore/detail/tampermonkey/dhdgffkkebhmkfjojejmpbldmpobfkfo)
-
-└── .github/                # GitHub configuration   - [Firefox](https://addons.mozilla.org/en-US/firefox/addon/tampermonkey/)
-
-    └── copilot-instructions.md   - [Edge](https://microsoftedge.microsoft.com/addons/detail/tampermonkey/iikmkjmpaadaobahmlepeloendndfphd)
-
-```   - [Safari](https://apps.apple.com/us/app/tampermonkey/id1482490089)
-
-
-
-## 🚀 Getting Started### Install the Userscript
-
-
-
-### TamperMonkey Userscript1. Build the project (see Development section)
-
-2. Open `dist/organized-jihad.user.js` in your browser
-
-The main userscript project for browser-based gameplay tracking:3. TamperMonkey will prompt you to install the script
-
-4. Click "Install" to confirm
-
-```bash
-
-cd userscriptAlternatively, you can:
-
-yarn install1. Open TamperMonkey dashboard
-
-yarn build2. Click "Create a new script"
-
-```3. Copy and paste the contents of `dist/organized-jihad.user.js`
-
-4. Save the script
-
-See [userscript/README.md](userscript/README.md) for detailed installation and usage instructions.
-
-## Usage
-
-## 📚 Documentation
-
-### Accessing the Overlay
-
-- **[API Integration Research](~docs/API-Integration-Research.md)** - Comprehensive API documentation and patterns
-
-- **[Copilot Chat History](~docs/copilot-chats/)** - Development conversation logs- **Automatic**: The overlay appears automatically when you visit Hero Wars (if enabled in settings)
-
-- **Keyboard Shortcut**: Press `Ctrl+Shift+H` to toggle the overlay visibility
-
-## 🎯 Future Projects- **Position**: Drag the header to reposition the overlay anywhere on screen
-
-
-
-This workspace is designed to support multiple related projects:### Navigation
-
-- Browser extensions (Chrome/Firefox)
-
-- Desktop applicationsThe overlay includes several tabs:
-
-- Mobile companion apps
-
-- Web-based dashboards1. **Dashboard**: Quick overview of your stats, suggestions, and upcoming events
-
-- Data analysis tools2. **Goals**: Manage short-term and long-term goals
-
-3. **Calendar**: View and manage events and reminders
-
-## 📝 Development4. **Heroes**: Track your hero roster and stats
-
-5. **Resources**: Monitor your in-game resources
-
-All projects follow consistent formatting rules:6. **Reports**: View detailed statistics and analytics
-
-- **Tabs** for indentation (width: 4)7. **Settings**: Configure the tracker and manage your data
-
-- **CRLF** line endings
-
-- **UTF-8** encoding### Managing Goals
-
-- **Single quotes** for strings
-
-- **ES2024+** modern JavaScript1. Click the **Goals** tab
-
-2. Click **+ Add Goal** to create a new goal
-
-See `.github/copilot-instructions.md` for complete development guidelines.3. Choose between "Short Term" or "Long Term" tabs
-
-4. Track progress automatically or manually update
-
-## 📄 License
-
-### Calendar Features
-
-See [LICENSE](userscript/LICENSE) for details.
-
-1. Click the **Calendar** tab
-2. Add custom events with **+ Add Event**
-3. View upcoming events for the next 7-30 days
-4. Set reminders for important events
-
-### Viewing Suggestions
-
-The tracker analyzes your gameplay and provides suggestions:
-- Goal priorities based on progress
-- Resource management tips
-- Hero development recommendations
-- Battle activity reminders
-
-Dismiss suggestions you've addressed by clicking "Dismiss"
-
-### Data Management
-
-In the **Settings** tab:
-
-- **Export Data**: Download a JSON backup of all your tracking data
-- **Import Data**: Restore data from a previous backup
-- **Clear All Data**: Reset the tracker (use with caution!)
-
-## Development
-
-### Setup
+Run this from the repository root:
 
 ```powershell
-# Clone the repository
+pwsh -ExecutionPolicy Bypass -File .\Install-OrganizedJihad.ps1
+```
+
+Or double-click:
+
+```
+Install-OrganizedJihad.cmd
+```
+
+What it does:
+
+- Builds the latest TamperMonkey userscript bundle
+- Publishes the API backend as a self-contained Windows executable
+- Installs/updates artifacts in `%LOCALAPPDATA%\OrganizedJihad`
+- Registers `OrganizedJihad.Api.Autostart` scheduled task (runs on logon)
+- Registers `OrganizedJihad.Api.Autostart` for system startup + logon when installer is run as Administrator
+- Falls back to logon startup when not elevated
+- Opens Tampermonkey extension install pages and opens the latest userscript file for import/update
+
+Optional flags:
+
+- `-SkipTampermonkeyBootstrap` to skip opening extension/script pages
+- `-SkipYarnInstall` to skip `yarn install` during repeat installs
+- `-InstallRoot "D:\Apps\OrganizedJihad"` to customize install location
+
+### Build & Run
+
+```powershell
+# Clone
 git clone https://github.com/yourusername/OrganizedJihad.git
 cd OrganizedJihad
 
-# Install dependencies
-npm install
+# Build everything
+dotnet build
+
+# Start the API backend (http://localhost:5000)
+dotnet run --project api
+
+# Build the userscript
+cd userscript
+yarn install
+yarn build
+# Install dist/organized-jihad.user.js in TamperMonkey
+
+# Run the desktop app
+dotnet run --project desktop-app
 ```
 
-### Build
+### Running Tests
 
 ```powershell
-# Development build (with watch mode)
-npm run dev
+# .NET tests (75 tests: 39 Data + 36 API)
+dotnet test
 
-# Production build
-npm run build
+# JavaScript tests (296 tests across 7 suites)
+cd userscript
+yarn test
 ```
 
-The compiled userscript will be in `dist/organized-jihad.user.js`
-
-### Project Structure
+## Project Structure
 
 ```
 OrganizedJihad/
-├── src/
-│   ├── index.js                    # Main entry point
-│   ├── modules/
-│   │   ├── gameTracker.js          # Game data tracking
-│   │   ├── goalsManager.js         # Goals management
-│   │   ├── calendarManager.js      # Calendar & events
-│   │   ├── suggestionsEngine.js    # Smart suggestions
-│   │   ├── storageManager.js       # Data persistence
-│   │   └── uiManager.js            # UI overlay
-│   └── styles/
-│       └── main.css                # Styles
-├── dist/                           # Compiled userscript
-├── package.json
-├── webpack.config.js
-└── README.md
+├── api/                    # ASP.NET Core Web API (Tier 3)
+│   ├── Controllers/        #   SyncController (import/query endpoints)
+│   ├── Models/             #   BrowserSyncData DTOs
+│   └── Services/           #   SyncService (business logic)
+│
+├── data/                   # EF Core Data Layer (shared)
+│   ├── Entities/           #   Base entity classes (Auditable, SoftDeletable)
+│   ├── Models/             #   35+ game entity models
+│   ├── Migrations/         #   Database migrations
+│   └── GameDatabaseContext.cs
+│
+├── desktop-app/            # .NET MAUI Blazor Hybrid (Tier 2)
+│   ├── Components/Pages/   #   Dashboard, Battles, Chests, Resources,
+│   │                       #   ShopPurchases, Inventory, Hero/Titan Rosters,
+│   │                       #   Hero/Titan Upgrades, Daily Activity
+│   └── Services/           #   DataService, SyncService
+│
+├── userscript/             # TamperMonkey Userscript (Tier 1)
+│   └── src/modules/        #   apiMonitor, gameTracker, syncClient,
+│                           #   storageManager, heroNames, etc.
+│
+├── tests/                  # xUnit test projects
+│   ├── OrganizedJihad.Data.Tests/
+│   └── OrganizedJihad.Api.Tests/
+│
+└── ~docs/                  # Documentation and plans
+    ├── plans/              #   Architecture, tracking reference, roadmap
+    └── copilot-chats/      #   AI session logs
 ```
 
-### Customization
+## Desktop App Pages
 
-#### Adding New Tracking Features
+| Page | Route | Description |
+|------|-------|-------------|
+| Dashboard | `/` | Overview with latest snapshot, quick stats, recent activity |
+| Hero Roster | `/heroes` | All heroes with level, stars, color, power, progress bars |
+| Hero Upgrades | `/hero-upgrades` | Every hero upgrade event (level, star, color, skill, artifact) |
+| Titan Roster | `/titans` | All titans with level, stars, element, power, progress bars |
+| Titan Upgrades | `/titan-upgrades` | Every titan upgrade event |
+| Battles | `/battles` | All battle types grouped: Arena, Grand Arena, Titan Arena, Guild War, Raid Boss, Expedition |
+| Resources | `/resources` | Clickable resource balances with earn/spend transaction log |
+| Chests | `/chests` | Chest openings with individual drops, percentages, rarity breakdown |
+| Shop Purchases | `/shop-purchases` | All shop/merchant purchases with currency analysis |
+| Inventory | `/inventory-usage` | Current inventory grouped by type + consumable usage log |
+| Daily Activity | `/daily-activity` | Daily quests, guild quests, login rewards |
 
-Edit `src/modules/gameTracker.js` to add new data capture methods:
+## Development Guidelines
 
-```javascript
-captureNewGameData(element) {
-    // Your custom tracking logic here
-}
-```
+- **Formatting**: Tabs (width 4), CRLF, UTF-8, K&R braces (see `.editorconfig`)
+- **C#**: File-scoped namespaces, XML doc comments, modern C# 13+ features
+- **JavaScript**: ES2024+, JSDoc comments, single quotes, semicolons always
+- **Entities**: Inherit from `CreationAuditableEntity` (immutable) or `AuditableEntity` (mutable)
+- **Package manager**: Use `yarn` for the userscript project
+- **Issue-first workflow**: Every task starts with a GitHub Issue
+- **Branch naming**: `feature/<issue-number>-description` or `fix/<issue-number>-description`
 
-#### Customizing the UI
-
-Edit `src/styles/main.css` to modify colors, layout, and styling.
-
-#### Adding New Modules
-
-Create a new module in `src/modules/` and import it in `src/index.js`.
-
-## Troubleshooting
-
-### Script Not Loading
-
-- Ensure TamperMonkey is enabled
-- Check that the script is enabled in TamperMonkey dashboard
-- Verify you're on the correct domain (hero-wars.com)
-
-### Data Not Tracking
-
-- The game's DOM structure may have changed
-- Open browser console (F12) to check for errors
-- The script looks for specific CSS classes - these may need updating
-
-### Overlay Not Appearing
-
-- Press `Ctrl+Shift+H` to toggle visibility
-- Check Settings to ensure "Show overlay on page load" is enabled
-- Clear browser cache and reload
-
-### Performance Issues
-
-- Reduce the frequency of data sync in settings
-- Clear old data periodically
-- Disable features you don't use
+See [Code Style Guide](~docs/Code-Style-Guide.md) for complete formatting rules.
 
 ## Privacy & Data
 
-- All data is stored **locally** in your browser
-- No data is sent to external servers
-- Data persists using TamperMonkey's GM_setValue API or localStorage
-- Export your data regularly to prevent loss
-
-## Contributing
-
-Contributions are welcome! Please:
-
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
-
-## Known Issues
-
-- Game data tracking requires manual calibration for specific DOM selectors
-- Some game events may not be auto-detected
-- Calendar reminders don't persist across browser sessions (planned feature)
-
-## Future Enhancements
-
-- [ ] Auto-sync with game API (if available)
-- [ ] Team composition optimizer
-- [ ] Resource farming calculator
-- [ ] Guild management features
-- [ ] Dark/Light theme toggle
-- [ ] Mobile-responsive overlay
-- [ ] Export reports as PDF
+- All data is stored **locally** — browser data in IndexedDB, backend data in SQLite
+- The userscript syncs to `localhost` only — no external servers
+- Export your data regularly via the Settings panel
 
 ## License
 
-MIT License - see LICENSE file for details
+MIT License — see [LICENSE](userscript/LICENSE) for details.
 
 ## Disclaimer
 
-This is a fan-made tool and is not affiliated with or endorsed by Hero Wars or its developers. Use at your own discretion.
-
-## Support
-
-For issues, questions, or suggestions:
-- Open an issue on [GitHub](https://github.com/yourusername/OrganizedJihad/issues)
-- Check existing issues for solutions
-
-## Changelog
-
-### Version 1.0.0 (Initial Release)
-- Core game tracking functionality
-- Goals management system
-- Calendar and events
-- Suggestions engine
-- Interactive UI overlay
-- Data export/import
-- Keyboard shortcuts
-
----
-
-**Happy Gaming! May your heroes always be organized! 🎮⚔️**
+This is a fan-made tool and is not affiliated with or endorsed by Hero Wars or its developers.

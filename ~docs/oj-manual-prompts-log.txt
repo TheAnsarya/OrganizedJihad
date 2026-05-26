@@ -1,0 +1,288 @@
+
+[OJ - Organized Jihad] using `C:\Users\me\source\repos\Nexen\` as a reference, update the editorconfig, and update the co-pilot instructions, and the gitignore, and the format files like markdownlint, and all of the other work-item files, etc., and continue; update plans, issues, documentation, chat/session logs, code-plans, and todos, etc; and make a bunch of tests (make a testing project) and make performance benchmarking (make a benchmark project as well if you need to); and focus on logging the state of our account and tracking all battles and hero/titan upgrades and inventory usage, and daily/guild quests and everything, track it all!; continue;
+
+[OJ - Organized Jihad] make sure you are creating github issues for all work and try to make those issues **before** you do the changes; continue;
+
+[OJ - Organized Jihad] continue, make issues, work issues, make prompts for me to use in the future in a document; continue;
+
+*********************************** C:\Users\me\source\repos\OrganizedJihad\~docs\AI-Prompts-Reference.md
+
+work on some issues and continue;
+
+&&&&&&&&&
+[OJ] Perform a comprehensive update session:
+
+1. Assess current state (git status, gh issue list, dotnet build, dotnet test)
+2. Create GitHub issues for all planned work
+3. Work through issues in priority order
+4. Write tests as you go
+5. Create a session log
+6. Create a git commit per logical unit
+7. Report final status: tests, build, issues closed
+&&&&&&&&&&
+
+continue working;
+
+[OJ - Organized Jihad] For this prompt now, ignore the c# server, etc, just focus on the tampermonkey script; make issues, docs, plans, etcs, for the script to collect all the information in a local db through javascript/typescript and display a menu and ways to view this data inside the web application, and make instructions for how I can install this is my browser and see _something_ in the game, so I know my script is working; continue;
+
+UI: clicking the badge opens a window, The minimize and close buttons on the interface don't work, there's nothing under any of the tabs, work on this window (make it moveable as well); make issues for the content and issues for the window funcationality itself and make issues for the data collection; update chat/sessions logs every time, add that to copilot instructions, then update the chat/session logs; continue;
+
+Tamper monkey is now spiraling in an infinite loop so I cannot interact with it, is that our fault? Did a code change to the script mess it up? Also, I thought changes to the user script would auto update in the game after a refresh, but nothing works; continue;
+
+You are spiraling; figure it out or quit; don't waste all my resources going in circles; find other issues and work on them; continue;
+
+Keep working on issues; continue;
+
+Keep working on issues; continue;
+
+Keep working on issues; continue;
+
+keep the version low, we're already showing `3.1.0` and we haven't even have an alpha release yet, drop the version number back below 1.0; Keep working on issues; continue;
+
+add tracking for rewards from opening various consumable items in the inventory; we want to figure out the percentages for each item you can get from chests and such; continue;
+
+figure out how to add a percentage bar and a percentage number (format: `62.38%`) on top of each Hero in the game's Heroes dialog (the Manage Team window) claculated by how much of each system (ascension, items, skills, glyphs, artifacts, etc) make plans, issues, docs, chat/session logs, etc.;  Yes, add it to our UI, but also figure out how to add an overlay to the real UI of the game; continue;
+
+build the user script and then give me instructions on how to install it in Opera and run it as `dev` si every code change and the script is reloaded everytime we refresh the tab; continue;
+
+rebuild
+
+The user script installed didn't have a name, fix that, fix everything, I installed the live updator and ran `yarn dev` and yet there is nothing on Hero Wars, so it is installed wrong; make it work, tell me what to do to make it work; continue;
+
+there is an error when I follow your directions: Error: listen EADDRINUSE: address already in use 127.0.0.1:8765
+------- Get-Process -Id (Get-NetTCPConnection -LocalPort 8765).OwningProcess | Stop-Process -Force
+
+OJ is not installed, only the boot loader, it is not working; make it work god damnit; set it up to automaticallly install and update; when I open `https://www.hero-wars.com` I want to see our userscript UI; continue;
+
+It is saying in the console `[OrganizedJihad] Skipping — not in the game iframe` which means the script is not running, it used to run just fine, why not now, fix this; continue;
+
+You said `Find the setting Inject Mode and set it to "Instant"` but there is not an `Inject Mode` setting that I can find, where is it, and this "all frames" nonsense do these things exist? please figure this out NOW, stop wasting resources. We had a working script that had functioning windows before now, it used to work well, why doe sit not now; make this shit work! ; continue;
+
+I followed the directions, and the console log says `[OrganizedJihad] Waiting on outer page — script will activate inside the game iframe (www.hero-wars.com)` but nothing else from OJ and there is no badge or any visual indication on the website. This used to work, so please make it work. If there is a way to let you see the Opera browser instance with the game and script I'll allow it (is their an MCP or something that enables a connection to the browser?); continue;
+
+The script isn't running or something? No UI, no console messages at all, i checked every iframe' console log on the the main page, this used to work, we cannot advance until the script actually runs; continue;
+
+I see in the console `[OrganizedJihad] On outer page (www.hero-wars.com) — watching for game iframe...` followed by `lib connect` and then nothing else; and it doesn't work; there are 3 iframes with a url of `about:blank` 1 iframe url of `https://www.recaptcha.net/recaptcha/enterprise/anchor?ar=1&k=6LfVj3spAAAAAKDBueUxzQsDDsVsRFYiiYEuweN6&co=aHR0cHM6Ly93d3cuaGVyby13YXJzLmNvbTo0NDM.&hl=en&v=vUgXt_KV952_-5BB2jjloYzl&size=invisible&anchor-ms=20000&execute-ms=30000&cb=z9tbayzhdyfi` and 1 iframe url of `https://14283401.fls.doubleclick.net/activityi;dc_pre=COe4rt727pIDFaIIVgUdxWMwtA;src=14283401;type=cweb;cat=login0;ord=1450454334245;npa=0;auiddc=882798035.1767636118;gclgs=1;gclst=6653;gcllp=245626269;gclaw=EAIaIQobChMI1qfCj4ySkAMVyw-zAB04pjsVEAAYASAAEgIotvD_BwE;gac=UA-74588006-8%3AEAIaIQobChMI1qfCj4ySkAMVyw-zAB04pjsVEAAYASAAEgIotvD_BwE;u2=106912669;uaa=x86;uab=64;uafvl=Opera%2520GX%3B127.0.5778.75%7CChromium%3B143.0.7499.194%7CNot%2520A(Brand%3B24.0.0.0;uamb=0;uam=;uap=Windows;uapv=10.0.0;uaw=0;pscdl=noapi;frm=0;_tu=KFA;gtm=45fe62i1v9179318577z8810313577za20gzb810313577zd810313577xea;gcs=G111;gcd=13t3t3t3t5l1;dma=0;dc_fmt=2;tag_exp=103116026~103200004~104527906~104528501~104684208~104684211~115616986~115938465~115938469~117455676~117455678;epver=2;dc_random=1771826142_hB8qQaFWOcsA9HdemduuFisEdOkYcG2UJw;_dc_test=1;~oref=https%3A%2F%2Fwww.hero-wars.com%2F%3Fhl%3Den%26delayedsignup%3Dtrue%26nx_source%3Dadx_adwordssearch.hw_wb_uu_-.cc-us.g-m.au-brand.opt-25m_p.com-newac.lp-delayed.cr-aitext.dt-search.kw-hero%2520wars.mT-e.cid-18372845914.agId-145114688767.csd-190922.-%26cp%3D.aid-622733362540%26gad_source%3D1%26gad_campaignid%3D18372845914%26gclid%3DEAIaIQobChMI1qfCj4ySkAMVyw-zAB04pjsVEAAYASAAEgIotvD_BwE?`
+
+I have logged into the game and it has loaded everytime I am testing your changes; can i give you my login credentials or make new credentials for a new account  so you can see the loaded game? This workled a few days ago, after commit `c4ecc065e36368f99fa1837152e04d14386ecf70`; continue;
+
+The UI is working now, and the `calls` count goes up when I click things in the game, please add an api queue and UI that shows the last 100 calls so we can debug what's happening; None of the data is updating, like if I open the Heroes UI in the game, we get an api call, but nothing shows up in the Heros UI of the the script; continue;
+
+I open the Heroes game-dialog and get the api log message of `No calls or results in payload` and no data in the script-UI 
+
+So I've only got 1 API call entry although the count says 6, and the one api log entry is: `✅ 2:40:30 AM [www.hero-wars.com] #1 → https://heroes-wb.nextersglobal.com/api/ userGetInfo, clanWarGetInfo, titanArenaGetStatus, quest_completeEasterEggQuest Dispatched: userGetInfo, clanWarGetInfo | Unhandled: titanArenaGetStatus, quest_completeEasterEggQuest(no data)`; continue;
+
+api call log says `⏭️ 3:05:36 AM [www.hero-wars.com] #5 → https://heroes-wb.nextersglobal.com/api/ (none) No .calls/.results | req keys=[MPm, Lj] res keys=[results, date] ⚠️ req: (unstringifiable: object) | res: {"results":[{"ident":"body","result":{"response":[true]}}],"date":1771833935}` and so fix it; continue;
+
+Analyze the HeroWarsHelper script to see how it has installed itself and also how it tracks api calls and gathers data and displays ui; we have an example of how to do everything, use it; make issues, and plans and code-plans and chat/session logs and docs and epics/issues for all the work; continue;
+
+work issues and continue!
+
+work issues and continue!
+
+work issues and continue!
+
+No information iws being collected, do we need to be attached to the iframe or are we just processing the api calls incorrectly? Look at HeroWarsHelper to see how they do it; make plans and issues and documents and make the script work; continue;
+
+for api call tracking, I've got 10 chests trackings, but it has only sparse data, and nothing else is tracking data; work issues and continue!
+
+Is this going to fix the problem? continue fixing issues and make this script work; continue;
+
+The  UI is now displaying Heo information, but I need more, for instance it says the name is "Hero_49" instead of "Yasmine" but we need an ID column with 49 and the name column needs to be fixed to the actual hero name and add ascension and glyph and artfiact columns; continue;
+
+Fix the titan tracking/display, every titan has `titan` listed as its element, which is wrong, add the percentage bar stuff we added to heroes only with titan level, titan stars, skins levels, artifact stars, artifact levels, totems, etc.; continue;
+
+`Hero_71` does not have a real name attached, fixed that, the chests don't have names and do not show what items we got from them with percentages; Inventory tab does not show the inventory or any information about it, they should be grouped by type; emeralds shows "0" which is wrong, and should be clickable to show a log of gettting and spending emeralds; Battles aren't being tracked correctly. They should be tracked and grouped by type: Clash of Worlds, Dungeon, Guild War, Arena, Grand Arena, Adventure, Tournament of the Elements, Tower, Guild Raid minions, Guild Raid Boss (Osh and Maestro), etc.; Track Outland chest rewards, track Adventures, track Tower cheststrack shop and merchant purchases, etc., and display them all; make issues and plans and documentation and instructions and the `readme.md` file and supporting linked `md` files; update the chat/session logs everytime, git commit; continue;
+
+Add element emojis to the Titan element column; move app badge from bottom-right to top-middle to so it doesn't cover up existing ui; titans don't seem to have the progress bars (with click the titan to show/hide the individual bars) like we added to the Heroes display, i told you to do that and it's not there, fix that;
+
+&&&
+Oh shit, I've been talking about the userscript (tampermonkey) and you've been updating the desktop app; So Let's redo our past work only in the appropriate context;
+All of the following prompts apply to the TamperMonkey userscript, not the dotnet projects, update the script's UI and tracking:
+Fix the titan tracking/display, every titan has `titan` listed as its element, which is wrong, add the percentage bar stuff we added to heroes only with titan level, titan stars, skins levels, artifact stars, artifact levels, totems, etc.; continue;
+`Hero_71` does not have a real name attached, fixed that, the chests don't have names and do not show what items we got from them with percentages; Inventory tab does not show the inventory or any information about it, they should be grouped by type; emeralds shows "0" which is wrong, and should be clickable to show a log of gettting and spending emeralds; Battles aren't being tracked correctly. They should be tracked and grouped by type: Clash of Worlds, Dungeon, Guild War, Arena, Grand Arena, Adventure, Tournament of the Elements, Tower, Guild Raid minions, Guild Raid Boss (Osh and Maestro), etc.; Track Outland chest rewards, track Adventures, track Tower cheststrack shop and merchant purchases, etc., and display them all; make issues and plans and documentation and instructions and the `readme.md` file and supporting linked `md` files; update the chat/session logs everytime, git commit; continue;
+Add element emojis to the Titan element column; move app badge from bottom-right to top-middle to so it doesn't cover up existing ui; titans don't seem to have the progress bars (with click the titan to show/hide the individual bars) like we added to the Heroes display, i told you to do that and it's not there, fix that;
+&&&
+
+(userscript) update the patch version number for every build so we can tell the difference, we've been stuck on `9.4.0` for a while; The application badge or whatever that opens the UI is labeled `( OJ: ### calls)` make it have the purple background color (3b143d) and add padding, and add a logo emoji and the tet should be something like `(emoji) OrganizedJihad: ## (status indicator)` instead; work issues and continue!
+
+
+&&&
+(userscript) `Cleaver` has `skills` listed as 66.92% when he has all skills maxed, make sure the Hero displays are showing the right numbers (and Titans, etc.); all prompts are about the userscript until further notice; make issues for all work before you do the work; and make docs and plans and issues;
+When opening the ui on the dashboard, the player component is terrible, instead redesign it and remove the table format, make the name big top-left, show the level large, overall progressbar (titans + heros + etc.), basic scratchpad of a design:
+{(Player Name, large, mine is Wayness, left)} {(Level number)}
+{[progress bar], add up the other progress bars}
+{[four cards]: (gold emoji) (amount of gold) (emerald emoji) (amount of emeralds) (hero emoji) (total heroes percentage bar) (titan emoji) (total titans pencentage bar)}
+{[four cards]: daily quests, guild quests, guild war/cow, guild raid (minions or boss)}
+&&&
+
+(userscript) the version says `9.5` while installed says `9.6` what's up with the version confusion? You're supposed to updating the patch number, not the minor number; continue; work issues!; continue;
+
+(userscript) ignore version number stuff, except that a build was a version less than the last one; work issues, continue;
+
+(userscript) find the graphics for the hero avatars in the game, and then load those and use them in the Heroes UI table at the beginning of the row; continue;
+
+(userscript) work issues and continue!
+
+(userscript) Hero Rank when maxed is displayed as `Rank 18` when it should say `Red +2 (Max)` or something like that; work issues and continue!
+
+(userscript) work issues and continue!
+
+(userscript) The dashboard is not updating as the game state changes, `Gold` is wrong, and `Emeralds` still shows 0, and the four other numbers are meaningless (Daily Quests, Guild Quests, Guild War, Guild Raid) what are these numbers?; Chests still does not show what came out of them with percentages, Inventory has basically nothing, API log doesn't have a way to see the request/response; Titans ui has "skill" and "Summon stars" which are not things in the game, it shouldn't be `Totems/Artifacts' just artifacts if showing the totem, then separate it into its own bar, two Titans still don't have names, I can give you the names; `Pets` tab has no data and opening the game's pets ui does not update the data; and the data should update dynamically; And you need to add tracking of the mail (track what we get from it); make issues and plans and docs, etc, then implement; continue!
+
+(userscript) We're having problems with messages that say `The diff algorithm was stopped early (after 5000 ms.)` I thought we fixed this already, remove the limit, or increase it; continue working issues and continue;
+
+(userscript) There still is no information in the Pets tab, after I opened Pets in the game, keep finding api data sources that don't work and fix them; plan, issues, docs, etc, implement; continue;
+
+(userscript) Add column on `Pets` tab ui for the Items, and add Items to the the progress bar; continue; 
+
+(userscript) For the `Pets` tab ui and tracking, `Items` is always listed as 100% when it is not, fix that; at the top of the Pets UI tab, show a progress bar (not percentage, but actual number) show the progress on pet soul stones so we can see what we have and how many we need total; continue; 
+
+(userscript) like we added avatars to the heroes, let's add avatars to pets and titans; on dashboard ui, make emeralds green, not blue, and make the value accurate; for the dashboard, turn the second row of cards (Daily Quests, Guild Quests, Guild War, Guild Raid) to use ##/## in order to show a useful number, guild raid should show both minions (1/9) and guild boss (1/5); and fix tracking battles, as none of them are saved/shown correctly they need to track and show the enemy teams and the actual result, with damage ane hhealing numbers and what pets were used, and display with all the avatars; track all api calls that happen, and make code to deal with each and every kind of call, api endpoint; track everything; continue;
+
+(userscript) make issues and plans and docs, etc, then implement; continue!
+
+(userscript) For the Titans ui tab, `Skill` is not a real thing, remove it, `Skins` doesn't have any data, fix that, capture the skins data, show all three artifacts with colorered borders and a small level number badge in a column, Titans are not showing avatars, fix that; update the "element" column to show Totem stats (star, level, etc); continue; fix ` Pet Soul Stones` numbers, show how many we need, what does `9,624 available` and `2,400 needed to max all` actually mean?; continue;
+
+(userscript) Titans ui tab, the artifacts logos should be next to each other (horizontal, not vertical), and artifacts have border colors based on their star level, not their artifact level which is wrong, star levels should be represented at the top of the aritfact logo with "4 (star emoji)" and the level at the bottom, and the titans avatars are not visible, the file urls are wrong, the `ELEMENT /TOTEM` column should have the totem star level and level number displayed; continue; 
+
+(userscript) Dashboard - the emeralds icon is still blue, but it should be green, emeralds still shows 0 but it should be "24,429", add "Energy" to the second row of cards, and collect the data for energy; keep working through all the data collection and display issues, make plans and issues and docs etc; continue;
+
+(userscript) Dashboard - Player info display - Gold doesn't have an emoji that displays, fix the coin emoji, emeralds emoji is now pink, change it to green, enery is not displaying the right value (showing 0) and should also number of `bottled energy`s, Daily quests shows number completed, but it shouw "out of how many" like "30/40" or whatever the numbers are, Guild Quests says "111 today" (is that right?) also show an "out of how many" like "12/50" or whatever the numbers are, Guild War shows "2/3" but there are only 2 GW attacks per day (Monday-Friday) and it should also show current `Clash of Worlds` progress (hero and titan attack usage), and "Raid Attacks" show show, Raid attacks (showing 0/9 of minion attacks when all 9 are done) and should show Raid Boss info (Is it Osh or Maestro? what level?) and how many Raid Boss attacks you've done (5/5) and how much damage you've done in total; make comprehensive github issues (epics and sub-issues) and plans and 
+documents, code-plans, prompt plans, etc, fix the data collection and ui updates; continue;
+
+(userscript) Can the AI chat not see the actual api calls and responses, so you don't track the data correctly because you can't get example json responses? Is there a way for the userscript to log api calls and responses, with the converted response values and put them into a file or something so that the AI chat can see the file and use it as the basis for fixing these data tracking and api errors?; continue;
+
+
+Where is `Export API Samples` I do not see it, I just did all the api calls, how do I export this data?
+
+The `Settings` tab => `About` section says  `Hero Wars Tracker v0.9.2` but it's supposed to be `Hero Wars Tracker v0.9.34` please update this every version, make the version dynamic; continue;
+
+(all) never use npm or npx, always use yarn, add this to the copilot instructions; continue;
+
+(userscript) The api examples file is at `C:\Users\me\source\repos\OrganizedJihad\~docs\api-samples\hw-api-samples-2026-02-27.json` so use that to continue working on the api data collection and the UI changes we discussed; make issues and plans and docs, etc; continue;
+
+(userscript) make issues and plans and docs, etc, then implement; continue!
+
+(userscript) document every api call we know about with our call and a breakdown/documentation of the response object and how it relates to the UI; focus on the userscript, I do not care about the desktop app right now; continue;
+
+(userscript) work issues and review api call and implement tracking for everything and display on UI correctly, as I instructed; continue;
+
+(userscript) work issues and review api call and implement tracking for everything and display on UI correctly, as I instructed; continue;
+
+(userscript) with the current script, if you attack in a battle in Arena, the Organized Jihad badge at the top center disappears, but it shouldn't; same with Guild Arena, make sure the app badge is always there; continue;
+
+(userscript) See if we've got more api cals to track and show in UI, `C:\Users\me\source\repos\OrganizedJihad\~docs\api-samples\hw-api-samples-2026-02-27 (2).json` make issues, implement issues and update docs and chat/session logs, and plans, and issues, etc; continue;
+
+move the application badge to the top-left, but to the right of the `Hero Wars Dominion Era` logo
+
+continue working issues and making new ones;
+
+(userscript) Change the pets icon to an emoji for a single paw; This isn't tracking any battles at all, figure out the api calls and tracking strategy for tracking and displaying battle information, and recording outr battles and other people's teams in arena, gw, cow, grand arena, aoc, and tracking battles in campaign and Adventure (and track the other teams, what are they and how did they do and how did we beat them, so, especially in Adventures, we can add reccomendations for teams to beat the adventure nodes; continue;
+
+(userscript) continue working issues and making new ones;
+
+(userscript) continue working issues and making new ones;
+
+(userscript) continue working issues and making new ones;
+
+(userscript) continue working issues and making new ones;
+
+(userscript) continue working issues and making new ones;
+
+(userscript) continue working issues and making new ones; make chat/session logs, plans, issues, etc;
+
+--- Claudse 4.5
+
+go
+
+continue working issues and make new ones; go!; continue;
+
+continue working issues and make new ones; go!; continue;
+
+continue working issues and make new ones; go!; continue;
+
+[OJ] work through current issues and make any new ones you discover work for; continue;
+
+[OJ] work through current issues and make any new ones you discover work for; continue;
+
+[OJ] Implement performance improvements, review the issues for them; continue;
+
+[OJ] work through current issues and make any new ones you discover work for; test and benchmark everything; continue;
+
+[OJ] Search for battle simulation code online, and incorporate it, track all items and chests and their rewards, track and save the stats and progress for everything in the game, heros/titans/artifacts/glyphs/totems/fusions/etc; continue; make issues and epics and docs and plans implement everything, we want all stats tracked, our status tracked, and all chests tracked with what they produce, and find all the tools and such on the internet for the HeroWars game and make our own battle simulator and other tools, so we can display recommendations in the UI, figure out how to do that; make issues and then implement them! continue;
+
+yes, do the next two recommended things: Next step I can do now: implement #159 parity matrix and close any real chest/item reward gaps from userscript -> sync payload -> API -> DB -> UI. After that: scaffold #160 simulator core (feature extraction + Monte Carlo shell + evaluation harness) and wire first recommendation cards into UI for #161.; continue, find all the other gaps and problems and fix them; continue;
+
+yes, do the three Next Steps: Add API tests for reward replay dedupe and fallback reward-to-opening matching. Add simulator calibration tests against historical outcomes (Brier/MAE thresholds). Mirror recommendation cards in desktop UI to complete #161 parity across surfaces.; continue;
+
+continue;
+
+[OJ] Search for battle simulation code online, and incorporate it, track all items and chests and their rewards, track and save the stats and progress for everything in the game, heros/titans/artifacts/glyphs/totems/fusions/etc; continue; make issues and epics and docs and plans implement everything, we want all stats tracked, our status tracked, and all chests tracked with what they produce, and find all the tools and such on the internet for the HeroWars game and make our own battle simulator and other tools, so we can display recommendations in the UI, figure out how to do that; make issues and then implement them! continue;
+
+continue;
+continue;
+continue;
+continue;
+
+[OJ] Make a plan document for continuing current work later, then work on the new effort: Use the Battle Simulator and knowledge of the exact state of our current Heroes/Titans and other resources we can pull from other internet sources to create a Team Recommendation Engine so we can show recommended teams for Arena, Grand Arena, GW, CoW, campaign, adventure, etc in the on screen Web UI when playing HeroWars; create epics, for backend and the engine and the UI and make plans and issues and docs and start working on the implementation; continue;
+
+continue;
+continue;
+continue;
+
+[OJ] Use the Battle Simulator and knowledge of the exact state of our current Heroes/Titans and ***other resources we can pull from other internet sources*** to create a Team Recommendation Engine so we can show recommended teams for Arena, Grand Arena, GW, CoW, campaign, adventure, etc in the on screen Web UI when playing HeroWars; and make plans and issues and docs and start working on the implementation; continue;
+
+continue;
+continue;
+continue;
+
+[OJ] git commit everything in logical batches; Make sure the tampermonkey script is fully up to date not just the desktop app, making new issues and implementing them, including showing the recommended teams for various battles; Create a stable complete build, and a single simple install file that updates when an earlier version is already installed. It should set everything up, get the server running on system startup, and install the tampermonkey browser extension and also the tampermonkey script we've created; continue;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

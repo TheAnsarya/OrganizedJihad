@@ -10,7 +10,10 @@ Step Two: Install the HWH Script https://greasyfork.org/en/scripts/450693-herowa
 
 &&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&
 directives:
-use my editorconfig for formatting, use crlf, use tabs for all documents, use UTF-8, and always use the most modern code and practices, use yarn instead of npm when appropriate, comment everything including the code inside methods, add links in the comments to explanitory articles, always format, for this session and all sessions
+for all:
+use my editorconfig for formatting, use crlf, use tabs for all documents, use UTF-8, and always use the most modern code and practices, leave blank line between the stages, keep opening braces on the previous line, use yarn instead of npm when appropriate, comment everything including the code inside methods, add links in the comments to explanitory articles, always format the code using editorconfig and other formatting directives (never spaces, always tabs), if a file grows too large move pieces into their own logical components or classes separating concerns, update the chat log files, create a git commit including description, for this session and all sessions
+for `c#/dotnet`:
+use file-scoped namespace with a single blank line after, use [] instead of array.empty, use collection expressions, leave blank line between the stages, keep opening braces on the previous line, always use span when you can and it is right to do so
 &&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&
 
 ----------------
@@ -74,6 +77,121 @@ continue
 save all of the past and future copilot chats to a folder so I know what's happening
 
 the API should be separate from the desktop app, webapi project, ignore the desktop app for now, make a database and web api to recieve data updates and retrieve them for the userscript. but keep a local version in the userscript -- can you use sqlite from an extension?
+
+**********************
+Would you like me to:
+A) Quickly fix these remaining compile errors
+B) Create a simplified working version without all the helper methods
+C) Document what you need to fix and move on
+***********************
+A
+************************
+Next Steps:
+1. Update the browser userscript to use IndexedDB for local storage (not SQLite)
+2. Add HTTP client to POST data to the API /api/sync/import endpoint
+3. Test the full sync workflow
+4. Build the desktop UI pages
+************************
+Do 1 and then 2
+
+---- git branch api-backend-creation
+---- git reset --hard HEAD~4
+---- git branch api-backend-creation-with-desktop
+---- then back to the not `with-desktop` branch, delete the desktop app folder (we can merge it back in later, but no errors in build for now)
+
+Make a big TODO list for moving the DB layer from the `api` project to its own project, add audit fields, with audit interfaces/abracts. especially `DateCreated` since most of these records will be unwritable in the data recording tables. explore the api to make sure we are recording everything useful in the database.
+
+&&&& old directives
+
+find the next TODO ensuring proper build order and implement it
+
+&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&
+directives:
+for all:
+use my editorconfig for formatting, use crlf, use tabs for all documents, use UTF-8, (IMPORTANT) and always use the most modern code and practices, leave blank line between the stages, keep opening braces on the previous line, use yarn instead of npm when appropriate, comment everything including the code inside methods, add links in the comments to explanitory articles, always format the code using editorconfig and other formatting directives (never spaces, always tabs), if a file grows too large move pieces into their own logical components or classes separating concerns, update the chat log files, create a git commit including description, for this session and all sessions
+for `c#/dotnet`:
+use the most recent version of dotnet and all other libraries, use the most modern development and styling practices, use file-scoped namespace with a single blank line after, use [] instead of array.empty, use collection expressions, leave blank line between the stages, keep opening braces on the previous line, always use span when you can and it is right to do so, use simplified using statements, use pattern matching, always format and clean up, make sure file structure matches namespaces, always comment and document
+fix issues and test everything
+&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&
+
+dotnet format
+
+update the chat log files, find the next TODO ensuring proper build order and implement it, create a git commit including description, and then update the chat log files
+if a file grows too large move pieces/refactor into their own logical components or classes separating concerns
+find the next TODO for the data layer, ensuring proper build order and implement it, make sure to follow the formatting, modern practices and other rules, and then update the chat log files, create a git commit including description
+continue with `Phase 2: Add audit infrastructure`
+update the chat log files, and then continue with `Phase 2.4: Implement EF Core SaveChanges interceptors`
+
+****************************
+Next Step: The TODO file shows Phase 3 (Update Database Context) but we've essentially completed those tasks using the interceptor pattern. We can either:
+1. Continue with Phase 4 (Review API Data Collection)
+2. Create an EF Core migration to add audit columns to the database schema
+3. Review and update the TODO file to reflect the interceptor implementation
+What would you like to do next?
+*****************************
+3, then 2, then 1
+
+*************************
+Would you like to continue with Phase 4 (Update API and Services), or would you prefer to work on something else?
+****************************
+continue with Phase 4 (Update API and Services)
+Phase 5: Update Desktop App 
+bring back the desktop app code from previous git commits, commit to current branch, and then proceed with phase 5
+proceed with Phase 6 now
+make sure the chat log files are up to date
+continue with `Phase 3: Review API Data Collection` and definitely track everything about pets and titans and heros and inventory and everything else we can track
+Phase 7: Update Userscript
+
+create a comprehensive todo for testing the api, database, and userscript, and then begin implementing testing in stages. Remember: modern practices, comment everything, include links to external resources, update the chat log as you go.
+
+do 2, 3, and 4 in order. Remember: modern practices, comment everything, include links to external resources, update the chat log as you go.
+Activity Tracking Completion - Add more resource/guild tracking hooks
+
+---- use VS and chat-cpt
+ uninstall the powershell extension `ohmyposh` and return the powershell terminal to normal text colors because currently the text is showing as black on black and is unreadable
+do it
+----
+fix the build errors and warnings, etc, for all the projects, especially `desktopapp` keeping the applications platform agnostic
+---- dotnet format
+cd .\desktop-app\; dotnet format
+
+^^^^^^^^^^^^^
+make sure the editor config for `razor` and other file types from `desktop` includes end_of_line = crlf
+trim_trailing_whitespace = true
+insert_final_newline = true
+max_line_length = 120
+and keep opening braces on the previous line and , comment everything including the code inside methods, add links in the comments to explanitory articles, always format the code using editorconfig and other formatting directives (never spaces, always tabs),
+^^^^^^^^^^^
+the desktop app is using spaces, fix the formatting rules and format the whole project and the other projects to use utf-8, crlf, and tabs (4)
+log guild chat and private chats and adventure chats and AoC chats
+track fellow guild members and their statistics, guild war, dungeon, guild raid minions and boss, login/logout, participation, guild activity, titanite, prestige, etc
+Setup testing for the userscript, database, and api
+fix those bugs and tests
+commit changes with description
+add the XML documentation comments everywhere they are needed, and update where appropriate, and add comments inside methods, and make sure to include links to external resources
+
+&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&
+directives:
+for all:
+use my editorconfig for formatting, use crlf, use tabs for all documents, use UTF-8, (IMPORTANT) and always use the most modern code and practices, leave blank line between the stages, keep opening braces on the previous line, use yarn instead of npm when appropriate, comment everything including the code inside methods, add links in the comments to explanitory articles, always format the code using editorconfig and other formatting directives (never spaces, always tabs), if a file grows too large move pieces into their own logical components or classes separating concerns, update the chat log files, create a git commit including description, for this session and all sessions
+for `c#/dotnet`:
+use the most recent version of dotnet and all other libraries, use the most modern development and styling practices, use file-scoped namespace with a single blank line after, use [] instead of array.empty, use collection expressions, leave blank line between the stages, keep opening braces on the previous line, always use span when you can and it is right to do so, use simplified using statements, use pattern matching, always format and clean up, make sure file structure matches namespaces, always comment and document
+fix issues and test everything
+&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&
+
+can you attach to a current Opera session of `https://www.hero-wars.com/` and watch the api calls to find more things to monitor and also document how the active apis work?
+3. Enhance the existing TamperMonkey userscript to log all API calls it sees?
+
+
+
+
+
+
+
+
+
+
+
 
 
 

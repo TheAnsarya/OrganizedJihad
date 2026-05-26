@@ -1,11 +1,15 @@
-/* OrganizedJihad Tracker - Main Styles */
+/* =========================================================================
+   OrganizedJihad Tracker — Main Styles
+   ========================================================================= */
 
 /* Overlay Container */
 .oj-overlay {
 	position: fixed;
 	top: 20px;
 	right: 20px;
-	width: 600px;
+	width: 560px;
+	min-width: 400px;
+	min-height: 300px;
 	max-height: 80vh;
 	background: linear-gradient(135deg, #1e3a5f 0%, #2a5298 100%);
 	border-radius: 12px;
@@ -14,16 +18,43 @@
 	font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
 	display: none;
 	overflow: hidden;
+	color: #fff;
+	font-size: 13px;
+	line-height: 1.5;
+}
+
+.oj-overlay:focus {
+	outline: 2px solid #4fc3f7;
+	outline-offset: 2px;
 }
 
 .oj-overlay.minimized {
-	height: 60px;
+	max-height: 52px;
+	min-height: auto;
 	overflow: hidden;
 }
 
 .oj-overlay.minimized .oj-nav,
-.oj-overlay.minimized .oj-content {
+.oj-overlay.minimized .oj-content,
+.oj-overlay.minimized .oj-resize-handle {
 	display: none;
+}
+
+/* Resize handle — bottom-right corner */
+.oj-resize-handle {
+	position: absolute;
+	bottom: 0;
+	right: 0;
+	width: 18px;
+	height: 18px;
+	cursor: nwse-resize;
+	background: linear-gradient(135deg, transparent 50%, rgba(255, 255, 255, 0.3) 50%);
+	border-radius: 0 0 12px 0;
+	z-index: 10;
+}
+
+.oj-resize-handle:hover {
+	background: linear-gradient(135deg, transparent 50%, rgba(255, 255, 255, 0.5) 50%);
 }
 
 /* Container */
@@ -31,49 +62,54 @@
 	display: flex;
 	flex-direction: column;
 	height: 100%;
+	max-height: inherit;
+	position: relative;
 }
 
-/* Header */
+/* Header (draggable) */
 .oj-header {
 	background: rgba(0, 0, 0, 0.3);
-	padding: 12px 16px;
+	padding: 10px 16px;
 	display: flex;
 	justify-content: space-between;
 	align-items: center;
 	cursor: grab;
 	border-bottom: 2px solid rgba(255, 255, 255, 0.1);
+	user-select: none;
+	flex-shrink: 0;
 }
 
 .oj-title {
 	margin: 0;
-	font-size: 18px;
+	font-size: 16px;
 	color: #fff;
 	font-weight: 600;
 }
 
 .oj-header-actions {
 	display: flex;
-	gap: 8px;
+	gap: 6px;
 }
 
-/* Navigation */
+/* Navigation Tabs */
 .oj-nav {
 	display: flex;
 	gap: 4px;
 	padding: 8px;
 	background: rgba(0, 0, 0, 0.2);
 	overflow-x: auto;
-	flex-wrap: wrap;
+	flex-wrap: nowrap;
+	flex-shrink: 0;
 }
 
 .oj-nav-btn {
-	padding: 8px 16px;
+	padding: 6px 14px;
 	background: rgba(255, 255, 255, 0.1);
 	color: #fff;
 	border: none;
 	border-radius: 6px;
 	cursor: pointer;
-	font-size: 13px;
+	font-size: 12px;
 	font-weight: 500;
 	transition: all 0.2s;
 	white-space: nowrap;
@@ -88,16 +124,16 @@
 	box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
 }
 
-/* Content */
+/* Content Area */
 .oj-content {
 	flex: 1;
 	overflow-y: auto;
 	padding: 16px;
-	color: #fff;
+	min-height: 200px;
 }
 
 .oj-content::-webkit-scrollbar {
-	width: 8px;
+	width: 6px;
 }
 
 .oj-content::-webkit-scrollbar-track {
@@ -106,427 +142,403 @@
 
 .oj-content::-webkit-scrollbar-thumb {
 	background: rgba(255, 255, 255, 0.3);
-	border-radius: 4px;
+	border-radius: 3px;
 }
 
-/* Buttons */
+/* ── Buttons ─────────────────────────────────────────────────────────── */
+
 .oj-btn {
 	padding: 8px 16px;
-	background: rgba(255, 255, 255, 0.2);
+	background: rgba(255, 255, 255, 0.15);
 	color: #fff;
-	border: 1px solid rgba(255, 255, 255, 0.3);
+	border: 1px solid rgba(255, 255, 255, 0.2);
 	border-radius: 6px;
 	cursor: pointer;
-	font-size: 14px;
+	font-size: 13px;
 	font-weight: 500;
 	transition: all 0.2s;
 }
 
 .oj-btn:hover {
-	background: rgba(255, 255, 255, 0.3);
+	background: rgba(255, 255, 255, 0.25);
 }
 
 .oj-btn-icon {
-	width: 32px;
-	height: 32px;
+	width: 28px;
+	height: 28px;
 	padding: 0;
-	font-size: 20px;
+	font-size: 18px;
 	display: flex;
 	align-items: center;
 	justify-content: center;
-}
-
-.oj-btn-sm {
-	padding: 4px 12px;
-	font-size: 12px;
+	border-radius: 6px;
 }
 
 .oj-btn-danger {
-	background: rgba(220, 53, 69, 0.8);
-	border-color: rgba(220, 53, 69, 0.9);
+	background: rgba(220, 53, 69, 0.7);
+	border-color: rgba(220, 53, 69, 0.8);
 }
 
 .oj-btn-danger:hover {
 	background: rgba(220, 53, 69, 0.9);
 }
 
-/* Dashboard */
-.oj-dashboard {
+.oj-btn-row {
 	display: flex;
-	flex-direction: column;
-	gap: 20px;
+	gap: 8px;
+	flex-wrap: wrap;
 }
+
+/* ── Sections ────────────────────────────────────────────────────────── */
 
 .oj-section {
 	background: rgba(0, 0, 0, 0.2);
-	padding: 16px;
+	padding: 14px;
 	border-radius: 8px;
+	margin-bottom: 12px;
 }
 
 .oj-section h3 {
-	margin: 0 0 16px 0;
-	font-size: 16px;
+	margin: 0 0 12px 0;
+	font-size: 14px;
 	font-weight: 600;
 }
 
-.oj-section-header {
-	display: flex;
-	justify-content: space-between;
-	align-items: center;
-	margin-bottom: 16px;
-}
+/* ── Stats Grid ──────────────────────────────────────────────────────── */
 
-.oj-section-header h3 {
-	margin: 0;
-}
-
-/* Stats Grid */
 .oj-stats-grid {
 	display: grid;
-	grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
-	gap: 12px;
+	grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
+	gap: 10px;
+}
+
+.oj-stats-sm {
+	margin-bottom: 12px;
 }
 
 .oj-stat-card {
-	background: rgba(255, 255, 255, 0.1);
-	padding: 16px;
+	background: rgba(255, 255, 255, 0.08);
+	padding: 12px 8px;
 	border-radius: 8px;
 	text-align: center;
 }
 
 .oj-stat-value {
-	font-size: 28px;
+	font-size: 24px;
 	font-weight: bold;
 	color: #4fc3f7;
 }
 
 .oj-stat-label {
-	font-size: 12px;
+	font-size: 11px;
 	margin-top: 4px;
+	opacity: 0.7;
+}
+
+/* ── Status List ─────────────────────────────────────────────────────── */
+
+.oj-status-list {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+}
+
+.oj-status-row {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	padding: 6px 10px;
+	background: rgba(255, 255, 255, 0.05);
+	border-radius: 4px;
+	font-size: 13px;
+}
+
+.oj-status-ok {
+	color: #4CAF50;
+	font-weight: 600;
+}
+
+.oj-status-err {
+	color: #f44336;
+	font-weight: 600;
+}
+
+/* ── Tables ──────────────────────────────────────────────────────────── */
+
+.oj-table {
+	width: 100%;
+	border-collapse: collapse;
+	font-size: 12px;
+}
+
+.oj-table thead th {
+	text-align: left;
+	padding: 8px 10px;
+	background: rgba(0, 0, 0, 0.3);
+	font-weight: 600;
+	font-size: 11px;
+	text-transform: uppercase;
+	letter-spacing: 0.5px;
+	opacity: 0.8;
+	border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.oj-table tbody tr {
+	border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+	transition: background 0.15s;
+}
+
+.oj-table tbody tr:hover {
+	background: rgba(255, 255, 255, 0.05);
+}
+
+.oj-table td {
+	padding: 6px 10px;
+}
+
+.oj-mono {
+	font-family: 'Cascadia Code', 'Fira Code', 'Consolas', monospace;
+	font-size: 11px;
 	opacity: 0.8;
 }
 
-/* Suggestions */
-.oj-suggestions-list {
-	display: flex;
-	flex-direction: column;
-	gap: 12px;
+.oj-num {
+	text-align: right;
+	font-variant-numeric: tabular-nums;
 }
 
-.oj-suggestion {
-	background: rgba(255, 255, 255, 0.1);
-	padding: 12px;
-	border-radius: 8px;
-	border-left: 4px solid;
-}
+/* ── Battle Results ──────────────────────────────────────────────────── */
 
-.oj-suggestion.high {
-	border-color: #f44336;
-}
-
-.oj-suggestion.medium {
-	border-color: #ff9800;
-}
-
-.oj-suggestion.low {
-	border-color: #4caf50;
-}
-
-.oj-suggestion-header {
-	display: flex;
-	justify-content: space-between;
-	align-items: center;
-	margin-bottom: 8px;
-}
-
-.oj-suggestion-title {
-	font-weight: 600;
-}
-
-.oj-suggestion-priority {
+.oj-win {
+	color: #4CAF50;
+	font-weight: 700;
 	font-size: 11px;
-	text-transform: uppercase;
-	padding: 2px 8px;
-	border-radius: 4px;
-	background: rgba(0, 0, 0, 0.3);
 }
 
-.oj-suggestion-desc {
-	font-size: 13px;
-	margin: 0 0 8px 0;
-	opacity: 0.9;
-}
-
-/* Events */
-.oj-events-list {
-	display: flex;
-	flex-direction: column;
-	gap: 12px;
-}
-
-.oj-event-item {
-	background: rgba(255, 255, 255, 0.1);
-	padding: 12px;
-	border-radius: 8px;
-	display: flex;
-	gap: 12px;
-	align-items: center;
-}
-
-.oj-event-date {
-	font-size: 12px;
-	opacity: 0.7;
-	min-width: 80px;
-}
-
-.oj-event-title {
-	font-weight: 500;
-}
-
-/* Goals */
-.oj-tabs {
-	display: flex;
-	gap: 8px;
-	margin-bottom: 16px;
-}
-
-.oj-tab-btn {
-	padding: 8px 16px;
-	background: rgba(255, 255, 255, 0.1);
-	color: #fff;
-	border: none;
-	border-radius: 6px;
-	cursor: pointer;
-	font-size: 14px;
-	transition: all 0.2s;
-}
-
-.oj-tab-btn.active {
-	background: rgba(255, 255, 255, 0.3);
-}
-
-.oj-tab-content {
-	display: none;
-}
-
-.oj-tab-content.active {
-	display: block;
-}
-
-.oj-goals-list {
-	display: flex;
-	flex-direction: column;
-	gap: 12px;
-}
-
-.oj-goal-card {
-	background: rgba(255, 255, 255, 0.1);
-	padding: 16px;
-	border-radius: 8px;
-	border-left: 4px solid #4caf50;
-}
-
-.oj-goal-card.completed {
-	opacity: 0.6;
-	border-color: #9e9e9e;
-}
-
-.oj-goal-header {
-	display: flex;
-	justify-content: space-between;
-	align-items: center;
-	margin-bottom: 8px;
-}
-
-.oj-goal-header h4 {
-	margin: 0;
-	font-size: 16px;
-}
-
-.oj-goal-desc {
-	font-size: 13px;
-	margin: 0 0 12px 0;
-	opacity: 0.9;
-}
-
-.oj-progress-bar {
-	background: rgba(0, 0, 0, 0.3);
-	height: 24px;
-	border-radius: 12px;
-	position: relative;
-	margin-bottom: 12px;
-	overflow: hidden;
-}
-
-.oj-progress-fill {
-	background: linear-gradient(90deg, #4caf50, #8bc34a);
-	height: 100%;
-	border-radius: 12px;
-	transition: width 0.3s;
-}
-
-.oj-progress-text {
-	position: absolute;
-	top: 50%;
-	left: 50%;
-	transform: translate(-50%, -50%);
-	font-size: 12px;
-	font-weight: 600;
-	z-index: 1;
-}
-
-.oj-goal-footer {
-	display: flex;
-	justify-content: space-between;
-	font-size: 12px;
-	opacity: 0.7;
-}
-
-.oj-badge {
-	padding: 4px 8px;
-	border-radius: 4px;
+.oj-loss {
+	color: #f44336;
+	font-weight: 700;
 	font-size: 11px;
-	text-transform: uppercase;
-	background: rgba(0, 0, 0, 0.3);
 }
 
-.oj-badge.high {
-	background: rgba(244, 67, 54, 0.8);
-}
+/* ── Resource Cards ──────────────────────────────────────────────────── */
 
-.oj-badge.medium {
-	background: rgba(255, 152, 0, 0.8);
-}
-
-.oj-badge.low {
-	background: rgba(76, 175, 80, 0.8);
-}
-
-/* Calendar */
-.oj-event-card {
-	background: rgba(255, 255, 255, 0.1);
-	padding: 16px;
-	border-radius: 8px;
-	border-left: 4px solid #2196f3;
-	margin-bottom: 12px;
-}
-
-.oj-event-card.game-event {
-	border-color: #ff9800;
-}
-
-.oj-event-header {
-	display: flex;
-	justify-content: space-between;
-	align-items: center;
-	margin-bottom: 8px;
-}
-
-.oj-event-header h4 {
-	margin: 0;
-	font-size: 16px;
-}
-
-.oj-event-dates {
-	font-size: 12px;
-	opacity: 0.7;
-	display: flex;
-	flex-direction: column;
-	gap: 4px;
-	margin-top: 8px;
-}
-
-/* Heroes & Resources */
-.oj-heroes-grid,
-.oj-resources-grid {
-	display: grid;
-	grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
-	gap: 12px;
-}
-
-.oj-hero-card,
 .oj-resource-card {
-	background: rgba(255, 255, 255, 0.1);
-	padding: 16px;
+	background: rgba(255, 255, 255, 0.08);
+	padding: 14px 10px;
 	border-radius: 8px;
 	text-align: center;
 }
 
-.oj-hero-card h4,
-.oj-resource-card h4 {
-	margin: 0 0 8px 0;
-	font-size: 14px;
-}
-
-.oj-hero-stats {
-	display: flex;
-	flex-direction: column;
-	gap: 4px;
-	font-size: 12px;
-	opacity: 0.8;
+.oj-resource-icon {
+	font-size: 24px;
+	margin-bottom: 4px;
 }
 
 .oj-resource-amount {
-	font-size: 24px;
+	font-size: 20px;
 	font-weight: bold;
 	color: #4fc3f7;
-	margin: 8px 0;
+	margin: 4px 0;
 }
 
-.oj-resource-time {
+.oj-resource-label {
 	font-size: 11px;
-	opacity: 0.6;
+	opacity: 0.7;
 }
 
-/* Reports */
-.oj-report-section {
-	background: rgba(0, 0, 0, 0.2);
-	padding: 16px;
-	border-radius: 8px;
-	margin-bottom: 16px;
-}
+/* ── Settings ────────────────────────────────────────────────────────── */
 
-.oj-report-section h4 {
-	margin: 0 0 12px 0;
-	font-size: 14px;
-	font-weight: 600;
-}
-
-/* Settings */
 .oj-settings-group {
 	background: rgba(0, 0, 0, 0.2);
-	padding: 16px;
+	padding: 14px;
 	border-radius: 8px;
-	margin-bottom: 16px;
+	margin-bottom: 10px;
 }
 
 .oj-settings-group h4 {
-	margin: 0 0 12px 0;
-	font-size: 14px;
+	margin: 0 0 10px 0;
+	font-size: 13px;
 	font-weight: 600;
 }
 
-.oj-settings-group label {
+.oj-checkbox-label {
 	display: flex;
 	align-items: center;
 	gap: 8px;
 	cursor: pointer;
+	font-size: 13px;
 }
 
-.oj-settings-group button {
-	margin-right: 8px;
-	margin-bottom: 8px;
+.oj-shortcut-row {
+	display: flex;
+	align-items: center;
+	gap: 12px;
+	font-size: 13px;
 }
 
-/* Empty State */
+.oj-shortcut-row kbd {
+	background: rgba(0, 0, 0, 0.3);
+	padding: 3px 8px;
+	border-radius: 4px;
+	font-family: monospace;
+	font-size: 12px;
+	border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+/* ── Tips ─────────────────────────────────────────────────────────────── */
+
+.oj-tips {
+	margin: 0;
+	padding-left: 20px;
+	list-style: disc;
+}
+
+.oj-tips li {
+	margin-bottom: 6px;
+	font-size: 13px;
+	line-height: 1.4;
+}
+
+.oj-tips kbd {
+	background: rgba(0, 0, 0, 0.3);
+	padding: 2px 6px;
+	border-radius: 3px;
+	font-family: monospace;
+	font-size: 11px;
+	border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+/* ── Empty / Loading / Error States ──────────────────────────────────── */
+
 .oj-empty {
 	text-align: center;
 	opacity: 0.6;
-	padding: 32px;
+	padding: 32px 16px;
 	font-style: italic;
 }
 
-/* Responsive */
+.oj-loading {
+	text-align: center;
+	padding: 40px;
+	opacity: 0.6;
+	font-size: 14px;
+}
+
+.oj-error {
+	text-align: center;
+	padding: 24px;
+	background: rgba(244, 67, 54, 0.15);
+	border: 1px solid rgba(244, 67, 54, 0.3);
+	border-radius: 8px;
+}
+
+.oj-error h3 {
+	margin: 0 0 8px 0;
+}
+
+.oj-muted {
+	opacity: 0.5;
+	font-size: 12px;
+}
+
+/* ── Battle Type Pills ──────────────────────────────────────────────── */
+
+.oj-pills {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 6px;
+	margin: 8px 0 12px;
+}
+
+.oj-pill {
+	display: inline-block;
+	padding: 3px 10px;
+	background: rgba(255, 255, 255, 0.08);
+	border: 1px solid rgba(255, 255, 255, 0.15);
+	border-radius: 12px;
+	font-size: 11px;
+	color: #ccc;
+	white-space: nowrap;
+}
+
+/* ── Hero Color Rank Classes ─────────────────────────────────────── */
+
+.oj-rank-gray   { color: #9e9e9e; }
+.oj-rank-green  { color: #4caf50; font-weight: bold; }
+.oj-rank-blue   { color: #42a5f5; font-weight: bold; }
+.oj-rank-violet { color: #ab47bc; font-weight: bold; }
+.oj-rank-orange { color: #ff9800; font-weight: bold; }
+.oj-rank-red    { color: #ef5350; font-weight: bold; }
+
+/* ── Resource Transactions ───────────────────────────────────────── */
+
+.oj-positive { color: #4caf50; }
+.oj-negative { color: #ef5350; }
+
+.oj-section-sub {
+	font-size: 13px;
+	margin: 14px 0 6px;
+	color: #b0bec5;
+	border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+	padding-bottom: 4px;
+}
+
+/* ── Numeric Column ──────────────────────────────────────────────── */
+
+.oj-num {
+	text-align: right;
+	font-variant-numeric: tabular-nums;
+}
+
+/* ── Live Activity Feed ──────────────────────────────────────────── */
+
+.oj-activity-list {
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+	max-height: 400px;
+	overflow-y: auto;
+}
+
+.oj-activity-row {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	padding: 4px 8px;
+	border-radius: 4px;
+	font-size: 12px;
+	border-left: 3px solid transparent;
+}
+
+.oj-activity-time {
+	flex-shrink: 0;
+	font-size: 11px;
+	opacity: 0.6;
+	min-width: 70px;
+}
+
+.oj-activity-icon {
+	flex-shrink: 0;
+	font-size: 13px;
+}
+
+.oj-activity-msg {
+	flex: 1;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+/* Activity event color variants */
+.oj-event-green  { border-left-color: #4caf50; color: #a5d6a7; }
+.oj-event-red    { border-left-color: #ef5350; color: #ef9a9a; }
+.oj-event-blue   { border-left-color: #42a5f5; color: #90caf9; }
+.oj-event-gold   { border-left-color: #ffc107; color: #ffe082; }
+.oj-event-purple { border-left-color: #ab47bc; color: #ce93d8; }
+
+/* ── Responsive ──────────────────────────────────────────────────────── */
+
 @media (max-width: 768px) {
 	.oj-overlay {
 		width: calc(100% - 40px);
@@ -536,4 +548,965 @@
 	.oj-stats-grid {
 		grid-template-columns: repeat(2, 1fr);
 	}
+}
+
+/* ── Data Browser: Search Bar ─────────────────────────────────────── */
+
+.oj-search-bar {
+	margin: 6px 0 10px;
+}
+
+.oj-search-input {
+	width: 100%;
+	padding: 6px 10px;
+	border: 1px solid rgba(255, 255, 255, 0.2);
+	border-radius: 6px;
+	background: rgba(0, 0, 0, 0.25);
+	color: #fff;
+	font-size: 12px;
+	outline: none;
+	box-sizing: border-box;
+}
+
+.oj-search-input::placeholder {
+	color: rgba(255, 255, 255, 0.4);
+}
+
+.oj-search-input:focus {
+	border-color: #4fc3f7;
+	box-shadow: 0 0 0 2px rgba(79, 195, 247, 0.2);
+}
+
+/* ── Data Browser: Pagination ─────────────────────────────────────── */
+
+.oj-pagination {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	gap: 12px;
+	padding: 10px 0 4px;
+	font-size: 12px;
+}
+
+.oj-page-info {
+	color: #b0bec5;
+}
+
+.oj-btn-sm {
+	padding: 3px 10px;
+	font-size: 11px;
+	border-radius: 4px;
+}
+
+.oj-btn-sm:disabled,
+.oj-btn-sm[disabled] {
+	opacity: 0.3;
+	cursor: not-allowed;
+	pointer-events: none;
+}
+
+/* ── Data Browser: Sortable Headers ───────────────────────────────── */
+
+.oj-sort-header {
+	cursor: pointer;
+	user-select: none;
+	white-space: nowrap;
+}
+
+.oj-sort-header:hover {
+	color: #4fc3f7;
+}
+
+/* ── Data Browser: Sub-Tab Pills (interactive) ────────────────────── */
+
+.oj-sub-tabs {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 6px;
+	margin: 8px 0 10px;
+}
+
+.oj-pill-btn {
+	display: inline-block;
+	padding: 3px 10px;
+	background: rgba(255, 255, 255, 0.08);
+	border: 1px solid rgba(255, 255, 255, 0.15);
+	border-radius: 12px;
+	font-size: 11px;
+	color: #ccc;
+	white-space: nowrap;
+	cursor: pointer;
+	transition: background 0.15s, border-color 0.15s;
+}
+
+.oj-pill-btn:hover {
+	background: rgba(255, 255, 255, 0.15);
+	border-color: rgba(255, 255, 255, 0.3);
+}
+
+.oj-pill-active {
+	background: rgba(79, 195, 247, 0.25);
+	border-color: #4fc3f7;
+	color: #4fc3f7;
+	font-weight: 600;
+}
+
+/* ── Drop Rate Analysis Tables ────────────────────────────────────── */
+
+.oj-drop-rates {
+	margin: 8px 0 16px;
+}
+
+.oj-drop-rate-section {
+	margin-bottom: 12px;
+}
+
+.oj-table-compact th,
+.oj-table-compact td {
+	padding: 3px 8px;
+	font-size: 11px;
+}
+
+.oj-drop-rate {
+	font-weight: bold;
+	color: #4fc3f7;
+}
+
+/* =========================================================================
+   Hero Completion Bars & Per-System Breakdown
+   ========================================================================= */
+
+/* ── Inline completion bar (used in tables and overlay) ──────────── */
+
+.oj-completion-bar {
+	position: relative;
+	width: 100%;
+	min-width: 80px;
+	height: 18px;
+	background: rgba(255, 255, 255, 0.08);
+	border-radius: 9px;
+	overflow: hidden;
+}
+
+.oj-completion-fill {
+	position: absolute;
+	top: 0;
+	left: 0;
+	height: 100%;
+	border-radius: 9px;
+	transition: width 0.3s ease;
+}
+
+.oj-completion-label {
+	position: absolute;
+	top: 0;
+	left: 0;
+	right: 0;
+	height: 100%;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	font-size: 10px;
+	font-weight: 700;
+	color: #fff;
+	text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6);
+	z-index: 1;
+}
+
+.oj-completion-cell {
+	min-width: 100px;
+}
+
+/* Color fills */
+.oj-completion-red    { background: rgba(244, 67, 54, 0.7); }
+.oj-completion-orange { background: rgba(255, 152, 0, 0.7); }
+.oj-completion-yellow { background: rgba(255, 235, 59, 0.55); }
+.oj-completion-green  { background: rgba(76, 175, 80, 0.7); }
+.oj-completion-cyan   { background: rgba(0, 188, 212, 0.7); }
+
+/* ── Hero Avatar Portraits ────────────────────────────────────────── */
+
+.oj-avatar-header {
+	width: 36px;
+	padding: 4px !important;
+}
+
+.oj-avatar-cell {
+	width: 36px;
+	padding: 3px 4px !important;
+	text-align: center;
+	vertical-align: middle;
+}
+
+.oj-hero-avatar {
+	width: 32px;
+	height: 32px;
+	border-radius: 6px;
+	object-fit: cover;
+	border: 2px solid rgba(255, 255, 255, 0.2);
+	background: rgba(0, 0, 0, 0.3);
+	vertical-align: middle;
+	transition: border-color 0.2s, transform 0.15s;
+}
+
+.oj-hero-avatar:hover {
+	transform: scale(1.15);
+	z-index: 1;
+}
+
+/* Color-rank borders on avatars */
+.oj-hero-avatar.oj-rank-gray   { border-color: #9e9e9e; }
+.oj-hero-avatar.oj-rank-green  { border-color: #4caf50; }
+.oj-hero-avatar.oj-rank-blue   { border-color: #42a5f5; }
+.oj-hero-avatar.oj-rank-violet { border-color: #ab47bc; }
+.oj-hero-avatar.oj-rank-orange { border-color: #ff9800; }
+.oj-hero-avatar.oj-rank-red    { border-color: #ef5350; }
+
+/* ── Clickable hero rows ─────────────────────────────────────────── */
+
+.oj-hero-row,
+.oj-titan-row,
+.oj-pet-row,
+.oj-battle-row {
+	cursor: pointer;
+	transition: background 0.15s ease;
+}
+
+.oj-hero-row:hover,
+.oj-titan-row:hover,
+.oj-pet-row:hover,
+.oj-battle-row:hover {
+	background: rgba(255, 255, 255, 0.06);
+}
+
+.oj-hero-row.oj-expanded,
+.oj-titan-row.oj-expanded,
+.oj-pet-row.oj-expanded,
+.oj-battle-row.oj-expanded {
+	background: rgba(79, 195, 247, 0.08);
+}
+
+/* ── Per-system breakdown (expandable detail row) ────────────────── */
+
+.oj-hero-detail td,
+.oj-titan-detail td,
+.oj-pet-detail td,
+.oj-battle-detail td {
+	padding: 0 !important;
+}
+
+.oj-sys-breakdown {
+	display: grid;
+	grid-template-columns: repeat(3, 1fr);
+	gap: 4px 12px;
+	padding: 8px 12px 10px;
+	background: rgba(0, 0, 0, 0.15);
+	border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.oj-sys-row {
+	display: flex;
+	align-items: center;
+	gap: 4px;
+	font-size: 11px;
+}
+
+.oj-sys-icon {
+	flex-shrink: 0;
+	width: 16px;
+	text-align: center;
+}
+
+.oj-sys-name {
+	flex-shrink: 0;
+	width: 60px;
+	color: rgba(255, 255, 255, 0.7);
+	white-space: nowrap;
+}
+
+.oj-sys-row .oj-completion-bar {
+	min-width: 50px;
+	height: 14px;
+}
+
+.oj-sys-row .oj-completion-label {
+	font-size: 9px;
+}
+
+/* ── Pet Patronage Info ──────────────────────────────────────────── */
+
+.oj-pet-patronage {
+	padding: 6px 12px 8px;
+	font-size: 11px;
+	color: rgba(255, 255, 255, 0.7);
+	background: rgba(0, 0, 0, 0.1);
+	border-top: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+/* ── Upgrade History Badges ──────────────────────────────────────── */
+
+.oj-badge-hero,
+.oj-badge-titan,
+.oj-badge-equip {
+	display: inline-block;
+	padding: 2px 6px;
+	border-radius: 4px;
+	font-size: 10px;
+	font-weight: 600;
+	text-transform: uppercase;
+	letter-spacing: 0.3px;
+	white-space: nowrap;
+}
+
+.oj-badge-hero  { background: rgba(79, 195, 247, 0.25); color: #4fc3f7; }
+.oj-badge-titan { background: rgba(171, 71, 188, 0.25); color: #ce93d8; }
+.oj-badge-equip { background: rgba(255, 152, 0, 0.25); color: #ffb74d; }
+
+.oj-upgrade-row {
+	font-size: 12px;
+}
+
+.oj-upgrade-row td {
+	white-space: nowrap;
+}
+
+/* ── Clickable elements & resource filter ────────────────────────── */
+
+.oj-clickable {
+	cursor: pointer;
+	transition: background 0.15s ease, transform 0.1s ease;
+}
+
+.oj-clickable:hover {
+	background: rgba(79, 195, 247, 0.15) !important;
+	transform: scale(1.02);
+}
+
+/* ── Chest reward items ──────────────────────────────────────────── */
+
+.oj-reward-list {
+	font-size: 11px;
+	line-height: 1.4;
+	max-width: 300px;
+}
+
+.oj-reward-item {
+	white-space: nowrap;
+}
+
+/* ── Inventory grouped layout ────────────────────────────────────── */
+
+.oj-inv-group {
+	margin-bottom: 8px;
+}
+
+.oj-inv-group-header {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	padding: 6px 10px;
+	background: rgba(255, 255, 255, 0.06);
+	border-radius: 4px;
+	cursor: pointer;
+	font-weight: 600;
+	font-size: 12px;
+	transition: background 0.15s ease;
+	user-select: none;
+}
+
+.oj-inv-group-header:hover {
+	background: rgba(255, 255, 255, 0.10);
+}
+
+.oj-inv-group-header::before {
+	content: '\u25BC';
+	font-size: 9px;
+	margin-right: 6px;
+	transition: transform 0.2s ease;
+}
+
+.oj-inv-group-header.oj-inv-collapsed::before {
+	transform: rotate(-90deg);
+}
+
+.oj-inv-group-table {
+	margin-top: 2px;
+	transition: max-height 0.2s ease;
+}
+
+.oj-inv-group-table.oj-collapsed {
+	display: none;
+}
+
+/* =========================================================================
+   API Call Log — Debug View
+   ========================================================================= */
+
+.oj-apilog h3 {
+	margin: 0 0 4px;
+}
+
+.oj-log-list {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+	max-height: 500px;
+	overflow-y: auto;
+}
+
+.oj-log-entry {
+	background: rgba(255, 255, 255, 0.04);
+	border-left: 3px solid rgba(255, 255, 255, 0.15);
+	border-radius: 4px;
+	padding: 6px 10px;
+	font-size: 11px;
+	line-height: 1.4;
+}
+
+.oj-log-ok {
+	border-left-color: #4CAF50;
+}
+
+.oj-log-error {
+	border-left-color: #F44336;
+	background: rgba(244, 67, 54, 0.08);
+}
+
+.oj-log-skip {
+	border-left-color: #FFC107;
+}
+
+.oj-log-header {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	margin-bottom: 2px;
+}
+
+.oj-log-status {
+	font-size: 12px;
+}
+
+.oj-log-time {
+	color: #90a4ae;
+	font-family: monospace;
+	font-size: 10px;
+}
+
+.oj-log-num {
+	color: #607d8b;
+	font-size: 10px;
+	margin-left: auto;
+}
+
+.oj-log-calls {
+	color: #4fc3f7;
+	font-family: monospace;
+	word-break: break-word;
+}
+
+.oj-log-detail {
+	color: #b0bec5;
+	font-size: 10px;
+}
+
+.oj-log-err-detail {
+	color: #ef9a9a;
+	font-size: 10px;
+	margin-top: 2px;
+	word-break: break-all;
+}
+
+.oj-log-url {
+	color: #78909c;
+	font-family: monospace;
+	font-size: 9px;
+	word-break: break-all;
+	margin-bottom: 2px;
+}
+
+.oj-log-page {
+	color: #ffcc80;
+	font-size: 9px;
+	font-family: monospace;
+}
+
+/* API Log payload viewer (#91) */
+.oj-btn-tiny {
+	background: rgba(255, 255, 255, 0.08);
+	border: 1px solid rgba(255, 255, 255, 0.15);
+	color: #90caf9;
+	border-radius: 3px;
+	padding: 1px 6px;
+	font-size: 10px;
+	cursor: pointer;
+	margin-top: 4px;
+}
+
+.oj-btn-tiny:hover {
+	background: rgba(255, 255, 255, 0.14);
+}
+
+.oj-log-payload {
+	margin-top: 6px;
+	padding: 6px;
+	background: rgba(0, 0, 0, 0.25);
+	border-radius: 4px;
+	border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.oj-payload-call {
+	margin-bottom: 8px;
+}
+
+.oj-payload-call strong {
+	color: #4fc3f7;
+	font-size: 11px;
+}
+
+.oj-payload-section {
+	margin-top: 2px;
+}
+
+.oj-payload-label {
+	color: #81c784;
+	font-size: 10px;
+	font-family: monospace;
+}
+
+.oj-payload-json {
+	color: #cfd8dc;
+	font-size: 10px;
+	font-family: monospace;
+	white-space: pre-wrap;
+	word-break: break-word;
+	max-height: 200px;
+	overflow-y: auto;
+	margin: 2px 0 0 0;
+	padding: 4px;
+	background: rgba(0, 0, 0, 0.2);
+	border-radius: 3px;
+}
+
+/* =========================================================================
+   Game Overlay — Floating Hero Completion Panel
+   ========================================================================= */
+
+.oj-game-overlay {
+	position: fixed;
+	top: 60px;
+	right: 20px;
+	width: 280px;
+	max-height: 70vh;
+	background: rgba(15, 30, 55, 0.94);
+	border: 1px solid rgba(79, 195, 247, 0.25);
+	border-radius: 10px;
+	box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+	z-index: 999997;
+	font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+	color: #fff;
+	font-size: 12px;
+	overflow: hidden;
+	backdrop-filter: blur(12px);
+}
+
+/* ── Header (drag handle) ────────────────────────────────────────── */
+
+.oj-go-header {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	padding: 6px 10px;
+	background: rgba(30, 58, 95, 0.8);
+	border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+	cursor: grab;
+	user-select: none;
+}
+
+.oj-go-header:active {
+	cursor: grabbing;
+}
+
+.oj-go-title {
+	font-weight: 600;
+	font-size: 12px;
+}
+
+.oj-go-controls {
+	display: flex;
+	gap: 4px;
+}
+
+.oj-go-btn {
+	background: none;
+	border: none;
+	color: rgba(255, 255, 255, 0.5);
+	font-size: 14px;
+	cursor: pointer;
+	padding: 2px 4px;
+	border-radius: 4px;
+	line-height: 1;
+	transition: color 0.15s, background 0.15s;
+}
+
+.oj-go-btn:hover {
+	color: #fff;
+	background: rgba(255, 255, 255, 0.1);
+}
+
+/* ── Body ─────────────────────────────────────────────────────────── */
+
+.oj-go-body {
+	max-height: 55vh;
+	overflow-y: auto;
+	padding: 6px 0;
+}
+
+.oj-go-summary {
+	text-align: center;
+	padding: 4px 10px 6px;
+	font-size: 11px;
+	color: rgba(255, 255, 255, 0.6);
+	border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.oj-go-list {
+	padding: 2px 0;
+}
+
+.oj-go-row {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	padding: 3px 10px;
+	transition: background 0.12s;
+}
+
+.oj-go-row:hover {
+	background: rgba(255, 255, 255, 0.04);
+}
+
+.oj-go-name {
+	flex-shrink: 0;
+	width: 80px;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	font-size: 11px;
+}
+
+.oj-go-bar-wrap {
+	flex: 1;
+	height: 10px;
+	background: rgba(255, 255, 255, 0.06);
+	border-radius: 5px;
+	overflow: hidden;
+}
+
+.oj-go-bar {
+	height: 100%;
+	border-radius: 5px;
+	transition: width 0.3s ease;
+}
+
+.oj-go-pct {
+	flex-shrink: 0;
+	width: 48px;
+	text-align: right;
+	font-size: 10px;
+	font-weight: 700;
+}
+
+/* ── Footer ───────────────────────────────────────────────────────── */
+
+.oj-go-footer {
+	padding: 4px 10px;
+	text-align: center;
+	font-size: 10px;
+	color: rgba(255, 255, 255, 0.3);
+	border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.oj-go-loading,
+.oj-go-empty {
+	text-align: center;
+	color: rgba(255, 255, 255, 0.4);
+	padding: 20px 10px;
+	font-style: italic;
+}
+
+/* ── Scrollbar styling for overlay ────────────────────────────────── */
+
+.oj-go-body::-webkit-scrollbar {
+	width: 4px;
+}
+
+.oj-go-body::-webkit-scrollbar-track {
+	background: transparent;
+}
+
+.oj-go-body::-webkit-scrollbar-thumb {
+	background: rgba(255, 255, 255, 0.15);
+	border-radius: 2px;
+}
+
+/* ── Battle team display (#111) ──────────────────────────────────── */
+
+.oj-battle-teams {
+	display: flex;
+	gap: 16px;
+	padding: 10px 12px;
+	background: rgba(0, 0, 0, 0.15);
+	border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+	flex-wrap: wrap;
+}
+
+.oj-battle-team-block {
+	flex: 1;
+	min-width: 140px;
+}
+
+.oj-battle-team-label {
+	font-size: 11px;
+	color: rgba(255, 255, 255, 0.6);
+	margin-bottom: 6px;
+	font-weight: 600;
+}
+
+.oj-battle-team-row {
+	display: flex;
+	gap: 4px;
+	flex-wrap: wrap;
+	margin-bottom: 4px;
+}
+
+.oj-battle-hero {
+	position: relative;
+	display: inline-flex;
+	flex-direction: column;
+	align-items: center;
+	gap: 2px;
+}
+
+.oj-battle-dmg {
+	font-size: 9px;
+	color: #ef9a9a;
+	font-weight: 600;
+	white-space: nowrap;
+}
+
+.oj-battle-pet-icon {
+	position: absolute;
+	bottom: 14px;
+	right: -4px;
+	width: 14px;
+	height: 14px;
+	border-radius: 3px;
+	border: 1px solid rgba(255, 255, 255, 0.3);
+	background: rgba(0, 0, 0, 0.5);
+}
+
+.oj-dmg { color: #ef9a9a; }
+.oj-heal { color: #81c784; }
+
+/* ── Battle round results & power (#131) ─────────────────────────── */
+
+.oj-round-results {
+	display: flex;
+	gap: 6px;
+	margin-bottom: 8px;
+	flex-wrap: wrap;
+}
+
+.oj-round-pill {
+	font-size: 11px;
+	font-weight: 600;
+	padding: 2px 8px;
+	border-radius: 10px;
+	background: rgba(0, 0, 0, 0.3);
+	border: 1px solid rgba(255, 255, 255, 0.1);
+	cursor: default;
+}
+
+.oj-round-pill.oj-win {
+	border-color: rgba(76, 175, 80, 0.4);
+	background: rgba(76, 175, 80, 0.15);
+}
+
+.oj-round-pill.oj-loss {
+	border-color: rgba(244, 67, 54, 0.4);
+	background: rgba(244, 67, 54, 0.15);
+}
+
+.oj-battle-power {
+	font-size: 12px;
+	margin-bottom: 6px;
+	color: rgba(255, 255, 255, 0.7);
+}
+
+/* ── Adventure Guide (#131) ──────────────────────────────────────── */
+
+.oj-adventure-guide {
+	background: rgba(0, 0, 0, 0.2);
+	border: 1px solid rgba(255, 255, 255, 0.08);
+	border-radius: 6px;
+	padding: 10px 12px;
+	margin-bottom: 10px;
+}
+
+.oj-adventure-guide h4 {
+	margin: 0 0 8px;
+	font-size: 13px;
+}
+
+.oj-adv-nodes {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+	max-height: 360px;
+	overflow-y: auto;
+}
+
+.oj-adv-node {
+	background: rgba(255, 255, 255, 0.04);
+	border: 1px solid rgba(255, 255, 255, 0.06);
+	border-radius: 4px;
+	padding: 6px 10px;
+}
+
+.oj-adv-node-header {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	font-size: 12px;
+	font-weight: 600;
+	margin-bottom: 4px;
+}
+
+.oj-adv-node-teams {
+	display: flex;
+	gap: 12px;
+	flex-wrap: wrap;
+}
+
+/* ── Titan Avatar Fallback ───────────────────────────────────────── */
+
+.oj-avatar-fallback {
+	width: 32px;
+	height: 32px;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	font-size: 20px;
+	border-radius: 50%;
+	background: rgba(255, 255, 255, 0.08);
+}
+
+/* ── Titan Artifact Icons ────────────────────────────────────────── */
+
+.oj-artifact-cell {
+	padding: 2px 4px !important;
+	vertical-align: middle;
+}
+
+.oj-artifact-col {
+	display: flex;
+	flex-direction: row;
+	align-items: center;
+	gap: 4px;
+}
+
+.oj-artifact-icon {
+	width: 32px;
+	height: 38px;
+	border-radius: 4px;
+	border: 2px solid rgba(255, 255, 255, 0.2);
+	background: rgba(0, 0, 0, 0.4);
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	justify-content: space-between;
+	position: relative;
+	padding: 2px 1px;
+}
+
+.oj-artifact-icon.oj-rank-gray   { border-color: #9e9e9e; }
+.oj-artifact-icon.oj-rank-green  { border-color: #4caf50; }
+.oj-artifact-icon.oj-rank-blue   { border-color: #42a5f5; }
+.oj-artifact-icon.oj-rank-violet { border-color: #ab47bc; }
+.oj-artifact-icon.oj-rank-orange { border-color: #ff9800; }
+.oj-artifact-icon.oj-rank-red    { border-color: #ef5350; }
+
+.oj-artifact-star {
+	font-size: 8px;
+	font-weight: 700;
+	color: #ffd740;
+	line-height: 1;
+	white-space: nowrap;
+}
+
+.oj-artifact-level {
+	font-size: 9px;
+	font-weight: 700;
+	color: #fff;
+	text-shadow: 0 0 3px rgba(0, 0, 0, 0.8);
+	line-height: 1;
+}
+
+/* ── Totem Stats (below element display) ─────────────────────────── */
+
+.oj-totem-stats {
+	font-size: 10px;
+	color: rgba(255, 255, 255, 0.6);
+	white-space: nowrap;
+}
+
+/* ── Pet Soul Stones Details ─────────────────────────────────────── */
+
+.oj-pet-soulstones {
+	margin-bottom: 10px;
+	padding: 8px 12px;
+	background: rgba(0, 0, 0, 0.15);
+	border-radius: 6px;
+}
+
+.oj-pet-soulstones-label {
+	margin-bottom: 6px;
+	font-size: 12px;
+}
+
+.oj-pet-soulstones-bar {
+	margin-bottom: 6px;
+}
+
+.oj-soulstone-details {
+	margin-top: 6px;
+	font-size: 11px;
+}
+
+.oj-soulstone-details summary {
+	cursor: pointer;
+	color: rgba(255, 255, 255, 0.6);
+	margin-bottom: 4px;
+}
+
+.oj-soulstone-details summary:hover {
+	color: rgba(255, 255, 255, 0.9);
+}
+
+.oj-soulstone-table {
+	font-size: 11px;
+}
+
+.oj-soulstone-table th {
+	font-size: 10px;
+	padding: 2px 6px !important;
+}
+
+.oj-soulstone-table td {
+	padding: 2px 6px !important;
+}
+
+.oj-text-green {
+	color: #4caf50;
 }

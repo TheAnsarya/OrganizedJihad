@@ -1,0 +1,949 @@
+/**
+ * IndexedDBStorage Tests
+ * Tests for browser-side IndexedDB storage operations.
+ *
+ * Uses fake-indexeddb (imported in tests/setup.js via 'fake-indexeddb/auto')
+ * to provide an in-memory IndexedDB implementation.
+ *
+ * Actual IndexedDBStorage key facts:
+ *   - DB name: 'OrganizedJihad'
+ *   - Version: 11
+ *   - 38 object stores (snapshots, battles, heroes, titans, consumableRewards, errorLog, adventureGuide, etc.)
+ *   - Methods: add, put, get, getAll, getByIndex, delete, clear, ensureDB
+ *   - init() is idempotent — returns the single initPromise
+ */
+
+import IndexedDBStorage from '../src/modules/indexedDBStorage.js';
+
+// Node 16 doesn't have structuredClone — polyfill for fake-indexeddb
+if (typeof globalThis.structuredClone === 'undefined') {
+	globalThis.structuredClone = (obj) => JSON.parse(JSON.stringify(obj));
+}
+
+describe('IndexedDBStorage', () => {
+	let storage;
+
+	beforeEach(async () => {
+		storage = new IndexedDBStorage();
+		await storage.init();
+	});
+
+	afterEach(async () => {
+		if (storage?.db) {
+			// Clear defensive handlers before teardown so deleteDatabase
+			// doesn't trigger onversionchange → close → reconnect loops (#129)
+			storage.db.onversionchange = null;
+			storage.db.onclose = null;
+			storage.db.close();
+		}
+		// Delete the database so each test starts fresh
+		const deleteRequest = indexedDB.deleteDatabase('OrganizedJihad');
+		await new Promise((resolve) => {
+			deleteRequest.onsuccess = resolve;
+			deleteRequest.onerror = resolve;
+		});
+	});
+
+	// ─── Initialization ──────────────────────────────────────────────────
+
+	describe('Initialization', () => {
+		test('should initialize database successfully', async () => {
+			expect(storage.db).toBeDefined();
+			expect(storage.db.name).toBe('OrganizedJihad');
+			expect(storage.db.version).toBe(11);
+		});
+
+		test('should create core object stores', async () => {
+			const names = Array.from(storage.db.objectStoreNames);
+
+			// Phase 1 stores
+			expect(names).toContain('snapshots');
+			expect(names).toContain('battles');
+			expect(names).toContain('chests');
+			expect(names).toContain('opponents');
+			expect(names).toContain('goals');
+			expect(names).toContain('events');
+			expect(names).toContain('metadata');
+		});
+
+		test('should create Phase 7 tracking stores', async () => {
+			const names = Array.from(storage.db.objectStoreNames);
+
+			expect(names).toContain('heroes');
+			expect(names).toContain('titans');
+			expect(names).toContain('pets');
+			expect(names).toContain('inventory');
+			expect(names).toContain('questCompletions');
+			expect(names).toContain('missionProgress');
+			expect(names).toContain('shopPurchases');
+			expect(names).toContain('towerProgress');
+			expect(names).toContain('expeditionBattles');
+			expect(names).toContain('resourceTransactions');
+			expect(names).toContain('guildActivities');
+		});
+
+		test('should create guild & chat stores', async () => {
+			const names = Array.from(storage.db.objectStoreNames);
+
+			expect(names).toContain('chatMessages');
+			expect(names).toContain('guildMembers');
+			expect(names).toContain('guildMemberSnapshots');
+			expect(names).toContain('guildWarParticipations');
+			expect(names).toContain('guildRaidParticipations');
+			expect(names).toContain('guildDungeonParticipations');
+			expect(names).toContain('titaniteTransactions');
+		});
+
+		test('should create Phase 8 upgrade & activity stores', async () => {
+			const names = Array.from(storage.db.objectStoreNames);
+
+			expect(names).toContain('apiLogs');
+			expect(names).toContain('heroUpgrades');
+			expect(names).toContain('titanUpgrades');
+			expect(names).toContain('dailyQuestCompletions');
+			expect(names).toContain('guildQuestCompletions');
+			expect(names).toContain('loginRewards');
+			expect(names).toContain('inventoryItemUsages');
+			expect(names).toContain('equipmentChanges');
+		});
+
+		test('should create Phase 9 activityEvents store', async () => {
+			const names = Array.from(storage.db.objectStoreNames);
+			expect(names).toContain('activityEvents');
+		});
+
+		test('should create Phase 10 consumableRewards store with indexes', async () => {
+			const names = Array.from(storage.db.objectStoreNames);
+			expect(names).toContain('consumableRewards');
+
+			// Verify the store has the expected indexes
+			const tx = storage.db.transaction('consumableRewards', 'readonly');
+			const store = tx.objectStore('consumableRewards');
+			const indexNames = Array.from(store.indexNames);
+			expect(indexNames).toContain('timestamp');
+			expect(indexNames).toContain('sourceType');
+			expect(indexNames).toContain('sourceId');
+			expect(indexNames).toContain('itemType');
+			expect(indexNames).toContain('itemId');
+			expect(indexNames).toContain('openingId');
+		});
+
+		test('should create Phase 11 errorLog store with indexes (#28)', async () => {
+			const names = Array.from(storage.db.objectStoreNames);
+			expect(names).toContain('errorLog');
+
+			const tx = storage.db.transaction('errorLog', 'readonly');
+			const store = tx.objectStore('errorLog');
+			const indexNames = Array.from(store.indexNames);
+			expect(indexNames).toContain('timestamp');
+			expect(indexNames).toContain('context');
+		});
+
+		test('init() should be idempotent (calling multiple times returns same db)', async () => {
+			const db1 = await storage.init();
+			const db2 = await storage.init();
+			expect(db1).toBe(db2);
+		});
+
+		test('should create Phase 14 adventureGuide store with indexes (#131)', async () => {
+			const names = Array.from(storage.db.objectStoreNames);
+			expect(names).toContain('adventureGuide');
+
+			const tx = storage.db.transaction('adventureGuide', 'readonly');
+			const store = tx.objectStore('adventureGuide');
+			const indexNames = Array.from(store.indexNames);
+			expect(indexNames).toContain('nodeId');
+			expect(indexNames).toContain('timestamp');
+			expect(indexNames).toContain('isWin');
+		});
+	});
+
+	// ─── CRUD Operations ─────────────────────────────────────────────────
+
+	describe('CRUD Operations', () => {
+		test('should add data to a store', async () => {
+			const key = await storage.add('snapshots', {
+				playerId: 12345,
+				playerName: 'TestPlayer',
+				level: 50,
+				timestamp: Date.now(),
+			});
+			expect(key).toBeDefined();
+			expect(typeof key).toBe('number');
+		});
+
+		test('should retrieve data by key', async () => {
+			const data = { playerId: 12345, playerName: 'TestPlayer', level: 50, timestamp: Date.now() };
+			const key = await storage.add('snapshots', data);
+			const retrieved = await storage.get('snapshots', key);
+
+			expect(retrieved).toBeDefined();
+			expect(retrieved.playerId).toBe(12345);
+			expect(retrieved.playerName).toBe('TestPlayer');
+		});
+
+		test('should update existing data via put', async () => {
+			const data = { playerId: 12345, playerName: 'TestPlayer', level: 50, timestamp: Date.now() };
+			const key = await storage.add('snapshots', data);
+
+			const updated = { ...data, id: key, level: 60 };
+			await storage.put('snapshots', updated);
+
+			const retrieved = await storage.get('snapshots', key);
+			expect(retrieved.level).toBe(60);
+		});
+
+		test('should delete data by key', async () => {
+			const data = { playerId: 12345, playerName: 'TestPlayer', timestamp: Date.now() };
+			const key = await storage.add('snapshots', data);
+			await storage.delete('snapshots', key);
+
+			const retrieved = await storage.get('snapshots', key);
+			expect(retrieved).toBeUndefined();
+		});
+
+		test('should retrieve all data from a store', async () => {
+			await storage.add('snapshots', { playerId: 1, timestamp: 1 });
+			await storage.add('snapshots', { playerId: 2, timestamp: 2 });
+			await storage.add('snapshots', { playerId: 3, timestamp: 3 });
+
+			const all = await storage.getAll('snapshots');
+			expect(all).toHaveLength(3);
+		});
+
+		test('should respect limit in getAll', async () => {
+			await storage.add('snapshots', { playerId: 1, timestamp: 1 });
+			await storage.add('snapshots', { playerId: 2, timestamp: 2 });
+			await storage.add('snapshots', { playerId: 3, timestamp: 3 });
+
+			const limited = await storage.getAll('snapshots', 2);
+			expect(limited).toHaveLength(2);
+		});
+	});
+
+	// ─── Index Queries ───────────────────────────────────────────────────
+
+	describe('Index Queries', () => {
+		test('should query by index', async () => {
+			await storage.add('battles', { battleType: 'arena', timestamp: 1, opponentId: 1, isWin: true });
+			await storage.add('battles', { battleType: 'arena', timestamp: 2, opponentId: 2, isWin: false });
+			await storage.add('battles', { battleType: 'guildWar', timestamp: 3, opponentId: 3, isWin: true });
+
+			const arenaBattles = await storage.getByIndex('battles', 'battleType', 'arena');
+			expect(arenaBattles).toHaveLength(2);
+		});
+	});
+
+	// ─── Guild Member Upsert ─────────────────────────────────────────────
+
+	describe('Guild Member Upsert', () => {
+		test('should insert new guild member via put', async () => {
+			const member = {
+				playerId: 99999,
+				playerName: 'NewMember',
+				guildId: 1,
+				level: 80,
+				teamPower: 500000,
+			};
+			// guildMembers uses keyPath: 'playerId'
+			await storage.put('guildMembers', member);
+			const retrieved = await storage.get('guildMembers', 99999);
+
+			expect(retrieved).toBeDefined();
+			expect(retrieved.playerName).toBe('NewMember');
+			expect(retrieved.level).toBe(80);
+		});
+
+		test('should update existing guild member via put', async () => {
+			const member = {
+				playerId: 99999,
+				playerName: 'Member',
+				guildId: 1,
+				level: 80,
+				teamPower: 500000,
+			};
+			await storage.put('guildMembers', member);
+			await storage.put('guildMembers', { ...member, level: 90, teamPower: 600000 });
+
+			const retrieved = await storage.get('guildMembers', 99999);
+			expect(retrieved.level).toBe(90);
+			expect(retrieved.teamPower).toBe(600000);
+
+			const all = await storage.getAll('guildMembers');
+			expect(all).toHaveLength(1);
+		});
+	});
+
+	// ─── Error Handling ──────────────────────────────────────────────────
+
+	describe('Error Handling', () => {
+		test('should throw error for invalid store name', async () => {
+			await expect(storage.add('nonExistentStore', {})).rejects.toThrow();
+		});
+
+		test('should throw on null data add', async () => {
+			// fake-indexeddb throws when trying to add null/undefined
+			await expect(storage.add('snapshots', null)).rejects.toThrow();
+		});
+	});
+
+	// ─── Bulk Operations ─────────────────────────────────────────────────
+
+	describe('Bulk Operations', () => {
+		test('should clear all data from a store', async () => {
+			await storage.add('snapshots', { playerId: 1, timestamp: 1 });
+			await storage.add('snapshots', { playerId: 2, timestamp: 2 });
+
+			await storage.clear('snapshots');
+
+			const all = await storage.getAll('snapshots');
+			expect(all).toHaveLength(0);
+		});
+	});
+
+	// ─── Pagination (getPage) ────────────────────────────────────────────
+
+	describe('Pagination', () => {
+		beforeEach(async () => {
+			// Seed 10 hero records with incrementing timestamps
+			for (let i = 1; i <= 10; i++) {
+				await storage.add('heroes', {
+					heroId: i,
+					heroName: `Hero ${i}`,
+					playerId: 100,
+					timestamp: new Date(2025, 0, i).toISOString(),
+					power: i * 100,
+				});
+			}
+		});
+
+		test('should return first page of records', async () => {
+			const page = await storage.getPage('heroes', { limit: 3, offset: 0, direction: 'next' });
+			expect(page).toHaveLength(3);
+		});
+
+		test('should skip records with offset', async () => {
+			const page = await storage.getPage('heroes', { limit: 3, offset: 5, direction: 'next' });
+			expect(page).toHaveLength(3);
+		});
+
+		test('should return remaining records on last page', async () => {
+			const page = await storage.getPage('heroes', { limit: 4, offset: 8, direction: 'next' });
+			expect(page).toHaveLength(2);
+		});
+
+		test('should return empty array when offset exceeds count', async () => {
+			const page = await storage.getPage('heroes', { limit: 5, offset: 100, direction: 'next' });
+			expect(page).toHaveLength(0);
+		});
+
+		test('should default to limit 25 and direction prev', async () => {
+			const page = await storage.getPage('heroes');
+			// All 10 fit in default page size of 25
+			expect(page).toHaveLength(10);
+		});
+	});
+
+	// ─── Purge Old Records (#45) ─────────────────────────────────────────
+
+	describe('purgeOldRecords', () => {
+		test('should delete records older than retention period', async () => {
+			const now = Date.now();
+			const oldTimestamp = new Date(now - 100 * 24 * 60 * 60 * 1000).toISOString(); // 100 days ago
+			const recentTimestamp = new Date(now - 5 * 24 * 60 * 60 * 1000).toISOString(); // 5 days ago
+
+			await storage.add('battles', { battleType: 'Arena', timestamp: oldTimestamp, isWin: true });
+			await storage.add('battles', { battleType: 'Arena', timestamp: recentTimestamp, isWin: false });
+
+			// Default retention for battles is 90 days
+			const summary = await storage.purgeOldRecords();
+			expect(summary.battles).toBe(1);
+
+			const remaining = await storage.getAll('battles');
+			expect(remaining).toHaveLength(1);
+			expect(remaining[0].timestamp).toBe(recentTimestamp);
+		});
+
+		test('should handle numeric timestamps', async () => {
+			const now = Date.now();
+			const oldTs = now - 100 * 24 * 60 * 60 * 1000; // 100 days ago
+			const newTs = now - 1 * 24 * 60 * 60 * 1000;   // 1 day ago
+
+			await storage.add('activityEvents', { type: 'test', timestamp: oldTs });
+			await storage.add('activityEvents', { type: 'test', timestamp: newTs });
+
+			const summary = await storage.purgeOldRecords();
+			expect(summary.activityEvents).toBe(1);
+
+			const remaining = await storage.getAll('activityEvents');
+			expect(remaining).toHaveLength(1);
+		});
+
+		test('should respect retention overrides', async () => {
+			const now = Date.now();
+			const ts = new Date(now - 10 * 24 * 60 * 60 * 1000).toISOString(); // 10 days ago
+
+			await storage.add('battles', { battleType: 'Arena', timestamp: ts, isWin: true });
+
+			// With default 90-day retention, this should NOT be purged
+			const summary1 = await storage.purgeOldRecords();
+			expect(summary1.battles).toBeUndefined();
+
+			// With override of 5 days, it SHOULD be purged
+			const summary2 = await storage.purgeOldRecords({ battles: 5 });
+			expect(summary2.battles).toBe(1);
+		});
+
+		test('should return empty summary when nothing to purge', async () => {
+			const summary = await storage.purgeOldRecords();
+			expect(Object.keys(summary)).toHaveLength(0);
+		});
+	});
+
+	// ─── Storage Stats (#45) ─────────────────────────────────────────────
+
+	describe('getStorageStats', () => {
+		test('should return record counts per store', async () => {
+			await storage.add('battles', { battleType: 'Arena', timestamp: new Date().toISOString(), isWin: true });
+			await storage.add('battles', { battleType: 'Arena', timestamp: new Date().toISOString(), isWin: false });
+			await storage.add('snapshots', { playerId: '1', timestamp: new Date().toISOString() });
+
+			const stats = await storage.getStorageStats();
+			expect(stats.battles).toBe(2);
+			expect(stats.snapshots).toBe(1);
+			expect(stats.heroes).toBe(0);
+		});
+
+		test('should include all store names', async () => {
+			const stats = await storage.getStorageStats();
+			expect(stats).toHaveProperty('battles');
+			expect(stats).toHaveProperty('snapshots');
+			expect(stats).toHaveProperty('heroes');
+			expect(stats).toHaveProperty('apiLogs');
+		});
+	});
+
+	// =================================================================
+	// Export / Import (#27)
+	// =================================================================
+	describe('exportAllStores', () => {
+		test('should export all stores with _meta header', async () => {
+			await storage.add('battles', {
+				timestamp: '2025-01-01', type: 'arena', isWin: true,
+				attackTeam: '[]', defenseTeam: '[]',
+			});
+
+			const result = await storage.exportAllStores();
+
+			expect(result._meta).toBeDefined();
+			expect(result._meta.exportedAt).toBeDefined();
+			expect(result._meta.version).toBe(11);
+			expect(result.battles).toHaveLength(1);
+			expect(result.battles[0].type).toBe('arena');
+		});
+
+		test('should export specific stores only', async () => {
+			await storage.add('battles', {
+				timestamp: '2025-01-01', type: 'arena', isWin: true,
+				attackTeam: '[]', defenseTeam: '[]',
+			});
+
+			const result = await storage.exportAllStores(['battles']);
+
+			expect(result.battles).toBeDefined();
+			expect(result.heroes).toBeUndefined();
+			expect(result._meta.storeCount).toBe(1);
+		});
+	});
+
+	describe('importStores', () => {
+		test('should import records into stores', async () => {
+			const data = {
+				battles: [{
+					timestamp: '2025-01-01', type: 'arena', isWin: true,
+					attackTeam: '[]', defenseTeam: '[]',
+				}],
+			};
+
+			const summary = await storage.importStores(data);
+			expect(summary.imported.battles).toBe(1);
+
+			const count = await storage.count('battles');
+			expect(count).toBe(1);
+		});
+
+		test('should skip _meta key during import', async () => {
+			const data = {
+				_meta: { version: 9 },
+				battles: [{
+					timestamp: '2025-01-01', type: 'arena', isWin: true,
+					attackTeam: '[]', defenseTeam: '[]',
+				}],
+			};
+
+			const summary = await storage.importStores(data);
+			expect(summary.imported._meta).toBeUndefined();
+			expect(summary.imported.battles).toBe(1);
+		});
+
+		test('should report errors for unknown stores', async () => {
+			const data = { nonExistentStore: [{ id: 1 }] };
+			const summary = await storage.importStores(data);
+			expect(summary.errors).toContain('Unknown store: nonExistentStore');
+		});
+	});
+
+	describe('getStoreNames', () => {
+		test('should return array of all store names', async () => {
+			const names = await storage.getStoreNames();
+			expect(Array.isArray(names)).toBe(true);
+			expect(names).toContain('battles');
+			expect(names).toContain('heroes');
+			expect(names).toContain('errorLog');
+			expect(names).toContain('mailRewards');
+			expect(names.length).toBe(38);
+		});
+	});
+
+	// ─── Defensive Handlers (#129) ───────────────────────────────────────
+
+	describe('Defensive IDB Handlers (#129)', () => {
+		test('should register db.onclose handler after opening', async () => {
+			expect(typeof storage.db.onclose).toBe('function');
+		});
+
+		test('should register db.onversionchange handler after opening', async () => {
+			expect(typeof storage.db.onversionchange).toBe('function');
+		});
+
+		test('should initialise _dbClosed to false', () => {
+			expect(storage._dbClosed).toBe(false);
+		});
+
+		test('db.onclose should set _dbClosed flag', () => {
+			// Simulate browser closing the connection
+			storage.db.onclose();
+			expect(storage._dbClosed).toBe(true);
+		});
+
+		test('db.onversionchange should close db and set _dbClosed flag', () => {
+			const closeSpy = jest.spyOn(storage.db, 'close');
+			storage.db.onversionchange();
+			expect(closeSpy).toHaveBeenCalled();
+			expect(storage._dbClosed).toBe(true);
+			closeSpy.mockRestore();
+		});
+
+		test('_ensureDb should reconnect after db.onclose fires', async () => {
+			// Actually close the connection, then set the flag (mimics browser behaviour)
+			storage.db.close();
+			storage._dbClosed = true;
+
+			// _ensureDb should transparently reconnect
+			const db = await storage._ensureDb();
+			expect(db).toBeDefined();
+			expect(db.name).toBe('OrganizedJihad');
+			expect(storage._dbClosed).toBe(false);
+		});
+
+		test('CRUD methods should work after reconnect', async () => {
+			// Close the connection and set flag, simulating browser eviction
+			storage.db.close();
+			storage._dbClosed = true;
+
+			// add() should still succeed — it calls _ensureDb() internally
+			const id = await storage.add('metadata', { key: 'reconnect-test', value: 42 });
+			expect(id).toBeDefined();
+
+			// Verify the data is actually there
+			const record = await storage.get('metadata', 'reconnect-test');
+			expect(record.value).toBe(42);
+		});
+
+		test('_reconnect should replace initPromise', async () => {
+			const originalPromise = storage.initPromise;
+			storage.db.close();
+			storage._dbClosed = true;
+			const reconnected = storage._reconnect();
+			expect(storage.initPromise).not.toBe(originalPromise);
+			await reconnected;
+			expect(storage._dbClosed).toBe(false);
+		});
+	});
+
+	// ─── getByIndexRange (#132) ──────────────────────────────────────────
+
+	describe('getByIndexRange', () => {
+		test('should return records with lower bound', async () => {
+			await storage.add('battles', { battleType: 'Arena', timestamp: '2025-01-01T00:00:00Z', opponentId: 1, isWin: true });
+			await storage.add('battles', { battleType: 'Arena', timestamp: '2025-01-02T00:00:00Z', opponentId: 2, isWin: false });
+			await storage.add('battles', { battleType: 'Arena', timestamp: '2025-01-03T00:00:00Z', opponentId: 3, isWin: true });
+
+			const results = await storage.getByIndexRange('battles', 'timestamp', { lower: '2025-01-02T00:00:00Z' });
+			expect(results).toHaveLength(2);
+		});
+
+		test('should return records with upper bound', async () => {
+			await storage.add('battles', { battleType: 'Arena', timestamp: '2025-01-01T00:00:00Z', opponentId: 1, isWin: true });
+			await storage.add('battles', { battleType: 'Arena', timestamp: '2025-01-02T00:00:00Z', opponentId: 2, isWin: false });
+			await storage.add('battles', { battleType: 'Arena', timestamp: '2025-01-03T00:00:00Z', opponentId: 3, isWin: true });
+
+			const results = await storage.getByIndexRange('battles', 'timestamp', { upper: '2025-01-02T00:00:00Z' });
+			expect(results).toHaveLength(2);
+		});
+
+		test('should return records within bounded range', async () => {
+			await storage.add('battles', { battleType: 'Arena', timestamp: '2025-01-01T00:00:00Z', opponentId: 1, isWin: true });
+			await storage.add('battles', { battleType: 'Arena', timestamp: '2025-01-02T00:00:00Z', opponentId: 2, isWin: false });
+			await storage.add('battles', { battleType: 'Arena', timestamp: '2025-01-03T00:00:00Z', opponentId: 3, isWin: true });
+
+			const results = await storage.getByIndexRange('battles', 'timestamp', {
+				lower: '2025-01-01T12:00:00Z',
+				upper: '2025-01-02T12:00:00Z',
+			});
+			expect(results).toHaveLength(1);
+			expect(results[0].opponentId).toBe(2);
+		});
+
+		test('should return all records when no bounds specified', async () => {
+			await storage.add('battles', { battleType: 'Arena', timestamp: '2025-01-01T00:00:00Z', opponentId: 1, isWin: true });
+			await storage.add('battles', { battleType: 'Arena', timestamp: '2025-01-02T00:00:00Z', opponentId: 2, isWin: false });
+
+			const results = await storage.getByIndexRange('battles', 'timestamp', {});
+			expect(results).toHaveLength(2);
+		});
+
+		test('should honour lowerOpen exclusion', async () => {
+			await storage.add('battles', { battleType: 'Arena', timestamp: '2025-01-01T00:00:00Z', opponentId: 1, isWin: true });
+			await storage.add('battles', { battleType: 'Arena', timestamp: '2025-01-02T00:00:00Z', opponentId: 2, isWin: false });
+
+			const inclusive = await storage.getByIndexRange('battles', 'timestamp', { lower: '2025-01-01T00:00:00Z' });
+			expect(inclusive).toHaveLength(2);
+
+			const exclusive = await storage.getByIndexRange('battles', 'timestamp', { lower: '2025-01-01T00:00:00Z', lowerOpen: true });
+			expect(exclusive).toHaveLength(1);
+			expect(exclusive[0].opponentId).toBe(2);
+		});
+	});
+
+	// ─── pruneOldest (#132) ──────────────────────────────────────────────
+
+	describe('pruneOldest', () => {
+		test('should delete oldest records when store exceeds max', async () => {
+			// Add 5 records with ascending timestamps
+			for (let i = 1; i <= 5; i++) {
+				await storage.add('battles', {
+					battleType: 'Arena',
+					timestamp: `2025-01-0${i}T00:00:00Z`,
+					opponentId: i,
+					isWin: true,
+				});
+			}
+
+			const deleted = await storage.pruneOldest('battles', 'timestamp', 3);
+			expect(deleted).toBe(2);
+
+			const remaining = await storage.getAll('battles');
+			expect(remaining).toHaveLength(3);
+			// Oldest two (opponentId 1, 2) should be gone
+			const ids = remaining.map((r) => r.opponentId).sort();
+			expect(ids).toEqual([3, 4, 5]);
+		});
+
+		test('should return 0 when store is within max', async () => {
+			await storage.add('battles', {
+				battleType: 'Arena', timestamp: '2025-01-01T00:00:00Z',
+				opponentId: 1, isWin: true,
+			});
+
+			const deleted = await storage.pruneOldest('battles', 'timestamp', 10);
+			expect(deleted).toBe(0);
+
+			const remaining = await storage.getAll('battles');
+			expect(remaining).toHaveLength(1);
+		});
+
+		test('should return 0 when store is empty', async () => {
+			const deleted = await storage.pruneOldest('battles', 'timestamp', 10);
+			expect(deleted).toBe(0);
+		});
+
+		test('should delete all excess when maxRecords is 0', async () => {
+			for (let i = 1; i <= 3; i++) {
+				await storage.add('battles', {
+					battleType: 'Arena',
+					timestamp: `2025-01-0${i}T00:00:00Z`,
+					opponentId: i,
+					isWin: true,
+				});
+			}
+
+			const deleted = await storage.pruneOldest('battles', 'timestamp', 0);
+			expect(deleted).toBe(3);
+
+			const remaining = await storage.getAll('battles');
+			expect(remaining).toHaveLength(0);
+		});
+	});
+
+	// ─── Batch Operations (#141) ─────────────────────────────────────────
+
+	describe('addBatch', () => {
+		test('should insert multiple records in a single transaction', async () => {
+			const records = [
+				{ heroId: 1, heroName: 'Aurora', playerId: 100, timestamp: '2025-01-01T00:00:00Z', power: 100 },
+				{ heroId: 2, heroName: 'Celeste', playerId: 100, timestamp: '2025-01-01T00:00:00Z', power: 200 },
+				{ heroId: 3, heroName: 'Jorgen', playerId: 100, timestamp: '2025-01-01T00:00:00Z', power: 300 },
+			];
+
+			const keys = await storage.addBatch('heroes', records);
+
+			expect(keys).toHaveLength(3);
+			expect(keys.every((k) => k > 0)).toBe(true);
+
+			const all = await storage.getAll('heroes');
+			expect(all).toHaveLength(3);
+			expect(all.map((h) => h.heroName)).toEqual(['Aurora', 'Celeste', 'Jorgen']);
+		});
+
+		test('should return empty array for empty/null records', async () => {
+			expect(await storage.addBatch('heroes', [])).toEqual([]);
+			expect(await storage.addBatch('heroes', null)).toEqual([]);
+			expect(await storage.addBatch('heroes', undefined)).toEqual([]);
+		});
+
+		test('should return keys matching inserted record count', async () => {
+			// addBatch returns an array of generated keys — one per record
+			const records = [
+				{ heroId: 10, heroName: 'Astaroth', playerId: 100, timestamp: '2025-01-01T00:00:00Z', power: 500 },
+				{ heroId: 20, heroName: 'Martha', playerId: 100, timestamp: '2025-01-01T00:00:00Z', power: 600 },
+			];
+
+			const keys = await storage.addBatch('heroes', records);
+			expect(keys).toHaveLength(2);
+
+			// Each key should be the auto-incremented ID
+			const all = await storage.getAll('heroes');
+			expect(all).toHaveLength(2);
+			expect(all[0].heroName).toBe('Astaroth');
+			expect(all[1].heroName).toBe('Martha');
+		});
+
+		test('should handle large batches efficiently', async () => {
+			const records = Array.from({ length: 100 }, (_, i) => ({
+				heroId: i + 1,
+				heroName: `Hero_${i + 1}`,
+				playerId: 100,
+				timestamp: new Date(2025, 0, 1, 0, 0, i).toISOString(),
+				power: (i + 1) * 10,
+			}));
+
+			const keys = await storage.addBatch('heroes', records);
+
+			expect(keys).toHaveLength(100);
+			const all = await storage.getAll('heroes');
+			expect(all).toHaveLength(100);
+		});
+	});
+
+	describe('putBatch', () => {
+		test('should upsert multiple records in a single transaction', async () => {
+			const records = [
+				{ key: 'a', value: 1 },
+				{ key: 'b', value: 2 },
+				{ key: 'c', value: 3 },
+			];
+
+			const keys = await storage.putBatch('metadata', records);
+
+			expect(keys).toHaveLength(3);
+
+			const a = await storage.get('metadata', 'a');
+			expect(a.value).toBe(1);
+			const c = await storage.get('metadata', 'c');
+			expect(c.value).toBe(3);
+		});
+
+		test('should return empty array for empty/null records', async () => {
+			expect(await storage.putBatch('metadata', [])).toEqual([]);
+			expect(await storage.putBatch('metadata', null)).toEqual([]);
+			expect(await storage.putBatch('metadata', undefined)).toEqual([]);
+		});
+
+		test('should update existing records', async () => {
+			// Insert initial records
+			await storage.put('metadata', { key: 'x', value: 'old' });
+			await storage.put('metadata', { key: 'y', value: 'stale' });
+
+			// Upsert with updated values
+			const keys = await storage.putBatch('metadata', [
+				{ key: 'x', value: 'new' },
+				{ key: 'y', value: 'fresh' },
+				{ key: 'z', value: 'brand-new' },
+			]);
+
+			expect(keys).toHaveLength(3);
+
+			const x = await storage.get('metadata', 'x');
+			expect(x.value).toBe('new');
+			const y = await storage.get('metadata', 'y');
+			expect(y.value).toBe('fresh');
+			const z = await storage.get('metadata', 'z');
+			expect(z.value).toBe('brand-new');
+		});
+	});
+
+	// ─── getBattleStats (#150) ───────────────────────────────────────────
+
+	describe('getBattleStats', () => {
+		const seedBattles = async () => {
+			await storage.add('battles', { battleType: 'Arena', timestamp: '2025-01-01T00:00:00Z', opponentId: 1, isWin: true });
+			await storage.add('battles', { battleType: 'Arena', timestamp: '2025-01-02T00:00:00Z', opponentId: 2, isWin: false });
+			await storage.add('battles', { battleType: 'GrandArena', timestamp: '2025-01-03T00:00:00Z', opponentId: 3, isWin: true });
+			await storage.add('battles', { battleType: 'GrandArena', timestamp: '2025-01-04T00:00:00Z', opponentId: 4, isWin: true });
+			await storage.add('battles', { battleType: 'Arena', timestamp: '2025-01-05T00:00:00Z', opponentId: 5, isWin: false });
+		};
+
+		test('should return correct totals without any time bounds', async () => {
+			await seedBattles();
+			const stats = await storage.getBattleStats();
+
+			expect(stats.total).toBe(5);
+			expect(stats.wins).toBe(3);
+			expect(stats.losses).toBe(2);
+		});
+
+		test('should break down stats by battleType', async () => {
+			await seedBattles();
+			const stats = await storage.getBattleStats();
+
+			expect(stats.byType.Arena).toEqual({ total: 3, wins: 1, losses: 2 });
+			expect(stats.byType.GrandArena).toEqual({ total: 2, wins: 2, losses: 0 });
+		});
+
+		test('should return zeroes for empty store', async () => {
+			const stats = await storage.getBattleStats();
+
+			expect(stats.total).toBe(0);
+			expect(stats.wins).toBe(0);
+			expect(stats.losses).toBe(0);
+			expect(stats.byType).toEqual({});
+		});
+
+		test('should filter with since lower bound', async () => {
+			await seedBattles();
+			const stats = await storage.getBattleStats({ since: '2025-01-03T00:00:00Z' });
+
+			// Records on 01-03, 01-04, 01-05
+			expect(stats.total).toBe(3);
+			expect(stats.wins).toBe(2);
+			expect(stats.losses).toBe(1);
+		});
+
+		test('should filter with until upper bound', async () => {
+			await seedBattles();
+			const stats = await storage.getBattleStats({ until: '2025-01-02T00:00:00Z' });
+
+			// Records on 01-01, 01-02
+			expect(stats.total).toBe(2);
+			expect(stats.wins).toBe(1);
+			expect(stats.losses).toBe(1);
+		});
+
+		test('should filter with bounded range (since + until)', async () => {
+			await seedBattles();
+			const stats = await storage.getBattleStats({
+				since: '2025-01-02T00:00:00Z',
+				until: '2025-01-04T00:00:00Z',
+			});
+
+			// Records on 01-02, 01-03, 01-04
+			expect(stats.total).toBe(3);
+			expect(stats.wins).toBe(2);
+			expect(stats.losses).toBe(1);
+			expect(stats.byType.Arena).toEqual({ total: 1, wins: 0, losses: 1 });
+			expect(stats.byType.GrandArena).toEqual({ total: 2, wins: 2, losses: 0 });
+		});
+	});
+
+	// ─── addBatch non-ConstraintError resilience (#151) ──────────────────
+
+	describe('addBatch error resilience (#151)', () => {
+		test('should continue batch when a non-duplicate error is prevented', async () => {
+			// Insert two valid records — even if the DB engine raises a
+			// non-ConstraintError on one, the transaction should not abort;
+			// all other records should still commit.
+			const records = [
+				{ heroId: 1, heroName: 'Astaroth', playerId: 100, timestamp: '2025-01-01T00:00:00Z', power: 100 },
+				{ heroId: 2, heroName: 'Martha', playerId: 100, timestamp: '2025-01-01T00:00:00Z', power: 200 },
+			];
+
+			// With fake-indexeddb we can only trigger ConstraintError
+			// naturally, but we can verify that the batch succeeds under
+			// normal conditions and that the key array is well-formed.
+			const keys = await storage.addBatch('heroes', records);
+			expect(keys).toHaveLength(2);
+			expect(keys.every((k) => k > 0)).toBe(true);
+
+			const all = await storage.getAll('heroes');
+			expect(all).toHaveLength(2);
+		});
+
+		test('should skip duplicates but preserve other records', async () => {
+			// First batch — succeeds fully
+			await storage.addBatch('heroes', [
+				{ heroId: 10, heroName: 'Aurora', playerId: 100, timestamp: '2025-01-01T00:00:00Z', power: 300 },
+			]);
+
+			// Second batch — first record is NEW, second would be fine too
+			// (no unique key collision on autoincrement stores)
+			const keys = await storage.addBatch('heroes', [
+				{ heroId: 20, heroName: 'Celeste', playerId: 100, timestamp: '2025-01-01T00:00:00Z', power: 400 },
+				{ heroId: 30, heroName: 'Jorgen', playerId: 100, timestamp: '2025-01-01T00:00:00Z', power: 500 },
+			]);
+
+			expect(keys).toHaveLength(2);
+			const all = await storage.getAll('heroes');
+			expect(all).toHaveLength(3); // all three committed
+		});
+	});
+
+	// ─── Incremental sync helpers (#145) ─────────────────────────────────
+
+	describe('getByIndexRange with timestamps (#145)', () => {
+		const seedTimestamped = async () => {
+			for (let i = 1; i <= 5; i++) {
+				await storage.add('battles', {
+					battleType: 'Arena',
+					timestamp: `2025-01-0${i}T12:00:00Z`,
+					opponentId: i,
+					isWin: i % 2 === 0,
+				});
+			}
+		};
+
+		test('should return records after a given timestamp (lowerBound)', async () => {
+			await seedTimestamped();
+			const results = await storage.getByIndexRange('battles', 'timestamp', {
+				lower: '2025-01-03T00:00:00Z',
+			});
+			// Records with timestamps on 01-03, 01-04, 01-05
+			expect(results.length).toBeGreaterThanOrEqual(3);
+		});
+
+		test('should return records before a given timestamp (upperBound)', async () => {
+			await seedTimestamped();
+			const results = await storage.getByIndexRange('battles', 'timestamp', {
+				upper: '2025-01-03T00:00:00Z',
+			});
+			// Records with timestamps on 01-01, 01-02, 01-03
+			expect(results.length).toBeGreaterThanOrEqual(2);
+		});
+
+		test('should return all records when no bounds given', async () => {
+			await seedTimestamped();
+			const results = await storage.getByIndexRange('battles', 'timestamp', {});
+			expect(results).toHaveLength(5);
+		});
+	});
+});

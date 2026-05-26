@@ -74,13 +74,13 @@
    - Completion tracking
 
 10. **CalendarEvent** (`Data/Models/UserData.cs`)
-    - Events and reminders
-    - Recurring events support
-    - Reminder notifications
+	- Events and reminders
+	- Recurring events support
+	- Reminder notifications
 
 11. **SyncMetadata** (`Data/Models/SyncMetadata.cs`)
-    - Sync state tracking
-    - Last sync timestamp, browser version
+	- Sync state tracking
+	- Last sync timestamp, browser version
 
 ### 4. Services Implemented
 
