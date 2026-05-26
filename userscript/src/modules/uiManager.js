@@ -2095,10 +2095,11 @@ class UIManager {
 		// Build projected overall item requirements for remaining hero progression.
 		let requirementsProjection = null;
 		try {
-			const [heroUpgrades, equipmentChanges, inventoryItemUsages] = await Promise.all([
+			const [heroUpgrades, equipmentChanges, inventoryItemUsages, inventoryData] = await Promise.all([
 				this.idbStorage.getAll('heroUpgrades', FETCH_LIMIT_LARGE).catch(() => []),
 				this.idbStorage.getAll('equipmentChanges', FETCH_LIMIT_LARGE).catch(() => []),
 				this.idbStorage.getAll('inventoryItemUsages', FETCH_LIMIT_LARGE).catch(() => []),
+				this.idbStorage.getMetadata('inventoryData', {}).catch(() => ({})),
 			]);
 
 			requirementsProjection = HeroMaterialRequirementsCalculator.calculateProjectedRequirements({
@@ -2106,6 +2107,7 @@ class UIManager {
 				heroUpgrades,
 				equipmentChanges,
 				inventoryItemUsages,
+				inventoryData,
 				targetLevel: HeroCompletionCalculator.MAX_LEVEL,
 				targetColorRank: 19,
 				topItemLimit: 24,
@@ -2238,21 +2240,28 @@ class UIManager {
 		const itemRows = topItems.map((entry) => {
 			const levelPart = Number(entry.levelProjected || 0);
 			const colorPart = Number(entry.colorProjected || 0);
-			const qty = Number(entry.quantity || 0);
+			const needed = Number(entry.quantity || 0);
+			const owned = Number(entry.ownedQuantity || 0);
+			const shortage = Number(entry.shortageQuantity || 0);
 			const mix = [];
 			if (levelPart > 0) mix.push(`Lv ${levelPart.toLocaleString()}`);
 			if (colorPart > 0) mix.push(`Rank ${colorPart.toLocaleString()}`);
 			const mixLabel = mix.length > 0 ? mix.join(' • ') : 'Projected';
+			const shortageStyle = shortage > 0 ? 'color:#ef9a9a;font-weight:700' : 'color:#a5d6a7;font-weight:700';
 
 			return `<tr>` +
 				`<td class="oj-mono">${this._escapeHtml(String(entry.itemId || 'unknown_item'))}</td>` +
-				`<td class="oj-num"><strong>${qty.toLocaleString()}</strong></td>` +
+				`<td class="oj-num"><strong>${needed.toLocaleString()}</strong></td>` +
+				`<td class="oj-num">${owned.toLocaleString()}</td>` +
+				`<td class="oj-num" style="${shortageStyle}">${shortage.toLocaleString()}</td>` +
 				`<td class="oj-muted" style="font-size:11px">${this._escapeHtml(mixLabel)}</td>` +
 			`</tr>`;
 		}).join('');
 
 		const coverage = projection.coverage || {};
 		const totalNeeds = Number(projection.totalProjectedItems || 0).toLocaleString();
+		const totalOwned = Number(projection.totalOwnedForProjectedItems || 0).toLocaleString();
+		const totalShortage = Number(projection.totalShortageItems || 0).toLocaleString();
 
 		return `
 			<div class="oj-section" style="margin-bottom:10px;padding:10px 12px">
@@ -2267,10 +2276,12 @@ class UIManager {
 					<div class="oj-muted" style="font-size:11px">Level gaps: <strong>${Number(projection.totalLevelDeficit || 0).toLocaleString()}</strong></div>
 					<div class="oj-muted" style="font-size:11px">Rank gaps: <strong>${Number(projection.totalColorDeficit || 0).toLocaleString()}</strong></div>
 					<div class="oj-muted" style="font-size:11px">Projected total: <strong>${totalNeeds}</strong></div>
+					<div class="oj-muted" style="font-size:11px">Owned (matching IDs): <strong>${totalOwned}</strong></div>
+					<div class="oj-muted" style="font-size:11px">Shortage: <strong style="color:#ef9a9a">${totalShortage}</strong></div>
 					<div class="oj-muted" style="font-size:11px">Signals: lvlUp ${Number(coverage.levelUpgradeSamples || 0)}, colorUp ${Number(coverage.colorUpgradeSamples || 0)}, equip ${Number(coverage.equipmentChangeSamples || 0)}, itemUse ${Number(coverage.itemUsageSamples || 0)}</div>
 				</div>
 				${hasSignal
-					? `<table class="oj-table" style="margin-top:4px"><thead><tr><th>Item ID</th><th>Qty</th><th>Mix</th></tr></thead><tbody>${itemRows}</tbody></table>`
+					? `<table class="oj-table" style="margin-top:4px"><thead><tr><th>Item ID</th><th>Needed</th><th>Owned</th><th>Shortage</th><th>Mix</th></tr></thead><tbody>${itemRows}</tbody></table>`
 					: `<p class="oj-empty" style="margin:0">Not enough tracked upgrade/equipment history yet to estimate concrete item IDs. Keep playing with tracking enabled and this panel will auto-fill.</p>`
 				}
 			</div>

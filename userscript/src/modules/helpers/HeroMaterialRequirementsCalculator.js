@@ -40,6 +40,7 @@ class HeroMaterialRequirementsCalculator {
 	 *  heroUpgrades?: Array<object>,
 	 *  equipmentChanges?: Array<object>,
 	 *  inventoryItemUsages?: Array<object>,
+	 *  inventoryData?: object,
 	 *  targetLevel?: number,
 	 *  targetColorRank?: number,
 	 *  topItemLimit?: number
@@ -53,6 +54,8 @@ class HeroMaterialRequirementsCalculator {
 	 *  totalLevelDeficit: number,
 	 *  totalColorDeficit: number,
 	 *  totalProjectedItems: number,
+	 *  totalOwnedForProjectedItems: number,
+	 *  totalShortageItems: number,
 	 *  distinctItems: number,
 	 *  confidenceScore: number,
 	 *  coverage: {
@@ -66,6 +69,8 @@ class HeroMaterialRequirementsCalculator {
 	 *  items: Array<{
 	 *   itemId: string,
 	 *   quantity: number,
+	 *   ownedQuantity: number,
+	 *   shortageQuantity: number,
 	 *   levelProjected: number,
 	 *   colorProjected: number
 	 *  }>
@@ -76,6 +81,7 @@ class HeroMaterialRequirementsCalculator {
 		const heroUpgrades = Array.isArray(input.heroUpgrades) ? input.heroUpgrades : [];
 		const equipmentChanges = Array.isArray(input.equipmentChanges) ? input.equipmentChanges : [];
 		const inventoryItemUsages = Array.isArray(input.inventoryItemUsages) ? input.inventoryItemUsages : [];
+		const inventoryData = this._parseJson(input.inventoryData, {});
 		const targetLevel = Math.max(1, Number(input.targetLevel) || this.DEFAULT_TARGET_LEVEL);
 		const targetColorRank = Math.max(0, Number(input.targetColorRank) || this.DEFAULT_TARGET_COLOR_RANK);
 		const topItemLimit = Math.max(1, Number(input.topItemLimit) || this.DEFAULT_TOP_ITEM_LIMIT);
@@ -114,22 +120,32 @@ class HeroMaterialRequirementsCalculator {
 		}
 
 		const mergedItems = this._mergeTotals(projectedLevelItems, projectedColorItems);
-		const sortedItems = Object.entries(mergedItems)
+		const ownedItemTotals = this._buildOwnedItemTotals(inventoryData);
+		const fullItems = Object.entries(mergedItems)
 			.map(([itemId, quantity]) => {
 				const levelProjected = Math.ceil(projectedLevelItems[itemId] || 0);
 				const colorProjected = Math.ceil(projectedColorItems[itemId] || 0);
+				const ownedQuantity = Math.max(0, Math.floor(this._toNumber(ownedItemTotals[itemId])));
+				const projectedQuantity = Math.ceil(quantity);
+				const shortageQuantity = Math.max(0, projectedQuantity - ownedQuantity);
 				return {
 					itemId,
-					quantity: Math.ceil(quantity),
+					quantity: projectedQuantity,
+					ownedQuantity,
+					shortageQuantity,
 					levelProjected,
 					colorProjected,
 				};
 			})
 			.filter((entry) => entry.quantity > 0)
-			.sort((a, b) => b.quantity - a.quantity)
+			.sort((a, b) => b.shortageQuantity - a.shortageQuantity || b.quantity - a.quantity);
+
+		const sortedItems = fullItems
 			.slice(0, topItemLimit);
 
-		const totalProjectedItems = sortedItems.reduce((sum, entry) => sum + entry.quantity, 0);
+		const totalProjectedItems = fullItems.reduce((sum, entry) => sum + entry.quantity, 0);
+		const totalOwnedForProjectedItems = fullItems.reduce((sum, entry) => sum + Math.min(entry.ownedQuantity, entry.quantity), 0);
+		const totalShortageItems = fullItems.reduce((sum, entry) => sum + entry.shortageQuantity, 0);
 		const confidenceScore = this._calculateConfidence(levelModel, colorModel);
 
 		return {
@@ -141,7 +157,9 @@ class HeroMaterialRequirementsCalculator {
 			totalLevelDeficit,
 			totalColorDeficit,
 			totalProjectedItems,
-			distinctItems: sortedItems.length,
+			totalOwnedForProjectedItems,
+			totalShortageItems,
+			distinctItems: fullItems.length,
 			confidenceScore,
 			coverage: {
 				levelUpgradeSamples: levelModel.levelUpgradeSamples,
@@ -153,6 +171,36 @@ class HeroMaterialRequirementsCalculator {
 			},
 			items: sortedItems,
 		};
+	}
+
+	/**
+	 * Build item ownership totals keyed by item ID from raw inventory data.
+	 *
+	 * @param {object} inventoryData - Raw inventory payload captured from inventoryGet
+	 * @returns {ItemTotals} Owned quantity totals
+	 */
+	static _buildOwnedItemTotals(inventoryData) {
+		const totals = this._emptyTotals();
+		if (!inventoryData || typeof inventoryData !== 'object') {
+			return totals;
+		}
+
+		for (const value of Object.values(inventoryData)) {
+			if (!value || typeof value !== 'object') {
+				continue;
+			}
+
+			for (const [rawId, rawQty] of Object.entries(value)) {
+				const itemId = this._normalizeItemId(rawId);
+				const qty = Math.max(0, Math.floor(this._toNumber(rawQty)));
+				if (!itemId || qty <= 0) {
+					continue;
+				}
+				this._addTotal(totals, itemId, qty);
+			}
+		}
+
+		return totals;
 	}
 
 	/**

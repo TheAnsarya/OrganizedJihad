@@ -38,3 +38,33 @@
 - Inventory subtraction and shortage display.
 - API/desktop parity endpoint and shared contracts.
 - Installer UX extras (post-install health summary and shortcuts).
+
+---
+
+## Session
+- Date: 2026-05-26
+- Session Number: 3
+- Scope: Add inventory-aware shortage calculations and UI columns for projected hero requirements.
+
+## Summary
+- Extended requirements projection output with owned and shortage quantities by item.
+- Corrected overall totals so projected totals are computed across all items, not only the displayed top-N rows.
+- Updated Heroes panel table to show Needed, Owned, and Shortage columns with aggregate shortage summary.
+- Added calculator tests for ownership/shortage behavior and top-limit total correctness.
+
+## Files Modified
+- userscript/src/modules/helpers/HeroMaterialRequirementsCalculator.js
+- userscript/src/modules/uiManager.js
+- userscript/tests/heroMaterialRequirementsCalculator.test.js
+- userscript/package.json
+
+## Validation
+- yarn test heroMaterialRequirementsCalculator.test.js --runInBand: passed (5 tests)
+- yarn test --runInBand: passed (17 suites, 694 tests)
+- yarn build: passed
+
+## Deferred Follow-up (Updated)
+- Deterministic per-hero recipe catalog ingestion for exact ingredient trees.
+- Item name/icon resolution for human-readable requirements table entries.
+- API/desktop parity endpoint and shared contract for projections.
+- Installer UX extras (post-install health summary and shortcuts).
