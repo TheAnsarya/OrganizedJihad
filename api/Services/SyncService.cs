@@ -1847,7 +1847,7 @@ public class SyncService {
 			.Select(option => new TeamRecommendationModeOption {
 				Value = option.Value,
 				Label = option.Label,
-				PreferredTrendWindowDays = ResolveModePreferredTrendWindowDays(option.Value, preferenceState),
+				PreferredTrendWindowDays = TeamRecommendationCalibrationStateMath.ResolveModePreferredTrendWindowDays(option.Value, preferenceState, SupportedCalibrationTrendWindowDays),
 				IsUserPreference = preferenceState.ModeTrendWindowDays.ContainsKey(option.Value),
 				SupportedTrendWindowDays = [.. SupportedCalibrationTrendWindowDays],
 			})
@@ -1903,7 +1903,7 @@ public class SyncService {
 		var modes = TeamRecommendationProfileCatalog.SupportedModes
 			.Select(mode => new TeamRecommendationModeTrendPreference {
 				Mode = mode,
-				PreferredTrendWindowDays = ResolveModePreferredTrendWindowDays(mode, preferenceState),
+				PreferredTrendWindowDays = TeamRecommendationCalibrationStateMath.ResolveModePreferredTrendWindowDays(mode, preferenceState, SupportedCalibrationTrendWindowDays),
 				SupportedTrendWindowDays = [.. SupportedCalibrationTrendWindowDays],
 			})
 			.OrderBy(entry => entry.Mode)
@@ -1920,7 +1920,7 @@ public class SyncService {
 	/// </summary>
 	public async Task<TeamRecommendationTrendPreferenceResponse> SetTeamRecommendationTrendPreferenceAsync(string mode, int preferredTrendWindowDays) {
 		var normalizedMode = NormalizeTeamRecommendationMode(mode);
-		if (!IsSupportedCalibrationTrendWindow(preferredTrendWindowDays)) {
+		if (!TeamRecommendationCalibrationStateMath.IsSupportedCalibrationTrendWindow(preferredTrendWindowDays, SupportedCalibrationTrendWindowDays)) {
 			throw new ArgumentOutOfRangeException(nameof(preferredTrendWindowDays), "Supported values: 7, 30, 90.");
 		}
 
@@ -2091,14 +2091,14 @@ public class SyncService {
 		}
 
 		var nowUtc = DateTime.UtcNow;
-		var resolvedTrendWindowDays = ResolvePreferredCalibrationTrendWindowDays(modeState, preferenceState, normalizedMode, preferredTrendWindowDays);
-		var trendWindows = BuildCalibrationTrendWindows(modeState, SupportedCalibrationTrendWindowDays, nowUtc);
+		var resolvedTrendWindowDays = TeamRecommendationCalibrationStateMath.ResolvePreferredCalibrationTrendWindowDays(modeState, preferenceState, normalizedMode, preferredTrendWindowDays, SupportedCalibrationTrendWindowDays);
+		var trendWindows = TeamRecommendationCalibrationStateMath.BuildCalibrationTrendWindows(modeState, SupportedCalibrationTrendWindowDays, nowUtc);
 
 		return new TeamRecommendationCalibrationResponse {
 			Mode = normalizedMode,
 			PreferredTrendWindowDays = resolvedTrendWindowDays,
 			SupportedTrendWindowDays = [.. SupportedCalibrationTrendWindowDays],
-			SuggestedFrictionScale = Math.Round(ResolveSuggestedScaleFromModeState(modeState, resolvedTrendWindowDays, nowUtc), 6),
+			SuggestedFrictionScale = Math.Round(TeamRecommendationCalibrationStateMath.ResolveSuggestedScaleFromModeState(modeState, resolvedTrendWindowDays, nowUtc), 6),
 			MeanAbsoluteError = Math.Round(Math.Clamp(modeState.MeanAbsoluteError, 0d, 1d), 6),
 			MeanBrierScore = Math.Round(Math.Clamp(modeState.MeanBrierScore, 0d, 1d), 6),
 			PredictionBias = Math.Round(Math.Clamp(modeState.PredictionBias, -1d, 1d), 6),
@@ -2741,8 +2741,8 @@ public class SyncService {
 		var state = await LoadTeamRecommendationCalibrationStateAsync(context);
 		var preferenceState = await LoadTeamRecommendationTrendPreferenceStateAsync(context);
 		if (state.Modes.TryGetValue(mode, out var modeState) && modeState.Samples > 0) {
-			var resolvedTrendWindowDays = ResolvePreferredCalibrationTrendWindowDays(modeState, preferenceState, mode, preferredTrendWindowDays);
-			return ResolveSuggestedScaleFromModeState(modeState, resolvedTrendWindowDays, DateTime.UtcNow);
+			var resolvedTrendWindowDays = TeamRecommendationCalibrationStateMath.ResolvePreferredCalibrationTrendWindowDays(modeState, preferenceState, mode, preferredTrendWindowDays, SupportedCalibrationTrendWindowDays);
+			return TeamRecommendationCalibrationStateMath.ResolveSuggestedScaleFromModeState(modeState, resolvedTrendWindowDays, DateTime.UtcNow);
 		}
 
 		return 1d;
@@ -2802,179 +2802,17 @@ public class SyncService {
 			state.Modes[backtest.Mode] = modeState;
 		}
 
-		var nextSamples = Math.Max(1, modeState.Samples + 1);
-		modeState.MeanAbsoluteError = ((modeState.MeanAbsoluteError * modeState.Samples) + backtest.MeanAbsoluteError) / nextSamples;
-		modeState.MeanBrierScore = ((modeState.MeanBrierScore * modeState.Samples) + backtest.MeanBrierScore) / nextSamples;
-		var bias = backtest.MeanPredictedWin - backtest.MeanActualWin;
-		modeState.PredictionBias = ((modeState.PredictionBias * modeState.Samples) + bias) / nextSamples;
-		modeState.Samples = nextSamples;
-		modeState.LastObjective = backtest.Objective;
-		modeState.LastUpdatedUtc = DateTime.UtcNow;
-		modeState.PreferredTrendWindowDays = ResolvePreferredCalibrationTrendWindowDays(modeState, preferenceState, backtest.Mode, null);
-		modeState.SuggestedFrictionScale = Math.Clamp(1d + (modeState.PredictionBias * 0.85d), 0.65d, 1.45d);
-		modeState.Observations.Add(new TeamRecommendationCalibrationObservation {
-			TimestampUtc = DateTime.UtcNow,
-			MeanAbsoluteError = Math.Clamp(backtest.MeanAbsoluteError, 0d, 1d),
-			MeanBrierScore = Math.Clamp(backtest.MeanBrierScore, 0d, 1d),
-			PredictionBias = Math.Clamp(backtest.MeanPredictedWin - backtest.MeanActualWin, -1d, 1d),
-			MatchedTeams = Math.Max(0, backtest.MatchedTeamCount),
-			MatchedSamples = Math.Max(0, backtest.MatchedBattleSamples),
-			Objective = backtest.Objective,
-		});
-
-		var cutoff = DateTime.UtcNow.AddDays(-120);
-		modeState.Observations = modeState.Observations
-			.Where(observation => observation.TimestampUtc >= cutoff)
-			.OrderByDescending(observation => observation.TimestampUtc)
-			.Take(256)
-			.OrderBy(observation => observation.TimestampUtc)
-			.ToList();
+		TeamRecommendationCalibrationStateMath.ApplyBacktestObservation(
+			modeState,
+			preferenceState,
+			backtest,
+			DateTime.UtcNow,
+			SupportedCalibrationTrendWindowDays
+		);
 
 		state.UpdatedAtUtc = DateTime.UtcNow;
 		var serialized = JsonSerializer.Serialize(state);
 		await UpdateSyncMetadataAsync(context, TeamRecommendationCalibrationMetadataKey, serialized);
-	}
-
-	private static int ResolvePreferredCalibrationTrendWindowDays(
-		TeamRecommendationCalibrationModeState? modeState,
-		TeamRecommendationTrendPreferenceState? preferenceState,
-		string mode,
-		int? preferredTrendWindowDays
-	) {
-		if (preferredTrendWindowDays.HasValue && IsSupportedCalibrationTrendWindow(preferredTrendWindowDays.Value)) {
-			return preferredTrendWindowDays.Value;
-		}
-
-		if (preferenceState != null &&
-			preferenceState.ModeTrendWindowDays.TryGetValue(mode, out var preferredByMode) &&
-			IsSupportedCalibrationTrendWindow(preferredByMode)) {
-			return preferredByMode;
-		}
-
-		if (modeState != null && IsSupportedCalibrationTrendWindow(modeState.PreferredTrendWindowDays)) {
-			return modeState.PreferredTrendWindowDays;
-		}
-
-		return TeamRecommendationProfileCatalog.GetDefaultCalibrationTrendWindowDays(mode);
-	}
-
-	private static int ResolveModePreferredTrendWindowDays(string mode, TeamRecommendationTrendPreferenceState preferenceState) {
-		if (preferenceState.ModeTrendWindowDays.TryGetValue(mode, out var preferredWindowDays) && IsSupportedCalibrationTrendWindow(preferredWindowDays)) {
-			return preferredWindowDays;
-		}
-
-		return TeamRecommendationProfileCatalog.GetDefaultCalibrationTrendWindowDays(mode);
-	}
-
-	private static bool IsSupportedCalibrationTrendWindow(int trendWindowDays) {
-		return SupportedCalibrationTrendWindowDays.Contains(trendWindowDays);
-	}
-
-	private static double ResolveSuggestedScaleFromModeState(TeamRecommendationCalibrationModeState modeState, int preferredWindowDays, DateTime nowUtc) {
-		if (modeState == null) {
-			return 1d;
-		}
-
-		var preferred = BuildCalibrationTrendWindow(modeState, preferredWindowDays, nowUtc);
-		if (preferred != null && preferred.Samples > 0) {
-			return Math.Clamp(preferred.SuggestedFrictionScale, 0.65d, 1.45d);
-		}
-
-		return Math.Clamp(modeState.SuggestedFrictionScale, 0.65d, 1.45d);
-	}
-
-	private static List<TeamRecommendationCalibrationTrendWindow> BuildCalibrationTrendWindows(
-		TeamRecommendationCalibrationModeState modeState,
-		IReadOnlyList<int> windows,
-		DateTime nowUtc
-	) {
-		var result = new List<TeamRecommendationCalibrationTrendWindow>();
-		foreach (var window in windows.Distinct().OrderBy(w => w)) {
-			if (window <= 0) {
-				continue;
-			}
-
-			var trend = BuildCalibrationTrendWindow(modeState, window, nowUtc);
-			if (trend != null) {
-				result.Add(trend);
-			}
-		}
-
-		return result;
-	}
-
-	private static TeamRecommendationCalibrationTrendWindow? BuildCalibrationTrendWindow(
-		TeamRecommendationCalibrationModeState modeState,
-		int windowDays,
-		DateTime nowUtc
-	) {
-		if (modeState == null) {
-			return null;
-		}
-
-		var cutoff = nowUtc.AddDays(-windowDays);
-		var observations = modeState.Observations
-			.Where(observation => observation.TimestampUtc >= cutoff)
-			.OrderBy(observation => observation.TimestampUtc)
-			.ToList();
-
-		if (observations.Count == 0) {
-			return new TeamRecommendationCalibrationTrendWindow {
-				WindowDays = windowDays,
-				Samples = 0,
-				MeanAbsoluteError = 0d,
-				MeanBrierScore = 0d,
-				PredictionBias = 0d,
-				SuggestedFrictionScale = Math.Clamp(modeState.SuggestedFrictionScale, 0.65d, 1.45d),
-				LastUpdatedUtc = modeState.LastUpdatedUtc,
-			};
-		}
-
-		var mae = observations.Average(observation => observation.MeanAbsoluteError);
-		var brier = observations.Average(observation => observation.MeanBrierScore);
-		var bias = observations.Average(observation => observation.PredictionBias);
-
-		return new TeamRecommendationCalibrationTrendWindow {
-			WindowDays = windowDays,
-			Samples = observations.Count,
-			MeanAbsoluteError = Math.Round(Math.Clamp(mae, 0d, 1d), 6),
-			MeanBrierScore = Math.Round(Math.Clamp(brier, 0d, 1d), 6),
-			PredictionBias = Math.Round(Math.Clamp(bias, -1d, 1d), 6),
-			SuggestedFrictionScale = Math.Round(Math.Clamp(1d + (bias * 0.85d), 0.65d, 1.45d), 6),
-			LastUpdatedUtc = observations.Max(observation => observation.TimestampUtc),
-		};
-	}
-
-	private sealed class TeamRecommendationCalibrationState {
-		public Dictionary<string, TeamRecommendationCalibrationModeState> Modes { get; set; } = new(StringComparer.OrdinalIgnoreCase);
-		public DateTime UpdatedAtUtc { get; set; }
-	}
-
-	private sealed class TeamRecommendationTrendPreferenceState {
-		public Dictionary<string, int> ModeTrendWindowDays { get; set; } = new(StringComparer.OrdinalIgnoreCase);
-		public DateTime UpdatedAtUtc { get; set; }
-	}
-
-	private sealed class TeamRecommendationCalibrationModeState {
-		public double SuggestedFrictionScale { get; set; } = 1d;
-		public int PreferredTrendWindowDays { get; set; } = 30;
-		public double MeanAbsoluteError { get; set; }
-		public double MeanBrierScore { get; set; }
-		public double PredictionBias { get; set; }
-		public int Samples { get; set; }
-		public string LastObjective { get; set; } = string.Empty;
-		public DateTime? LastUpdatedUtc { get; set; }
-		public List<TeamRecommendationCalibrationObservation> Observations { get; set; } = [];
-	}
-
-	private sealed class TeamRecommendationCalibrationObservation {
-		public DateTime TimestampUtc { get; set; }
-		public double MeanAbsoluteError { get; set; }
-		public double MeanBrierScore { get; set; }
-		public double PredictionBias { get; set; }
-		public int MatchedTeams { get; set; }
-		public int MatchedSamples { get; set; }
-		public string Objective { get; set; } = string.Empty;
 	}
 
 	private static double ComputeResourcePressureScore(PlayerSnapshot? snapshot, InventorySnapshot? inventory) {
