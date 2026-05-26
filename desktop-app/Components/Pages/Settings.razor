@@ -42,6 +42,110 @@
 
 	<div class="row mt-4">
 		<div class="col-lg-10">
+			<div class="card border-primary">
+				<div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+					<h5 class="mb-0">Team Recommendation Calibration</h5>
+					<button class="btn btn-sm btn-light" @onclick="RefreshTeamRecommendationAsync">Refresh</button>
+				</div>
+				<div class="card-body">
+					@if (!string.IsNullOrWhiteSpace(TeamRecommendationStatusMessage)) {
+						<div class="alert alert-secondary py-2 mb-3">
+							<small>@TeamRecommendationStatusMessage</small>
+						</div>
+					}
+
+					@if (TeamRecommendationModePreferences.Any()) {
+						<div class="table-responsive mb-3">
+							<table class="table table-sm align-middle mb-0">
+								<thead>
+									<tr>
+										<th>Mode</th>
+										<th>Preferred Trend Window</th>
+										<th>Supported</th>
+									</tr>
+								</thead>
+								<tbody>
+									@foreach (var modePreference in TeamRecommendationModePreferences) {
+										<tr>
+											<td><strong>@modePreference.Mode</strong></td>
+											<td>
+												<select class="form-select form-select-sm"
+													value="@modePreference.PreferredTrendWindowDays"
+													@onchange="@(args => SaveModeTrendPreferenceAsync(modePreference.Mode, args))">
+													@foreach (var window in modePreference.SupportedTrendWindowDays.Distinct().OrderBy(w => w)) {
+														<option value="@window">@window days</option>
+													}
+												</select>
+											</td>
+											<td><small>@string.Join(", ", modePreference.SupportedTrendWindowDays.Distinct().OrderBy(w => w))</small></td>
+										</tr>
+									}
+								</tbody>
+							</table>
+						</div>
+					}
+
+					<div class="row g-2 mb-3">
+						<div class="col-md-4">
+							<label class="form-label">Calibration Mode</label>
+							<select class="form-select" @bind="SelectedCalibrationMode" @bind:after="RefreshTeamCalibrationAsync">
+								@foreach (var mode in TeamRecommendationModePreferences.Select(m => m.Mode).Distinct(StringComparer.OrdinalIgnoreCase).OrderBy(m => m)) {
+									<option value="@mode">@mode</option>
+								}
+							</select>
+						</div>
+					</div>
+
+					@if (TeamCalibration is not null) {
+						<div class="row">
+							<div class="col-md-6">
+								<div><strong>Suggested Friction Scale:</strong> @TeamCalibration.SuggestedFrictionScale.ToString("F3")</div>
+								<div><strong>Preferred Trend Window:</strong> @TeamCalibration.PreferredTrendWindowDays days</div>
+								<div><strong>Samples:</strong> @TeamCalibration.Samples</div>
+							</div>
+							<div class="col-md-6">
+								<div><strong>MAE:</strong> @((TeamCalibration.MeanAbsoluteError * 100).ToString("F2"))%</div>
+								<div><strong>Brier:</strong> @((TeamCalibration.MeanBrierScore * 100).ToString("F2"))%</div>
+								<div><strong>Bias:</strong> @TeamCalibration.PredictionBias.ToString("F4")</div>
+							</div>
+						</div>
+
+						@if (TeamCalibration.TrendWindows.Any()) {
+							<div class="table-responsive mt-3">
+								<table class="table table-sm table-striped mb-0">
+									<thead>
+										<tr>
+											<th>Window</th>
+											<th>Samples</th>
+											<th>Scale</th>
+											<th>MAE</th>
+											<th>Brier</th>
+											<th>Bias</th>
+										</tr>
+									</thead>
+									<tbody>
+										@foreach (var trend in TeamCalibration.TrendWindows.OrderBy(t => t.WindowDays)) {
+											<tr>
+												<td>@trend.WindowDays d</td>
+												<td>@trend.Samples</td>
+												<td>@trend.SuggestedFrictionScale.ToString("F3")</td>
+												<td>@((trend.MeanAbsoluteError * 100).ToString("F2"))%</td>
+												<td>@((trend.MeanBrierScore * 100).ToString("F2"))%</td>
+												<td>@trend.PredictionBias.ToString("F4")</td>
+											</tr>
+										}
+									</tbody>
+								</table>
+							</div>
+						}
+					}
+				</div>
+			</div>
+		</div>
+	</div>
+
+	<div class="row mt-4">
+		<div class="col-lg-10">
 			<div class="card border-info">
 				<div class="card-header bg-info text-white d-flex justify-content-between align-items-center">
 					<h5 class="mb-0">External Tool Catalog</h5>
@@ -143,7 +247,11 @@
 @code {
 	private string RecommendationApiBaseUrl { get; set; } = string.Empty;
 	private string StatusMessage { get; set; } = string.Empty;
+	private string TeamRecommendationStatusMessage { get; set; } = string.Empty;
 	private string CatalogStatusMessage { get; set; } = string.Empty;
+	private string SelectedCalibrationMode { get; set; } = "arena";
+	private List<TeamRecommendationModePreferenceModel> TeamRecommendationModePreferences { get; set; } = [];
+	private TeamRecommendationCalibrationResponseModel? TeamCalibration { get; set; }
 	private List<ToolCatalogEntryModel> ToolCatalog { get; set; } = new();
 	private List<string> CatalogCategories { get; set; } = ["simulator", "calculator", "guides", "extension"];
 	private List<string> CatalogVerificationStatuses { get; set; } = ["verified", "partial", "unverified", "stale"];
@@ -156,7 +264,96 @@
 
 	protected override void OnInitialized() {
 		RecommendationApiBaseUrl = RecommendationSettings.GetRecommendationApiBaseUrl();
+		_ = InitializeTeamRecommendationAsync();
 		_ = InitializeCatalogAsync();
+	}
+
+	private async Task InitializeTeamRecommendationAsync() {
+		await LoadTeamRecommendationPreferencesAsync();
+		await RefreshTeamCalibrationAsync();
+	}
+
+	private async Task RefreshTeamRecommendationAsync() {
+		await LoadTeamRecommendationPreferencesAsync();
+		await RefreshTeamCalibrationAsync();
+	}
+
+	private async Task LoadTeamRecommendationPreferencesAsync() {
+		try {
+			var baseUrl = RecommendationSettings.GetRecommendationApiBaseUrl().TrimEnd('/');
+			using var client = new HttpClient { Timeout = TimeSpan.FromSeconds(3) };
+			var payload = await client.GetFromJsonAsync<TeamRecommendationTrendPreferenceResponseModel>($"{baseUrl}/api/sync/teams/recommendations/preferences");
+
+			TeamRecommendationModePreferences = payload?.Modes
+				?.Where(m => !string.IsNullOrWhiteSpace(m.Mode))
+				.OrderBy(m => m.Mode)
+				.ToList() ?? [];
+
+			if (TeamRecommendationModePreferences.Count > 0 &&
+				!TeamRecommendationModePreferences.Any(m => string.Equals(m.Mode, SelectedCalibrationMode, StringComparison.OrdinalIgnoreCase))) {
+				SelectedCalibrationMode = TeamRecommendationModePreferences[0].Mode;
+			}
+
+			if (TeamRecommendationModePreferences.Count > 0) {
+				TeamRecommendationStatusMessage = $"Loaded {TeamRecommendationModePreferences.Count} mode preference entries.";
+			}
+		} catch (Exception ex) {
+			TeamRecommendationStatusMessage = $"Team Recommendation preferences unavailable: {ex.Message}";
+			TeamRecommendationModePreferences = [];
+		}
+	}
+
+	private async Task SaveModeTrendPreferenceAsync(string mode, ChangeEventArgs args) {
+		if (string.IsNullOrWhiteSpace(mode)) {
+			return;
+		}
+
+		if (!int.TryParse(args?.Value?.ToString(), out var preferredTrendWindowDays)) {
+			return;
+		}
+
+		if (preferredTrendWindowDays is not (7 or 30 or 90)) {
+			return;
+		}
+
+		try {
+			var baseUrl = RecommendationSettings.GetRecommendationApiBaseUrl().TrimEnd('/');
+			using var client = new HttpClient { Timeout = TimeSpan.FromSeconds(3) };
+			var response = await client.PutAsJsonAsync(
+				$"{baseUrl}/api/sync/teams/recommendations/preferences",
+				new TeamRecommendationTrendPreferenceUpdateRequestModel {
+					Mode = mode,
+					PreferredTrendWindowDays = preferredTrendWindowDays,
+				});
+
+			if (!response.IsSuccessStatusCode) {
+				TeamRecommendationStatusMessage = $"Failed to save preference for {mode}: HTTP {(int)response.StatusCode}";
+				return;
+			}
+
+			SelectedCalibrationMode = mode;
+			TeamRecommendationStatusMessage = $"Saved trend window preference for {mode}: {preferredTrendWindowDays}d";
+			await RefreshTeamRecommendationAsync();
+		} catch (Exception ex) {
+			TeamRecommendationStatusMessage = $"Save failed for {mode}: {ex.Message}";
+		}
+	}
+
+	private async Task RefreshTeamCalibrationAsync() {
+		if (string.IsNullOrWhiteSpace(SelectedCalibrationMode)) {
+			TeamCalibration = null;
+			return;
+		}
+
+		try {
+			var baseUrl = RecommendationSettings.GetRecommendationApiBaseUrl().TrimEnd('/');
+			using var client = new HttpClient { Timeout = TimeSpan.FromSeconds(3) };
+			var payload = await client.GetFromJsonAsync<TeamRecommendationCalibrationResponseModel>($"{baseUrl}/api/sync/teams/recommendations/calibration?mode={Uri.EscapeDataString(SelectedCalibrationMode)}");
+			TeamCalibration = payload;
+		} catch (Exception ex) {
+			TeamRecommendationStatusMessage = $"Calibration unavailable for {SelectedCalibrationMode}: {ex.Message}";
+			TeamCalibration = null;
+		}
 	}
 
 	private async Task InitializeCatalogAsync() {
@@ -258,6 +455,41 @@
 		public double DefaultMinConfidence { get; set; }
 		public bool DefaultIncludeStale { get; set; }
 		public string DefaultSort { get; set; } = string.Empty;
+	}
+
+	private sealed class TeamRecommendationTrendPreferenceResponseModel {
+		public List<TeamRecommendationModePreferenceModel> Modes { get; set; } = [];
+	}
+
+	private sealed class TeamRecommendationModePreferenceModel {
+		public string Mode { get; set; } = string.Empty;
+		public int PreferredTrendWindowDays { get; set; } = 30;
+		public List<int> SupportedTrendWindowDays { get; set; } = [7, 30, 90];
+	}
+
+	private sealed class TeamRecommendationTrendPreferenceUpdateRequestModel {
+		public string Mode { get; set; } = "arena";
+		public int PreferredTrendWindowDays { get; set; } = 30;
+	}
+
+	private sealed class TeamRecommendationCalibrationResponseModel {
+		public string Mode { get; set; } = "arena";
+		public double SuggestedFrictionScale { get; set; }
+		public double MeanAbsoluteError { get; set; }
+		public double MeanBrierScore { get; set; }
+		public double PredictionBias { get; set; }
+		public int Samples { get; set; }
+		public int PreferredTrendWindowDays { get; set; } = 30;
+		public List<TeamRecommendationCalibrationTrendWindowModel> TrendWindows { get; set; } = [];
+	}
+
+	private sealed class TeamRecommendationCalibrationTrendWindowModel {
+		public int WindowDays { get; set; }
+		public int Samples { get; set; }
+		public double MeanAbsoluteError { get; set; }
+		public double MeanBrierScore { get; set; }
+		public double PredictionBias { get; set; }
+		public double SuggestedFrictionScale { get; set; }
 	}
 
 	private static bool IsStale(DateTime lastReviewedUtc) {
