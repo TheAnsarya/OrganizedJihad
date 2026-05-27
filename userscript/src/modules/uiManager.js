@@ -19,6 +19,7 @@ import { bindDataBrowserTableControls } from './binders/dataBrowserTableControls
 import { bindDataBrowserMiscInteractions } from './binders/dataBrowserMiscBinder.js';
 import { bindSettingsHealthActions } from './binders/settingsHealthActionsBinder.js';
 import { bindSettingsDataActions } from './binders/settingsDataActionsBinder.js';
+import { bindSettingsDisplayTracking } from './binders/settingsDisplayTrackingBinder.js';
 import { bindProjectionInteractions } from './binders/projectionInteractionBinder.js';
 import { renderHeroRequirementsProjectionPanel } from './renderers/heroRequirementsProjectionRenderer.js';
 import {
@@ -4310,54 +4311,11 @@ class UIManager {
 			refreshStorageStats: () => this._loadStorageStats(),
 		});
 
-		// ── Auto-show checkbox ──────────────────────────────────────────
-		const autoShowCb = this.overlay.querySelector('#oj-auto-show');
-		if (autoShowCb) {
-			autoShowCb.addEventListener('change', (e) => {
-				this.prefStorage.set('uiVisible', e.target.checked);
-			});
-		}
-
-		// ── Auto-hide during battles checkbox (#50) ─────────────────────
-		const autoHideCb = this.overlay.querySelector('#oj-auto-hide-battle');
-		if (autoHideCb) {
-			autoHideCb.addEventListener('change', (e) => {
-				this.prefStorage.set('autoHideBattle', e.target.checked);
-			});
-		}
-
-		// ── Opacity slider ──────────────────────────────────────────────
-		const opacitySlider = this.overlay.querySelector('#oj-opacity');
-		const opacityVal = this.overlay.querySelector('#oj-opacity-val');
-		if (opacitySlider) {
-			opacitySlider.addEventListener('input', (e) => {
-				const val = parseInt(e.target.value, 10);
-				if (opacityVal) opacityVal.textContent = `${val}%`;
-				if (this.overlay) {
-					this.overlay.style.opacity = val / 100;
-				}
-			});
-			opacitySlider.addEventListener('change', (e) => {
-				this.prefStorage.set('overlayOpacity', parseInt(e.target.value, 10));
-			});
-		}
-
-		// ── Default tab selector ────────────────────────────────────────
-		const defaultTabSel = this.overlay.querySelector('#oj-default-tab');
-		if (defaultTabSel) {
-			defaultTabSel.addEventListener('change', (e) => {
-				this.prefStorage.set('defaultTab', e.target.value);
-			});
-		}
-
-		// ── Tracking category toggles ───────────────────────────────────
-		const catCheckboxes = this.overlay.querySelectorAll('[data-track-cat]');
-		for (const cb of catCheckboxes) {
-			cb.addEventListener('change', (e) => {
-				const cat = e.target.dataset.trackCat;
-				this.gameTracker.setTrackingCategory(cat, e.target.checked);
-			});
-		}
+		bindSettingsDisplayTracking({
+			overlay: this.overlay,
+			prefStorage: this.prefStorage,
+			gameTracker: this.gameTracker,
+		});
 
 		// ── Notification settings (#52) ─────────────────────────────────
 		if (this.notificationManager) {
