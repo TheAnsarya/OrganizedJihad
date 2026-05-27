@@ -2,7 +2,11 @@ param(
 	[string]$InstallRoot = "$env:LOCALAPPDATA\OrganizedJihad",
 	[string]$ApiUrl = 'http://localhost:5124',
 	[switch]$SkipTampermonkeyBootstrap,
-	[switch]$SkipYarnInstall
+	[switch]$SkipYarnInstall,
+	[switch]$RunInstallHealthCheck,
+	[switch]$InstallHealthCheckJson,
+	[ValidateSet('none', 'failed', 'required', 'all')]
+	[string]$InstallHealthCheckOpen = 'none'
 )
 
 Set-StrictMode -Version Latest
@@ -96,6 +100,7 @@ $taskName = 'OrganizedJihad.Api.Autostart'
 
 Write-Step "Validating prerequisites"
 Assert-Command -Name 'dotnet' -HelpText 'Install .NET SDK 10 preview or later.'
+Assert-Command -Name 'node' -HelpText 'Install Node.js 18+.'
 Assert-Command -Name 'yarn' -HelpText 'Install Yarn (classic) and Node.js 18+.'
 
 Write-Step "Building userscript bundle"
@@ -145,6 +150,29 @@ if (-not $SkipTampermonkeyBootstrap) {
 	}
 }
 
+if ($RunInstallHealthCheck) {
+	Write-Step 'Running userscript install health check.'
+	$healthCheckScript = Join-Path $userscriptDir 'scripts\install-health-check.mjs'
+	if (-not (Test-Path -Path $healthCheckScript)) {
+		throw "Install health-check script not found at '$healthCheckScript'."
+	}
+
+	$healthCheckArgs = @($healthCheckScript, '--baseUrl', $ApiUrl)
+	if ($InstallHealthCheckJson) {
+		$healthCheckArgs += '--json'
+	}
+	if ($InstallHealthCheckOpen -ne 'none') {
+		$healthCheckArgs += @('--open', $InstallHealthCheckOpen)
+	}
+
+	& node @healthCheckArgs
+	if ($LASTEXITCODE -ne 0) {
+		Write-Step "Health check reported issues (exit code $LASTEXITCODE). Review output above."
+	} else {
+		Write-Step 'Health check passed.'
+	}
+}
+
 Write-Step 'Installation complete.'
 Write-Host ""
 Write-Host 'What was configured:' -ForegroundColor Green
@@ -157,3 +185,4 @@ Write-Host 'Recommended next checks:' -ForegroundColor Green
 Write-Host '- Open Hero Wars in your browser'
 Write-Host '- Confirm Tampermonkey has the OrganizedJihad script enabled'
 Write-Host '- Verify API health at http://localhost:5124/api/sync/health'
+Write-Host '- Optional: rerun check with browser-open failures: yarn install:check --open failed'

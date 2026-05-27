@@ -26,6 +26,18 @@ This installer will:
 
 Use `-SkipTampermonkeyBootstrap` if you only want backend/userscript artifact updates.
 
+Optional post-install health-check run from installer:
+
+```powershell
+pwsh -ExecutionPolicy Bypass -File .\Install-OrganizedJihad.ps1 -RunInstallHealthCheck -InstallHealthCheckOpen failed
+```
+
+Optional JSON output from installer-triggered health check:
+
+```powershell
+pwsh -ExecutionPolicy Bypass -File .\Install-OrganizedJihad.ps1 -RunInstallHealthCheck -InstallHealthCheckJson
+```
+
 ## Prerequisites
 
 - **Browser**: Chrome, Edge, Firefox, or any Chromium-based browser

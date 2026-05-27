@@ -46,12 +46,9 @@ Status update:
 - Auto-adjust confidence based on recency and sample density.
 
 6. Installer/ease workflow enhancements
-- Add optional post-install health check summary and shortcut creation in installer.
-- Add one-click open of userscript diagnostics panel after installation.
-
-Status update:
+- Optional post-install health-check execution is now available in installer via `-RunInstallHealthCheck` plus `-InstallHealthCheckJson` and `-InstallHealthCheckOpen` modes.
 - Browser-open modes and JSON output are now implemented for `yarn install:check` (`--json`, `--open [failed|required|all]`).
-- Remaining: optional post-install summary and one-click diagnostics-panel open path in installer script.
+- Remaining: optional one-click open of userscript diagnostics panel after installation.
 
 ## Suggested Next Slices
 - Slice A: Deterministic recipe catalog ingestion (exact per-rank ingredient trees).

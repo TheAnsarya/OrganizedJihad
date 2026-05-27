@@ -665,3 +665,41 @@
 
 ## Known Follow-up
 - Consider adding installer wiring to auto-run `yarn install:check --open failed` after first setup.
+
+---
+
+## Session
+- Date: 2026-05-27
+- Session Number: 20
+- Scope: Add optional installer wiring for post-install userscript health-check execution.
+
+## Summary
+- Created and implemented issue #201.
+- Extended `Install-OrganizedJihad.ps1` with optional post-install health-check controls:
+	- `-RunInstallHealthCheck`
+	- `-InstallHealthCheckJson`
+	- `-InstallHealthCheckOpen none|failed|required|all`
+- Installer now invokes `node userscript/scripts/install-health-check.mjs --baseUrl <ApiUrl>` with optional JSON/open flags when requested.
+- Added non-fatal installer messaging for health-check failures so setup still completes while surfacing diagnostics.
+- Updated install documentation with installer flag examples.
+
+## Files Modified
+- Install-OrganizedJihad.ps1
+- userscript/INSTALL.md
+- ~docs/copilot-chats/2026-05-27-requirements-item-icon-enrichment.md
+
+## Issues Referenced
+- #201 Add optional post-install install:check run with browser-open failed mode
+
+## Validation
+- PowerShell parse check for installer script: passed
+- node scripts/install-health-check.mjs --json --open failed --baseUrl http://127.0.0.1:9: expected failure payload and exit code 1
+- yarn test --runInBand: passed (18 suites, 706 tests)
+- yarn build: passed (version 0.9.110)
+
+## Key Decisions
+- Kept installer behavior backward compatible by requiring explicit `-RunInstallHealthCheck` opt-in.
+- Added `node` prerequisite assertion since installer now can directly invoke Node script.
+
+## Known Follow-up
+- Consider adding a convenience switch that implies `-RunInstallHealthCheck -InstallHealthCheckOpen failed` for first-time setup flows.
