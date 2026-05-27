@@ -120,6 +120,78 @@
 - Status: Completed on `feature/204-architecture-modernization`.
 - Outcome target: isolate activity empty-state and API-log fallback table rendering from `uiManager`.
 
+28. #233 Extract daily-summary dashboard section renderer from uiManager
+- Status: Completed on `feature/204-architecture-modernization`.
+- Outcome target: isolate daily summary section markup from `uiManager`.
+
+29. #234 Extract battle recommendation cards renderer from uiManager
+- Status: Completed on `feature/204-architecture-modernization`.
+- Outcome target: isolate dashboard battle recommendation card markup from `uiManager`.
+
+30. #235 Extract dashboard suggestions renderer from uiManager
+- Status: Completed on `feature/204-architecture-modernization`.
+- Outcome target: isolate suggestions section markup from `uiManager`.
+
+31. #236 Extract win-rate dashboard section renderer from uiManager
+- Status: Completed on `feature/204-architecture-modernization`.
+- Outcome target: isolate win-rate section markup from `uiManager`.
+
+32. #237 Extract team recommendation engine section renderer from uiManager
+- Status: Completed on `feature/204-architecture-modernization`.
+- Outcome target: isolate Team Recommendation Engine section shell/controls markup from `uiManager`.
+
+33. #238 Introduce shared cached API metadata fetch helper in uiManager
+- Status: Completed on `feature/204-architecture-modernization`.
+- Outcome target: centralize repeated cache/network/fallback fetch semantics across dashboard recommendation/tool payload paths.
+
+34. #239 Extract dashboard player header renderer from uiManager
+- Status: Completed on `feature/204-architecture-modernization`.
+- Outcome target: isolate large dashboard player-header markup block from `uiManager`.
+
+35. #240 Extract external tools dashboard section renderer from uiManager
+- Status: Completed on `feature/204-architecture-modernization`.
+- Outcome target: isolate external tools section card/filter markup from `uiManager`.
+
+36. #241 Extract dashboard win-rate card model builder into helper module
+- Status: Completed on `feature/204-architecture-modernization`.
+- Outcome target: isolate win-rate model calculation from `uiManager` rendering method.
+
+37. #242 Extract dashboard metadata loading from renderDashboard into dedicated helper method
+- Status: Completed on `feature/204-architecture-modernization`.
+- Outcome target: isolate dashboard metadata bundle loading from `renderDashboard` body.
+
+38. #243 Extract heroes roster loading and dedupe logic from renderHeroes into helper method
+- Status: Completed on `feature/204-architecture-modernization`.
+- Outcome target: isolate metadata/IDB roster-loading and dedupe logic from `renderHeroes`.
+
+39. #244 Extract team recommendation row rendering into dedicated renderer module
+- Status: Completed on `feature/204-architecture-modernization`.
+- Outcome target: isolate Team Recommendation Engine recommendation/provenance card-row markup from `uiManager`.
+
+40. #245 Extract dashboard daily-activity aggregation into helper module
+- Status: Completed on `feature/204-architecture-modernization`.
+- Outcome target: isolate today-only activity aggregation queries/counters from `_renderDailySummary`.
+
+41. #246 Extract suggestions row-model builder from uiManager into helper module
+- Status: Completed on `feature/204-architecture-modernization`.
+- Outcome target: isolate suggestion sorting/mapping model preparation from `_renderSuggestionsSection`.
+
+42. #247 Extract battle recommendation row-model builder from uiManager into helper module
+- Status: Completed on `feature/204-architecture-modernization`.
+- Outcome target: isolate recommendation row-model preparation from `_renderBattleRecommendationsSection`.
+
+43. #248 Extract external tools section model builder from uiManager into helper module
+- Status: Completed on `feature/204-architecture-modernization`.
+- Outcome target: isolate external tools section model shaping from `_renderExternalToolsSection`.
+
+44. #249 Extract hero requirements projection data loading from renderHeroes into helper method
+- Status: Completed on `feature/204-architecture-modernization`.
+- Outcome target: isolate hero projection dataset loading from `renderHeroes`.
+
+45. #250 Extract cached API payload helper from uiManager into shared helper module
+- Status: Completed on `feature/204-architecture-modernization`.
+- Outcome target: move cache-backed API payload resolver into shared helper module and delegate all dashboard call sites.
+
 ## Validation Strategy
 - API changes: run `dotnet test tests/OrganizedJihad.Api.Tests/OrganizedJihad.Api.Tests.csproj` and `dotnet test OrganizedJihad.sln`.
 - Userscript changes: run `yarn test --runInBand` and `yarn build`.
@@ -127,7 +199,7 @@
 
 ## Notes
 - Parallel issue creation caused issue-number drift; canonical mapping is documented in epic #206 comments.
-- Completed slices so far: #205, #208, #204, #207, #210, #211, #212, #213, #214, #215, #216, #217, #218, #219, #220, #221, #222, #223, #224, #225, #226, #227, #228, #229, #230, #231, and #232 (API seams + controller split + userscript renderer/binder extraction).
+- Completed slices so far: #205, #208, #204, #207, #210, #211, #212, #213, #214, #215, #216, #217, #218, #219, #220, #221, #222, #223, #224, #225, #226, #227, #228, #229, #230, #231, #232, #233, #234, #235, #236, #237, #238, #239, #240, #241, #242, #243, #244, #245, #246, #247, #248, #249, and #250 (API seams + controller split + userscript renderer/binder/helper extraction).
 - Existing unrelated dirty files remain intentionally untouched:
   - `userscript/package.json`
   - `~docs/oj-manual-prompts-log.txt`

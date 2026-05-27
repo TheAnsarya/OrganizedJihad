@@ -904,6 +904,55 @@
 
 ## Session
 - Date: 2026-05-27
+- Session Number: 32
+- Scope: Execute a sustained issue-first multi-slice modernization wave across userscript `uiManager` dashboard/heroes recommendation seams.
+
+## Summary
+- Completed an extended extraction run spanning medium and high-risk slices:
+	- Medium: #233, #234, #235, #236, #240, #241, #245, #246, #247, #248
+	- High: #238, #239, #242, #243, #244, #249, #250
+- Added dedicated renderer/helper modules and delegated `uiManager` logic while preserving UI/data behavior:
+	- Dashboard insight renderers and model builders
+	- Team recommendation section shell + row/provenance rendering split
+	- External tools section renderer and model builder split
+	- Player header renderer extraction
+	- Hero roster/projection loading helper extraction
+	- Shared cached API payload helper extraction
+	- Dashboard metadata bundle loading helper extraction
+
+## Files Modified
+- userscript/src/modules/uiManager.js
+- ~docs/plans/architecture-modernization-roadmap.md
+- ~docs/copilot-chats/2026-05-27-requirements-item-icon-enrichment.md
+
+## Files Created
+- userscript/src/modules/renderers/dashboardInsightsRenderer.js
+- userscript/src/modules/renderers/externalToolsSectionRenderer.js
+- userscript/src/modules/renderers/dashboardPlayerHeaderRenderer.js
+- userscript/src/modules/renderers/teamRecommendationSectionRenderer.js
+- userscript/src/modules/renderers/teamRecommendationRowsRenderer.js
+- userscript/src/modules/helpers/dashboardInsightsBuilders.js
+- userscript/src/modules/helpers/cachedApiPayloadHelper.js
+
+## Issues Referenced
+- #206 Epic: Architecture modernization and module deepening across API/userscript
+- #233 #234 #235 #236 #237 #238 #239 #240 #241 #242 #243 #244 #245 #246 #247 #248 #249 #250
+
+## Validation
+- `yarn test --runInBand`: passed repeatedly after each extraction wave (18 suites, 706 tests)
+- `yarn build`: passed repeatedly after each extraction wave (webpack build succeeded; existing bundle-size warnings only)
+
+## Key Decisions
+- Performed changes as many narrow delegations/helpers rather than one monolithic rewrite to keep regression risk bounded.
+- Preserved existing output semantics and formatting contracts for recommendation/provenance and dashboard cards while moving rendering/model-construction responsibilities.
+
+## Known Follow-up
+- Continue remaining large-view decomposition seams (`renderBattles`, `renderTitans`, `renderPets`, `renderInventory`) in similarly traceable issue-first slices.
+
+---
+
+## Session
+- Date: 2026-05-27
 - Session Number: 31
 - Scope: Execute several medium-risk userscript uiManager renderer extraction slices for activity and dashboard sections.
 
