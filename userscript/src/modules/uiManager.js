@@ -17,6 +17,7 @@ import PetCompletionCalculator from './helpers/PetCompletionCalculator.js';
 import { bindDataRowInteractions } from './binders/dataRowInteractionBinder.js';
 import { bindDataBrowserTableControls } from './binders/dataBrowserTableControlsBinder.js';
 import { bindDataBrowserMiscInteractions } from './binders/dataBrowserMiscBinder.js';
+import { bindDashboardFilters } from './binders/dashboardFiltersBinder.js';
 import { bindSettingsHealthActions } from './binders/settingsHealthActionsBinder.js';
 import { bindSettingsDataActions } from './binders/settingsDataActionsBinder.js';
 import { bindSettingsDisplayTracking } from './binders/settingsDisplayTrackingBinder.js';
@@ -653,46 +654,12 @@ class UIManager {
 	 * Attach dashboard-specific controls.
 	 */
 	attachDashboardEventListeners() {
-		const statusFilter = this.overlay?.querySelector('#oj-tools-status-filter');
-		if (statusFilter) {
-			statusFilter.addEventListener('change', (e) => {
-				this.prefStorage.set('toolsCatalogStatusFilter', e.target.value || '');
-				this.renderView('dashboard');
-			});
-		}
-
-		const teamMode = this.overlay?.querySelector('#oj-team-mode-filter');
-		if (teamMode) {
-			teamMode.addEventListener('change', (e) => {
-				this.prefStorage.set('teamRecommendationsMode', e.target.value || 'arena');
-				this.renderView('dashboard');
-			});
-		}
-
-		const teamObjective = this.overlay?.querySelector('#oj-team-objective-filter');
-		if (teamObjective) {
-			teamObjective.addEventListener('change', (e) => {
-				this.prefStorage.set('teamRecommendationsObjective', e.target.value || 'balanced');
-				this.renderView('dashboard');
-			});
-		}
-
-		const teamTrendWindow = this.overlay?.querySelector('#oj-team-trend-window-filter');
-		if (teamTrendWindow) {
-			teamTrendWindow.addEventListener('change', (e) => {
-				const selectedPreference = e.target.value || 'auto';
-				const selectedMode = this.prefStorage.get('teamRecommendationsMode', 'arena');
-				const defaultWindow = Number(e.target?.dataset?.defaultWindow || 30);
-				const configuredWindow = Number(selectedPreference);
-				const resolvedWindow = selectedPreference === 'auto'
-					? defaultWindow
-					: (Number.isFinite(configuredWindow) ? configuredWindow : defaultWindow);
-
-				this.prefStorage.set('teamRecommendationsTrendWindow', selectedPreference);
-				this._saveTeamRecommendationTrendPreference(selectedMode, resolvedWindow);
-				this.renderView('dashboard');
-			});
-		}
+		bindDashboardFilters({
+			overlay: this.overlay,
+			prefStorage: this.prefStorage,
+			renderView: (view) => this.renderView(view),
+			saveTrendPreference: (mode, windowDays) => this._saveTeamRecommendationTrendPreference(mode, windowDays),
+		});
 	}
 
 	// =====================================================================
