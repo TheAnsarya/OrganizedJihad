@@ -33,3 +33,37 @@
 - Replace emoji icon fallbacks with sprite/icon assets when available.
 - Add deterministic item-name catalog integration for richer labels and icon accuracy.
 - Add API/Desktop parity for projection payload consumption.
+
+---
+
+## Session
+- Date: 2026-05-27
+- Session Number: 2
+- Scope: Add deterministic projected item catalog resolver module and refactor Heroes requirements UI to use it.
+
+## Summary
+- Created and implemented issue #183.
+- Added `ProjectedItemCatalogResolver` helper as a centralized resolver for projected requirement item display metadata.
+- Refactored `uiManager` Heroes requirements panel to consume resolver APIs instead of inline item-name/icon logic.
+- Added dedicated resolver unit tests covering runtime metadata preference and deterministic fallbacks.
+
+## Files Modified
+- userscript/src/modules/uiManager.js
+- userscript/package.json
+
+## Files Created
+- userscript/src/modules/helpers/ProjectedItemCatalogResolver.js
+- userscript/tests/projectedItemCatalogResolver.test.js
+
+## Issues Referenced
+- #183 Add deterministic projected item catalog resolver for hero requirements UI
+
+## Validation
+- yarn test projectedItemCatalogResolver.test.js --runInBand: passed (4 tests)
+- yarn test --runInBand: passed (18 suites, 698 tests)
+- yarn build: passed
+
+## Known Follow-up
+- Expand resolver with deterministic catalog entries beyond runtime metadata.
+- Move from emoji glyphs to maintained icon asset mapping when available.
+- Add API/Desktop parity for projection payload and display metadata contracts.

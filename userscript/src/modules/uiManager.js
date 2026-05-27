@@ -11,6 +11,7 @@
 
 import HeroCompletionCalculator from './helpers/HeroCompletionCalculator.js';
 import HeroMaterialRequirementsCalculator from './helpers/HeroMaterialRequirementsCalculator.js';
+import ProjectedItemCatalogResolver from './helpers/ProjectedItemCatalogResolver.js';
 import TitanCompletionCalculator from './helpers/TitanCompletionCalculator.js';
 import PetCompletionCalculator from './helpers/PetCompletionCalculator.js';
 import { TRACKING_CATEGORIES } from './gameTracker.js';
@@ -2108,19 +2109,7 @@ class UIManager {
 			]);
 
 			const parsedInventory = this._parseRawInventory(inventoryData || {});
-			requirementItemMeta = parsedInventory.reduce((acc, item) => {
-				const itemId = String(item.itemId || '').trim();
-				if (!itemId) {
-					return acc;
-				}
-				const category = String(item.category || '').trim();
-				acc[itemId] = {
-					name: item.name || `Item #${itemId}`,
-					category,
-					icon: this._requirementsItemIcon(category, itemId),
-				};
-				return acc;
-			}, {});
+			requirementItemMeta = ProjectedItemCatalogResolver.buildRuntimeMetaMap(parsedInventory);
 
 			requirementsProjection = HeroMaterialRequirementsCalculator.calculateProjectedRequirements({
 				heroes,
@@ -2270,10 +2259,10 @@ class UIManager {
 			if (colorPart > 0) mix.push(`Rank ${colorPart.toLocaleString()}`);
 			const mixLabel = mix.length > 0 ? mix.join(' • ') : 'Projected';
 			const shortageStyle = shortage > 0 ? 'color:#ef9a9a;font-weight:700' : 'color:#a5d6a7;font-weight:700';
-			const itemId = String(entry.itemId || 'unknown_item');
-			const meta = itemMetaMap[itemId] || {};
-			const resolvedName = meta.name || this._prettifyProjectedItemId(itemId);
-			const itemIcon = meta.icon || this._requirementsItemIcon(meta.category, itemId);
+			const resolved = ProjectedItemCatalogResolver.resolveItemMeta(entry.itemId, itemMetaMap);
+			const itemId = resolved.itemId;
+			const resolvedName = resolved.name;
+			const itemIcon = resolved.icon;
 
 			return `<tr>` +
 				`<td><div class="oj-mono" style="font-size:11px">${this._escapeHtml(itemId)}</div><div style="display:flex;align-items:center;gap:6px"><span>${this._escapeHtml(itemIcon)}</span><span>${this._escapeHtml(resolvedName)}</span></div></td>` +
@@ -2312,67 +2301,6 @@ class UIManager {
 				}
 			</div>
 		`;
-	}
-
-	/**
-	 * Convert item IDs into readable fallback labels when no inventory name mapping exists.
-	 *
-	 * @param {string} itemId - Raw item ID
-	 * @returns {string} Human-readable label
-	 * @private
-	 */
-	_prettifyProjectedItemId(itemId) {
-		if (!itemId) {
-			return 'Unknown Item';
-		}
-
-		const fromSnake = itemId
-			.replace(/^[a-z]+_/, '')
-			.replace(/[_-]+/g, ' ')
-			.replace(/\b\w/g, (c) => c.toUpperCase())
-			.trim();
-
-		if (fromSnake) {
-			return fromSnake;
-		}
-
-		return `Item ${itemId}`;
-	}
-
-	/**
-	 * Resolve display icon for projected requirement items.
-	 *
-	 * @param {string} category - Inventory category if known
-	 * @param {string} itemId - Raw item ID
-	 * @returns {string} Icon glyph
-	 * @private
-	 */
-	_requirementsItemIcon(category, itemId) {
-		const categoryIcons = {
-			hero_soul_stones: '💎',
-			titan_soul_stones: '💠',
-			pet_soul_stones: '🐾',
-			equipment: '🛡️',
-			consumable: '🧪',
-			fragment: '🧩',
-			scroll: '📜',
-			artifact: '🏺',
-			resource: '📦',
-		};
-
-		if (category && categoryIcons[category]) {
-			return categoryIcons[category];
-		}
-
-		const id = String(itemId || '').toLowerCase();
-		if (id.includes('fragment') || id.includes('stone')) return '🧩';
-		if (id.includes('potion') || id.includes('consumable')) return '🧪';
-		if (id.includes('scroll')) return '📜';
-		if (id.includes('artifact')) return '🏺';
-		if (id.includes('gold') || id.includes('coin')) return '🪙';
-		if (id.includes('gear') || id.includes('item_')) return '🛡️';
-
-		return '📦';
 	}
 
 	/**
