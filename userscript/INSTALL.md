@@ -95,6 +95,9 @@ yarn install
 yarn build
 ```
 
+`yarn build` now also appends an automated daily session entry under `~docs/copilot-chats/`
+using `userscript/scripts/session-log-autogen.mjs`.
+
 This produces `userscript/dist/organized-jihad.user.js` — a single bundled JS file.
 
 ## Step 2.5: Run One-Command Install Health Check (Recommended)

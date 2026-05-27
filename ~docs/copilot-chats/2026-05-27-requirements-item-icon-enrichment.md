@@ -904,6 +904,58 @@
 
 ## Session
 - Date: 2026-05-27
+- Session Number: 37
+- Scope: Continue high-throughput architecture modernization using batch issues for API recommendation seams, desktop parity client consolidation, and userscript build automation.
+
+## Summary
+- Created and completed batch slices #294, #295, and #296.
+- Extracted Team Recommendation scoring/synthetic/provenance/signature helpers from `SyncService` into `TeamRecommendationScoringMath` and delegated call sites.
+- Added desktop `TeamRecommendationClientService` and moved Settings Team Recommendation endpoint/model handling to shared service methods.
+- Added userscript build-time session log auto-generation script and wired it into `yarn build`.
+- Closed related parent/child issues after validation: #294, #295, #296, #147, #177.
+
+## Files Modified
+- api/Services/SyncService.cs
+- desktop-app/Components/Pages/Settings.razor
+- desktop-app/MauiProgram.cs
+- userscript/package.json
+- userscript/INSTALL.md
+- ~docs/plans/architecture-modernization-roadmap.md
+- ~docs/copilot-chats/2026-05-27-requirements-item-icon-enrichment.md
+
+## Files Created
+- api/Services/TeamRecommendation/TeamRecommendationScoringMath.cs
+- desktop-app/Services/TeamRecommendationClientService.cs
+- userscript/scripts/session-log-autogen.mjs
+- ~docs/copilot-chats/2026-05-27-userscript-build-auto.md
+
+## Issues Referenced
+- #206 Epic: Architecture modernization and module deepening across API/userscript
+- #175 Refactor: API service boundaries for Sync/Recommendation/Simulation
+- #177 Refactor: Desktop/API recommendation contract parity layer
+- #147 Enhancement: Add session log auto-generation to userscript build
+- #294 Batch modernization: Team Recommendation scoring pipeline extraction from SyncService
+- #295 Batch parity refactor: Desktop Team Recommendation typed client layer and model consolidation
+- #296 Batch userscript build automation: Session log auto-generation and safeguards
+
+## Validation
+- `dotnet test tests/OrganizedJihad.Api.Tests/OrganizedJihad.Api.Tests.csproj`: passed (56 tests)
+- `dotnet test OrganizedJihad.sln`: passed (95 tests)
+- `yarn test --runInBand`: passed (18 suites, 706 tests)
+- `yarn build`: passed (webpack success; expected bundle-size warnings only)
+
+## Key Decisions
+- Used batch-issue grouping for related medium/high-risk modernization slices to keep issue hygiene aligned with user-requested throughput.
+- Preserved endpoint and UI behavior contracts while extracting to dedicated modules/services to minimize regression risk.
+
+## Known Follow-up
+- Continue #175 by extracting additional recommendation/simulation orchestration seams from `SyncService`.
+- Continue #176 and #102 userscript modularization seams using the same batch-issue and validation-gated workflow.
+
+---
+
+## Session
+- Date: 2026-05-27
 - Session Number: 27
 - Scope: Continue open-issue execution by extracting Team Recommendation calibration/trend state persistence seams from `SyncService` (#175 continuation).
 

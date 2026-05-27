@@ -364,6 +364,18 @@
 - Status: Completed on `feature/204-architecture-modernization`.
 - Outcome target: keep modernization roadmap/session logs synchronized with the new Team Recommendation state-store boundary.
 
+89. #294 Batch modernization: Team Recommendation scoring pipeline extraction from SyncService
+- Status: Completed on `feature/204-architecture-modernization`.
+- Outcome target: extract recommendation scoring/synthetic/provenance/signature helpers from `SyncService` into dedicated Team Recommendation scoring module and preserve API behavior.
+
+90. #295 Batch parity refactor: Desktop Team Recommendation typed client layer and model consolidation
+- Status: Completed on `feature/204-architecture-modernization`.
+- Outcome target: centralize Team Recommendation desktop endpoint calls/models in a shared service and remove page-local DTO duplication.
+
+91. #296 Batch userscript build automation: Session log auto-generation and safeguards
+- Status: Completed on `feature/204-architecture-modernization`.
+- Outcome target: auto-append daily userscript build session logs in `~docs/copilot-chats/` from the userscript build pipeline.
+
 ## Validation Strategy
 - API changes: run `dotnet test tests/OrganizedJihad.Api.Tests/OrganizedJihad.Api.Tests.csproj` and `dotnet test OrganizedJihad.sln`.
 - Userscript changes: run `yarn test --runInBand` and `yarn build`.
@@ -371,7 +383,7 @@
 
 ## Notes
 - Parallel issue creation caused issue-number drift; canonical mapping is documented in epic #206 comments.
-- Completed slices so far: #205, #208, #204, #207, #210, #211, #212, #213, #214, #215, #216, #217, #218, #219, #220, #221, #222, #223, #224, #225, #226, #227, #228, #229, #230, #231, #232, #233, #234, #235, #236, #237, #238, #239, #240, #241, #242, #243, #244, #245, #246, #247, #248, #249, #250, #251, #252, #253, #254, #255, #256, #257, #258, #259, #260, #261, #262, #263, #264, #265, #266, #267, #268, #269, #270, #271, #272, #273, #274, #275, #276, #277, #278, #279, #280, #281, #282, #283, #284, #285, #286, #287, #288, #289, #290, #291, #292, and #293 (API seams + controller split + userscript renderer/binder/helper extraction + Team Recommendation state-store boundary extraction).
+- Completed slices so far: #205, #208, #204, #207, #210, #211, #212, #213, #214, #215, #216, #217, #218, #219, #220, #221, #222, #223, #224, #225, #226, #227, #228, #229, #230, #231, #232, #233, #234, #235, #236, #237, #238, #239, #240, #241, #242, #243, #244, #245, #246, #247, #248, #249, #250, #251, #252, #253, #254, #255, #256, #257, #258, #259, #260, #261, #262, #263, #264, #265, #266, #267, #268, #269, #270, #271, #272, #273, #274, #275, #276, #277, #278, #279, #280, #281, #282, #283, #284, #285, #286, #287, #288, #289, #290, #291, #292, #293, #294, #295, and #296 (API seams + controller split + userscript renderer/binder/helper extraction + Team Recommendation boundary extraction + desktop typed client parity + userscript build log automation).
 - Existing unrelated dirty files remain intentionally untouched:
   - `userscript/package.json`
   - `~docs/oj-manual-prompts-log.txt`

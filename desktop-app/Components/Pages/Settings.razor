@@ -1,5 +1,6 @@
 @page "/settings"
 @inject RecommendationSettingsService RecommendationSettings
+@inject TeamRecommendationClientService TeamRecommendationClient
 @inject ProjectedItemCatalogClientService ProjectedCatalogClient
 @using System.Net.Http.Json
 
@@ -361,28 +362,15 @@
 	}
 
 	private async Task LoadTeamRecommendationPreferencesAsync() {
-		try {
-			var baseUrl = RecommendationSettings.GetRecommendationApiBaseUrl().TrimEnd('/');
-			using var client = new HttpClient { Timeout = TimeSpan.FromSeconds(3) };
-			var payload = await client.GetFromJsonAsync<TeamRecommendationTrendPreferenceResponseModel>($"{baseUrl}/api/sync/teams/recommendations/preferences");
+		var result = await TeamRecommendationClient.GetTrendPreferencesAsync();
+		TeamRecommendationModePreferences = result.Payload?.Modes ?? [];
 
-			TeamRecommendationModePreferences = payload?.Modes
-				?.Where(m => !string.IsNullOrWhiteSpace(m.Mode))
-				.OrderBy(m => m.Mode)
-				.ToList() ?? [];
-
-			if (TeamRecommendationModePreferences.Count > 0 &&
-				!TeamRecommendationModePreferences.Any(m => string.Equals(m.Mode, SelectedCalibrationMode, StringComparison.OrdinalIgnoreCase))) {
-				SelectedCalibrationMode = TeamRecommendationModePreferences[0].Mode;
-			}
-
-			if (TeamRecommendationModePreferences.Count > 0) {
-				TeamRecommendationStatusMessage = $"Loaded {TeamRecommendationModePreferences.Count} mode preference entries.";
-			}
-		} catch (Exception ex) {
-			TeamRecommendationStatusMessage = $"Team Recommendation preferences unavailable: {ex.Message}";
-			TeamRecommendationModePreferences = [];
+		if (TeamRecommendationModePreferences.Count > 0 &&
+			!TeamRecommendationModePreferences.Any(m => string.Equals(m.Mode, SelectedCalibrationMode, StringComparison.OrdinalIgnoreCase))) {
+			SelectedCalibrationMode = TeamRecommendationModePreferences[0].Mode;
 		}
+
+		TeamRecommendationStatusMessage = result.Message;
 	}
 
 	private async Task SaveModeTrendPreferenceAsync(string mode, ChangeEventArgs args) {
@@ -398,23 +386,15 @@
 			return;
 		}
 
+		var saveResult = await TeamRecommendationClient.SaveTrendPreferenceAsync(mode, preferredTrendWindowDays);
+		if (!saveResult.IsSuccess) {
+			TeamRecommendationStatusMessage = saveResult.Message;
+			return;
+		}
+
 		try {
-			var baseUrl = RecommendationSettings.GetRecommendationApiBaseUrl().TrimEnd('/');
-			using var client = new HttpClient { Timeout = TimeSpan.FromSeconds(3) };
-			var response = await client.PutAsJsonAsync(
-				$"{baseUrl}/api/sync/teams/recommendations/preferences",
-				new TeamRecommendationTrendPreferenceUpdateRequestModel {
-					Mode = mode,
-					PreferredTrendWindowDays = preferredTrendWindowDays,
-				});
-
-			if (!response.IsSuccessStatusCode) {
-				TeamRecommendationStatusMessage = $"Failed to save preference for {mode}: HTTP {(int)response.StatusCode}";
-				return;
-			}
-
 			SelectedCalibrationMode = mode;
-			TeamRecommendationStatusMessage = $"Saved trend window preference for {mode}: {preferredTrendWindowDays}d";
+			TeamRecommendationStatusMessage = saveResult.Message;
 			await RefreshTeamRecommendationAsync();
 		} catch (Exception ex) {
 			TeamRecommendationStatusMessage = $"Save failed for {mode}: {ex.Message}";
@@ -427,15 +407,14 @@
 			return;
 		}
 
-		try {
-			var baseUrl = RecommendationSettings.GetRecommendationApiBaseUrl().TrimEnd('/');
-			using var client = new HttpClient { Timeout = TimeSpan.FromSeconds(3) };
-			var payload = await client.GetFromJsonAsync<TeamRecommendationCalibrationResponseModel>($"{baseUrl}/api/sync/teams/recommendations/calibration?mode={Uri.EscapeDataString(SelectedCalibrationMode)}");
-			TeamCalibration = payload;
-		} catch (Exception ex) {
-			TeamRecommendationStatusMessage = $"Calibration unavailable for {SelectedCalibrationMode}: {ex.Message}";
+		var result = await TeamRecommendationClient.GetCalibrationAsync(SelectedCalibrationMode);
+		if (!result.IsSuccess) {
+			TeamRecommendationStatusMessage = result.Message;
 			TeamCalibration = null;
+			return;
 		}
+
+		TeamCalibration = result.Payload;
 	}
 
 	private async Task InitializeCatalogAsync() {
@@ -553,41 +532,6 @@
 		public double DefaultMinConfidence { get; set; }
 		public bool DefaultIncludeStale { get; set; }
 		public string DefaultSort { get; set; } = string.Empty;
-	}
-
-	private sealed class TeamRecommendationTrendPreferenceResponseModel {
-		public List<TeamRecommendationModePreferenceModel> Modes { get; set; } = [];
-	}
-
-	private sealed class TeamRecommendationModePreferenceModel {
-		public string Mode { get; set; } = string.Empty;
-		public int PreferredTrendWindowDays { get; set; } = 30;
-		public List<int> SupportedTrendWindowDays { get; set; } = [7, 30, 90];
-	}
-
-	private sealed class TeamRecommendationTrendPreferenceUpdateRequestModel {
-		public string Mode { get; set; } = "arena";
-		public int PreferredTrendWindowDays { get; set; } = 30;
-	}
-
-	private sealed class TeamRecommendationCalibrationResponseModel {
-		public string Mode { get; set; } = "arena";
-		public double SuggestedFrictionScale { get; set; }
-		public double MeanAbsoluteError { get; set; }
-		public double MeanBrierScore { get; set; }
-		public double PredictionBias { get; set; }
-		public int Samples { get; set; }
-		public int PreferredTrendWindowDays { get; set; } = 30;
-		public List<TeamRecommendationCalibrationTrendWindowModel> TrendWindows { get; set; } = [];
-	}
-
-	private sealed class TeamRecommendationCalibrationTrendWindowModel {
-		public int WindowDays { get; set; }
-		public int Samples { get; set; }
-		public double MeanAbsoluteError { get; set; }
-		public double MeanBrierScore { get; set; }
-		public double PredictionBias { get; set; }
-		public double SuggestedFrictionScale { get; set; }
 	}
 
 	private static bool IsStale(DateTime lastReviewedUtc) {
