@@ -7,6 +7,24 @@
  */
 class ProjectedItemCatalogResolver {
 	/**
+	 * Alias map: variant item IDs -> canonical deterministic IDs.
+	 *
+	 * @type {Record<string, string>}
+	 */
+	static ID_ALIASES = {
+		xp_potion_large: 'xp_potion_l',
+		xp_potion_medium: 'xp_potion_m',
+		xp_potion_small: 'xp_potion_s',
+		red_fragment: 'item_red_fragment',
+		orange_fragment: 'item_orange_fragment',
+		violet_fragment: 'item_violet_fragment',
+		green_fragment: 'item_green_fragment',
+		blue_fragment: 'item_blue_fragment',
+		gold: 'gold_coin',
+		coin_gold: 'gold_coin',
+	};
+
+	/**
 	 * Seeded deterministic entries for high-frequency projected item IDs.
 	 * These provide stable labels/icons before runtime metadata exists.
 	 *
@@ -17,6 +35,12 @@ class ProjectedItemCatalogResolver {
 		xp_potion_m: { name: 'Medium XP Potion', category: 'consumable', icon: '🧪' },
 		xp_potion_s: { name: 'Small XP Potion', category: 'consumable', icon: '🧪' },
 		gold_coin: { name: 'Gold', category: 'resource', icon: '🪙' },
+		stamina_potion: { name: 'Stamina Potion', category: 'consumable', icon: '🧪' },
+		skin_stone: { name: 'Skin Stone', category: 'resource', icon: '📦' },
+		rune_stone: { name: 'Rune Stone', category: 'resource', icon: '📦' },
+		artifact_essence: { name: 'Artifact Essence', category: 'artifact', icon: '🏺' },
+		artifact_scroll: { name: 'Artifact Scroll', category: 'artifact', icon: '🏺' },
+		item_artifact_fragment: { name: 'Artifact Fragment', category: 'fragment', icon: '🧩' },
 		item_red_fragment: { name: 'Red Fragment', category: 'fragment', icon: '🧩' },
 		item_violet_fragment: { name: 'Violet Fragment', category: 'fragment', icon: '🧩' },
 		item_orange_fragment: { name: 'Orange Fragment', category: 'fragment', icon: '🧩' },
@@ -36,7 +60,7 @@ class ProjectedItemCatalogResolver {
 		}
 
 		return items.reduce((acc, item) => {
-			const itemId = String(item.itemId || '').trim();
+			const itemId = this.canonicalizeItemId(item.itemId);
 			if (!itemId) {
 				return acc;
 			}
@@ -59,7 +83,7 @@ class ProjectedItemCatalogResolver {
 	 * @returns {{itemId: string, name: string, category: string, icon: string}} Resolved item metadata
 	 */
 	static resolveItemMeta(itemId, runtimeMetaMap = {}) {
-		const normalizedId = String(itemId || 'unknown_item').trim() || 'unknown_item';
+		const normalizedId = this.canonicalizeItemId(itemId || 'unknown_item') || 'unknown_item';
 		const runtimeMeta = runtimeMetaMap[normalizedId] || {};
 		const seededMeta = this.SEEDED_CATALOG[normalizedId] || {};
 		const category = String(runtimeMeta.category || seededMeta.category || '').trim();
@@ -73,6 +97,31 @@ class ProjectedItemCatalogResolver {
 			category,
 			icon,
 		};
+	}
+
+	/**
+	 * Convert raw item IDs to canonical IDs for deterministic lookups.
+	 *
+	 * @param {string} itemId - Raw item ID
+	 * @returns {string} Canonical ID
+	 */
+	static canonicalizeItemId(itemId) {
+		if (itemId == null) {
+			return '';
+		}
+
+		const normalized = String(itemId)
+			.trim()
+			.toLowerCase()
+			.replace(/[^a-z0-9]+/g, '_')
+			.replace(/^_+|_+$/g, '')
+			.replace(/_+/g, '_');
+
+		if (!normalized) {
+			return '';
+		}
+
+		return this.ID_ALIASES[normalized] || normalized;
 	}
 
 	/**

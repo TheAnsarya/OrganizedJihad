@@ -101,3 +101,35 @@
 - Replace emoji-based seeded icons with maintained image/icon asset mapping.
 - Expand seeded catalog breadth using observed top projected IDs from real accounts.
 - Add API/Desktop parity contract for resolver metadata payloads.
+
+---
+
+## Session
+- Date: 2026-05-27
+- Session Number: 4
+- Scope: Expand deterministic resolver with canonical ID normalization and alias support.
+
+## Summary
+- Created and implemented issue #185.
+- Added canonical item ID normalization (`canonicalizeItemId`) for deterministic lookups.
+- Added alias map to collapse common projected-item variants into canonical IDs.
+- Expanded seeded catalog coverage for additional common requirement IDs.
+- Extended tests for alias/canonical resolution, seeded-via-alias behavior, and runtime-over-seeded precedence.
+
+## Files Modified
+- userscript/src/modules/helpers/ProjectedItemCatalogResolver.js
+- userscript/tests/projectedItemCatalogResolver.test.js
+- userscript/package.json
+
+## Issues Referenced
+- #185 Expand deterministic projected item catalog with canonical ID aliasing
+
+## Validation
+- yarn test projectedItemCatalogResolver.test.js --runInBand: passed (9 tests)
+- yarn test --runInBand: passed (18 suites, 703 tests)
+- yarn build: passed
+
+## Known Follow-up
+- Replace emoji-based icon mapping with maintained sprite/asset IDs.
+- Continue seeding catalog entries based on observed top projected IDs.
+- Add API/Desktop parity contract for canonical item metadata payloads.

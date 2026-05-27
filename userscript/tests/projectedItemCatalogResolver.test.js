@@ -16,6 +16,15 @@ describe('ProjectedItemCatalogResolver', () => {
 		expect(map.xp_potion_l.icon).toBe('🧪');
 	});
 
+		test('buildRuntimeMetaMap canonicalizes and aliases runtime IDs', () => {
+			const map = ProjectedItemCatalogResolver.buildRuntimeMetaMap([
+				{ itemId: 'XP-Potion-Large', name: 'Large XP Potion Alt', category: 'consumable' },
+			]);
+
+			expect(map.xp_potion_l).toBeDefined();
+			expect(map.xp_potion_l.name).toBe('Large XP Potion Alt');
+		});
+
 	test('resolveItemMeta prefers runtime metadata when available', () => {
 		const runtime = {
 			item_red_fragment: {
@@ -38,6 +47,13 @@ describe('ProjectedItemCatalogResolver', () => {
 		expect(meta.icon).toBe('🧪');
 	});
 
+		test('resolveItemMeta uses seeded catalog through alias IDs', () => {
+			const meta = ProjectedItemCatalogResolver.resolveItemMeta('XP-Potion-Large', {});
+			expect(meta.itemId).toBe('xp_potion_l');
+			expect(meta.name).toBe('Large XP Potion');
+			expect(meta.icon).toBe('🧪');
+		});
+
 	test('runtime metadata overrides seeded catalog entries', () => {
 		const runtime = {
 			xp_potion_l: {
@@ -52,6 +68,16 @@ describe('ProjectedItemCatalogResolver', () => {
 		expect(meta.category).toBe('resource');
 		expect(meta.icon).toBe('📦');
 	});
+
+		test('runtime metadata canonicalization allows override through alias keys', () => {
+			const runtime = ProjectedItemCatalogResolver.buildRuntimeMetaMap([
+				{ itemId: 'red_fragment', name: 'Runtime Red Fragment', category: 'fragment' },
+			]);
+
+			const meta = ProjectedItemCatalogResolver.resolveItemMeta('item_red_fragment', runtime);
+			expect(meta.name).toBe('Runtime Red Fragment');
+			expect(meta.itemId).toBe('item_red_fragment');
+		});
 
 	test('resolveItemMeta falls back deterministically for unknown IDs', () => {
 		const meta = ProjectedItemCatalogResolver.resolveItemMeta('mystery_token_x1', {});
