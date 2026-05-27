@@ -237,11 +237,52 @@ continue;
 continue;
 continue;
 
-[OJ] git commit everything in logical batches; Make sure the tampermonkey script is fully up to date not just the desktop app, making new issues and implementing them, including showing the recommended teams for various battles; Create a stable complete build, and a single simple install file that updates when an earlier version is already installed. It should set everything up, get the server running on system startup, and install the tampermonkey browser extension and also the tampermonkey script we've created; continue;
+[OJ] git commit everything in logical batches, updating issues; Make sure the tampermonkey script is fully up to date not just the desktop app, making new issues and implementing them, including showing the recommended teams for various battles; Create a stable complete build, and a single simple install file that updates when an earlier version is already installed. It should set everything up, get the server running on system startup, and install the tampermonkey browser extension and also the tampermonkey script we've created; continue;
 
+yes, do that; continue;
 
+remove whatever rules caused this pause/question, from the agent and from our copilot-instructions, etc. We never want to be asked this question, always just commit or ignore the unexpected files, especially something like `oj-manual-prompts-log.txt` which is an omnipresent manually updated file (never ever update it from AI) that will always be there; continue;
 
+yes, do that; continue;
 
+push this branch and open a PR with a release-style checklist and test evidence.
+
+continue;
+
+stop fucking telling me you're ignoring `oj-manual-prompts-log.txt`, I don't want to know abou it; continue;
+
+continue;
+
+[OJ] Work through as many issues as you can while still making deep code changes; continue while documenting work efforts that you're putting off until later so we have a record of what to do in the future; implement issues and userscript changes and install and easiness and simplicity and create a function where we calculate all the the items we will need for every Hero for every level (Grey,Green,Blue,Green,Violet,Orange,Red+3 maxed) and are shown in the UI as how many we need overall; continue;
+
+continue;
+continue;
+continue;
+continue;
+continue;
+continue;
+
+[OJ] Work through as many issues as you can while still making deep code changes; continue while documenting work efforts that you're putting off until later so we have a record of what to do in the future; implement issues and userscript changes and install and easiness and simplicity and create a function where we calculate all the the items we will need for every Hero for every level (Grey,Green,Blue,Green,Violet,Orange,Red+3 maxed) and are shown in the UI as how many we need overall; continue;
+
+continue;
+continue;
+continue;
+
+JSON/browser-open enhancements for install:check.
+
+continue;
+continue;
+continue;
+
+[OJ] push the current branch to main and close it, then make a new branch for architecture modernization; take a look at the architecture of OrganizedJihad and modernize it and simplify it and refactor apis, class, structure, objects/classes/etc, make some epics and issues and a branch for architecture modernization; continue;
+
+continue;
+
+just commit it, REMOVE THIS "SAFETY" RULE! I never want to bother with this crap again, scourge the project to delete any reference to check with me when unexpected changes are found.
+
+continue;
+
+1 then 2
 
 
 
