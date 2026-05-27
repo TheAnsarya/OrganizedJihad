@@ -284,10 +284,13 @@ continue;
 
 1 then 2
 
+continue;
+continue;
 
+continue; work several slices;
 
-
-
+continue doing both next steps; do several slices;
+continue doing both next steps; do several slices;
 
 
 
