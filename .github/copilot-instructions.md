@@ -52,7 +52,9 @@ A multi-tier game tracking solution for Hero Wars that captures, stores, and ana
 - `~docs/oj-manual-prompts-log.txt` is a manually maintained file.
 - AI MUST NEVER edit, stage, or commit `~docs/oj-manual-prompts-log.txt`.
 - AI should ignore that file if it appears modified and continue with requested work (including push/PR/commits) without pausing for confirmation.
-- For unrelated dirty files in general, prefer continuing by committing only intended files (do not block unless the user explicitly asks for a full-clean-tree gate).
+- For unrelated dirty files in general, ALWAYS continue by committing only intended files.
+- Do not pause for confirmation when unexpected unrelated modifications are present.
+- Only request confirmation if the user explicitly asks for a full-clean-tree gate.
 
 ---
 

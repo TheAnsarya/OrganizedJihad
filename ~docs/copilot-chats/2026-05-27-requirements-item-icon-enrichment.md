@@ -899,3 +899,30 @@
 
 ## Known Follow-up
 - Continue epic #206 with #207 userscript `uiManager` projection/diagnostics decomposition.
+
+---
+
+## Session
+- Date: 2026-05-27
+- Session Number: 26
+- Scope: Commit pending API bootstrap file update and remove repository-level pause-for-confirmation wording for unexpected unrelated dirty files.
+
+## Summary
+- Confirmed pending `api/Program.cs` change was harmless whitespace normalization in header comments.
+- Updated repository AI workflow overrides to explicitly continue work without confirmation prompts when unrelated unexpected modifications are present.
+- Preserved strict exclusion of the manually maintained prompts log from AI staging/commits.
+
+## Files Modified
+- api/Program.cs
+- .github/copilot-instructions.md
+- ~docs/copilot-chats/2026-05-27-requirements-item-icon-enrichment.md
+
+## Issues Referenced
+- #204 (active branch context)
+
+## Key Decisions
+- Standardized repository guidance to "continue and commit intended files only" as the default dirty-worktree behavior.
+- Kept a single explicit exception path: only pause when user explicitly requests a clean-tree gate.
+
+## Known Follow-up
+- Continue epic #206 with #207 userscript `uiManager` projection/diagnostics decomposition.

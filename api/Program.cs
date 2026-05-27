@@ -1,16 +1,16 @@
 /// <summary>
 /// OrganizedJihad API - Hero Wars Game Data Tracking Backend
-/// 
+///
 /// This ASP.NET Core minimal API provides endpoints for synchronizing game data
 /// from a browser userscript to a local SQLite database. It serves as the backend
 /// for tracking player progress, battle results, and game statistics.
-/// 
+///
 /// Architecture:
 /// - ASP.NET Core 10.0 Web API
 /// - Entity Framework Core with SQLite
 /// - DbContextFactory pattern for better performance and thread safety
 /// - CORS enabled for browser userscript access
-/// 
+///
 /// References:
 /// - ASP.NET Core: https://learn.microsoft.com/en-us/aspnet/core/
 /// - EF Core DbContextFactory: https://learn.microsoft.com/en-us/ef/core/dbcontext-configuration/#using-a-dbcontext-factory
