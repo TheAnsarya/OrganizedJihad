@@ -14,6 +14,7 @@ import HeroMaterialRequirementsCalculator from './helpers/HeroMaterialRequiremen
 import ProjectedItemCatalogResolver from './helpers/ProjectedItemCatalogResolver.js';
 import TitanCompletionCalculator from './helpers/TitanCompletionCalculator.js';
 import PetCompletionCalculator from './helpers/PetCompletionCalculator.js';
+import { bindProjectionInteractions } from './binders/projectionInteractionBinder.js';
 import { renderHeroRequirementsProjectionPanel } from './renderers/heroRequirementsProjectionRenderer.js';
 import {
 	buildInstallHealthCheckModel,
@@ -4904,36 +4905,11 @@ class UIManager {
 			});
 		});
 
-		// Persist projection section collapse state (heroes view only)
-		content.querySelectorAll('details[data-projection-section]').forEach((detailsEl) => {
-			detailsEl.addEventListener('toggle', () => {
-				const section = detailsEl.dataset.projectionSection;
-				const isOpen = detailsEl.open;
-				this._saveProjectionSectionOpenPreference(section, isOpen);
-			});
-		});
-
-		// Projection section global controls (heroes view only)
-		content.querySelectorAll('[data-projection-control]').forEach((btn) => {
-			btn.addEventListener('click', () => {
-				const control = btn.dataset.projectionControl;
-				const shouldOpen = control === 'expandAll';
-				content.querySelectorAll('details[data-projection-section]').forEach((detailsEl) => {
-					detailsEl.open = shouldOpen;
-					this._saveProjectionSectionOpenPreference(detailsEl.dataset.projectionSection, shouldOpen);
-				});
-			});
-		});
-
-		// Top projected items paging controls (heroes view only)
-		content.querySelectorAll('[data-projection-top-nav]').forEach((btn) => {
-			btn.addEventListener('click', () => {
-				if (!this._viewState.heroes) return;
-				const current = Number(this._viewState.heroes.projectionTopItemsPage || 0);
-				const direction = btn.dataset.projectionTopNav === 'next' ? 1 : -1;
-				this._viewState.heroes.projectionTopItemsPage = Math.max(0, current + direction);
-				this.renderView('heroes');
-			});
+		bindProjectionInteractions({
+			content,
+			heroesViewState: this._viewState.heroes || {},
+			saveProjectionSectionOpenPreference: (section, isOpen) => this._saveProjectionSectionOpenPreference(section, isOpen),
+			renderHeroes: () => this.renderView('heroes'),
 		});
 
 		// Titan row expand/collapse (titans view only)

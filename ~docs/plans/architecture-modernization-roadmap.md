@@ -28,6 +28,10 @@
 - Status: Completed on `feature/204-architecture-modernization`.
 - Outcome target: extract projection/diagnostics render seams to improve maintainability and test focus.
 
+5. #210 Decompose userscript uiManager projection interaction wiring into dedicated binder module
+- Status: Completed on `feature/204-architecture-modernization`.
+- Outcome target: isolate projection interaction event wiring (section persistence, global controls, top-item paging) from `uiManager`.
+
 ## Validation Strategy
 - API changes: run `dotnet test tests/OrganizedJihad.Api.Tests/OrganizedJihad.Api.Tests.csproj` and `dotnet test OrganizedJihad.sln`.
 - Userscript changes: run `yarn test --runInBand` and `yarn build`.
@@ -35,7 +39,7 @@
 
 ## Notes
 - Parallel issue creation caused issue-number drift; canonical mapping is documented in epic #206 comments.
-- Completed slices so far: #205, #208, #204, and #207 (API seams + controller split + userscript renderer extraction).
+- Completed slices so far: #205, #208, #204, #207, and #210 (API seams + controller split + userscript renderer/binder extraction).
 - Existing unrelated dirty files remain intentionally untouched:
   - `userscript/package.json`
   - `~docs/oj-manual-prompts-log.txt`

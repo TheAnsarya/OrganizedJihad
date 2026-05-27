@@ -940,6 +940,44 @@
 
 ## Session
 - Date: 2026-05-27
+- Session Number: 28
+- Scope: Execute issue #210 by extracting userscript heroes projection interaction wiring into a dedicated binder module.
+
+## Summary
+- Created `userscript/src/modules/binders/projectionInteractionBinder.js` to isolate projection interaction listeners.
+- Delegated projection interaction wiring from `uiManager` to the new binder:
+	- projection section open/close persistence
+	- projection global expand/collapse controls
+	- top projected items paging controls
+- Preserved behavior and preference key usage by calling existing `uiManager` callbacks.
+
+## Files Modified
+- userscript/src/modules/uiManager.js
+- ~docs/plans/architecture-modernization-roadmap.md
+- ~docs/copilot-chats/2026-05-27-requirements-item-icon-enrichment.md
+
+## Files Created
+- userscript/src/modules/binders/projectionInteractionBinder.js
+
+## Issues Referenced
+- #206 Epic: Architecture modernization and module deepening across API/userscript
+- #210 Decompose uiManager projection interaction wiring into dedicated binder module
+
+## Validation
+- `yarn test --runInBand`: passed (18 suites, 706 tests)
+- `yarn build`: passed (webpack production build succeeded; existing bundle-size warnings only)
+
+## Key Decisions
+- Kept binder narrowly scoped to projection interactions only to reduce regression risk.
+- Reused `uiManager` preference-save and re-render callbacks to preserve existing behavior.
+
+## Known Follow-up
+- Continue decomposing large userscript orchestration surfaces (event wiring and data browser handlers) into focused modules.
+
+---
+
+## Session
+- Date: 2026-05-27
 - Session Number: 26
 - Scope: Commit pending API bootstrap file update and remove repository-level pause-for-confirmation wording for unexpected unrelated dirty files.
 
