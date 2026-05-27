@@ -904,6 +904,47 @@
 
 ## Session
 - Date: 2026-05-27
+- Session Number: 31
+- Scope: Execute several additional settings-focused userscript architecture slices by extracting remaining `attachSettingsEventListeners` listener clusters from `uiManager`.
+
+## Summary
+- Completed three slices:
+	- #215 extracted settings data action binder
+	- #216 extracted settings display/tracking binder
+	- #217 extracted settings notification binder
+- Reduced `uiManager` settings listener complexity by delegating wiring to focused binders while preserving selectors and behavior.
+
+## Files Modified
+- userscript/src/modules/uiManager.js
+- ~docs/plans/architecture-modernization-roadmap.md
+- ~docs/copilot-chats/2026-05-27-requirements-item-icon-enrichment.md
+
+## Files Created
+- userscript/src/modules/binders/settingsDataActionsBinder.js
+- userscript/src/modules/binders/settingsDisplayTrackingBinder.js
+- userscript/src/modules/binders/settingsNotificationBinder.js
+
+## Issues Referenced
+- #206 Epic: Architecture modernization and module deepening across API/userscript
+- #215 Extract settings data action listeners from uiManager into binder module
+- #216 Extract settings display and tracking toggle listeners from uiManager
+- #217 Extract notification settings listeners from uiManager into binder module
+
+## Validation
+- For each slice, `yarn test --runInBand` passed (18 suites, 706 tests)
+- For each slice, `yarn build` passed (webpack production build succeeded; existing bundle-size warnings only)
+
+## Key Decisions
+- Kept each binder narrow and behavior-preserving (no selector/contract changes) to minimize regression risk.
+- Corrected issue comments for #215 and #216 after commit-hash mismatches to keep audit trail accurate.
+
+## Known Follow-up
+- Continue decomposing remaining overlay listener orchestration paths beyond settings as needed.
+
+---
+
+## Session
+- Date: 2026-05-27
 - Session Number: 27
 - Scope: Complete issue #207 by decomposing userscript `uiManager` projection and diagnostics rendering logic into focused renderer modules.
 

@@ -48,6 +48,18 @@
 - Status: Completed on `feature/204-architecture-modernization`.
 - Outcome target: isolate settings first-run health action listeners from `uiManager`.
 
+10. #215 Extract settings data action listeners from uiManager into binder module
+- Status: Completed on `feature/204-architecture-modernization`.
+- Outcome target: isolate settings export/import/clear listener wiring from `uiManager`.
+
+11. #216 Extract settings display and tracking toggle listeners from uiManager
+- Status: Completed on `feature/204-architecture-modernization`.
+- Outcome target: isolate settings display preference and tracking category listener wiring from `uiManager`.
+
+12. #217 Extract notification settings listeners from uiManager into binder module
+- Status: Completed on `feature/204-architecture-modernization`.
+- Outcome target: isolate notification settings listener wiring (master/type/permission/quiet hours) from `uiManager`.
+
 ## Validation Strategy
 - API changes: run `dotnet test tests/OrganizedJihad.Api.Tests/OrganizedJihad.Api.Tests.csproj` and `dotnet test OrganizedJihad.sln`.
 - Userscript changes: run `yarn test --runInBand` and `yarn build`.
@@ -55,7 +67,7 @@
 
 ## Notes
 - Parallel issue creation caused issue-number drift; canonical mapping is documented in epic #206 comments.
-- Completed slices so far: #205, #208, #204, #207, #210, #211, #212, #213, and #214 (API seams + controller split + userscript renderer/binder extraction).
+- Completed slices so far: #205, #208, #204, #207, #210, #211, #212, #213, #214, #215, #216, and #217 (API seams + controller split + userscript renderer/binder extraction).
 - Existing unrelated dirty files remain intentionally untouched:
   - `userscript/package.json`
   - `~docs/oj-manual-prompts-log.txt`
