@@ -949,6 +949,31 @@
 
 ## Session
 - Date: 2026-05-27
+- Session Number: 28
+- Scope: Close backlog docs issue by documenting timestamp formats across all stores.
+
+## Summary
+- Implemented issue #146 by adding `Appendix A.1 Timestamp Format Matrix` in API call reference docs.
+- Documented, for every IndexedDB store, the time field/index, local IDB representation, sync payload/API representation, and normalization notes.
+- Explicitly documented legacy epoch-ms handling for `chests` and `consumableRewards` plus ISO normalization in `syncClient` before API import.
+
+## Files Modified
+- ~docs/API-Call-Reference.md
+- ~docs/copilot-chats/2026-05-27-requirements-item-icon-enrichment.md
+
+## Issues Referenced
+- #146 Enhancement: Document timestamp format for all stores in API-Call-Reference
+
+## Validation
+- Documentation-only change; verified references against `userscript/src/modules/indexedDBStorage.js` and `userscript/src/modules/syncClient.js`.
+
+## Known Follow-up
+- Evaluate #147 (session-log auto-generation in userscript build) for implementation feasibility and desired build-hook behavior.
+
+---
+
+## Session
+- Date: 2026-05-27
 - Session Number: 31
 - Scope: Execute a high-volume `uiManager` decomposition wave across battles/titans/pets/inventory, completing issues #252-#269.
 

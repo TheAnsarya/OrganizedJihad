@@ -1728,6 +1728,53 @@ All other previously-unhandled methods were addressed in:
 | `events` | auto | Calendar events | Events manager |
 | `metadata` | `key` | Key-value fast cache | Multiple handlers |
 
+### Appendix A.1 Timestamp Format Matrix (IDB + Sync/API)
+
+Canonical rule:
+- API payloads and C# `DateTime` fields use ISO-8601 UTC strings.
+- Userscript IndexedDB stores are mostly ISO strings, with explicit legacy epoch-ms exceptions noted below.
+- `syncClient` normalizes legacy epoch timestamps to ISO before sending to `/api/sync/import`.
+
+| Store | Time Field / Index | IndexedDB Format | Sync Payload Format | Notes |
+|-------|---------------------|------------------|---------------------|-------|
+| `snapshots` | `timestamp` | ISO string | ISO string | Incremental via `timestamp` |
+| `heroes` | `timestamp` | ISO string | ISO string | Incremental via `timestamp` |
+| `titans` | `timestamp` | ISO string | ISO string | Incremental via `timestamp` |
+| `pets` | `timestamp` | ISO string | ISO string | Incremental via `timestamp` |
+| `inventory` | `timestamp` | ISO string | ISO string | Incremental via `timestamp` |
+| `battles` | `timestamp` | ISO string | ISO string | Incremental via `timestamp` |
+| `chests` | `timestamp` | Epoch ms (number, legacy) | ISO string (normalized) | Queried as epoch; normalized by `syncClient.toIso()` |
+| `consumableRewards` | `timestamp` | Epoch ms (number, legacy) | ISO string (normalized) | Queried as epoch; normalized by `syncClient.toIso()` |
+| `opponents` | `lastSeen` | ISO string | ISO string | Upsert store; full send |
+| `questCompletions` | `completedAt` | ISO string | ISO string | Incremental via `completedAt` |
+| `dailyQuestCompletions` | `completedAt` | ISO string | ISO string | Incremental via `completedAt` |
+| `guildQuestCompletions` | `completedAt` | ISO string | ISO string | Incremental via `completedAt` |
+| `loginRewards` | `claimedAt` | ISO string | ISO string | Incremental via `claimedAt` |
+| `missionProgress` | no time index | N/A | N/A | Mutable keyed store; full send |
+| `towerProgress` | `lastUpdate` | ISO string | ISO string | Mutable keyed store; full send |
+| `expeditionBattles` | `timestamp` | ISO string | ISO string | Incremental via `timestamp` |
+| `shopPurchases` | `purchasedAt` | ISO string | ISO string | Incremental via `purchasedAt` |
+| `resourceTransactions` | `timestamp` | ISO string | ISO string | Incremental via `timestamp` |
+| `guildActivities` | `timestamp` | ISO string | ISO string | Incremental via `timestamp` |
+| `guildMembers` | `lastOnline` | ISO string | ISO string | Upsert store; full snapshots when included |
+| `guildMemberSnapshots` | `timestamp` | ISO string | ISO string | Historical snapshots |
+| `guildWarParticipations` | `warDate` | ISO string | ISO string | Participation records |
+| `guildRaidParticipations` | `raidDate` | ISO string | ISO string | Participation records |
+| `guildDungeonParticipations` | `dungeonDate` | ISO string | ISO string | Participation records |
+| `titaniteTransactions` | `timestamp` | ISO string | ISO string | Economic events |
+| `chatMessages` | `timestamp` | ISO string | ISO string | Chat archive events |
+| `heroUpgrades` | `timestamp` | ISO string | ISO string | Incremental via `timestamp` |
+| `titanUpgrades` | `timestamp` | ISO string | ISO string | Incremental via `timestamp` |
+| `inventoryItemUsages` | `timestamp` | ISO string | ISO string | Incremental via `timestamp` |
+| `equipmentChanges` | `timestamp` | ISO string | ISO string | Incremental via `timestamp` |
+| `activityEvents` | `timestamp` | Epoch ms (number) | not part of API import payload | Local diagnostics/live feed |
+| `apiLogs` | `timestamp` | ISO string | not part of API import payload | API monitor records |
+| `mailRewards` | `timestamp` | ISO string | ISO string | Mail/reward event records |
+| `adventureGuide` | `timestamp` | ISO string | N/A | Local guidance cache |
+| `goals` | no time index (`createdAt` exists) | ISO string | ISO string | Upsert store; full send |
+| `events` | `eventDate` | ISO string | ISO string | Upsert store; full send |
+| `metadata` | `lastSync` value | ISO string | ISO string | Sync boundary marker |
+
 ---
 
 ## Appendix B: Metadata Keys
