@@ -25,6 +25,7 @@ import { bindSettingsDisplayTracking } from './binders/settingsDisplayTrackingBi
 import { bindSettingsNotifications } from './binders/settingsNotificationBinder.js';
 import { bindProjectionInteractions } from './binders/projectionInteractionBinder.js';
 import { renderHeroRequirementsProjectionPanel } from './renderers/heroRequirementsProjectionRenderer.js';
+import { renderPagination, renderSearchBar } from './renderers/dataBrowserSharedRenderer.js';
 import {
 	buildInstallHealthCheckModel,
 	renderInstallHealthDiagnosticsOutput,
@@ -4463,13 +4464,7 @@ class UIManager {
 	 * @returns {string} HTML
 	 */
 	_renderSearchBar(currentFilter, placeholder = 'Search...') {
-		const val = this._escapeHtml(currentFilter || '');
-		return `
-			<div class="oj-search-bar">
-				<input type="text" class="oj-search-input" placeholder="${placeholder}"
-				       value="${val}" aria-label="${placeholder}">
-			</div>
-		`;
+		return renderSearchBar(currentFilter, placeholder, (value) => this._escapeHtml(value));
 	}
 
 	/**
@@ -4481,18 +4476,7 @@ class UIManager {
 	 * @returns {string} HTML
 	 */
 	_renderPagination(currentPage, totalPages, totalItems) {
-		if (totalPages <= 1) {
-			return `<div class="oj-pagination"><span class="oj-muted">${totalItems} items</span></div>`;
-		}
-		const prevDisabled = currentPage <= 0 ? 'disabled' : '';
-		const nextDisabled = currentPage >= totalPages - 1 ? 'disabled' : '';
-		return `
-			<div class="oj-pagination">
-				<button class="oj-btn oj-btn-sm oj-page-prev" ${prevDisabled}>\u25C0 Prev</button>
-				<span class="oj-page-info">Page ${currentPage + 1} of ${totalPages} <span class="oj-muted">(${totalItems} items)</span></span>
-				<button class="oj-btn oj-btn-sm oj-page-next" ${nextDisabled}>Next \u25B6</button>
-			</div>
-		`;
+		return renderPagination(currentPage, totalPages, totalItems);
 	}
 
 	/**
