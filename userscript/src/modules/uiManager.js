@@ -15,6 +15,7 @@ import ProjectedItemCatalogResolver from './helpers/ProjectedItemCatalogResolver
 import TitanCompletionCalculator from './helpers/TitanCompletionCalculator.js';
 import PetCompletionCalculator from './helpers/PetCompletionCalculator.js';
 import { bindDataRowInteractions } from './binders/dataRowInteractionBinder.js';
+import { bindDataBrowserTableControls } from './binders/dataBrowserTableControlsBinder.js';
 import { bindProjectionInteractions } from './binders/projectionInteractionBinder.js';
 import { renderHeroRequirementsProjectionPanel } from './renderers/heroRequirementsProjectionRenderer.js';
 import {
@@ -4834,63 +4835,11 @@ class UIManager {
 		const vs = this._viewState[viewName];
 		if (!vs) return;
 
-		// Sort headers
-		content.querySelectorAll('.oj-sort-header[data-sort]').forEach((th) => {
-			th.addEventListener('click', () => {
-				const field = th.dataset.sort;
-				if (vs.sortField === field) {
-					vs.sortDir = vs.sortDir === 'asc' ? 'desc' : 'asc';
-				} else {
-					vs.sortField = field;
-					vs.sortDir = 'desc';
-				}
-				vs.page = 0;
-				this.renderView(viewName);
-			});
-		});
-
-		// Search input (debounced)
-		const searchInput = content.querySelector('.oj-search-input');
-		if (searchInput) {
-			let debounceTimer = null;
-			searchInput.addEventListener('input', (e) => {
-				clearTimeout(debounceTimer);
-				debounceTimer = setTimeout(() => {
-					vs.filter = e.target.value.trim();
-					vs.page = 0;
-					this.renderView(viewName);
-				}, 250);
-			});
-			// Restore focus & cursor position after re-render
-			searchInput.focus();
-			searchInput.setSelectionRange(searchInput.value.length, searchInput.value.length);
-		}
-
-		// Pagination buttons
-		const prevBtn = content.querySelector('.oj-page-prev');
-		if (prevBtn) {
-			prevBtn.addEventListener('click', () => {
-				if (vs.page > 0) {
-					vs.page--;
-					this.renderView(viewName);
-				}
-			});
-		}
-		const nextBtn = content.querySelector('.oj-page-next');
-		if (nextBtn) {
-			nextBtn.addEventListener('click', () => {
-				vs.page++;
-				this.renderView(viewName);
-			});
-		}
-
-		// Sub-tab pills (battles view)
-		content.querySelectorAll('.oj-pill-btn[data-subtab]').forEach((pill) => {
-			pill.addEventListener('click', () => {
-				vs.subTab = pill.dataset.subtab;
-				vs.page = 0;
-				this.renderView(viewName);
-			});
+		bindDataBrowserTableControls({
+			content,
+			viewState: vs,
+			viewName,
+			renderView: (nextView) => this.renderView(nextView),
 		});
 
 		bindDataRowInteractions({ content });
