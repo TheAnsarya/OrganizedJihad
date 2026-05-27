@@ -904,6 +904,41 @@
 
 ## Session
 - Date: 2026-05-27
+- Session Number: 31
+- Scope: Execute a high-volume `uiManager` decomposition wave across battles/titans/pets/inventory, completing issues #252-#269.
+
+## Summary
+- Created and completed 18 issue-backed slices in one validated wave:
+	- Battles extraction set: #252, #253, #254, #255, #256, #264, #268, #269
+	- Titans extraction set: #257, #258, #259
+	- Pets extraction set: #260, #261, #262, #263
+	- Inventory extraction set: #265, #266, #267
+- Refactored `uiManager` to delegate battles/titans/pets/inventory render concerns into focused helper methods while preserving existing UI behavior and outputs.
+
+## Files Modified
+- userscript/src/modules/uiManager.js
+- ~docs/plans/architecture-modernization-roadmap.md
+- ~docs/copilot-chats/2026-05-27-requirements-item-icon-enrichment.md
+
+## Issues Referenced
+- #206 Epic: Architecture modernization and module deepening across API/userscript
+- #252, #253, #254, #255, #256, #257, #258, #259, #260, #261, #262, #263, #264, #265, #266, #267, #268, #269
+
+## Validation
+- `yarn test --runInBand`: passed (18 suites, 706 tests)
+- `yarn build`: passed (webpack production build succeeded; existing bundle-size warnings only)
+
+## Key Decisions
+- Kept extraction within `uiManager` helper methods for this wave to maximize throughput and reduce cross-file import/contract risk.
+- Preserved prior selectors, table structures, and detail-row semantics to avoid UI regression while reducing method-body complexity.
+
+## Known Follow-up
+- Continue extraction of remaining large `uiManager` methods (mail/resources/upgrades/chests) using the same issue-first and validation-gated pattern.
+
+---
+
+## Session
+- Date: 2026-05-27
 - Session Number: 32
 - Scope: Execute a sustained issue-first multi-slice modernization wave across userscript `uiManager` dashboard/heroes recommendation seams.
 

@@ -196,6 +196,78 @@
 - Status: Completed on `feature/204-architecture-modernization`.
 - Outcome target: isolate `allBattles` + today-only battle dataset loading from `renderDashboard` body.
 
+47. #252 Extract battles dataset loader from renderBattles into helper method
+- Status: Completed on `feature/204-architecture-modernization`.
+- Outcome target: isolate battles store load/sort from `renderBattles`.
+
+48. #253 Extract battles type metadata map from renderBattles into helper method
+- Status: Completed on `feature/204-architecture-modernization`.
+- Outcome target: isolate battle type labels/icons/default type list from `renderBattles`.
+
+49. #254 Extract battles sub-tab pills model builder from renderBattles
+- Status: Completed on `feature/204-architecture-modernization`.
+- Outcome target: isolate sub-tab pill model/render composition from `renderBattles`.
+
+50. #255 Extract battles filter and summary stats computation from renderBattles
+- Status: Completed on `feature/204-architecture-modernization`.
+- Outcome target: isolate filtered dataset and filtered stats computation from `renderBattles`.
+
+51. #256 Extract battle row rendering from renderBattles into helper method
+- Status: Completed on `feature/204-architecture-modernization`.
+- Outcome target: isolate battle row/detail-row markup loop from `renderBattles`.
+
+52. #257 Extract titans roster loading and dedupe from renderTitans into helper method
+- Status: Completed on `feature/204-architecture-modernization`.
+- Outcome target: isolate titans metadata/IDB roster loader and dedupe from `renderTitans`.
+
+53. #258 Extract titan table row rendering from renderTitans into helper method
+- Status: Completed on `feature/204-architecture-modernization`.
+- Outcome target: isolate titan row/detail-row markup loop from `renderTitans`.
+
+54. #259 Extract titans completion map computation from renderTitans into helper method
+- Status: Completed on `feature/204-architecture-modernization`.
+- Outcome target: isolate titan completion-map precomputation from `renderTitans`.
+
+55. #260 Extract pets completion map computation from renderPets into helper method
+- Status: Completed on `feature/204-architecture-modernization`.
+- Outcome target: isolate pet completion-map precomputation from `renderPets`.
+
+56. #261 Extract pets roster loading and dedupe from renderPets into helper method
+- Status: Completed on `feature/204-architecture-modernization`.
+- Outcome target: isolate pets metadata/IDB roster loader and dedupe from `renderPets`.
+
+57. #262 Extract pet table row rendering from renderPets into helper method
+- Status: Completed on `feature/204-architecture-modernization`.
+- Outcome target: isolate pet row/detail-row markup loop from `renderPets`.
+
+58. #263 Extract pet soul-stone section rendering from renderPets into helper method
+- Status: Completed on `feature/204-architecture-modernization`.
+- Outcome target: isolate pet soul-stone summary/progress/details rendering from `renderPets`.
+
+59. #264 Extract battle detail fragment builder from renderBattles into helper method
+- Status: Completed on `feature/204-architecture-modernization`.
+- Outcome target: isolate battle detail fragment assembly (power/round/team) from row loop.
+
+60. #265 Extract inventory grouping and group section rendering from renderInventory into helper method
+- Status: Completed on `feature/204-architecture-modernization`.
+- Outcome target: isolate inventory category grouping and grouped-section markup generation.
+
+61. #266 Extract inventory usage history section rendering from renderInventory into helper method
+- Status: Completed on `feature/204-architecture-modernization`.
+- Outcome target: isolate recent inventory usage query/sort/markup section from `renderInventory`.
+
+62. #267 Extract inventory dataset loading from renderInventory into helper method
+- Status: Completed on `feature/204-architecture-modernization`.
+- Outcome target: isolate inventory metadata/snapshot loading pipeline from `renderInventory`.
+
+63. #268 Extract battles damage-healing computation from renderBattles into helper method
+- Status: Completed on `feature/204-architecture-modernization`.
+- Outcome target: isolate compressed-team damage/healing aggregation logic from battle row loop.
+
+64. #269 Extract battle detail id generation from renderBattles into helper method
+- Status: Completed on `feature/204-architecture-modernization`.
+- Outcome target: isolate deterministic battle-detail row-id generation from row loop.
+
 ## Validation Strategy
 - API changes: run `dotnet test tests/OrganizedJihad.Api.Tests/OrganizedJihad.Api.Tests.csproj` and `dotnet test OrganizedJihad.sln`.
 - Userscript changes: run `yarn test --runInBand` and `yarn build`.
@@ -203,7 +275,7 @@
 
 ## Notes
 - Parallel issue creation caused issue-number drift; canonical mapping is documented in epic #206 comments.
-- Completed slices so far: #205, #208, #204, #207, #210, #211, #212, #213, #214, #215, #216, #217, #218, #219, #220, #221, #222, #223, #224, #225, #226, #227, #228, #229, #230, #231, #232, #233, #234, #235, #236, #237, #238, #239, #240, #241, #242, #243, #244, #245, #246, #247, #248, #249, #250, and #251 (API seams + controller split + userscript renderer/binder/helper extraction).
+- Completed slices so far: #205, #208, #204, #207, #210, #211, #212, #213, #214, #215, #216, #217, #218, #219, #220, #221, #222, #223, #224, #225, #226, #227, #228, #229, #230, #231, #232, #233, #234, #235, #236, #237, #238, #239, #240, #241, #242, #243, #244, #245, #246, #247, #248, #249, #250, #251, #252, #253, #254, #255, #256, #257, #258, #259, #260, #261, #262, #263, #264, #265, #266, #267, #268, and #269 (API seams + controller split + userscript renderer/binder/helper extraction).
 - Existing unrelated dirty files remain intentionally untouched:
   - `userscript/package.json`
   - `~docs/oj-manual-prompts-log.txt`

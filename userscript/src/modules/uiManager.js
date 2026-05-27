@@ -1824,18 +1824,7 @@ class UIManager {
 	 */
 	async renderBattles() {
 		const vs = this._viewState.battles;
-
-		let allBattles = [];
-		try {
-			allBattles = await this.idbStorage.getAll('battles', FETCH_LIMIT_LARGE);
-		} catch { /* empty */ }
-
-		// Sort newest first
-		allBattles.sort((a, b) => {
-			const ta = a.timestamp ? new Date(a.timestamp).getTime() : 0;
-			const tb = b.timestamp ? new Date(b.timestamp).getTime() : 0;
-			return tb - ta;
-		});
+		const allBattles = await this._loadBattlesDataset();
 
 		if (allBattles.length === 0) {
 			return `
@@ -1846,80 +1835,15 @@ class UIManager {
 			`;
 		}
 
-		// Overall stats
-		const totalWins = allBattles.filter((b) => b.isWin === true).length;
-		const totalLosses = allBattles.length - totalWins;
-		const overallWinRate = ((totalWins / allBattles.length) * 100).toFixed(1);
-
-		// Per-type counts for sub-tab pills
-		const types = [
-			'Arena', 'GrandArena', 'TitanArena', 'GuildWar',
-			'GuildRaid', 'RaidBoss', 'Dungeon', 'Tower', 'Adventure',
-			'ClashOfWorlds', 'TournamentOfElements', 'Expedition',
-		];
-		const typeLabels = {
-			Arena: 'Arena', GrandArena: 'Grand Arena', TitanArena: 'Titan Arena',
-			GuildWar: 'Guild War', GuildRaid: 'Guild Raid', RaidBoss: 'Raid Boss',
-			Dungeon: 'Dungeon', Tower: 'Tower', Adventure: 'Adventure',
-			ClashOfWorlds: 'Clash of Worlds', TournamentOfElements: 'Tournament of Elements',
-			Expedition: 'Expedition',
-		};
-		const typeIcons = {
-			Arena: '\uD83C\uDFC6', GrandArena: '\uD83C\uDFDF\uFE0F',
-			TitanArena: '\uD83D\uDCA0', GuildWar: '\u2694\uFE0F',
-			GuildRaid: '\uD83D\uDC32', RaidBoss: '\uD83D\uDC79',
-			Dungeon: '\uD83C\uDFF0', Tower: '\uD83D\uDDFC',
-			Adventure: '\uD83D\uDDFA\uFE0F', ClashOfWorlds: '\uD83C\uDF0D',
-			TournamentOfElements: '\uD83C\uDF29\uFE0F', Expedition: '\u26F5',
-		};
-
-		/** @type {Record<string, {count: number, wins: number}>} */
-		const byType = {};
-		for (const b of allBattles) {
-			const t = b.battleType || 'Other';
-			if (!byType[t]) byType[t] = { count: 0, wins: 0 };
-			byType[t].count++;
-			if (b.isWin === true) byType[t].wins++;
-		}
-
-		// Sub-tab pills (All + each type with counts, including unknown types from data)
-		const knownTypes = new Set(types);
-		const allTypes = [...types.filter((t) => byType[t])];
-		// Add any additional types found in data that aren't in the known list
-		for (const t of Object.keys(byType)) {
-			if (!knownTypes.has(t) && t !== 'Other') allTypes.push(t);
-		}
-		const subTabs = ['all', ...allTypes];
-		const pills = subTabs.map((t) => {
-			const active = vs.subTab === t ? 'oj-pill-active' : '';
-			if (t === 'all') {
-				return `<button class="oj-pill oj-pill-btn ${active}" data-subtab="all">\uD83D\uDCCA All (${allBattles.length})</button>`;
-			}
-			const d = byType[t];
-			const label = typeLabels[t] || t;
-			const icon = typeIcons[t] || '\u2753';
-			const wr = d.count > 0 ? ((d.wins / d.count) * 100).toFixed(0) : 0;
-			return `<button class="oj-pill oj-pill-btn ${active}" data-subtab="${t}">${icon} ${label} ${d.count} (${wr}%)</button>`;
-		}).join(' ');
-
-		// Filter battles by selected sub-tab
-		let filtered = vs.subTab === 'all'
-			? allBattles
-			: allBattles.filter((b) => b.battleType === vs.subTab);
-
-		// Text filter (opponent name)
-		if (vs.filter) {
-			const q = vs.filter.toLowerCase();
-			filtered = filtered.filter((b) => {
-				const opp = (b.opponentName || b.defenderId || b.opponentId || '').toString().toLowerCase();
-				return opp.includes(q);
-			});
-		}
-
-		// Filtered stats
-		const fWins = filtered.filter((b) => b.isWin === true).length;
-		const fLosses = filtered.length - fWins;
-		const fWinRate = filtered.length > 0 ? ((fWins / filtered.length) * 100).toFixed(1) : '0.0';
+		const { types, typeLabels, typeIcons } = this._getBattleTypeMetadata();
+		const byType = this._buildBattleTypeCounts(allBattles);
+		const pills = this._renderBattleSubTabPills(vs, allBattles, byType, types, typeLabels, typeIcons);
+		const {
+			filtered,
+			fWins,
+			fLosses,
+			fWinRate,
+		} = this._filterBattlesForView(allBattles, vs);
 
 		// Paginate
 		const totalCount = filtered.length;
@@ -1927,99 +1851,7 @@ class UIManager {
 		vs.page = Math.min(vs.page, totalPages - 1);
 		const pageItems = filtered.slice(vs.page * this.PAGE_SIZE, (vs.page + 1) * this.PAGE_SIZE);
 
-		const rows = pageItems.map((b) => {
-			const time = b.timestamp ? new Date(b.timestamp).toLocaleString() : '\u2014';
-			const result = b.isWin === true
-				? '<span class="oj-win">WIN</span>'
-				: '<span class="oj-loss">LOSS</span>';
-			const opponent = b.opponentName || b.defenderId || b.opponentId || '\u2014';
-			const type = typeLabels[b.battleType] || b.battleType || '\u2014';
-
-			// Rank change display for arena-type battles (#131)
-			let rankHtml = '\u2014';
-			if (b.rankBefore || b.rankAfter) {
-				const before = b.rankBefore ? `#${b.rankBefore}` : '?';
-				const after = b.rankAfter ? `#${b.rankAfter}` : '?';
-				if (b.rankBefore && b.rankAfter) {
-					const delta = b.rankBefore - b.rankAfter; // positive = rank improved (lower number)
-					const cls = delta > 0 ? 'oj-win' : delta < 0 ? 'oj-loss' : 'oj-muted';
-					const arrow = delta > 0 ? '\u25B2' : delta < 0 ? '\u25BC' : '\u25CF';
-					rankHtml = `<span class="${cls}">${before}\u2192${after} ${arrow}</span>`;
-				} else {
-					rankHtml = `${before}\u2192${after}`;
-				}
-			}
-
-			// Raid boss damage display (#131)
-			let raidDmgHtml = '';
-			if (b.battleType === 'RaidBoss' && b.damage > 0) {
-				raidDmgHtml = `<span class="oj-mono oj-dmg">${this._formatCompact(b.damage)}</span>`;
-			}
-
-			// Calculate total damage/healing from compressed team data (#111)
-			let totalDmg = 0;
-			let totalHeal = 0;
-			try {
-				const team = b.playerHeroes ? JSON.parse(b.playerHeroes) : [];
-				const flat = Array.isArray(team[0]) && Array.isArray(team[0][0]) ? team.flat() : team;
-				for (const h of flat) {
-					if (Array.isArray(h)) {
-						totalDmg += h[5] || 0;
-						totalHeal += h[6] || 0;
-					}
-				}
-			} catch { /* empty */ }
-
-			const dmgCell = raidDmgHtml || (totalDmg > 0 ? `<span class="oj-mono oj-dmg">${this._formatCompact(totalDmg)}</span>` : '\u2014');
-			const healCell = totalHeal > 0 ? `<span class="oj-mono oj-heal">${this._formatCompact(totalHeal)}</span>` : '\u2014';
-
-			// Grand Arena per-round results (#131)
-			let roundResultsHtml = '';
-			if (b.battleType === 'GrandArena' && b.roundResults) {
-				try {
-					const rounds = JSON.parse(b.roundResults);
-					const pills = rounds.map((r, i) => {
-						const cls = r.win ? 'oj-win' : 'oj-loss';
-						return `<span class="oj-round-pill ${cls}" title="Round ${i + 1}: ${r.win ? 'Win' : 'Loss'} (${this._formatCompact(r.playerPower || 0)} vs ${this._formatCompact(r.opponentPower || 0)})">R${i + 1} ${r.win ? '\u2714' : '\u2718'}</span>`;
-					}).join(' ');
-					roundResultsHtml = `<div class="oj-round-results">${pills}</div>`;
-				} catch { /* empty */ }
-			}
-
-			// Power display for PvP battles
-			let powerHtml = '';
-			if (b.playerPower || b.opponentPower) {
-				powerHtml = `<span class="oj-mono oj-muted" title="Your power vs opponent power">${this._formatCompact(b.playerPower || 0)} vs ${this._formatCompact(b.opponentPower || 0)}</span>`;
-			}
-
-			// Battle detail row with team compositions and avatars
-			const playerTeamHtml = this._renderBattleTeam(b.playerHeroes, '\uD83D\uDDE1\uFE0F Attack');
-			const opponentTeamHtml = this._renderBattleTeam(b.opponentHeroes, '\uD83D\uDEE1\uFE0F Defense');
-			const hasDetail = playerTeamHtml || opponentTeamHtml || roundResultsHtml || powerHtml;
-			const battleId = `battle-${b.timestamp || Math.random()}`;
-
-			return `
-				<tr class="${hasDetail ? 'oj-battle-row' : ''}" data-battle-id="${battleId}">
-					<td class="oj-mono">${time}</td>
-					<td>${type}</td>
-					<td>${this._escapeHtml(String(opponent))}</td>
-					<td>${rankHtml}</td>
-					<td>${dmgCell}</td>
-					<td>${healCell}</td>
-					<td>${result}</td>
-				</tr>
-				${hasDetail ? `<tr class="oj-battle-detail" data-detail-for="${battleId}" style="display:none">
-					<td colspan="7">
-						<div class="oj-battle-teams">
-							${powerHtml ? `<div class="oj-battle-power">\u26A1 ${powerHtml}</div>` : ''}
-							${roundResultsHtml}
-							${playerTeamHtml}
-							${opponentTeamHtml}
-						</div>
-					</td>
-				</tr>` : ''}
-			`;
-		}).join('');
+		const rows = this._renderBattleRows(pageItems, typeLabels);
 
 		// Adventure Guide panel — shown on Adventure sub-tab (#131)
 		let adventureGuideHtml = '';
@@ -2057,33 +1889,7 @@ class UIManager {
 	 */
 	async renderTitans() {
 		const vs = this._viewState.titans;
-
-		let titans = [];
-		try {
-			const cached = await this.idbStorage.getMetadata('titansData', null);
-			if (Array.isArray(cached) && cached.length > 0) {
-				titans = cached;
-			}
-		} catch { /* empty */ }
-
-		// Fallback: read from the titans IDB store and deduplicate by titanId
-		// Handles both legacy individual records and compressed batches (#43)
-		if (titans.length === 0) {
-			try {
-				const raw = await this.idbStorage.getAll('titans', FETCH_LIMIT_LARGE);
-				const all = decompressTitanStore(raw);
-				if (all.length > 0) {
-					const byId = {};
-					for (const t of all) {
-						const key = t.titanId || t.id;
-						if (!byId[key] || (t.timestamp || '') > (byId[key].timestamp || '')) {
-							byId[key] = t;
-						}
-					}
-					titans = Object.values(byId);
-				}
-			} catch { /* empty */ }
-		}
+		let titans = await this._loadTitansRoster();
 
 		if (titans.length === 0) {
 			return `
@@ -2112,12 +1918,7 @@ class UIManager {
 
 		const TCalc = TitanCompletionCalculator;
 
-		// Pre-compute completion for every titan (keyed by titanId for fast lookup)
-		const completionMap = {};
-		for (const t of titans) {
-			const key = t.titanId || t.id;
-			completionMap[key] = TCalc.calculateCompletion(t);
-		}
+		const completionMap = this._buildTitanCompletionMap(titans, TCalc);
 
 		// Average completion
 		const avgCompletion = titans.length > 0
@@ -2139,64 +1940,7 @@ class UIManager {
 		vs.page = Math.min(vs.page, totalPages - 1);
 		const pageItems = titans.slice(vs.page * this.PAGE_SIZE, (vs.page + 1) * this.PAGE_SIZE);
 
-		const rows = pageItems.map((t) => {
-			const tId = t.titanId || t.id;
-			const name = this._escapeHtml(t.titanName || t.name || `Titan #${tId}`);
-			const elementDisplay = TCalc.formatElement(t.element);
-			const comp = completionMap[tId] || { overall: 0, systems: {} };
-
-			// Titan avatar from HW-Assist Calculator CDN (#109)
-			// Titans use a separate directory with `titan_icon_` prefix, unlike heroes/pets
-			const avatarUrl = `https://calc2.hw-assist.com/static/assets/images/titan_icons/titan_icon_${tId}.png`;
-
-			// ── Artifacts column — 3 small icons with colored borders, star at top, level at bottom ──
-			const artifacts = TCalc.parseArtifacts(t);
-			const artifactIcons = artifacts.length > 0
-				? artifacts.map((art) => {
-					const borderClass = TCalc.artifactStarClass(art.star);
-					const starTip = `${art.star}\u2605 L${art.level}`;
-					return `<div class="oj-artifact-icon ${borderClass}" title="${starTip}">` +
-						`<span class="oj-artifact-star">${art.star}\u2B50</span>` +
-						`<span class="oj-artifact-level">${art.level}</span>` +
-						`</div>`;
-				}).join('')
-				: '<span class="oj-muted">\u2014</span>';
-
-			// ── Totem (Element Spirit) stats ──
-			const totemLevel = t.totemLevel || 0;
-			const totemStar = t.totemStar || 0;
-			const totemDisplay = (totemLevel > 0 || totemStar > 0)
-				? `${elementDisplay}<br><span class="oj-totem-stats">${totemStar}\u2B50 L${totemLevel}</span>`
-				: elementDisplay;
-
-			// Build expandable per-system breakdown (hidden by default)
-			const sysRows = Object.entries(TCalc.SYSTEM_LABELS).map(([key, label]) => {
-				const pct = comp.systems[key] || 0;
-				return `<div class="oj-sys-row">` +
-					`<span class="oj-sys-icon">${TCalc.SYSTEM_ICONS[key] || ''}</span>` +
-					`<span class="oj-sys-name">${label}</span>` +
-					TCalc.renderBar(pct) +
-					`</div>`;
-			}).join('');
-
-			return `
-				<tr class="oj-titan-row" data-titan-id="${tId}">
-					<td class="oj-avatar-cell"><img class="oj-hero-avatar" src="${avatarUrl}" alt="${name}" loading="lazy" referrerpolicy="no-referrer" onerror="this.onerror=null;this.src='';this.alt='\uD83D\uDCA0';this.className='oj-avatar-fallback'"></td>
-					<td><strong>${name}</strong></td>
-					<td>${t.level || '\u2014'}</td>
-					<td>${'\u2B50'.repeat(Math.min(t.stars || 0, 6)) || '\u2014'}</td>
-					<td>${totemDisplay}</td>
-					<td class="oj-artifact-cell"><div class="oj-artifact-col">${artifactIcons}</div></td>
-					<td class="oj-num">${t.power ? t.power.toLocaleString() : '\u2014'}</td>
-					<td class="oj-completion-cell">${TCalc.renderBar(comp.overall)}</td>
-				</tr>
-				<tr class="oj-titan-detail" data-detail-for="${tId}" style="display:none">
-					<td colspan="8">
-						<div class="oj-sys-breakdown">${sysRows}</div>
-					</td>
-				</tr>
-			`;
-		}).join('');
+		const rows = this._renderTitanRows(pageItems, completionMap, TCalc);
 
 		const sortInd = (field) => this._sortIndicator(vs.sortField, vs.sortDir, field);
 
@@ -2234,31 +1978,7 @@ class UIManager {
 		const vs = this._viewState.pets;
 		const PCalc = PetCompletionCalculator;
 
-		// Prefer the metadata cache (latest roster, one row per pet)
-		let pets = [];
-		try {
-			const cached = await this.idbStorage.getMetadata('petsData', null);
-			if (Array.isArray(cached) && cached.length > 0) {
-				pets = cached;
-			}
-		} catch { /* empty */ }
-
-		// Fallback: read from the pets IDB store and deduplicate by petId
-		if (pets.length === 0) {
-			try {
-				const raw = await this.idbStorage.getAll('pets', FETCH_LIMIT_MEDIUM);
-				if (raw.length > 0) {
-					const byId = {};
-					for (const p of raw) {
-						const key = p.petId || p.id;
-						if (!byId[key] || (p.timestamp || '') > (byId[key].timestamp || '')) {
-							byId[key] = p;
-						}
-					}
-					pets = Object.values(byId);
-				}
-			} catch { /* empty */ }
-		}
+		let pets = await this._loadPetsRoster();
 
 		if (pets.length === 0) {
 			return `
@@ -2269,12 +1989,7 @@ class UIManager {
 			`;
 		}
 
-		// Pre-compute completion for every pet
-		const completionMap = {};
-		for (const p of pets) {
-			const key = p.petId || p.id;
-			completionMap[key] = PCalc.calculateCompletion(p);
-		}
+		const completionMap = this._buildPetCompletionMap(pets, PCalc);
 
 		// Filter by name
 		if (vs.filter) {
@@ -2311,55 +2026,7 @@ class UIManager {
 		vs.page = Math.min(vs.page, totalPages - 1);
 		const pageItems = pets.slice(vs.page * this.PAGE_SIZE, (vs.page + 1) * this.PAGE_SIZE);
 
-		const rows = pageItems.map((p) => {
-			const pId = p.petId || p.id;
-			const name = this._escapeHtml(resolveHeroName(pId) || p.petName || p.name || `Pet #${pId}`);
-			const comp = completionMap[pId] || { overall: 0, systems: {} };
-			const patronageCount = PCalc.countPatronage(p.patronageData);
-
-			// Pet avatar from HW-Assist Calculator CDN (#109)
-			// Pet IDs are in the 6000-range; zero-padded to 4 digits
-			const avatarUrl = `https://calc2.hw-assist.com/static/assets/images/hero_icons/${String(pId).padStart(4, '0')}.png`;
-
-			// Build expandable per-system breakdown (hidden by default)
-			const sysRows = Object.entries(PCalc.SYSTEM_LABELS).map(([key, label]) => {
-				const pct = comp.systems[key] || 0;
-				return `<div class="oj-sys-row">` +
-					`<span class="oj-sys-icon">${PCalc.SYSTEM_ICONS[key] || ''}</span>` +
-					`<span class="oj-sys-name">${label}</span>` +
-					PCalc.renderBar(pct) +
-					`</div>`;
-			}).join('');
-
-			// Patronage info for detail row
-			const patronageInfo = patronageCount > 0
-				? `<div class="oj-pet-patronage">\uD83D\uDC64 Supporting ${patronageCount} hero${patronageCount !== 1 ? 'es' : ''}</div>`
-				: '';
-
-			const colorVal = p.color || 0;
-			const colorName = this._colorRankName(colorVal);
-			const colorClass = this._colorRankClass(colorVal);
-
-			return `
-				<tr class="oj-pet-row" data-pet-id="${pId}">
-					<td class="oj-avatar-cell"><img class="oj-hero-avatar ${colorClass}" src="${avatarUrl}" alt="${name}" loading="lazy" onerror="this.style.display='none'"></td>
-					<td><strong>${name}</strong></td>
-					<td>${p.level || '\u2014'}</td>
-					<td>${'\u2B50'.repeat(Math.min(p.stars || p.star || 0, 6)) || '\u2014'}</td>
-					<td class="${colorClass}">${colorName}</td>
-					<td class="oj-num">${p.power ? p.power.toLocaleString() : '\u2014'}</td>
-					<td class="oj-completion-cell">${PCalc.renderBar(comp.overall)}</td>
-				</tr>
-				<tr class="oj-pet-detail" data-detail-for="${pId}" style="display:none">
-					<td colspan="7">
-						<div class="oj-sys-breakdown">
-							${sysRows}
-						</div>
-						${patronageInfo}
-					</td>
-				</tr>
-			`;
-		}).join('');
+		const rows = this._renderPetRows(pageItems, completionMap, PCalc);
 
 		const sortInd = (field) => this._sortIndicator(vs.sortField, vs.sortDir, field);
 
@@ -2372,75 +2039,13 @@ class UIManager {
 		const STAR_COSTS_CUMULATIVE = [0, 10, 30, 80, 180, 330, 630];
 		const STAR_COSTS_INCREMENTAL = [10, 20, 50, 100, 150, 300]; // cost for star N+1
 		const MAX_STONES_PER_PET = 630;
-
-		let soulStonesHtml = '';
-		try {
-			const invData = await this.idbStorage.getMetadata('inventoryData', null);
-			const fragPet = (invData && invData.fragmentPet) ? invData.fragmentPet : {};
-
-			// Build per-pet soul stone breakdown
-			const petStoneSummary = [];
-			let totalUsable = 0; // Stones that can actually be applied (capped at what's needed)
-			let totalNeeded = 0; // Total stones still needed across all pets
-			let totalAvailable = 0; // Raw total stones in inventory
-
-			for (const p of pets) {
-				const pId = p.petId || p.id;
-				const curStars = Math.min(p.stars || p.star || 0, 6);
-				const stonesOwned = fragPet[pId] || fragPet[String(pId)] || 0;
-				const alreadyUsed = STAR_COSTS_CUMULATIVE[curStars] || 0;
-				const neededToMax = MAX_STONES_PER_PET - alreadyUsed;
-				const nextStarCost = curStars < 6 ? STAR_COSTS_INCREMENTAL[curStars] : 0;
-				const usable = Math.min(stonesOwned, neededToMax);
-
-				totalAvailable += stonesOwned;
-				totalUsable += usable;
-				totalNeeded += neededToMax;
-
-				const petName = this._escapeHtml(resolveHeroName(pId) || p.petName || p.name || `Pet #${pId}`);
-				petStoneSummary.push({ pId, petName, curStars, stonesOwned, neededToMax, nextStarCost, usable });
-			}
-
-			// Overall progress: usable stones / needed stones
-			const pct = totalNeeded > 0 ? Math.min(100, (totalUsable / totalNeeded) * 100) : 100;
-			const barColor = PCalc.colorClass(pct);
-
-			// Per-pet breakdown rows
-			const stoneRows = petStoneSummary.map((s) => {
-				const starDisplay = '\u2B50'.repeat(Math.min(s.curStars, 6));
-				const isMaxed = s.curStars >= 6;
-				const nextInfo = isMaxed
-					? '<span class="oj-muted">MAX</span>'
-					: `${s.nextStarCost} to ${s.curStars + 1}\u2605`;
-				const statusClass = isMaxed ? 'oj-muted' : (s.stonesOwned >= s.nextStarCost && s.curStars < 6) ? 'oj-text-green' : '';
-				return `<tr class="${statusClass}">` +
-					`<td>${s.petName}</td>` +
-					`<td>${starDisplay || '\u2014'}</td>` +
-					`<td class="oj-num">${s.stonesOwned.toLocaleString()}</td>` +
-					`<td class="oj-num">${nextInfo}</td>` +
-					`<td class="oj-num">${isMaxed ? '\u2014' : s.neededToMax.toLocaleString()}</td>` +
-					`</tr>`;
-			}).join('');
-
-			soulStonesHtml = `
-				<div class="oj-pet-soulstones">
-					<div class="oj-pet-soulstones-label">
-						\uD83D\uDC8E Pet Soul Stones: <strong>${totalUsable.toLocaleString()}</strong> usable of <strong>${totalAvailable.toLocaleString()}</strong> in inventory / <strong>${totalNeeded.toLocaleString()}</strong> needed to max all
-					</div>
-					<div class="oj-completion-bar oj-pet-soulstones-bar">
-						<div class="oj-completion-fill oj-completion-${barColor}" style="width:${pct.toFixed(1)}%"></div>
-						<div class="oj-completion-label">${totalUsable.toLocaleString()} / ${totalNeeded.toLocaleString()}</div>
-					</div>
-					<details class="oj-soulstone-details">
-						<summary>Per-pet breakdown</summary>
-						<table class="oj-table oj-soulstone-table">
-							<thead><tr><th>Pet</th><th>Stars</th><th>Have</th><th>Next \u2605</th><th>To Max</th></tr></thead>
-							<tbody>${stoneRows}</tbody>
-						</table>
-					</details>
-				</div>
-			`;
-		} catch { /* empty — no inventory data available yet */ }
+		const soulStonesHtml = await this._renderPetSoulStonesSection(
+			pets,
+			PCalc,
+			STAR_COSTS_CUMULATIVE,
+			STAR_COSTS_INCREMENTAL,
+			MAX_STONES_PER_PET,
+		);
 
 		return `
 			<div class="oj-pets" data-browser="pets">
@@ -2893,28 +2498,7 @@ class UIManager {
 	async renderInventory() {
 		const vs = this._viewState.inventory;
 
-		let items = [];
-		try {
-			// Primary: read raw inventory data from metadata cache (#97)
-			// This is the raw API object: { fragmentHero: {id: qty}, consumable: {id: qty}, gear: {id: qty}, ... }
-			const rawData = await this.idbStorage.getMetadata('inventoryData', null);
-			if (rawData && typeof rawData === 'object') {
-				items = this._parseRawInventory(rawData);
-			}
-		} catch { /* empty */ }
-
-		// Fallback: parse inventoryData JSON from latest IDB snapshot
-		if (items.length === 0) {
-			try {
-				const snapshots = await this.idbStorage.getPage('inventory', { limit: 1, direction: 'prev' });
-				if (snapshots.length > 0 && snapshots[0].inventoryData) {
-					const rawData = typeof snapshots[0].inventoryData === 'string'
-						? JSON.parse(snapshots[0].inventoryData)
-						: snapshots[0].inventoryData;
-					items = this._parseRawInventory(rawData);
-				}
-			} catch { /* empty */ }
-		}
+		let items = await this._loadInventoryItems();
 
 		if (items.length === 0) {
 			return `
@@ -2938,115 +2522,15 @@ class UIManager {
 		// Sort
 		items = this._sortData(items, vs.sortField, vs.sortDir);
 
-		// Group by category
-		const grouped = {};
-		for (const it of items) {
-			const cat = it.category || it.type || 'Uncategorized';
-			if (!grouped[cat]) grouped[cat] = [];
-			grouped[cat].push(it);
-		}
-
-		// Category display names and icons
-		const catLabels = {
-			hero_soul_stones: '\uD83D\uDC8E Hero Soul Stones',
-			titan_soul_stones: '\uD83D\uDCA0 Titan Soul Stones',
-			equipment: '\uD83D\uDEE1\uFE0F Equipment',
-			consumable: '\uD83E\uDDEA Consumables',
-			fragment: '\uD83E\uDDE9 Fragments',
-			scroll: '\uD83D\uDCDC Scrolls',
-			gear: '\u2699\uFE0F Gear',
-			potion: '\uD83E\uDDEB Potions',
-			skin_stone: '\uD83C\uDFAD Skin Stones',
-			artifact: '\uD83C\uDFFA Artifacts',
-			rune: '\uD83D\uDD2E Runes',
-			gold: '\uD83E\uDE99 Gold Items',
-			resource: '\uD83D\uDCE6 Resources',
-			Uncategorized: '\uD83D\uDCE6 Other',
-		};
-
 		// Paginate across all items (flat) but render grouped
 		const totalCount = items.length;
 		const totalPages = Math.max(1, Math.ceil(totalCount / this.PAGE_SIZE));
 		vs.page = Math.min(vs.page, totalPages - 1);
-
-		// Build grouped HTML — each category is a collapsible section
-		const categoryCount = Object.keys(grouped).length;
-		const groupHtml = Object.entries(grouped)
-			.sort(([a], [b]) => a.localeCompare(b))
-			.map(([cat, catItems]) => {
-				const label = catLabels[cat] || `\uD83D\uDCE6 ${cat}`;
-				const itemRows = catItems.map((it) => {
-					const name = this._escapeHtml(it.name || it.itemName || `Item #${it.itemId || it.id}`);
-					const qty = it.count ?? it.quantity ?? '\u2014';
-					return `
-						<tr>
-							<td><strong>${name}</strong></td>
-							<td class="oj-num">${typeof qty === 'number' ? qty.toLocaleString() : qty}</td>
-						</tr>
-					`;
-				}).join('');
-
-				return `
-					<div class="oj-inv-group">
-						<div class="oj-inv-group-header" data-inv-cat="${this._escapeHtml(cat)}">
-							<span>${label}</span>
-							<span class="oj-muted">(${catItems.length} items)</span>
-						</div>
-						<table class="oj-table oj-table-compact oj-inv-group-table">
-							<thead><tr><th>Name</th><th>Qty</th></tr></thead>
-							<tbody>${itemRows}</tbody>
-						</table>
-					</div>
-				`;
-			}).join('');
+		const { categoryCount, groupHtml } = this._renderInventoryGroupSections(items);
 
 		const sortInd = (field) => this._sortIndicator(vs.sortField, vs.sortDir, field);
 
-		// ── Recent item usage history from inventoryItemUsages store ──
-		let usageHtml = '';
-		try {
-			const usages = await this.idbStorage.getAll('inventoryItemUsages', FETCH_LIMIT_LARGE);
-			if (usages.length > 0) {
-				// Sort by timestamp descending, show last 50
-				usages.sort((a, b) => (b.timestamp || '').localeCompare(a.timestamp || ''));
-				const recent = usages.slice(0, 50);
-				const usageRows = recent.map((u) => {
-					const ts = u.timestamp ? new Date(u.timestamp).toLocaleString() : '\u2014';
-					const item = this._escapeHtml(u.itemName || u.itemId || 'Unknown');
-					const qty = u.quantityUsed || 1;
-					const target = this._escapeHtml(u.targetEntity || '\u2014');
-					const ctx = this._escapeHtml(u.usageContext || '\u2014').replace(/_/g, ' ');
-					const catBadge = this._escapeHtml(u.category || '');
-					return `<tr>
-						<td style="white-space:nowrap;font-size:11px">${ts}</td>
-						<td>${item}</td>
-						<td class="oj-num">${qty}</td>
-						<td><span class="oj-badge">${catBadge}</span></td>
-						<td>${ctx}</td>
-						<td>${target}</td>
-					</tr>`;
-				}).join('');
-
-				usageHtml = `
-					<div class="oj-section" style="margin-top:12px">
-						<h4>\uD83D\uDCC9 Recent Usage <span class="oj-muted">(${usages.length} total, showing last 50)</span></h4>
-						<table class="oj-table oj-table-compact">
-							<thead>
-								<tr>
-									<th>Time</th>
-									<th>Item</th>
-									<th>Qty</th>
-									<th>Category</th>
-									<th>Context</th>
-									<th>Target</th>
-								</tr>
-							</thead>
-							<tbody>${usageRows}</tbody>
-						</table>
-					</div>
-				`;
-			}
-		} catch { /* empty */ }
+		const usageHtml = await this._renderInventoryUsageSection();
 
 		return `
 			<div class="oj-inventory" data-browser="inventory">
@@ -4244,6 +3728,576 @@ class UIManager {
 	 */
 	_stalenessTag(lastUpdate) {
 		return stalenessTag(lastUpdate);
+	}
+
+	async _loadBattlesDataset() {
+		let allBattles = [];
+		try {
+			allBattles = await this.idbStorage.getAll('battles', FETCH_LIMIT_LARGE);
+		} catch { /* empty */ }
+
+		allBattles.sort((a, b) => {
+			const ta = a.timestamp ? new Date(a.timestamp).getTime() : 0;
+			const tb = b.timestamp ? new Date(b.timestamp).getTime() : 0;
+			return tb - ta;
+		});
+
+		return allBattles;
+	}
+
+	_getBattleTypeMetadata() {
+		const types = [
+			'Arena', 'GrandArena', 'TitanArena', 'GuildWar',
+			'GuildRaid', 'RaidBoss', 'Dungeon', 'Tower', 'Adventure',
+			'ClashOfWorlds', 'TournamentOfElements', 'Expedition',
+		];
+		const typeLabels = {
+			Arena: 'Arena', GrandArena: 'Grand Arena', TitanArena: 'Titan Arena',
+			GuildWar: 'Guild War', GuildRaid: 'Guild Raid', RaidBoss: 'Raid Boss',
+			Dungeon: 'Dungeon', Tower: 'Tower', Adventure: 'Adventure',
+			ClashOfWorlds: 'Clash of Worlds', TournamentOfElements: 'Tournament of Elements',
+			Expedition: 'Expedition',
+		};
+		const typeIcons = {
+			Arena: '\uD83C\uDFC6', GrandArena: '\uD83C\uDFDF\uFE0F',
+			TitanArena: '\uD83D\uDCA0', GuildWar: '\u2694\uFE0F',
+			GuildRaid: '\uD83D\uDC32', RaidBoss: '\uD83D\uDC79',
+			Dungeon: '\uD83C\uDFF0', Tower: '\uD83D\uDDFC',
+			Adventure: '\uD83D\uDDFA\uFE0F', ClashOfWorlds: '\uD83C\uDF0D',
+			TournamentOfElements: '\uD83C\uDF29\uFE0F', Expedition: '\u26F5',
+		};
+
+		return { types, typeLabels, typeIcons };
+	}
+
+	_buildBattleTypeCounts(allBattles) {
+		/** @type {Record<string, {count: number, wins: number}>} */
+		const byType = {};
+		for (const battle of allBattles) {
+			const type = battle.battleType || 'Other';
+			if (!byType[type]) byType[type] = { count: 0, wins: 0 };
+			byType[type].count++;
+			if (battle.isWin === true) byType[type].wins++;
+		}
+		return byType;
+	}
+
+	_renderBattleSubTabPills(vs, allBattles, byType, types, typeLabels, typeIcons) {
+		const knownTypes = new Set(types);
+		const allTypes = [...types.filter((type) => byType[type])];
+		for (const type of Object.keys(byType)) {
+			if (!knownTypes.has(type) && type !== 'Other') allTypes.push(type);
+		}
+
+		const subTabs = ['all', ...allTypes];
+		return subTabs.map((type) => {
+			const active = vs.subTab === type ? 'oj-pill-active' : '';
+			if (type === 'all') {
+				return `<button class="oj-pill oj-pill-btn ${active}" data-subtab="all">\uD83D\uDCCA All (${allBattles.length})</button>`;
+			}
+
+			const data = byType[type];
+			const label = typeLabels[type] || type;
+			const icon = typeIcons[type] || '\u2753';
+			const wr = data.count > 0 ? ((data.wins / data.count) * 100).toFixed(0) : 0;
+			return `<button class="oj-pill oj-pill-btn ${active}" data-subtab="${type}">${icon} ${label} ${data.count} (${wr}%)</button>`;
+		}).join(' ');
+	}
+
+	_filterBattlesForView(allBattles, vs) {
+		let filtered = vs.subTab === 'all'
+			? allBattles
+			: allBattles.filter((battle) => battle.battleType === vs.subTab);
+
+		if (vs.filter) {
+			const q = vs.filter.toLowerCase();
+			filtered = filtered.filter((battle) => {
+				const opp = (battle.opponentName || battle.defenderId || battle.opponentId || '').toString().toLowerCase();
+				return opp.includes(q);
+			});
+		}
+
+		const fWins = filtered.filter((battle) => battle.isWin === true).length;
+		const fLosses = filtered.length - fWins;
+		const fWinRate = filtered.length > 0 ? ((fWins / filtered.length) * 100).toFixed(1) : '0.0';
+		return { filtered, fWins, fLosses, fWinRate };
+	}
+
+	_buildBattleDetailId(battle, index) {
+		const ts = String(battle.timestamp || index);
+		const opp = String(battle.opponentId || battle.defenderId || battle.opponentName || 'na').replace(/\W+/g, '_');
+		return `battle-${ts}-${opp}-${index}`;
+	}
+
+	_computeBattleDamageHealing(battle) {
+		let totalDmg = 0;
+		let totalHeal = 0;
+		try {
+			const team = battle.playerHeroes ? JSON.parse(battle.playerHeroes) : [];
+			const flat = Array.isArray(team[0]) && Array.isArray(team[0][0]) ? team.flat() : team;
+			for (const hero of flat) {
+				if (Array.isArray(hero)) {
+					totalDmg += hero[5] || 0;
+					totalHeal += hero[6] || 0;
+				}
+			}
+		} catch { /* empty */ }
+
+		const raidDmgHtml = (battle.battleType === 'RaidBoss' && battle.damage > 0)
+			? `<span class="oj-mono oj-dmg">${this._formatCompact(battle.damage)}</span>`
+			: '';
+
+		const dmgCell = raidDmgHtml || (totalDmg > 0 ? `<span class="oj-mono oj-dmg">${this._formatCompact(totalDmg)}</span>` : '\u2014');
+		const healCell = totalHeal > 0 ? `<span class="oj-mono oj-heal">${this._formatCompact(totalHeal)}</span>` : '\u2014';
+		return { dmgCell, healCell };
+	}
+
+	_buildBattleDetailFragments(battle) {
+		let roundResultsHtml = '';
+		if (battle.battleType === 'GrandArena' && battle.roundResults) {
+			try {
+				const rounds = JSON.parse(battle.roundResults);
+				const pills = rounds.map((round, i) => {
+					const cls = round.win ? 'oj-win' : 'oj-loss';
+					return `<span class="oj-round-pill ${cls}" title="Round ${i + 1}: ${round.win ? 'Win' : 'Loss'} (${this._formatCompact(round.playerPower || 0)} vs ${this._formatCompact(round.opponentPower || 0)})">R${i + 1} ${round.win ? '\u2714' : '\u2718'}</span>`;
+				}).join(' ');
+				roundResultsHtml = `<div class="oj-round-results">${pills}</div>`;
+			} catch { /* empty */ }
+		}
+
+		let powerHtml = '';
+		if (battle.playerPower || battle.opponentPower) {
+			powerHtml = `<span class="oj-mono oj-muted" title="Your power vs opponent power">${this._formatCompact(battle.playerPower || 0)} vs ${this._formatCompact(battle.opponentPower || 0)}</span>`;
+		}
+
+		const playerTeamHtml = this._renderBattleTeam(battle.playerHeroes, '\uD83D\uDDE1\uFE0F Attack');
+		const opponentTeamHtml = this._renderBattleTeam(battle.opponentHeroes, '\uD83D\uDEE1\uFE0F Defense');
+		const hasDetail = playerTeamHtml || opponentTeamHtml || roundResultsHtml || powerHtml;
+		return { roundResultsHtml, powerHtml, playerTeamHtml, opponentTeamHtml, hasDetail };
+	}
+
+	_renderBattleRows(pageItems, typeLabels) {
+		return pageItems.map((battle, index) => {
+			const time = battle.timestamp ? new Date(battle.timestamp).toLocaleString() : '\u2014';
+			const result = battle.isWin === true
+				? '<span class="oj-win">WIN</span>'
+				: '<span class="oj-loss">LOSS</span>';
+			const opponent = battle.opponentName || battle.defenderId || battle.opponentId || '\u2014';
+			const type = typeLabels[battle.battleType] || battle.battleType || '\u2014';
+
+			let rankHtml = '\u2014';
+			if (battle.rankBefore || battle.rankAfter) {
+				const before = battle.rankBefore ? `#${battle.rankBefore}` : '?';
+				const after = battle.rankAfter ? `#${battle.rankAfter}` : '?';
+				if (battle.rankBefore && battle.rankAfter) {
+					const delta = battle.rankBefore - battle.rankAfter;
+					const cls = delta > 0 ? 'oj-win' : delta < 0 ? 'oj-loss' : 'oj-muted';
+					const arrow = delta > 0 ? '\u25B2' : delta < 0 ? '\u25BC' : '\u25CF';
+					rankHtml = `<span class="${cls}">${before}\u2192${after} ${arrow}</span>`;
+				} else {
+					rankHtml = `${before}\u2192${after}`;
+				}
+			}
+
+			const { dmgCell, healCell } = this._computeBattleDamageHealing(battle);
+			const { roundResultsHtml, powerHtml, playerTeamHtml, opponentTeamHtml, hasDetail } = this._buildBattleDetailFragments(battle);
+			const battleId = this._buildBattleDetailId(battle, index);
+
+			return `
+				<tr class="${hasDetail ? 'oj-battle-row' : ''}" data-battle-id="${battleId}">
+					<td class="oj-mono">${time}</td>
+					<td>${type}</td>
+					<td>${this._escapeHtml(String(opponent))}</td>
+					<td>${rankHtml}</td>
+					<td>${dmgCell}</td>
+					<td>${healCell}</td>
+					<td>${result}</td>
+				</tr>
+				${hasDetail ? `<tr class="oj-battle-detail" data-detail-for="${battleId}" style="display:none">
+					<td colspan="7">
+						<div class="oj-battle-teams">
+							${powerHtml ? `<div class="oj-battle-power">\u26A1 ${powerHtml}</div>` : ''}
+							${roundResultsHtml}
+							${playerTeamHtml}
+							${opponentTeamHtml}
+						</div>
+					</td>
+				</tr>` : ''}
+			`;
+		}).join('');
+	}
+
+	async _loadTitansRoster() {
+		let titans = [];
+		try {
+			const cached = await this.idbStorage.getMetadata('titansData', null);
+			if (Array.isArray(cached) && cached.length > 0) {
+				titans = cached;
+			}
+		} catch { /* empty */ }
+
+		if (titans.length === 0) {
+			try {
+				const raw = await this.idbStorage.getAll('titans', FETCH_LIMIT_LARGE);
+				const all = decompressTitanStore(raw);
+				if (all.length > 0) {
+					const byId = {};
+					for (const titan of all) {
+						const key = titan.titanId || titan.id;
+						if (!byId[key] || (titan.timestamp || '') > (byId[key].timestamp || '')) {
+							byId[key] = titan;
+						}
+					}
+					titans = Object.values(byId);
+				}
+			} catch { /* empty */ }
+		}
+
+		return titans;
+	}
+
+	_buildTitanCompletionMap(titans, TCalc) {
+		const completionMap = {};
+		for (const titan of titans) {
+			const key = titan.titanId || titan.id;
+			completionMap[key] = TCalc.calculateCompletion(titan);
+		}
+		return completionMap;
+	}
+
+	_renderTitanRows(pageItems, completionMap, TCalc) {
+		return pageItems.map((titan) => {
+			const titanId = titan.titanId || titan.id;
+			const name = this._escapeHtml(titan.titanName || titan.name || `Titan #${titanId}`);
+			const elementDisplay = TCalc.formatElement(titan.element);
+			const comp = completionMap[titanId] || { overall: 0, systems: {} };
+
+			const avatarUrl = `https://calc2.hw-assist.com/static/assets/images/titan_icons/titan_icon_${titanId}.png`;
+
+			const artifacts = TCalc.parseArtifacts(titan);
+			const artifactIcons = artifacts.length > 0
+				? artifacts.map((art) => {
+					const borderClass = TCalc.artifactStarClass(art.star);
+					const starTip = `${art.star}\u2605 L${art.level}`;
+					return `<div class="oj-artifact-icon ${borderClass}" title="${starTip}">` +
+						`<span class="oj-artifact-star">${art.star}\u2B50</span>` +
+						`<span class="oj-artifact-level">${art.level}</span>` +
+						`</div>`;
+				}).join('')
+				: '<span class="oj-muted">\u2014</span>';
+
+			const totemLevel = titan.totemLevel || 0;
+			const totemStar = titan.totemStar || 0;
+			const totemDisplay = (totemLevel > 0 || totemStar > 0)
+				? `${elementDisplay}<br><span class="oj-totem-stats">${totemStar}\u2B50 L${totemLevel}</span>`
+				: elementDisplay;
+
+			const sysRows = Object.entries(TCalc.SYSTEM_LABELS).map(([key, label]) => {
+				const pct = comp.systems[key] || 0;
+				return `<div class="oj-sys-row">` +
+					`<span class="oj-sys-icon">${TCalc.SYSTEM_ICONS[key] || ''}</span>` +
+					`<span class="oj-sys-name">${label}</span>` +
+					TCalc.renderBar(pct) +
+					`</div>`;
+			}).join('');
+
+			return `
+				<tr class="oj-titan-row" data-titan-id="${titanId}">
+					<td class="oj-avatar-cell"><img class="oj-hero-avatar" src="${avatarUrl}" alt="${name}" loading="lazy" referrerpolicy="no-referrer" onerror="this.onerror=null;this.src='';this.alt='\uD83D\uDCA0';this.className='oj-avatar-fallback'"></td>
+					<td><strong>${name}</strong></td>
+					<td>${titan.level || '\u2014'}</td>
+					<td>${'\u2B50'.repeat(Math.min(titan.stars || 0, 6)) || '\u2014'}</td>
+					<td>${totemDisplay}</td>
+					<td class="oj-artifact-cell"><div class="oj-artifact-col">${artifactIcons}</div></td>
+					<td class="oj-num">${titan.power ? titan.power.toLocaleString() : '\u2014'}</td>
+					<td class="oj-completion-cell">${TCalc.renderBar(comp.overall)}</td>
+				</tr>
+				<tr class="oj-titan-detail" data-detail-for="${titanId}" style="display:none">
+					<td colspan="8">
+						<div class="oj-sys-breakdown">${sysRows}</div>
+					</td>
+				</tr>
+			`;
+		}).join('');
+	}
+
+	async _loadPetsRoster() {
+		let pets = [];
+		try {
+			const cached = await this.idbStorage.getMetadata('petsData', null);
+			if (Array.isArray(cached) && cached.length > 0) {
+				pets = cached;
+			}
+		} catch { /* empty */ }
+
+		if (pets.length === 0) {
+			try {
+				const raw = await this.idbStorage.getAll('pets', FETCH_LIMIT_MEDIUM);
+				if (raw.length > 0) {
+					const byId = {};
+					for (const pet of raw) {
+						const key = pet.petId || pet.id;
+						if (!byId[key] || (pet.timestamp || '') > (byId[key].timestamp || '')) {
+							byId[key] = pet;
+						}
+					}
+					pets = Object.values(byId);
+				}
+			} catch { /* empty */ }
+		}
+
+		return pets;
+	}
+
+	_buildPetCompletionMap(pets, PCalc) {
+		const completionMap = {};
+		for (const pet of pets) {
+			const key = pet.petId || pet.id;
+			completionMap[key] = PCalc.calculateCompletion(pet);
+		}
+		return completionMap;
+	}
+
+	_renderPetRows(pageItems, completionMap, PCalc) {
+		return pageItems.map((pet) => {
+			const petId = pet.petId || pet.id;
+			const name = this._escapeHtml(resolveHeroName(petId) || pet.petName || pet.name || `Pet #${petId}`);
+			const comp = completionMap[petId] || { overall: 0, systems: {} };
+			const patronageCount = PCalc.countPatronage(pet.patronageData);
+			const avatarUrl = `https://calc2.hw-assist.com/static/assets/images/hero_icons/${String(petId).padStart(4, '0')}.png`;
+
+			const sysRows = Object.entries(PCalc.SYSTEM_LABELS).map(([key, label]) => {
+				const pct = comp.systems[key] || 0;
+				return `<div class="oj-sys-row">` +
+					`<span class="oj-sys-icon">${PCalc.SYSTEM_ICONS[key] || ''}</span>` +
+					`<span class="oj-sys-name">${label}</span>` +
+					PCalc.renderBar(pct) +
+					`</div>`;
+			}).join('');
+
+			const patronageInfo = patronageCount > 0
+				? `<div class="oj-pet-patronage">\uD83D\uDC64 Supporting ${patronageCount} hero${patronageCount !== 1 ? 'es' : ''}</div>`
+				: '';
+
+			const colorVal = pet.color || 0;
+			const colorName = this._colorRankName(colorVal);
+			const colorClass = this._colorRankClass(colorVal);
+
+			return `
+				<tr class="oj-pet-row" data-pet-id="${petId}">
+					<td class="oj-avatar-cell"><img class="oj-hero-avatar ${colorClass}" src="${avatarUrl}" alt="${name}" loading="lazy" onerror="this.style.display='none'"></td>
+					<td><strong>${name}</strong></td>
+					<td>${pet.level || '\u2014'}</td>
+					<td>${'\u2B50'.repeat(Math.min(pet.stars || pet.star || 0, 6)) || '\u2014'}</td>
+					<td class="${colorClass}">${colorName}</td>
+					<td class="oj-num">${pet.power ? pet.power.toLocaleString() : '\u2014'}</td>
+					<td class="oj-completion-cell">${PCalc.renderBar(comp.overall)}</td>
+				</tr>
+				<tr class="oj-pet-detail" data-detail-for="${petId}" style="display:none">
+					<td colspan="7">
+						<div class="oj-sys-breakdown">${sysRows}</div>
+						${patronageInfo}
+					</td>
+				</tr>
+			`;
+		}).join('');
+	}
+
+	async _renderPetSoulStonesSection(pets, PCalc, STAR_COSTS_CUMULATIVE, STAR_COSTS_INCREMENTAL, MAX_STONES_PER_PET) {
+		try {
+			const invData = await this.idbStorage.getMetadata('inventoryData', null);
+			const fragPet = (invData && invData.fragmentPet) ? invData.fragmentPet : {};
+
+			const petStoneSummary = [];
+			let totalUsable = 0;
+			let totalNeeded = 0;
+			let totalAvailable = 0;
+
+			for (const pet of pets) {
+				const petId = pet.petId || pet.id;
+				const curStars = Math.min(pet.stars || pet.star || 0, 6);
+				const stonesOwned = fragPet[petId] || fragPet[String(petId)] || 0;
+				const alreadyUsed = STAR_COSTS_CUMULATIVE[curStars] || 0;
+				const neededToMax = MAX_STONES_PER_PET - alreadyUsed;
+				const nextStarCost = curStars < 6 ? STAR_COSTS_INCREMENTAL[curStars] : 0;
+				const usable = Math.min(stonesOwned, neededToMax);
+
+				totalAvailable += stonesOwned;
+				totalUsable += usable;
+				totalNeeded += neededToMax;
+
+				const petName = this._escapeHtml(resolveHeroName(petId) || pet.petName || pet.name || `Pet #${petId}`);
+				petStoneSummary.push({ petName, curStars, stonesOwned, neededToMax, nextStarCost, usable });
+			}
+
+			const pct = totalNeeded > 0 ? Math.min(100, (totalUsable / totalNeeded) * 100) : 100;
+			const barColor = PCalc.colorClass(pct);
+
+			const stoneRows = petStoneSummary.map((stone) => {
+				const starDisplay = '\u2B50'.repeat(Math.min(stone.curStars, 6));
+				const isMaxed = stone.curStars >= 6;
+				const nextInfo = isMaxed
+					? '<span class="oj-muted">MAX</span>'
+					: `${stone.nextStarCost} to ${stone.curStars + 1}\u2605`;
+				const statusClass = isMaxed ? 'oj-muted' : (stone.stonesOwned >= stone.nextStarCost && stone.curStars < 6) ? 'oj-text-green' : '';
+				return `<tr class="${statusClass}">` +
+					`<td>${stone.petName}</td>` +
+					`<td>${starDisplay || '\u2014'}</td>` +
+					`<td class="oj-num">${stone.stonesOwned.toLocaleString()}</td>` +
+					`<td class="oj-num">${nextInfo}</td>` +
+					`<td class="oj-num">${isMaxed ? '\u2014' : stone.neededToMax.toLocaleString()}</td>` +
+					`</tr>`;
+			}).join('');
+
+			return `
+				<div class="oj-pet-soulstones">
+					<div class="oj-pet-soulstones-label">
+						\uD83D\uDC8E Pet Soul Stones: <strong>${totalUsable.toLocaleString()}</strong> usable of <strong>${totalAvailable.toLocaleString()}</strong> in inventory / <strong>${totalNeeded.toLocaleString()}</strong> needed to max all
+					</div>
+					<div class="oj-completion-bar oj-pet-soulstones-bar">
+						<div class="oj-completion-fill oj-completion-${barColor}" style="width:${pct.toFixed(1)}%"></div>
+						<div class="oj-completion-label">${totalUsable.toLocaleString()} / ${totalNeeded.toLocaleString()}</div>
+					</div>
+					<details class="oj-soulstone-details">
+						<summary>Per-pet breakdown</summary>
+						<table class="oj-table oj-soulstone-table">
+							<thead><tr><th>Pet</th><th>Stars</th><th>Have</th><th>Next \u2605</th><th>To Max</th></tr></thead>
+							<tbody>${stoneRows}</tbody>
+						</table>
+					</details>
+				</div>
+			`;
+		} catch {
+			return '';
+		}
+	}
+
+	async _loadInventoryItems() {
+		let items = [];
+		try {
+			const rawData = await this.idbStorage.getMetadata('inventoryData', null);
+			if (rawData && typeof rawData === 'object') {
+				items = this._parseRawInventory(rawData);
+			}
+		} catch { /* empty */ }
+
+		if (items.length === 0) {
+			try {
+				const snapshots = await this.idbStorage.getPage('inventory', { limit: 1, direction: 'prev' });
+				if (snapshots.length > 0 && snapshots[0].inventoryData) {
+					const rawData = typeof snapshots[0].inventoryData === 'string'
+						? JSON.parse(snapshots[0].inventoryData)
+						: snapshots[0].inventoryData;
+					items = this._parseRawInventory(rawData);
+				}
+			} catch { /* empty */ }
+		}
+
+		return items;
+	}
+
+	_renderInventoryGroupSections(items) {
+		const grouped = {};
+		for (const item of items) {
+			const cat = item.category || item.type || 'Uncategorized';
+			if (!grouped[cat]) grouped[cat] = [];
+			grouped[cat].push(item);
+		}
+
+		const catLabels = {
+			hero_soul_stones: '\uD83D\uDC8E Hero Soul Stones',
+			titan_soul_stones: '\uD83D\uDCA0 Titan Soul Stones',
+			equipment: '\uD83D\uDEE1\uFE0F Equipment',
+			consumable: '\uD83E\uDDEA Consumables',
+			fragment: '\uD83E\uDDE9 Fragments',
+			scroll: '\uD83D\uDCDC Scrolls',
+			gear: '\u2699\uFE0F Gear',
+			potion: '\uD83E\uDDEB Potions',
+			skin_stone: '\uD83C\uDFAD Skin Stones',
+			artifact: '\uD83C\uDFFA Artifacts',
+			rune: '\uD83D\uDD2E Runes',
+			gold: '\uD83E\uDE99 Gold Items',
+			resource: '\uD83D\uDCE6 Resources',
+			Uncategorized: '\uD83D\uDCE6 Other',
+		};
+
+		const groupHtml = Object.entries(grouped)
+			.sort(([a], [b]) => a.localeCompare(b))
+			.map(([cat, catItems]) => {
+				const label = catLabels[cat] || `\uD83D\uDCE6 ${cat}`;
+				const itemRows = catItems.map((item) => {
+					const name = this._escapeHtml(item.name || item.itemName || `Item #${item.itemId || item.id}`);
+					const qty = item.count ?? item.quantity ?? '\u2014';
+					return `
+						<tr>
+							<td><strong>${name}</strong></td>
+							<td class="oj-num">${typeof qty === 'number' ? qty.toLocaleString() : qty}</td>
+						</tr>
+					`;
+				}).join('');
+
+				return `
+					<div class="oj-inv-group">
+						<div class="oj-inv-group-header" data-inv-cat="${this._escapeHtml(cat)}">
+							<span>${label}</span>
+							<span class="oj-muted">(${catItems.length} items)</span>
+						</div>
+						<table class="oj-table oj-table-compact oj-inv-group-table">
+							<thead><tr><th>Name</th><th>Qty</th></tr></thead>
+							<tbody>${itemRows}</tbody>
+						</table>
+					</div>
+				`;
+			}).join('');
+
+		return { categoryCount: Object.keys(grouped).length, groupHtml };
+	}
+
+	async _renderInventoryUsageSection() {
+		try {
+			const usages = await this.idbStorage.getAll('inventoryItemUsages', FETCH_LIMIT_LARGE);
+			if (usages.length === 0) return '';
+
+			usages.sort((a, b) => (b.timestamp || '').localeCompare(a.timestamp || ''));
+			const recent = usages.slice(0, 50);
+			const usageRows = recent.map((usage) => {
+				const ts = usage.timestamp ? new Date(usage.timestamp).toLocaleString() : '\u2014';
+				const item = this._escapeHtml(usage.itemName || usage.itemId || 'Unknown');
+				const qty = usage.quantityUsed || 1;
+				const target = this._escapeHtml(usage.targetEntity || '\u2014');
+				const ctx = this._escapeHtml(usage.usageContext || '\u2014').replace(/_/g, ' ');
+				const catBadge = this._escapeHtml(usage.category || '');
+				return `<tr>
+					<td style="white-space:nowrap;font-size:11px">${ts}</td>
+					<td>${item}</td>
+					<td class="oj-num">${qty}</td>
+					<td><span class="oj-badge">${catBadge}</span></td>
+					<td>${ctx}</td>
+					<td>${target}</td>
+				</tr>`;
+			}).join('');
+
+			return `
+				<div class="oj-section" style="margin-top:12px">
+					<h4>\uD83D\uDCC9 Recent Usage <span class="oj-muted">(${usages.length} total, showing last 50)</span></h4>
+					<table class="oj-table oj-table-compact">
+						<thead>
+							<tr>
+								<th>Time</th>
+								<th>Item</th>
+								<th>Qty</th>
+								<th>Category</th>
+								<th>Context</th>
+								<th>Target</th>
+							</tr>
+						</thead>
+						<tbody>${usageRows}</tbody>
+					</table>
+				</div>
+			`;
+		} catch {
+			return '';
+		}
 	}
 
 	/**
