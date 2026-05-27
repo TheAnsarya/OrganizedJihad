@@ -17,6 +17,7 @@ import PetCompletionCalculator from './helpers/PetCompletionCalculator.js';
 import { bindDataRowInteractions } from './binders/dataRowInteractionBinder.js';
 import { bindDataBrowserTableControls } from './binders/dataBrowserTableControlsBinder.js';
 import { bindDataBrowserMiscInteractions } from './binders/dataBrowserMiscBinder.js';
+import { bindSettingsHealthActions } from './binders/settingsHealthActionsBinder.js';
 import { bindProjectionInteractions } from './binders/projectionInteractionBinder.js';
 import { renderHeroRequirementsProjectionPanel } from './renderers/heroRequirementsProjectionRenderer.js';
 import {
@@ -4535,34 +4536,13 @@ class UIManager {
 		// ── Load storage stats asynchronously ───────────────────────────
 		this._loadStorageStats();
 
-		// ── First-run install health check ──────────────────────────────
-		const healthBtn = this.overlay.querySelector('#oj-install-health-check');
-		if (healthBtn) {
-			healthBtn.addEventListener('click', () => {
-				this._runInstallHealthCheck();
-			});
-		}
-
-		const openApiLogBtn = this.overlay.querySelector('#oj-health-open-apilog');
-		if (openApiLogBtn) {
-			openApiLogBtn.addEventListener('click', () => {
-				this.switchView('apilog');
-			});
-		}
-
-		const openApiHealthBtn = this.overlay.querySelector('#oj-health-open-api-health');
-		if (openApiHealthBtn) {
-			openApiHealthBtn.addEventListener('click', () => {
-				this._openExternalUrl(SYNC_HEALTH_URL);
-			});
-		}
-
-		const openApiDocsBtn = this.overlay.querySelector('#oj-health-open-api-docs');
-		if (openApiDocsBtn) {
-			openApiDocsBtn.addEventListener('click', () => {
-				this._openExternalUrl(SYNC_DOCS_URL);
-			});
-		}
+		bindSettingsHealthActions({
+			overlay: this.overlay,
+			runInstallHealthCheck: () => this._runInstallHealthCheck(),
+			openApiLog: () => this.switchView('apilog'),
+			openApiHealth: () => this._openExternalUrl(SYNC_HEALTH_URL),
+			openApiDocs: () => this._openExternalUrl(SYNC_DOCS_URL),
+		});
 	}
 
 	/**

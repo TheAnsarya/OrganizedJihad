@@ -36,6 +36,18 @@
 - Status: Completed on `feature/204-architecture-modernization`.
 - Outcome target: isolate data-row and payload toggle interaction wiring (hero/titan/pet/battle/api log) from `uiManager`.
 
+7. #212 Extract uiManager data-browser table controls into binder module
+- Status: Completed on `feature/204-architecture-modernization`.
+- Outcome target: isolate sort/search/pagination/sub-tab listener wiring from `uiManager`.
+
+8. #213 Extract uiManager misc data-browser interactions into binder module
+- Status: Completed on `feature/204-architecture-modernization`.
+- Outcome target: isolate resource shortcut and inventory group-toggle listener wiring from `uiManager`.
+
+9. #214 Extract settings health-action listeners from uiManager into binder module
+- Status: Completed on `feature/204-architecture-modernization`.
+- Outcome target: isolate settings first-run health action listeners from `uiManager`.
+
 ## Validation Strategy
 - API changes: run `dotnet test tests/OrganizedJihad.Api.Tests/OrganizedJihad.Api.Tests.csproj` and `dotnet test OrganizedJihad.sln`.
 - Userscript changes: run `yarn test --runInBand` and `yarn build`.
@@ -43,7 +55,7 @@
 
 ## Notes
 - Parallel issue creation caused issue-number drift; canonical mapping is documented in epic #206 comments.
-- Completed slices so far: #205, #208, #204, #207, #210, and #211 (API seams + controller split + userscript renderer/binder extraction).
+- Completed slices so far: #205, #208, #204, #207, #210, #211, #212, #213, and #214 (API seams + controller split + userscript renderer/binder extraction).
 - Existing unrelated dirty files remain intentionally untouched:
   - `userscript/package.json`
   - `~docs/oj-manual-prompts-log.txt`

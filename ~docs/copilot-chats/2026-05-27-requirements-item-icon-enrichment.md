@@ -1016,6 +1016,47 @@
 
 ## Session
 - Date: 2026-05-27
+- Session Number: 30
+- Scope: Execute several additional userscript architecture slices by decomposing listener wiring from `uiManager` into focused binder modules.
+
+## Summary
+- Completed three slices:
+	- #212 extracted data-browser table controls binder
+	- #213 extracted misc data-browser interactions binder
+	- #214 extracted settings health-actions binder
+- Reduced listener wiring complexity inside `uiManager` by delegating to new binder modules while preserving behavior.
+
+## Files Modified
+- userscript/src/modules/uiManager.js
+- ~docs/plans/architecture-modernization-roadmap.md
+- ~docs/copilot-chats/2026-05-27-requirements-item-icon-enrichment.md
+
+## Files Created
+- userscript/src/modules/binders/dataBrowserTableControlsBinder.js
+- userscript/src/modules/binders/dataBrowserMiscBinder.js
+- userscript/src/modules/binders/settingsHealthActionsBinder.js
+
+## Issues Referenced
+- #206 Epic: Architecture modernization and module deepening across API/userscript
+- #212 Extract uiManager data-browser table controls into binder module
+- #213 Extract uiManager misc data-browser interactions into binder module
+- #214 Extract settings health-action listeners from uiManager into binder module
+
+## Validation
+- For each slice, `yarn test --runInBand` passed (18 suites, 706 tests)
+- For each slice, `yarn build` passed (webpack production build succeeded; existing bundle-size warnings only)
+
+## Key Decisions
+- Kept each binder narrowly scoped to one listener cluster for low-risk, traceable commits.
+- Preserved selectors and callback semantics to avoid UI regressions.
+
+## Known Follow-up
+- Continue decomposing remaining settings interaction clusters and overlay-level listener orchestration.
+
+---
+
+## Session
+- Date: 2026-05-27
 - Session Number: 26
 - Scope: Commit pending API bootstrap file update and remove repository-level pause-for-confirmation wording for unexpected unrelated dirty files.
 
