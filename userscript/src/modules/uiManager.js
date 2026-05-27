@@ -33,6 +33,11 @@ import { renderPagination, renderSearchBar } from './renderers/dataBrowserShared
 import { renderAdventureGuide } from './renderers/adventureGuideRenderer.js';
 import { renderActivityEventsFeed } from './renderers/activityFeedRenderer.js';
 import {
+	renderDashboardQuickTipsSection,
+	renderDashboardStatusSection,
+	renderDashboardTrackedDataSection,
+} from './renderers/dashboardLowerSectionsRenderer.js';
+import {
 	buildInstallHealthCheckModel,
 	renderInstallHealthDiagnosticsOutput,
 } from './renderers/installHealthDiagnosticsRenderer.js';
@@ -984,48 +989,26 @@ class UIManager {
 
 				${dailySummary}
 
-				<div class="oj-section">
-					<h3>\uD83D\uDCCA Tracked Data</h3>
-					<div class="oj-stats-grid">
-						${this._statCard(snapshotCount, 'Snapshots', '#4fc3f7')}
-						${this._statCard(heroCount, 'Hero Records', '#81c784')}
-						${this._statCard(battleCount, 'Battles', '#ffb74d')}
-						${this._statCard(chestCount, 'Chests', '#ce93d8')}
-						${this._statCard(resourceTxCount, 'Transactions', '#ef9a9a')}
-						${this._statCard(questCount, 'Quests', '#fff176')}
-						${this._statCard(apiLogCount, 'API Logs', '#90a4ae')}
-						${this._statCard(goalCount, 'Goals', '#a5d6a7')}
-					</div>
-				</div>
+				${renderDashboardTrackedDataSection({
+					statCard: (value, label, color) => this._statCard(value, label, color),
+					snapshotCount,
+					heroCount,
+					battleCount,
+					chestCount,
+					resourceTxCount,
+					questCount,
+					apiLogCount,
+					goalCount,
+				})}
 
-				<div class="oj-section">
-					<h3>\u2139\uFE0F Status</h3>
-					<div class="oj-status-list">
-						<div class="oj-status-row">
-							<span>IndexedDB</span>
-							<span class="oj-status-ok">Connected</span>
-						</div>
-						<div class="oj-status-row">
-							<span>API Interception</span>
-							<span class="${this.gameTracker?.isTracking ? 'oj-status-ok' : 'oj-status-err'}">${this.gameTracker?.isTracking ? 'Active' : 'Inactive'}</span>
-						</div>
-						<div class="oj-status-row">
-							<span>Last Snapshot</span>
-							<span class="oj-mono">${lastSnapshotTime}</span>
-						</div>
-						<div class="oj-status-row">
-							<span>API Sync</span>
-							${syncStatus.timestamp
-								? `<span class="${syncStatus.ok ? 'oj-status-ok' : 'oj-status-err'}" title="${this._escapeHtml(syncStatus.message || '')}">${syncStatus.ok ? '\u2705' : '\u274C'} ${new Date(syncStatus.timestamp).toLocaleTimeString()}${!syncStatus.ok ? ` \u2014 ${this._escapeHtml(syncStatus.message || 'Error')}` : ''}</span>`
-								: '<span style="color:#888">Not synced</span>'}
-						</div>
-						${errorCount > 0 ? `<div class="oj-status-row"><span>Errors</span><span class="oj-status-err">${errorCount}</span></div>` : ''}
-						<div class="oj-status-row">
-							<span>Version</span>
-							<span>${__OJ_VERSION__}</span>
-						</div>
-					</div>
-				</div>
+				${renderDashboardStatusSection({
+					isTracking: this.gameTracker?.isTracking,
+					lastSnapshotTime,
+					syncStatus,
+					errorCount,
+					version: __OJ_VERSION__,
+					escapeHtml: (value) => this._escapeHtml(value),
+				})}
 
 				${await this._renderSuggestionsSection()}
 
@@ -1035,15 +1018,7 @@ class UIManager {
 
 				${await this._renderExternalToolsSection()}
 
-				<div class="oj-section">
-					<h3>\uD83C\uDFAF Quick Tips</h3>
-					<ul class="oj-tips">
-						<li>Play the game normally \u2014 all API calls are intercepted automatically</li>
-						<li>Open your hero roster, arena, or inventory to capture data</li>
-						<li>Check the <strong>Activity</strong> tab to see intercepted calls in real-time</li>
-						<li>Press <kbd>Ctrl+Shift+H</kbd> to toggle this panel</li>
-					</ul>
-				</div>
+				${renderDashboardQuickTipsSection()}
 			</div>
 		`;
 	}
