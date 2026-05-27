@@ -31,7 +31,7 @@ import { renderHeroRequirementsProjectionPanel } from './renderers/heroRequireme
 import { renderBattleTeam } from './renderers/battleTeamRenderer.js';
 import { renderPagination, renderSearchBar } from './renderers/dataBrowserSharedRenderer.js';
 import { renderAdventureGuide } from './renderers/adventureGuideRenderer.js';
-import { renderActivityEventsFeed } from './renderers/activityFeedRenderer.js';
+import { renderActivityEventsFeed, renderActivityFallback } from './renderers/activityFeedRenderer.js';
 import {
 	renderDashboardQuickTipsSection,
 	renderDashboardStatusSection,
@@ -1834,40 +1834,10 @@ class UIManager {
 				logs.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
 			} catch { /* empty */ }
 
-			if (logs.length === 0) {
-				return `
-					<div class="oj-activity">
-						<h3>\uD83D\uDCE1 Live Activity Feed</h3>
-						<p class="oj-empty">No activity captured yet. Navigate around in the game to generate events.</p>
-					</div>
-				`;
-			}
-
-			// Render fallback API log table
-			const rows = logs.map((log) => {
-				const time = log.timestamp ? new Date(log.timestamp).toLocaleTimeString() : '\u2014';
-				const name = log.name || log.endpoint || 'unknown';
-				const status = log.success !== false
-					? '<span class="oj-status-ok">OK</span>'
-					: '<span class="oj-status-err">ERR</span>';
-				return `
-					<tr>
-						<td class="oj-mono">${time}</td>
-						<td>${this._escapeHtml(name)}</td>
-						<td>${status}</td>
-					</tr>
-				`;
-			}).join('');
-
-			return `
-				<div class="oj-activity">
-					<h3>\uD83D\uDCE1 API Logs <span class="oj-muted">(${logs.length})</span></h3>
-					<table class="oj-table">
-						<thead><tr><th>Time</th><th>API Call</th><th>Status</th></tr></thead>
-						<tbody>${rows}</tbody>
-					</table>
-				</div>
-			`;
+			return renderActivityFallback({
+				logs,
+				escapeHtml: (value) => this._escapeHtml(value),
+			});
 		}
 
 		return renderActivityEventsFeed({
