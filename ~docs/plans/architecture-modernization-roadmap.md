@@ -21,7 +21,7 @@
 - Outcome target: move tool catalog/filter metadata logic into dedicated adapter module and delegate from sync orchestration.
 
 3. #204 Split SyncController read/query endpoints from import orchestration surface
-- Status: Planned.
+- Status: Completed on `feature/204-architecture-modernization`.
 - Outcome target: separate read-focused controller/module while preserving route compatibility.
 
 4. #207 Decompose userscript uiManager projection and diagnostics rendering modules
@@ -35,7 +35,7 @@
 
 ## Notes
 - Parallel issue creation caused issue-number drift; canonical mapping is documented in epic #206 comments.
-- Completed slices so far: #205 and #208 (both API metadata seams extracted from `SyncService`).
+- Completed slices so far: #205, #208, and #204 (API metadata seams + controller responsibility split).
 - Existing unrelated dirty files remain intentionally untouched:
   - `userscript/package.json`
   - `~docs/oj-manual-prompts-log.txt`

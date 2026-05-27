@@ -859,3 +859,43 @@
 
 ## Known Follow-up
 - Continue epic #206 with #204 controller responsibility split and #207 userscript `uiManager` decomposition.
+
+---
+
+## Session
+- Date: 2026-05-27
+- Session Number: 25
+- Scope: Complete controller responsibility split for sync import orchestration vs query/read surfaces.
+
+## Summary
+- Implemented issue #204 by replacing monolithic `SyncController` with split controllers:
+	- `SyncImportController` for `/api/sync/health` and `/api/sync/import`
+	- `SyncQueryController` for remaining read/query/recommendation endpoints under `/api/sync/*`
+- Preserved route compatibility and endpoint behavior while reducing controller breadth and coupling.
+- Updated architecture roadmap status for #204 completion.
+
+## Files Modified
+- ~docs/plans/architecture-modernization-roadmap.md
+- ~docs/copilot-chats/2026-05-27-requirements-item-icon-enrichment.md
+
+## Files Created
+- api/Controllers/SyncImportController.cs
+- api/Controllers/SyncQueryController.cs
+
+## Files Deleted
+- api/Controllers/SyncController.cs
+
+## Issues Referenced
+- #206 Epic: Architecture modernization and module deepening across API/userscript
+- #204 Split SyncController read/query endpoints from import orchestration surface
+
+## Validation
+- dotnet test tests/OrganizedJihad.Api.Tests/OrganizedJihad.Api.Tests.csproj: passed (52 tests)
+- dotnet test OrganizedJihad.sln: passed (91 tests)
+
+## Key Decisions
+- Kept all routes rooted at `/api/sync` to avoid client-side contract churn while improving controller locality.
+- Grouped recommendation configuration endpoints with query surface to keep import orchestration narrowly scoped.
+
+## Known Follow-up
+- Continue epic #206 with #207 userscript `uiManager` projection/diagnostics decomposition.
