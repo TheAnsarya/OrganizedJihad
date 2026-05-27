@@ -83,6 +83,25 @@ If your API is on a different host/port:
 node .\scripts\install-health-check.mjs --baseUrl http://localhost:5000
 ```
 
+For automation / CI output:
+
+```powershell
+yarn install:check --json
+```
+
+Open troubleshooting URLs in your default browser while running checks:
+
+```powershell
+# Open only failed endpoints (default when --open has no value)
+yarn install:check --open
+
+# Open only required endpoints
+yarn install:check --open required
+
+# Open all checked endpoints
+yarn install:check --open all
+```
+
 ---
 
 ## Step 3: Install the Script in TamperMonkey

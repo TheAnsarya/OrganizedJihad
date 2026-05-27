@@ -48,7 +48,10 @@ Status update:
 6. Installer/ease workflow enhancements
 - Add optional post-install health check summary and shortcut creation in installer.
 - Add one-click open of userscript diagnostics panel after installation.
-- Add browser-open flag and JSON output mode to install health-check script for automation.
+
+Status update:
+- Browser-open modes and JSON output are now implemented for `yarn install:check` (`--json`, `--open [failed|required|all]`).
+- Remaining: optional post-install summary and one-click diagnostics-panel open path in installer script.
 
 ## Suggested Next Slices
 - Slice A: Deterministic recipe catalog ingestion (exact per-rank ingredient trees).

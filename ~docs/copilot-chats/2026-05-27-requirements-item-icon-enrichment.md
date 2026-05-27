@@ -629,3 +629,39 @@
 
 ## Known Follow-up
 - Consider optional shortcut customization in Settings if users request remappable keys.
+
+---
+
+## Session
+- Date: 2026-05-27
+- Session Number: 19
+- Scope: Enhance install health-check usability for automation and faster diagnostics.
+
+## Summary
+- Created and implemented issue #200.
+- Added `--json` mode to `install-health-check.mjs` with structured result payloads for automation/CI.
+- Added browser-open support with selectable modes: `--open` / `--open failed`, `--open required`, `--open all`.
+- Preserved default human-readable output and existing pass/fail exit code semantics.
+- Updated userscript install guide with new usage examples.
+
+## Files Modified
+- userscript/scripts/install-health-check.mjs
+- userscript/INSTALL.md
+- ~docs/copilot-chats/2026-05-27-requirements-item-icon-enrichment.md
+- ~docs/plans/hero-material-requirements-followups.md
+
+## Issues Referenced
+- #200 Enhance install:check with JSON output and browser-open options
+
+## Validation
+- node scripts/install-health-check.mjs --json --baseUrl http://127.0.0.1:9: expected failure payload emitted with `ok: false` and exit code 1
+- yarn test --runInBand: passed (18 suites, 706 tests)
+- yarn build: passed (version 0.9.109)
+- Script diagnostics: no errors
+
+## Key Decisions
+- Added cross-platform browser launch via detached child process (`cmd /c start`, `open`, `xdg-open`) with non-fatal error handling.
+- Kept compatibility by only enabling JSON output when explicitly requested (`--json`).
+
+## Known Follow-up
+- Consider adding installer wiring to auto-run `yarn install:check --open failed` after first setup.
