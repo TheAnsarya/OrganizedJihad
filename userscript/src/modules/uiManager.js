@@ -2098,7 +2098,7 @@ class UIManager {
 
 		// Build projected overall item requirements for remaining hero progression.
 		let requirementsProjection = null;
-		let requirementItemNames = {};
+		let requirementItemMeta = {};
 		try {
 			const [heroUpgrades, equipmentChanges, inventoryItemUsages, inventoryData] = await Promise.all([
 				this.idbStorage.getAll('heroUpgrades', FETCH_LIMIT_LARGE).catch(() => []),
@@ -2108,12 +2108,17 @@ class UIManager {
 			]);
 
 			const parsedInventory = this._parseRawInventory(inventoryData || {});
-			requirementItemNames = parsedInventory.reduce((acc, item) => {
+			requirementItemMeta = parsedInventory.reduce((acc, item) => {
 				const itemId = String(item.itemId || '').trim();
 				if (!itemId) {
 					return acc;
 				}
-				acc[itemId] = item.name || `Item #${itemId}`;
+				const category = String(item.category || '').trim();
+				acc[itemId] = {
+					name: item.name || `Item #${itemId}`,
+					category,
+					icon: this._requirementsItemIcon(category, itemId),
+				};
 				return acc;
 			}, {});
 
@@ -2129,10 +2134,10 @@ class UIManager {
 			});
 		} catch {
 			requirementsProjection = null;
-			requirementItemNames = {};
+			requirementItemMeta = {};
 		}
 
-		const requirementsPanelHtml = this._renderHeroRequirementsPanel(requirementsProjection, requirementItemNames);
+		const requirementsPanelHtml = this._renderHeroRequirementsPanel(requirementsProjection, requirementItemMeta);
 
 		// Filter
 		if (vs.filter) {
@@ -2238,11 +2243,11 @@ class UIManager {
 	 * Render a projected overall item requirements panel for hero progression.
 	 *
 	 * @param {object|null} projection - Projection payload from HeroMaterialRequirementsCalculator
-	 * @param {Record<string, string>} itemNameMap - Optional map from item ID to human-readable name
+	 * @param {Record<string, {name: string, category?: string, icon?: string}>} itemMetaMap - Optional map from item ID to display metadata
 	 * @returns {string} HTML panel markup
 	 * @private
 	 */
-	_renderHeroRequirementsPanel(projection, itemNameMap = {}) {
+	_renderHeroRequirementsPanel(projection, itemMetaMap = {}) {
 		if (!projection) {
 			return '';
 		}
@@ -2266,10 +2271,12 @@ class UIManager {
 			const mixLabel = mix.length > 0 ? mix.join(' • ') : 'Projected';
 			const shortageStyle = shortage > 0 ? 'color:#ef9a9a;font-weight:700' : 'color:#a5d6a7;font-weight:700';
 			const itemId = String(entry.itemId || 'unknown_item');
-			const resolvedName = itemNameMap[itemId] || this._prettifyProjectedItemId(itemId);
+			const meta = itemMetaMap[itemId] || {};
+			const resolvedName = meta.name || this._prettifyProjectedItemId(itemId);
+			const itemIcon = meta.icon || this._requirementsItemIcon(meta.category, itemId);
 
 			return `<tr>` +
-				`<td><div class="oj-mono" style="font-size:11px">${this._escapeHtml(itemId)}</div><div>${this._escapeHtml(resolvedName)}</div></td>` +
+				`<td><div class="oj-mono" style="font-size:11px">${this._escapeHtml(itemId)}</div><div style="display:flex;align-items:center;gap:6px"><span>${this._escapeHtml(itemIcon)}</span><span>${this._escapeHtml(resolvedName)}</span></div></td>` +
 				`<td class="oj-num"><strong>${needed.toLocaleString()}</strong></td>` +
 				`<td class="oj-num">${owned.toLocaleString()}</td>` +
 				`<td class="oj-num" style="${shortageStyle}">${shortage.toLocaleString()}</td>` +
@@ -2330,6 +2337,42 @@ class UIManager {
 		}
 
 		return `Item ${itemId}`;
+	}
+
+	/**
+	 * Resolve display icon for projected requirement items.
+	 *
+	 * @param {string} category - Inventory category if known
+	 * @param {string} itemId - Raw item ID
+	 * @returns {string} Icon glyph
+	 * @private
+	 */
+	_requirementsItemIcon(category, itemId) {
+		const categoryIcons = {
+			hero_soul_stones: '💎',
+			titan_soul_stones: '💠',
+			pet_soul_stones: '🐾',
+			equipment: '🛡️',
+			consumable: '🧪',
+			fragment: '🧩',
+			scroll: '📜',
+			artifact: '🏺',
+			resource: '📦',
+		};
+
+		if (category && categoryIcons[category]) {
+			return categoryIcons[category];
+		}
+
+		const id = String(itemId || '').toLowerCase();
+		if (id.includes('fragment') || id.includes('stone')) return '🧩';
+		if (id.includes('potion') || id.includes('consumable')) return '🧪';
+		if (id.includes('scroll')) return '📜';
+		if (id.includes('artifact')) return '🏺';
+		if (id.includes('gold') || id.includes('coin')) return '🪙';
+		if (id.includes('gear') || id.includes('item_')) return '🛡️';
+
+		return '📦';
 	}
 
 	/**
