@@ -904,6 +904,47 @@
 
 ## Session
 - Date: 2026-05-27
+- Session Number: 36
+- Scope: Continue both requested next-step tracks with several medium-risk slices focused on activity helpers and larger battle/adventure render seams in `uiManager`.
+
+## Summary
+- Completed three medium-risk slices:
+	- #227 extracted activity presentation helpers into helper module
+	- #228 extracted battle-team rendering into renderer module
+	- #229 extracted adventure-guide rendering into renderer module
+- Preserved `uiManager` wrapper methods and existing call sites through callback-based renderer/helper delegation.
+
+## Files Modified
+- userscript/src/modules/uiManager.js
+- ~docs/plans/architecture-modernization-roadmap.md
+- ~docs/copilot-chats/2026-05-27-requirements-item-icon-enrichment.md
+
+## Files Created
+- userscript/src/modules/helpers/activityPresentationHelpers.js
+- userscript/src/modules/renderers/battleTeamRenderer.js
+- userscript/src/modules/renderers/adventureGuideRenderer.js
+
+## Issues Referenced
+- #206 Epic: Architecture modernization and module deepening across API/userscript
+- #227 Extract activity presentation helpers from uiManager into helper module
+- #228 Extract battle-team rendering from uiManager into renderer module
+- #229 Extract adventure-guide rendering from uiManager into renderer module
+
+## Validation
+- For each slice, `yarn test --runInBand` passed (18 suites, 706 tests)
+- For each slice, `yarn build` passed (webpack production build succeeded; existing bundle-size warnings only)
+
+## Key Decisions
+- Used callback-based dependencies in renderer modules to avoid broad module contract churn.
+- Split battle-team and adventure-guide extraction into separate slices to keep risk and validation focused.
+
+## Known Follow-up
+- Continue extracting remaining larger dashboard/activity render blocks from `uiManager` into dedicated renderer modules.
+
+---
+
+## Session
+- Date: 2026-05-27
 - Session Number: 35
 - Scope: Continue both requested tracks with several medium-risk slices by extracting activity helpers and larger battle/adventure renderer blocks from `uiManager`.
 
