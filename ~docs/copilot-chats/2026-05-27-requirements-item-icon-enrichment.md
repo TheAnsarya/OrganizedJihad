@@ -201,3 +201,41 @@
 ## Known Follow-up
 - If this view becomes frequently used, promote it from Settings to a dedicated page under Economy or System.
 - Consider extracting repeated API call logic in Settings into shared desktop service abstractions.
+
+---
+
+## Session
+- Date: 2026-05-27
+- Session Number: 7
+- Scope: Add dedicated desktop page and navigation for projected item catalog parity.
+
+## Summary
+- Created and implemented issue #188.
+- Added a dedicated desktop page at `/projected-item-catalog` to consume and display `GET /api/sync/projections/item-catalog`.
+- Added a System navigation entry (`Projected Catalog`) for direct access.
+- Added page-level filtering and diagnostics:
+	- canonical item search (ID/name/category)
+	- category filter
+	- alias search (key/value)
+	- graceful API failure status messaging
+
+## Files Modified
+- desktop-app/Components/Layout/NavMenu.razor
+- ~docs/copilot-chats/2026-05-27-requirements-item-icon-enrichment.md
+
+## Files Created
+- desktop-app/Components/Pages/ProjectedItemCatalog.razor
+
+## Issues Referenced
+- #188 Add dedicated desktop page for projected item catalog parity view
+
+## Validation
+- dotnet test OrganizedJihad.sln: passed (91 tests)
+- Razor diagnostics for new page and nav menu: no errors
+
+## Key Decisions
+- Kept endpoint consumption pattern aligned with existing desktop settings pages (short-timeout `HttpClient`, typed payload model, non-crashing fallback message).
+- Included both canonical items and alias preview to support parity/debug workflows without requiring Settings navigation.
+
+## Known Follow-up
+- Consider moving projected catalog payload models into shared desktop service classes to avoid repeated DTOs across pages.
