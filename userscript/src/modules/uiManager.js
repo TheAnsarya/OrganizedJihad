@@ -19,6 +19,7 @@ import { bindDataBrowserTableControls } from './binders/dataBrowserTableControls
 import { bindDataBrowserMiscInteractions } from './binders/dataBrowserMiscBinder.js';
 import { bindDashboardFilters } from './binders/dashboardFiltersBinder.js';
 import { bindOverlayChromeControls } from './binders/overlayChromeControlsBinder.js';
+import { bindOverlayEscapeKey } from './binders/overlayEscapeKeyBinder.js';
 import { bindSettingsHealthActions } from './binders/settingsHealthActionsBinder.js';
 import { bindSettingsDataActions } from './binders/settingsDataActionsBinder.js';
 import { bindSettingsDisplayTracking } from './binders/settingsDisplayTrackingBinder.js';
@@ -361,12 +362,10 @@ class UIManager {
 			},
 		});
 
-		// Escape key — close overlay when visible
-		this._addDocListener('keydown', (e) => {
-			if (e.key === 'Escape' && this.isVisible) {
-				e.preventDefault();
-				this.hide();
-			}
+		bindOverlayEscapeKey({
+			addDocListener: (eventName, handler) => this._addDocListener(eventName, handler),
+			isVisible: () => this.isVisible,
+			hide: () => this.hide(),
 		});
 
 		// Draggable header
