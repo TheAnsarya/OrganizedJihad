@@ -38,7 +38,8 @@ Status update:
 - Sticky headers and bounded scroll containers are now implemented for projection tables.
 - Lightweight virtualization (paged top-items rendering) is now implemented in the Heroes projection panel.
 - Responsive max-height tuning is now implemented for projection scroll containers.
-- Remaining: optional keyboard shortcuts for projection paging controls.
+- Keyboard shortcuts are now implemented for projection paging controls (`Alt+Left`/`Alt+[`, `Alt+Right`/`Alt+]`).
+- Remaining: optional shortcut remapping/customization if user demand appears.
 
 5. Model calibration
 - Recompute projection baselines by mode/time window (e.g., 30/90-day behavior).

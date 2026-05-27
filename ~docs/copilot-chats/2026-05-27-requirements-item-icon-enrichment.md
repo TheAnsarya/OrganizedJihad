@@ -595,3 +595,37 @@
 
 ## Known Follow-up
 - Consider adding keyboard shortcuts for top-items page navigation in the Heroes projection panel.
+
+---
+
+## Session
+- Date: 2026-05-27
+- Session Number: 18
+- Scope: Add keyboard shortcut navigation for virtualized Heroes top-items projection table.
+
+## Summary
+- Created and implemented issue #199.
+- Added keyboard shortcuts for top-items paging in Heroes view:
+	- `Alt+Left` or `Alt+[` => previous page
+	- `Alt+Right` or `Alt+]` => next page
+- Added input-safety guard so shortcuts do not trigger while typing in form fields/contenteditable areas.
+- Added inline shortcut hint text in the Top Projected Items section.
+
+## Files Modified
+- userscript/src/modules/uiManager.js
+- ~docs/copilot-chats/2026-05-27-requirements-item-icon-enrichment.md
+
+## Issues Referenced
+- #199 Add keyboard shortcuts for Heroes projection top-items paging
+
+## Validation
+- yarn test --runInBand: passed (18 suites, 706 tests)
+- yarn build: passed (version 0.9.108)
+- UIManager diagnostics: no errors
+
+## Key Decisions
+- Scoped shortcuts to visible overlay + Heroes view only to avoid cross-tab key collisions.
+- Reused existing projection page state and re-render path to keep behavior deterministic and low-risk.
+
+## Known Follow-up
+- Consider optional shortcut customization in Settings if users request remappable keys.

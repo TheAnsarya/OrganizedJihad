@@ -168,6 +168,29 @@ class UIManager {
 			}
 		});
 
+		// Heroes projection paging shortcuts (#199)
+		// Alt+Left or Alt+[ => previous page; Alt+Right or Alt+] => next page
+		this._addDocListener('keydown', (e) => {
+			if (!this.isVisible || this.currentView !== 'heroes') return;
+			const target = /** @type {HTMLElement|null} */ (e.target instanceof HTMLElement ? e.target : null);
+			if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)) {
+				return;
+			}
+
+			const isPrev = e.altKey && (e.key === 'ArrowLeft' || e.key === '[');
+			const isNext = e.altKey && (e.key === 'ArrowRight' || e.key === ']');
+			if (!isPrev && !isNext) return;
+
+			const heroesState = this._viewState.heroes || {};
+			const currentPage = Number(heroesState.projectionTopItemsPage || 0);
+			const nextPage = Math.max(0, currentPage + (isNext ? 1 : -1));
+			if (nextPage === currentPage) return;
+
+			e.preventDefault();
+			heroesState.projectionTopItemsPage = nextPage;
+			this.renderView('heroes');
+		});
+
 		// Subscribe to live activity events for real-time feed updates.
 		// When the Activity tab is visible, re-render it on each new event.
 		if (this.gameTracker && typeof this.gameTracker.on === 'function') {
@@ -2371,6 +2394,7 @@ class UIManager {
 								<button type="button" class="oj-btn oj-btn-xs" data-projection-top-nav="next" ${topItemsPage >= (topItemsPageCount - 1) ? 'disabled' : ''}>Next</button>
 							</div>
 						</div>
+						<div class="oj-muted" style="font-size:11px;margin-top:4px">Shortcuts: Alt+Left / Alt+[ = Prev • Alt+Right / Alt+] = Next</div>
 						<div class="oj-projection-scroll" style="margin-top:6px">
 							<table class="oj-table oj-projection-table"><thead><tr><th>Item</th><th>Needed</th><th>Owned</th><th>Shortage</th><th>Mix</th></tr></thead><tbody>${itemRows}</tbody></table>
 						</div>
