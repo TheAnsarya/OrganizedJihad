@@ -291,6 +291,20 @@ continue; work several slices;
 
 continue doing both next steps; do several slices;
 continue doing both next steps; do several slices;
+continue doing both next steps; do several slices;
+
+continue doing both next steps; do several medium risk slices;
+continue doing both next steps; do several medium risk slices;
+continue doing both next steps; do several medium risk slices;
+
+[OJ] continue doing all the next steps and a ton of other work, going through issues; work through at least 12 medium risk slices and 6 high risk slices; take your time fixing everything and continue longer than you think you can; continue;
+[OJ] continue doing all the next steps and a ton of other work, going through issues; work through at least 12 medium risk slices and 6 high risk slices; take your time fixing everything and continue longer than you think you can; continue;
+
+[OJ] Go through the issues looking for closable issues, especially recent ones, it seems they weren't closed, and clean up our development environment. Close issues that have work that is done. If there is still more work then do that work before closing the issues; continue;
+
+[OJ] continue doing all the next steps and a ton of other work, going through issues; work through at least 12 medium risk slices and 6 high risk slices; take your time fixing everything and continue longer than you think you can; continue;
+
+[OJ] continue doing all the next steps and a ton of other work, going through issues; work through at least 12 medium risk slices and 6 high risk slices; take your time fixing everything and continue longer than you think you can; continue; don't make an issue for every little thing, make batch issues that cover several smaller efforts into one big effort; continue;
 
 
 
@@ -298,6 +312,44 @@ continue doing both next steps; do several slices;
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+[OJ] push the current branch to main and then continue working in this branch; continue doing all the next steps and a ton of other work, going through issues; work through at least 12 medium risk slices and 6 high risk slices; take your time fixing everything and continue longer than you think you can; continue;
 
 
 
