@@ -14,6 +14,7 @@ import HeroMaterialRequirementsCalculator from './helpers/HeroMaterialRequiremen
 import ProjectedItemCatalogResolver from './helpers/ProjectedItemCatalogResolver.js';
 import TitanCompletionCalculator from './helpers/TitanCompletionCalculator.js';
 import PetCompletionCalculator from './helpers/PetCompletionCalculator.js';
+import { activityColorClass, activityIcon } from './helpers/activityPresentationHelpers.js';
 import { colorRankClass, colorRankName, formatCompact } from './helpers/battlePresentationHelpers.js';
 import { sortData, sortIndicator } from './helpers/dataBrowserSortHelpers.js';
 import { stalenessTag, timeAgo } from './helpers/stalenessHelpers.js';
@@ -4879,13 +4880,7 @@ class UIManager {
 	 * @returns {string} CSS class name
 	 */
 	_activityColorClass(evt) {
-		const type = evt.eventType || '';
-		if (type === 'error') return 'oj-event-red';
-		if (type === 'battle') return evt.isWin ? 'oj-event-green' : 'oj-event-red';
-		if (type === 'resource') return 'oj-event-green';
-		if (type === 'hero' || type === 'upgrade') return 'oj-event-gold';
-		if (type === 'chest') return 'oj-event-purple';
-		return 'oj-event-blue'; // info, default
+		return activityColorClass(evt);
 	}
 
 	/**
@@ -4895,16 +4890,7 @@ class UIManager {
 	 * @returns {string} Emoji
 	 */
 	_activityIcon(evt) {
-		const icons = {
-			battle: '\u2694\uFE0F',
-			resource: '\uD83D\uDCB0',
-			hero: '\uD83E\uDDB8',
-			chest: '\uD83C\uDF81',
-			upgrade: '\u2B06\uFE0F',
-			error: '\u274C',
-			info: '\uD83D\uDCCB',
-		};
-		return icons[evt.eventType] || '\u2022';
+		return activityIcon(evt);
 	}
 
 	// =====================================================================
