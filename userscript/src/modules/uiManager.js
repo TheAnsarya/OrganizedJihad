@@ -33,6 +33,12 @@ import { renderPagination, renderSearchBar } from './renderers/dataBrowserShared
 import { renderAdventureGuide } from './renderers/adventureGuideRenderer.js';
 import { renderActivityEventsFeed, renderActivityFallback } from './renderers/activityFeedRenderer.js';
 import {
+	renderBattleRecommendationsSection,
+	renderDailySummarySection,
+	renderSuggestionsSection,
+	renderWinRateCardsSection,
+} from './renderers/dashboardInsightsRenderer.js';
+import {
 	renderDashboardQuickTipsSection,
 	renderDashboardStatusSection,
 	renderDashboardTrackedDataSection,
@@ -1051,37 +1057,26 @@ class UIManager {
 				return ts >= sevenDaysAgo;
 			});
 
-			if (all.length === 0) return '';
+			if (all.length === 0) return null;
 
 			const allWins = all.filter((b) => b.isWin).length;
 			const allPct = Math.round((allWins / all.length) * 100);
 			const recentWins = recent.filter((b) => b.isWin).length;
 			const recentPct = recent.length > 0 ? Math.round((recentWins / recent.length) * 100) : 0;
 
-			return `
-				<div style="flex:1;min-width:140px;background:#2a2a2e;border-radius:6px;padding:8px">
-					<div style="font-size:12px;font-weight:600;margin-bottom:4px">${label}</div>
-					<div style="font-size:20px;font-weight:700;color:${color}">${allPct}%</div>
-					<div style="background:#444;border-radius:3px;height:6px;margin:4px 0">
-						<div style="background:${color};height:100%;border-radius:3px;width:${allPct}%"></div>
-					</div>
-					<div style="font-size:10px;color:#aaa">
-						${allWins}W / ${all.length - allWins}L all time
-						${recent.length > 0 ? `\u00B7 ${recentPct}% last 7d (${recentWins}/${recent.length})` : ''}
-					</div>
-				</div>`;
+			return {
+				label,
+				color,
+				allPct,
+				allWins,
+				allLosses: all.length - allWins,
+				recentCount: recent.length,
+				recentWins,
+				recentPct,
+			};
 		}).filter(Boolean);
 
-		if (cards.length === 0) return '';
-
-		return `
-			<div class="oj-section">
-				<h3>\uD83C\uDFC5 Win Rates</h3>
-				<div style="display:flex;gap:8px;flex-wrap:wrap">
-					${cards.join('')}
-				</div>
-			</div>
-		`;
+		return renderWinRateCardsSection({ cards });
 	}
 
 	/**
@@ -1122,22 +1117,22 @@ class UIManager {
 			const rows = sorted.map((s) => {
 				const pri = priMap[s.priority] || priMap.medium;
 				const icon = catIcon[s.type] || '\uD83D\uDCA1';
-				return `<div style="display:flex;align-items:flex-start;gap:8px;padding:6px 0;border-bottom:1px solid #333">
-					<span style="font-size:14px;flex-shrink:0">${icon}</span>
-					<div style="flex:1;min-width:0">
-						<div style="font-size:12px;font-weight:600;color:${pri.color}">${pri.icon} ${this._escapeHtml(s.title)}</div>
-						<div style="font-size:11px;color:#aaa;margin-top:2px">${this._escapeHtml(s.description)}</div>
-					</div>
-				</div>`;
-			}).join('');
+				return {
+					icon,
+					priorityIcon: pri.icon,
+					priorityColor: pri.color,
+					title: this._escapeHtml(s.title),
+					description: this._escapeHtml(s.description),
+				};
+			});
 
 			const stats = this.suggestionsEngine.getStats();
 
-			return `<div class="oj-section">
-				<h3>\uD83D\uDCA1 Suggestions <span style="font-size:11px;font-weight:400;color:#888">(${stats.active} active)</span></h3>
-				${rows}
-				${suggestions.length > 6 ? `<div style="font-size:11px;color:#888;margin-top:6px;text-align:center">+ ${suggestions.length - 6} more</div>` : ''}
-			</div>`;
+			return renderSuggestionsSection({
+				rows,
+				activeCount: Number(stats?.active || 0),
+				totalCount: suggestions.length,
+			});
 		} catch {
 			return '';
 		}
@@ -1163,21 +1158,18 @@ class UIManager {
 				const wr = Number(rec.weightedWinRate || rec.winRate || 0);
 				const preview = this._escapeHtml(rec.teamPreview || rec.teamKey || 'Unknown Team');
 				const rationale = this._escapeHtml(rec.rationale || 'No rationale available.');
+				return {
+					index,
+					simPct: sim * 100,
+					weightedPct: wr * 100,
+					lowPct: low * 100,
+					highPct: high * 100,
+					preview,
+					rationale,
+				};
+			});
 
-				return `<div style="padding:8px;border:1px solid #2f3f5a;border-radius:8px;background:#182234;margin-top:${index === 0 ? '0' : '6px'}">
-					<div style="display:flex;justify-content:space-between;align-items:baseline;gap:8px">
-						<div style="font-size:12px;font-weight:700;color:#9ed0ff">${preview}</div>
-						<div style="font-size:11px;color:#8ec5ff">Sim ${(sim * 100).toFixed(1)}%</div>
-					</div>
-					<div style="font-size:11px;color:#9fb4cf;margin-top:4px">Weighted ${(wr * 100).toFixed(1)}% • CI ${(low * 100).toFixed(1)}-${(high * 100).toFixed(1)}%</div>
-					<div style="font-size:11px;color:#8c8c8c;margin-top:4px">${rationale}</div>
-				</div>`;
-			}).join('');
-
-			return `<div class="oj-section">
-				<h3>\uD83E\uDDE0 Arena Recommendations</h3>
-				${rows}
-			</div>`;
+			return renderBattleRecommendationsSection({ rows });
 		} catch {
 			return '';
 		}
@@ -1782,27 +1774,13 @@ class UIManager {
 			todayUpgrades = heroUp.length + titanUp.length;
 		} catch { /* empty */ }
 
-		if (todayBattles + todayChests + todayQuests + todayUpgrades === 0) return '';
-
-		return `
-			<div class="oj-section">
-				<h3>\uD83D\uDCC5 Today's Activity</h3>
-				<div style="display:flex;gap:8px;flex-wrap:wrap">
-					${todayBattles > 0 ? `<div style="background:#2a2a2e;border-radius:6px;padding:6px 10px;font-size:12px">
-						\u2694\uFE0F <strong>${todayBattles}</strong> battles (${todayWins}W / ${todayBattles - todayWins}L)
-					</div>` : ''}
-					${todayChests > 0 ? `<div style="background:#2a2a2e;border-radius:6px;padding:6px 10px;font-size:12px">
-						\uD83C\uDF81 <strong>${todayChests}</strong> chests opened
-					</div>` : ''}
-					${todayQuests > 0 ? `<div style="background:#2a2a2e;border-radius:6px;padding:6px 10px;font-size:12px">
-						\u2705 <strong>${todayQuests}</strong> quests completed
-					</div>` : ''}
-					${todayUpgrades > 0 ? `<div style="background:#2a2a2e;border-radius:6px;padding:6px 10px;font-size:12px">
-						\u2B06\uFE0F <strong>${todayUpgrades}</strong> upgrades
-					</div>` : ''}
-				</div>
-			</div>
-		`;
+		return renderDailySummarySection({
+			todayBattles,
+			todayWins,
+			todayChests,
+			todayQuests,
+			todayUpgrades,
+		});
 	}
 
 	/**
