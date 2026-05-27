@@ -777,3 +777,44 @@
 
 ## Known Follow-up
 - Consider adding a `-QuickStart` alias switch that maps to `-FirstRunDiagnostics` for discoverability.
+
+---
+
+## Session
+- Date: 2026-05-27
+- Session Number: 23
+- Scope: Promote prior work to `main`, start architecture-modernization branch, and ship first deepening slice.
+
+## Summary
+- Promoted `api-backend-creation` to `main`, created `feature/204-architecture-modernization`, and closed the old branch.
+- Created architecture modernization epic/issues and corrected canonical parent mapping in issue comments.
+- Implemented issue #205 by extracting projected catalog concerns from `SyncService` into a dedicated provider seam.
+- Added roadmap doc for modernization phases.
+
+## Files Modified
+- api/Services/SyncService.cs
+- api/Program.cs
+- ~docs/copilot-chats/2026-05-27-requirements-item-icon-enrichment.md
+
+## Files Created
+- api/Services/ProjectedItemCatalog/ProjectedItemCatalogContracts.cs
+- api/Services/ProjectedItemCatalog/SeededProjectedItemCatalogProvider.cs
+- ~docs/plans/architecture-modernization-roadmap.md
+
+## Issues Referenced
+- #206 Epic: Architecture modernization and module deepening across API/userscript
+- #205 Extract projected item catalog module from SyncService
+- #208 Extract external tool catalog module and filter metadata provider
+- #204 Split SyncController read/query endpoints from import orchestration surface
+- #207 Decompose userscript uiManager projection and diagnostics rendering modules
+
+## Validation
+- dotnet test tests/OrganizedJihad.Api.Tests/OrganizedJihad.Api.Tests.csproj: passed (52 tests)
+- dotnet test OrganizedJihad.sln: passed (91 tests)
+
+## Key Decisions
+- Introduced `IProjectedItemCatalogProvider` seam and `SeededProjectedItemCatalogProvider` adapter to isolate deterministic metadata concerns.
+- Kept existing `SyncService` constructor compatibility while adding injectable provider constructor for explicit seam wiring.
+
+## Known Follow-up
+- Continue epic #206 by extracting external tool catalog/filter metadata logic from `SyncService` (#208).
