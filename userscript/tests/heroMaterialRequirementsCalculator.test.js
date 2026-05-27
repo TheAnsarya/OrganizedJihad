@@ -165,6 +165,43 @@ describe('HeroMaterialRequirementsCalculator', () => {
 			expect(redTier.totalShortageItems).toBeGreaterThan(0);
 		});
 
+		test('builds ordered level-band summaries for level deficits', () => {
+			const result = HeroMaterialRequirementsCalculator.calculateProjectedRequirements({
+				heroes: [{ heroId: 1, level: 75, color: 10 }],
+				heroUpgrades: [
+					{ upgradeType: 'level', levelBefore: 70, levelAfter: 80 },
+				],
+				inventoryItemUsages: [
+					{ usageContext: 'hero_level', itemId: 'xp_potion_l', quantityUsed: 100 },
+				],
+				inventoryData: {
+					consumable: {
+						xp_potion_l: 20,
+					},
+				},
+				targetLevel: 130,
+				targetColorRank: 19,
+				topTierItemLimit: 5,
+			});
+
+			expect(result.levelBandSummaries.map((b) => b.bandName)).toEqual([
+				'1-40',
+				'41-80',
+				'81-120',
+				'121-130',
+			]);
+
+			const band41 = result.levelBandSummaries.find((b) => b.bandName === '41-80');
+			const band81 = result.levelBandSummaries.find((b) => b.bandName === '81-120');
+			const band121 = result.levelBandSummaries.find((b) => b.bandName === '121-130');
+
+			expect(band41.levelCount).toBeGreaterThan(0);
+			expect(band81.levelCount).toBeGreaterThan(0);
+			expect(band121.levelCount).toBeGreaterThan(0);
+			expect(band81.totalProjectedItems).toBeGreaterThan(0);
+			expect(band81.totalShortageItems).toBeGreaterThan(0);
+		});
+
 	test('falls back cleanly with sparse signals', () => {
 		const result = HeroMaterialRequirementsCalculator.calculateProjectedRequirements({
 			heroes: [{ heroId: 1, level: 100, color: 10 }],

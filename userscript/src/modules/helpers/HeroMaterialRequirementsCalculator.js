@@ -38,6 +38,14 @@ class HeroMaterialRequirementsCalculator {
 	/** @type {Array<string>} Deterministic progression tier order */
 	static COLOR_TIER_ORDER = ['Grey', 'Green', 'Blue', 'Violet', 'Orange', 'Red+'];
 
+	/** @type {Array<{name: string, min: number, max: number}>} Deterministic level-band order */
+	static LEVEL_BANDS = [
+		{ name: '1-40', min: 1, max: 40 },
+		{ name: '41-80', min: 41, max: 80 },
+		{ name: '81-120', min: 81, max: 120 },
+		{ name: '121-130', min: 121, max: 130 },
+	];
+
 	/**
 	 * Build projected item requirements for an entire hero roster.
 	 *
@@ -66,6 +74,20 @@ class HeroMaterialRequirementsCalculator {
 	 *  confidenceScore: number,
 	 *  tierSummaries: Array<{
 	 *   tierName: string,
+	 *   totalProjectedItems: number,
+	 *   totalOwnedForProjectedItems: number,
+	 *   totalShortageItems: number,
+	 *   distinctItems: number,
+	 *   items: Array<{
+	 *    itemId: string,
+	 *    quantity: number,
+	 *    ownedQuantity: number,
+	 *    shortageQuantity: number
+	 *   }>
+	 *  }>,
+	 *  levelBandSummaries: Array<{
+	 *   bandName: string,
+	 *   levelCount: number,
 	 *   totalProjectedItems: number,
 	 *   totalOwnedForProjectedItems: number,
 	 *   totalShortageItems: number,
@@ -112,6 +134,8 @@ class HeroMaterialRequirementsCalculator {
 		const projectedLevelItems = this._emptyTotals();
 		const projectedColorItems = this._emptyTotals();
 		const projectedColorItemsByTier = this._buildEmptyTierTotals();
+		const projectedLevelItemsByBand = this._buildEmptyLevelBandTotals(targetLevel);
+		const levelBandCounts = this._buildEmptyLevelBandCounts(targetLevel);
 		let totalLevelDeficit = 0;
 		let totalColorDeficit = 0;
 
@@ -127,6 +151,19 @@ class HeroMaterialRequirementsCalculator {
 			if (levelDeficit > 0) {
 				for (const [itemId, perLevel] of Object.entries(levelModel.perLevelDemand)) {
 					this._addTotal(projectedLevelItems, itemId, perLevel * levelDeficit);
+				}
+
+				const bandCounts = this._countMissingLevelsByBand(currentLevel, targetLevel);
+				for (const [bandName, missingLevels] of Object.entries(bandCounts)) {
+					if (missingLevels <= 0) {
+						continue;
+					}
+					levelBandCounts[bandName] = (levelBandCounts[bandName] || 0) + missingLevels;
+					const bandTotals = projectedLevelItemsByBand[bandName] || this._emptyTotals();
+					projectedLevelItemsByBand[bandName] = bandTotals;
+					for (const [itemId, perLevel] of Object.entries(levelModel.perLevelDemand)) {
+						this._addTotal(bandTotals, itemId, perLevel * missingLevels);
+					}
 				}
 			}
 
@@ -172,6 +209,7 @@ class HeroMaterialRequirementsCalculator {
 		const totalOwnedForProjectedItems = fullItems.reduce((sum, entry) => sum + Math.min(entry.ownedQuantity, entry.quantity), 0);
 		const totalShortageItems = fullItems.reduce((sum, entry) => sum + entry.shortageQuantity, 0);
 		const tierSummaries = this._buildTierSummaries(projectedColorItemsByTier, ownedItemTotals, topTierItemLimit);
+		const levelBandSummaries = this._buildLevelBandSummaries(projectedLevelItemsByBand, levelBandCounts, ownedItemTotals, topTierItemLimit, targetLevel);
 		const confidenceScore = this._calculateConfidence(levelModel, colorModel);
 
 		return {
@@ -188,6 +226,7 @@ class HeroMaterialRequirementsCalculator {
 			distinctItems: fullItems.length,
 			confidenceScore,
 			tierSummaries,
+			levelBandSummaries,
 			coverage: {
 				levelUpgradeSamples: levelModel.levelUpgradeSamples,
 				colorUpgradeSamples: colorModel.colorUpgradeSamples,
@@ -198,6 +237,53 @@ class HeroMaterialRequirementsCalculator {
 			},
 			items: sortedItems,
 		};
+	}
+
+	/**
+	 * Build deterministic per-level-band summaries for level progression materials.
+	 *
+	 * @param {Record<string, ItemTotals>} bandTotalsMap - Level-band totals keyed by band name
+	 * @param {Record<string, number>} levelBandCounts - Missing level counts per band
+	 * @param {ItemTotals} ownedItemTotals - Owned inventory totals keyed by item ID
+	 * @param {number} topItemLimit - Max top items per band
+	 * @param {number} targetLevel - Projection target level
+	 * @returns {Array<object>} Level-band summary array
+	 */
+	static _buildLevelBandSummaries(bandTotalsMap, levelBandCounts, ownedItemTotals, topItemLimit, targetLevel) {
+		const summaries = [];
+		for (const band of this._activeLevelBands(targetLevel)) {
+			const bandName = band.name;
+			const totals = bandTotalsMap[bandName] || this._emptyTotals();
+			const entries = Object.entries(totals)
+				.map(([itemId, quantity]) => {
+					const projectedQuantity = Math.ceil(quantity);
+					const ownedQuantity = Math.max(0, Math.floor(this._toNumber(ownedItemTotals[itemId])));
+					const shortageQuantity = Math.max(0, projectedQuantity - ownedQuantity);
+					return {
+						itemId,
+						quantity: projectedQuantity,
+						ownedQuantity,
+						shortageQuantity,
+					};
+				})
+				.filter((entry) => entry.quantity > 0)
+				.sort((a, b) => b.shortageQuantity - a.shortageQuantity || b.quantity - a.quantity || a.itemId.localeCompare(b.itemId));
+
+			const totalProjectedItems = entries.reduce((sum, entry) => sum + entry.quantity, 0);
+			const totalOwnedForProjectedItems = entries.reduce((sum, entry) => sum + Math.min(entry.ownedQuantity, entry.quantity), 0);
+			const totalShortageItems = entries.reduce((sum, entry) => sum + entry.shortageQuantity, 0);
+
+			summaries.push({
+				bandName,
+				levelCount: Math.max(0, Math.floor(this._toNumber(levelBandCounts[bandName]))),
+				totalProjectedItems,
+				totalOwnedForProjectedItems,
+				totalShortageItems,
+				distinctItems: entries.length,
+				items: entries.slice(0, topItemLimit),
+			});
+		}
+		return summaries;
 	}
 
 	/**
@@ -255,6 +341,69 @@ class HeroMaterialRequirementsCalculator {
 			map[tierName] = this._emptyTotals();
 		}
 		return map;
+	}
+
+	/**
+	 * Build empty totals map for active level bands.
+	 *
+	 * @param {number} targetLevel - Projection target level
+	 * @returns {Record<string, ItemTotals>} Empty level-band totals map
+	 */
+	static _buildEmptyLevelBandTotals(targetLevel) {
+		const map = {};
+		for (const band of this._activeLevelBands(targetLevel)) {
+			map[band.name] = this._emptyTotals();
+		}
+		return map;
+	}
+
+	/**
+	 * Build empty level count map for active level bands.
+	 *
+	 * @param {number} targetLevel - Projection target level
+	 * @returns {Record<string, number>} Empty level-band counts
+	 */
+	static _buildEmptyLevelBandCounts(targetLevel) {
+		const counts = {};
+		for (const band of this._activeLevelBands(targetLevel)) {
+			counts[band.name] = 0;
+		}
+		return counts;
+	}
+
+	/**
+	 * Count missing levels from current level to target level grouped by level band.
+	 *
+	 * @param {number} currentLevel - Hero current level
+	 * @param {number} targetLevel - Projection target level
+	 * @returns {Record<string, number>} Missing level counts by band name
+	 */
+	static _countMissingLevelsByBand(currentLevel, targetLevel) {
+		const counts = this._buildEmptyLevelBandCounts(targetLevel);
+		for (const band of this._activeLevelBands(targetLevel)) {
+			const from = Math.max(currentLevel + 1, band.min);
+			const to = Math.min(targetLevel, band.max);
+			if (to >= from) {
+				counts[band.name] += (to - from + 1);
+			}
+		}
+		return counts;
+	}
+
+	/**
+	 * Resolve active level bands clipped to the current target level.
+	 *
+	 * @param {number} targetLevel - Projection target level
+	 * @returns {Array<{name: string, min: number, max: number}>} Active bands
+	 */
+	static _activeLevelBands(targetLevel) {
+		return this.LEVEL_BANDS
+			.filter((band) => band.min <= targetLevel)
+			.map((band) => ({
+				name: band.name,
+				min: band.min,
+				max: Math.min(band.max, targetLevel),
+			}));
 	}
 
 	/**

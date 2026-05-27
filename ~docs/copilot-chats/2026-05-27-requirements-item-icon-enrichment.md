@@ -344,3 +344,47 @@
 ## Known Follow-up
 - Add optional expandable per-tier top-item details in UI for troubleshooting exact material drivers.
 - Add exact deterministic per-hero/per-rank recipe support (replace inferred per-step model where catalogs are available).
+
+---
+
+## Session
+- Date: 2026-05-27
+- Session Number: 11
+- Scope: Add level-band projection aggregation and UI visibility for hero material planning.
+
+## Summary
+- Created and implemented issue #192.
+- Extended `HeroMaterialRequirementsCalculator` with deterministic `levelBandSummaries` output grouped into level bands:
+	- `1-40`
+	- `41-80`
+	- `81-120`
+	- `121-130`
+- Added per-level-band metrics:
+	- missing level count
+	- needed/owned/shortage totals
+	- distinct item count
+	- top item rows
+- Updated Heroes requirements panel to render a Level Band summary table alongside color-tier summary and overall totals.
+- Added tests to validate ordered level-band output and non-zero totals when level deficits exist.
+
+## Files Modified
+- userscript/src/modules/helpers/HeroMaterialRequirementsCalculator.js
+- userscript/src/modules/uiManager.js
+- userscript/tests/heroMaterialRequirementsCalculator.test.js
+- ~docs/copilot-chats/2026-05-27-requirements-item-icon-enrichment.md
+
+## Issues Referenced
+- #192 Add level-band hero material aggregation to projection output and Heroes UI
+
+## Validation
+- yarn test heroMaterialRequirementsCalculator.test.js --runInBand: passed (8 tests)
+- yarn test --runInBand: passed (18 suites, 706 tests)
+- yarn build: passed (version 0.9.101)
+
+## Key Decisions
+- Kept level-band aggregation deterministic with fixed band order for consistent UI scans.
+- Level-band summaries focus on level-driven demand while color-tier summaries continue to represent rank-driven demand.
+
+## Known Follow-up
+- Add a compact toggle to collapse/expand tier + level-band tables when panel density is high.
+- Add exact recipe-aware calibration path so level-band summaries can be reconciled against deterministic game catalogs.

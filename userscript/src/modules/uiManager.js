@@ -2275,6 +2275,7 @@ class UIManager {
 
 		const coverage = projection.coverage || {};
 		const tierSummaries = Array.isArray(projection.tierSummaries) ? projection.tierSummaries : [];
+		const levelBandSummaries = Array.isArray(projection.levelBandSummaries) ? projection.levelBandSummaries : [];
 		const totalNeeds = Number(projection.totalProjectedItems || 0).toLocaleString();
 		const totalOwned = Number(projection.totalOwnedForProjectedItems || 0).toLocaleString();
 		const totalShortage = Number(projection.totalShortageItems || 0).toLocaleString();
@@ -2289,6 +2290,21 @@ class UIManager {
 				`<td class="oj-num">${owned.toLocaleString()}</td>` +
 				`<td class="oj-num" style="${shortageStyle}">${shortage.toLocaleString()}</td>` +
 				`<td class="oj-num oj-muted" style="font-size:11px">${Number(tier.distinctItems || 0).toLocaleString()}</td>` +
+			`</tr>`;
+		}).join('');
+		const levelBandRows = levelBandSummaries.map((band) => {
+			const levels = Number(band.levelCount || 0);
+			const need = Number(band.totalProjectedItems || 0);
+			const owned = Number(band.totalOwnedForProjectedItems || 0);
+			const shortage = Number(band.totalShortageItems || 0);
+			const shortageStyle = shortage > 0 ? 'color:#ef9a9a;font-weight:700' : 'color:#a5d6a7;font-weight:700';
+			return `<tr>` +
+				`<td><strong>${this._escapeHtml(band.bandName || 'Unknown')}</strong></td>` +
+				`<td class="oj-num oj-muted" style="font-size:11px">${levels.toLocaleString()}</td>` +
+				`<td class="oj-num">${need.toLocaleString()}</td>` +
+				`<td class="oj-num">${owned.toLocaleString()}</td>` +
+				`<td class="oj-num" style="${shortageStyle}">${shortage.toLocaleString()}</td>` +
+				`<td class="oj-num oj-muted" style="font-size:11px">${Number(band.distinctItems || 0).toLocaleString()}</td>` +
 			`</tr>`;
 		}).join('');
 
@@ -2311,6 +2327,10 @@ class UIManager {
 				</div>
 				${tierRows
 					? `<table class="oj-table" style="margin-top:4px"><thead><tr><th>Tier</th><th>Needed</th><th>Owned</th><th>Shortage</th><th>Distinct</th></tr></thead><tbody>${tierRows}</tbody></table>`
+					: ''
+				}
+				${levelBandRows
+					? `<table class="oj-table" style="margin-top:4px"><thead><tr><th>Level Band</th><th>Levels</th><th>Needed</th><th>Owned</th><th>Shortage</th><th>Distinct</th></tr></thead><tbody>${levelBandRows}</tbody></table>`
 					: ''
 				}
 				${hasSignal

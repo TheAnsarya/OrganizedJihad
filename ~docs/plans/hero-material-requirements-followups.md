@@ -11,6 +11,7 @@ Initial implementation in userscript projects roster-wide required item totals t
 - Projection output includes owned + shortage totals from inventory snapshots.
 - API/Desktop parity shipped for projected item catalog metadata endpoints and desktop views.
 - Tier-by-tier material aggregates now rendered in Heroes panel (`Grey`, `Green`, `Blue`, `Violet`, `Orange`, `Red+`).
+- Level-band material aggregates now rendered in Heroes panel (`1-40`, `41-80`, `81-120`, `121-130`).
 
 ## Deferred Work (Documented)
 1. Exact deterministic recipe catalog integration (still pending)
@@ -25,15 +26,19 @@ Initial implementation in userscript projects roster-wide required item totals t
 - Add optional level-band groups (e.g., 1-40, 41-80, 81-120, 121-130) alongside color tiers.
 - Provide toggle between color-tier and level-band aggregation.
 
-4. Model calibration
+4. Dense-panel usability
+- Add collapse/expand controls for tier and level-band sections.
+- Add sticky header + lightweight virtualization for large requirement tables.
+
+5. Model calibration
 - Recompute projection baselines by mode/time window (e.g., 30/90-day behavior).
 - Auto-adjust confidence based on recency and sample density.
 
-5. Installer/ease workflow enhancements
+6. Installer/ease workflow enhancements
 - Add optional post-install health check summary and shortcut creation in installer.
 - Add one-click open of userscript diagnostics panel after installation.
 
 ## Suggested Next Slices
 - Slice A: Deterministic recipe catalog ingestion (exact per-rank ingredient trees).
 - Slice B: Per-hero requirement drill-down and tier deep links.
-- Slice C: Level-band aggregation mode + calibration tuning.
+- Slice C: Level-band/tier UI density controls + calibration tuning.
