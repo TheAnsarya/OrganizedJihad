@@ -561,3 +561,37 @@
 
 ## Known Follow-up
 - Tune projection table max-height responsively by viewport size for small screens.
+
+---
+
+## Session
+- Date: 2026-05-27
+- Session Number: 17
+- Scope: Add lightweight top-items virtualization and responsive projection table max-height tuning.
+
+## Summary
+- Created and implemented issue #198.
+- Added lightweight paged-window rendering for the Heroes panel `Top Projected Items` table to reduce DOM size on dense projections.
+- Added `Prev` / `Next` controls and visible range/page indicators for top-item navigation.
+- Added responsive `max-height` tuning for projection scroll containers to better fit short viewports while preserving sticky headers.
+
+## Files Modified
+- userscript/src/modules/uiManager.js
+- userscript/src/styles/main.css
+- ~docs/copilot-chats/2026-05-27-requirements-item-icon-enrichment.md
+
+## Issues Referenced
+- #198 Add virtualized paging and responsive max-height for Heroes projection tables
+
+## Validation
+- yarn test --runInBand: passed (18 suites, 706 tests)
+- yarn build: passed (version 0.9.107)
+- UIManager diagnostics: no errors
+
+## Key Decisions
+- Kept projection math untouched and implemented virtualization at render level by slicing displayed rows only.
+- Used small, deterministic paging state in existing heroes view state (`projectionTopItemsPage`, `projectionTopItemsPageSize`) for low-complexity behavior.
+- Tuned projection table `max-height` using viewport-aware clamps and short-height media override.
+
+## Known Follow-up
+- Consider adding keyboard shortcuts for top-items page navigation in the Heroes projection panel.

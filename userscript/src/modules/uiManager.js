@@ -111,7 +111,7 @@ class UIManager {
 		 * @type {Record<string, object>}
 		 */
 		this._viewState = {
-			heroes:    { page: 0, sortField: 'power', sortDir: 'desc', filter: '' },
+			heroes:    { page: 0, sortField: 'power', sortDir: 'desc', filter: '', projectionTopItemsPage: 0, projectionTopItemsPageSize: 25 },
 			titans:    { page: 0, sortField: 'power', sortDir: 'desc', filter: '' },
 			pets:      { page: 0, sortField: 'power', sortDir: 'desc', filter: '' },
 			upgrades:  { page: 0, sortField: 'timestamp', sortDir: 'desc', filter: '', subTab: 'all' },
@@ -2241,14 +2241,22 @@ class UIManager {
 			return '';
 		}
 
+		const heroesViewState = this._viewState?.heroes || {};
 		const topItems = Array.isArray(projection.items) ? projection.items : [];
+		const topItemsPageSize = Math.max(10, Number(heroesViewState.projectionTopItemsPageSize || 25));
+		const topItemsPageCount = Math.max(1, Math.ceil(topItems.length / topItemsPageSize));
+		const topItemsPage = Math.min(Math.max(Number(heroesViewState.projectionTopItemsPage || 0), 0), topItemsPageCount - 1);
+		heroesViewState.projectionTopItemsPage = topItemsPage;
+		const topItemsSliceStart = topItemsPage * topItemsPageSize;
+		const topItemsSliceEnd = Math.min(topItemsSliceStart + topItemsPageSize, topItems.length);
+		const pagedTopItems = topItems.slice(topItemsSliceStart, topItemsSliceEnd);
 		const confidencePct = Math.round((projection.confidenceScore || 0) * 100);
 		const hasSignal = topItems.length > 0;
 		const confidenceColor = confidencePct >= 70
 			? '#81c784'
 			: (confidencePct >= 40 ? '#ffb74d' : '#ef9a9a');
 
-		const itemRows = topItems.map((entry) => {
+		const itemRows = pagedTopItems.map((entry) => {
 			const levelPart = Number(entry.levelProjected || 0);
 			const colorPart = Number(entry.colorProjected || 0);
 			const needed = Number(entry.quantity || 0);
@@ -2355,6 +2363,14 @@ class UIManager {
 				${hasSignal
 					? `<details ${isTopItemsOpen ? 'open' : ''} data-projection-section="topItems" style="margin-top:4px">
 						<summary style="cursor:pointer;font-size:12px;font-weight:700;color:#d0d0d0;list-style:disclosure-closed">Top Projected Items • ${topItems.length} rows</summary>
+						<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin-top:6px">
+							<div class="oj-muted" style="font-size:11px">Showing ${topItems.length === 0 ? 0 : (topItemsSliceStart + 1).toLocaleString()}-${topItemsSliceEnd.toLocaleString()} of ${topItems.length.toLocaleString()}</div>
+							<div style="display:flex;align-items:center;gap:6px">
+								<button type="button" class="oj-btn oj-btn-xs" data-projection-top-nav="prev" ${topItemsPage <= 0 ? 'disabled' : ''}>Prev</button>
+								<div class="oj-muted" style="font-size:11px">Page ${(topItemsPage + 1).toLocaleString()} / ${topItemsPageCount.toLocaleString()}</div>
+								<button type="button" class="oj-btn oj-btn-xs" data-projection-top-nav="next" ${topItemsPage >= (topItemsPageCount - 1) ? 'disabled' : ''}>Next</button>
+							</div>
+						</div>
 						<div class="oj-projection-scroll" style="margin-top:6px">
 							<table class="oj-table oj-projection-table"><thead><tr><th>Item</th><th>Needed</th><th>Owned</th><th>Shortage</th><th>Mix</th></tr></thead><tbody>${itemRows}</tbody></table>
 						</div>
@@ -4907,6 +4923,17 @@ class UIManager {
 					detailsEl.open = shouldOpen;
 					this._saveProjectionSectionOpenPreference(detailsEl.dataset.projectionSection, shouldOpen);
 				});
+			});
+		});
+
+		// Top projected items paging controls (heroes view only)
+		content.querySelectorAll('[data-projection-top-nav]').forEach((btn) => {
+			btn.addEventListener('click', () => {
+				if (!this._viewState.heroes) return;
+				const current = Number(this._viewState.heroes.projectionTopItemsPage || 0);
+				const direction = btn.dataset.projectionTopNav === 'next' ? 1 : -1;
+				this._viewState.heroes.projectionTopItemsPage = Math.max(0, current + direction);
+				this.renderView('heroes');
 			});
 		});
 

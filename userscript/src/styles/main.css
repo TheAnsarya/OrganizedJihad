@@ -163,6 +163,11 @@
 	background: rgba(255, 255, 255, 0.25);
 }
 
+.oj-btn:disabled {
+	opacity: 0.45;
+	cursor: not-allowed;
+}
+
 .oj-btn-icon {
 	width: 28px;
 	height: 28px;
@@ -298,7 +303,7 @@
 
 /* Projection table readability helpers: fixed scroll region + sticky header */
 .oj-projection-scroll {
-	max-height: 220px;
+	max-height: clamp(150px, 28vh, 320px);
 	overflow: auto;
 	border: 1px solid rgba(255, 255, 255, 0.08);
 	border-radius: 6px;
@@ -320,6 +325,12 @@
 	top: 0;
 	z-index: 1;
 	background: rgba(18, 24, 38, 0.96);
+}
+
+@media (max-height: 760px) {
+	.oj-projection-scroll {
+		max-height: clamp(120px, 24vh, 220px);
+	}
 }
 
 .oj-mono {

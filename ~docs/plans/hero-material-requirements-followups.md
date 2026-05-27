@@ -36,7 +36,9 @@ Status update:
 - Persisted expand/collapse preferences are now implemented for projection sections.
 - One-click Expand All / Collapse All controls are now implemented for projection sections.
 - Sticky headers and bounded scroll containers are now implemented for projection tables.
-- Remaining: lightweight virtualization and responsive max-height tuning.
+- Lightweight virtualization (paged top-items rendering) is now implemented in the Heroes projection panel.
+- Responsive max-height tuning is now implemented for projection scroll containers.
+- Remaining: optional keyboard shortcuts for projection paging controls.
 
 5. Model calibration
 - Recompute projection baselines by mode/time window (e.g., 30/90-day behavior).
