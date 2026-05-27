@@ -24,6 +24,7 @@
 
 import IndexedDBStorage from './indexedDBStorage.js';
 import UpgradeTracker from './trackers/UpgradeTracker.js';
+import { registerChatHandlers, registerCorePlayerHandlers, registerMailHandlers } from './trackers/GameTrackerCoreRegistry.js';
 import { compressHeroBatch, compressTitanBatch } from './heroCompression.js';
 import { resolveHeroName, resolveTitanElement } from './heroNames.js';
 
@@ -1495,17 +1496,7 @@ class GameTracker {
 		this._handlerRegistry = new Map();
 
 		// ── Core player data ───────────────────────────────────────────
-		this.registerHandler('userGetInfo', async (_call, _args, data) => {
-			await this.trackPlayerData(data);
-		}, 'trackPlayerData', { category: 'player' });
-
-		this.registerHandler('heroGetAll', async (_call, _args, data) => {
-			await this.trackHeroesData(data);
-		}, 'trackHeroesData', { dependsOn: ['userGetInfo'], category: 'player' });
-
-		this.registerHandler('inventoryGet', async (_call, _args, data) => {
-			await this.trackInventoryData(data);
-		}, 'trackInventoryData', { dependsOn: ['userGetInfo'], category: 'player' });
+		registerCorePlayerHandlers(this);
 
 		// ── Battle systems ──────────────────────────────────────────────
 		this.registerHandler('missionEnd', async (callName, args, data) => {
@@ -1697,22 +1688,10 @@ class GameTracker {
 		}, 'trackPetsData', { category: 'player' });
 
 		// ── Chat and communication ──────────────────────────────────────
-		this.registerHandler(['chatGetDialog', 'chatGetNewMessages'], async (callName, args, data) => {
-			await this.trackChatMessages(args, data, callName);
-		}, 'trackChatMessages', { category: 'guild' });
-
-		this.registerHandler('chatSendMessage', async (_call, args, data) => {
-			await this.trackOutgoingMessage(args, data);
-		}, 'trackOutgoingMessage', { category: 'guild' });
+		registerChatHandlers(this);
 
 		// ── Mail tracking (Phase 12, #94) ───────────────────────────────
-		this.registerHandler('mailGetAll', async (_call, _args, data) => {
-			await this.trackMailList(data);
-		}, 'trackMailList', { category: 'player' });
-
-		this.registerHandler(['mailFarm', 'mailCollect'], async (callName, args, data) => {
-			await this.trackMailRewards(callName, args, data);
-		}, 'trackMailRewards', { category: 'player' });
+		registerMailHandlers(this);
 
 		// ── Hero Upgrade Events (Phase 8) ───────────────────────────────
 		this.registerHandler('heroUpgradeSkill', async (_call, args, data) => {

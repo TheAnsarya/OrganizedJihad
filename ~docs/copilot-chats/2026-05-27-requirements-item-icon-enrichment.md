@@ -985,6 +985,46 @@
 
 ## Session
 - Date: 2026-05-27
+- Session Number: 40
+- Scope: Continue queued userscript batch decomposition work for #297/#298 with validated handler-registry extraction slices.
+
+## Summary
+- Implemented additional userscript modularization slices toward #297/#298 by extracting handler registration groups into a dedicated registry module:
+	- Core player snapshot handlers (`userGetInfo`, `heroGetAll`, `inventoryGet`)
+	- Chat handlers (`chatGetDialog/chatGetNewMessages`, `chatSendMessage`)
+	- Mail handlers (`mailGetAll`, `mailFarm/mailCollect`)
+- Added new module `GameTrackerCoreRegistry` and delegated corresponding `gameTracker._buildHandlerRegistry` call sites to extracted functions.
+
+## Files Modified
+- userscript/src/modules/gameTracker.js
+- userscript/package.json
+- ~docs/plans/architecture-modernization-roadmap.md
+- ~docs/copilot-chats/2026-05-27-userscript-build-auto.md
+- ~docs/copilot-chats/2026-05-27-requirements-item-icon-enrichment.md
+
+## Files Created
+- userscript/src/modules/trackers/GameTrackerCoreRegistry.js
+
+## Issues Referenced
+- #206 Epic: Architecture modernization and module deepening across API/userscript
+- #297 Batch refactor: gameTracker handler registry extraction wave (6 high-risk slices)
+- #298 Batch modernization: gameTracker registration phase decomposition (12 medium-risk slices)
+
+## Validation
+- `yarn test --runInBand`: passed (18 suites, 706 tests)
+- `yarn build`: passed
+
+## Key Decisions
+- Continued extraction in narrowly scoped clusters to minimize registration-order regression risk.
+- Kept handler labels/options intact while only changing registration locality.
+
+## Known Follow-up
+- Continue #297/#298 by extracting remaining high-risk registration clusters (battle/guild/chest/quest) into dedicated registry modules.
+
+---
+
+## Session
+- Date: 2026-05-27
 - Session Number: 37
 - Scope: Continue high-throughput architecture modernization using batch issues for API recommendation seams, desktop parity client consolidation, and userscript build automation.
 

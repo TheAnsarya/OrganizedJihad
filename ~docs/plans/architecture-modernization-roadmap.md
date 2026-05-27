@@ -379,10 +379,12 @@
 92. #297 Batch refactor: gameTracker handler registry extraction wave (6 high-risk slices)
 - Status: Planned/In Progress on `feature/204-architecture-modernization`.
 - Outcome target: extract high-risk userscript handler-registration clusters (battle/guild/chat/mail/chest/quest) into modular registry boundaries.
+- Progress update: extracted chat and mail registration clusters into `userscript/src/modules/trackers/GameTrackerCoreRegistry.js` and delegated from `_buildHandlerRegistry`.
 
 93. #298 Batch modernization: gameTracker registration phase decomposition (12 medium-risk slices)
 - Status: Planned/In Progress on `feature/204-architecture-modernization`.
 - Outcome target: decompose monolithic userscript registration surface into phase-oriented modular functions.
+- Progress update: extracted core player snapshot registration phase (`userGetInfo`, `heroGetAll`, `inventoryGet`) into `GameTrackerCoreRegistry` and delegated from `gameTracker`.
 
 94. #299 Batch refactor: Team Recommendation orchestration decomposition in SyncService (6 high + 12 medium slices)
 - Status: Completed on `feature/204-architecture-modernization`.
