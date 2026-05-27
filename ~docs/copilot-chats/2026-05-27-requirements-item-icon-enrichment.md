@@ -949,6 +949,11 @@
 ## Known Follow-up
 - Continue remaining large-view decomposition seams (`renderBattles`, `renderTitans`, `renderPets`, `renderInventory`) in similarly traceable issue-first slices.
 
+### Session 32 Addendum
+- Additional continuation slice completed after the main batch:
+	- #251 extracted dashboard battle dataset loading (`allBattles` + today-only battle counters) into `_loadDashboardBattleDatasets(todayISO)`.
+- Validation re-run: `yarn test --runInBand` passed (18 suites, 706 tests), `yarn build` passed.
+
 ---
 
 ## Session

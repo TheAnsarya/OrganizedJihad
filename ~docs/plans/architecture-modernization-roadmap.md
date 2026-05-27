@@ -192,6 +192,10 @@
 - Status: Completed on `feature/204-architecture-modernization`.
 - Outcome target: move cache-backed API payload resolver into shared helper module and delegate all dashboard call sites.
 
+46. #251 Extract dashboard battle dataset loader from renderDashboard into helper method
+- Status: Completed on `feature/204-architecture-modernization`.
+- Outcome target: isolate `allBattles` + today-only battle dataset loading from `renderDashboard` body.
+
 ## Validation Strategy
 - API changes: run `dotnet test tests/OrganizedJihad.Api.Tests/OrganizedJihad.Api.Tests.csproj` and `dotnet test OrganizedJihad.sln`.
 - Userscript changes: run `yarn test --runInBand` and `yarn build`.
@@ -199,7 +203,7 @@
 
 ## Notes
 - Parallel issue creation caused issue-number drift; canonical mapping is documented in epic #206 comments.
-- Completed slices so far: #205, #208, #204, #207, #210, #211, #212, #213, #214, #215, #216, #217, #218, #219, #220, #221, #222, #223, #224, #225, #226, #227, #228, #229, #230, #231, #232, #233, #234, #235, #236, #237, #238, #239, #240, #241, #242, #243, #244, #245, #246, #247, #248, #249, and #250 (API seams + controller split + userscript renderer/binder/helper extraction).
+- Completed slices so far: #205, #208, #204, #207, #210, #211, #212, #213, #214, #215, #216, #217, #218, #219, #220, #221, #222, #223, #224, #225, #226, #227, #228, #229, #230, #231, #232, #233, #234, #235, #236, #237, #238, #239, #240, #241, #242, #243, #244, #245, #246, #247, #248, #249, #250, and #251 (API seams + controller split + userscript renderer/binder/helper extraction).
 - Existing unrelated dirty files remain intentionally untouched:
   - `userscript/package.json`
   - `~docs/oj-manual-prompts-log.txt`
