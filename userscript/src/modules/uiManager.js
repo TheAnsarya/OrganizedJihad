@@ -14,6 +14,7 @@ import HeroMaterialRequirementsCalculator from './helpers/HeroMaterialRequiremen
 import ProjectedItemCatalogResolver from './helpers/ProjectedItemCatalogResolver.js';
 import TitanCompletionCalculator from './helpers/TitanCompletionCalculator.js';
 import PetCompletionCalculator from './helpers/PetCompletionCalculator.js';
+import { sortData, sortIndicator } from './helpers/dataBrowserSortHelpers.js';
 import { bindDataRowInteractions } from './binders/dataRowInteractionBinder.js';
 import { bindDataBrowserTableControls } from './binders/dataBrowserTableControlsBinder.js';
 import { bindDataBrowserMiscInteractions } from './binders/dataBrowserMiscBinder.js';
@@ -4381,8 +4382,7 @@ class UIManager {
 	 * @returns {string} Unicode arrow or empty string
 	 */
 	_sortIndicator(activeField, activeDir, field) {
-		if (activeField !== field) return '';
-		return activeDir === 'asc' ? '\u25B2' : '\u25BC';
+		return sortIndicator(activeField, activeDir, field);
 	}
 
 	/**
@@ -4395,26 +4395,7 @@ class UIManager {
 	 * @returns {Array<object>} Sorted array
 	 */
 	_sortData(data, field, dir) {
-		const mul = dir === 'asc' ? 1 : -1;
-		// Map common aliases for hero/titan fields
-		const fieldMap = {
-			name: (obj) => (obj.heroName || obj.titanName || obj.name || obj.itemName || '').toLowerCase(),
-			level: (obj) => obj.level || 0,
-			stars: (obj) => obj.stars || 0,
-			power: (obj) => obj.power || 0,
-			color: (obj) => typeof obj.color === 'number' ? obj.color : parseInt(obj.color, 10) || 0,
-			element: (obj) => (obj.element || '').toLowerCase(),
-			count: (obj) => obj.count ?? obj.quantity ?? 0,
-			category: (obj) => (obj.category || obj.type || '').toLowerCase(),
-			timestamp: (obj) => obj.timestamp ? new Date(obj.timestamp).getTime() : 0,
-		};
-		const getter = fieldMap[field] || ((obj) => obj[field] ?? '');
-		return data.sort((a, b) => {
-			const va = getter(a);
-			const vb = getter(b);
-			if (typeof va === 'number' && typeof vb === 'number') return (va - vb) * mul;
-			return String(va).localeCompare(String(vb)) * mul;
-		});
+		return sortData(data, field, dir);
 	}
 
 	/**
