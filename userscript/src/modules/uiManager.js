@@ -16,6 +16,7 @@ import TitanCompletionCalculator from './helpers/TitanCompletionCalculator.js';
 import PetCompletionCalculator from './helpers/PetCompletionCalculator.js';
 import { bindDataRowInteractions } from './binders/dataRowInteractionBinder.js';
 import { bindDataBrowserTableControls } from './binders/dataBrowserTableControlsBinder.js';
+import { bindDataBrowserMiscInteractions } from './binders/dataBrowserMiscBinder.js';
 import { bindProjectionInteractions } from './binders/projectionInteractionBinder.js';
 import { renderHeroRequirementsProjectionPanel } from './renderers/heroRequirementsProjectionRenderer.js';
 import {
@@ -4851,23 +4852,9 @@ class UIManager {
 			renderHeroes: () => this.renderView('heroes'),
 		});
 
-
-		// Emerald click — navigate to resources tab and filter to emerald transactions
-		content.querySelectorAll('[data-resource-filter="emeralds"]').forEach((el) => {
-			el.addEventListener('click', () => {
-				this.renderView('resources');
-			});
-		});
-
-		// Inventory group header expand/collapse
-		content.querySelectorAll('.oj-inv-group-header').forEach((header) => {
-			header.addEventListener('click', () => {
-				const table = header.nextElementSibling;
-				if (table && table.classList.contains('oj-inv-group-table')) {
-					table.classList.toggle('oj-collapsed');
-					header.classList.toggle('oj-inv-collapsed');
-				}
-			});
+		bindDataBrowserMiscInteractions({
+			content,
+			renderResources: () => this.renderView('resources'),
 		});
 
 	}
