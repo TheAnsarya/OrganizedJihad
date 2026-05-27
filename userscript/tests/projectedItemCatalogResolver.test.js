@@ -31,6 +31,28 @@ describe('ProjectedItemCatalogResolver', () => {
 		expect(meta.icon).toBe('🧩');
 	});
 
+	test('resolveItemMeta uses seeded catalog when runtime metadata is missing', () => {
+		const meta = ProjectedItemCatalogResolver.resolveItemMeta('xp_potion_l', {});
+		expect(meta.name).toBe('Large XP Potion');
+		expect(meta.category).toBe('consumable');
+		expect(meta.icon).toBe('🧪');
+	});
+
+	test('runtime metadata overrides seeded catalog entries', () => {
+		const runtime = {
+			xp_potion_l: {
+				name: 'Custom XP Potion Name',
+				category: 'resource',
+				icon: '📦',
+			},
+		};
+
+		const meta = ProjectedItemCatalogResolver.resolveItemMeta('xp_potion_l', runtime);
+		expect(meta.name).toBe('Custom XP Potion Name');
+		expect(meta.category).toBe('resource');
+		expect(meta.icon).toBe('📦');
+	});
+
 	test('resolveItemMeta falls back deterministically for unknown IDs', () => {
 		const meta = ProjectedItemCatalogResolver.resolveItemMeta('mystery_token_x1', {});
 		expect(meta.name).toBe('Mystery Token X1');

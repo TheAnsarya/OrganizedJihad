@@ -67,3 +67,37 @@
 - Expand resolver with deterministic catalog entries beyond runtime metadata.
 - Move from emoji glyphs to maintained icon asset mapping when available.
 - Add API/Desktop parity for projection payload and display metadata contracts.
+
+---
+
+## Session
+- Date: 2026-05-27
+- Session Number: 3
+- Scope: Seed deterministic projected item catalog entries and enforce metadata precedence.
+
+## Summary
+- Created and implemented issue #184.
+- Added seeded deterministic entries in `ProjectedItemCatalogResolver` for high-frequency projected IDs.
+- Implemented resolution precedence:
+	1. Runtime metadata
+	2. Seeded catalog metadata
+	3. Pattern-based deterministic fallbacks
+- Expanded resolver tests for seeded resolution and runtime-over-seeded overrides.
+
+## Files Modified
+- userscript/src/modules/helpers/ProjectedItemCatalogResolver.js
+- userscript/tests/projectedItemCatalogResolver.test.js
+- userscript/package.json
+
+## Issues Referenced
+- #184 Seed deterministic projected item catalog entries for hero requirements
+
+## Validation
+- yarn test projectedItemCatalogResolver.test.js --runInBand: passed (6 tests)
+- yarn test --runInBand: passed (18 suites, 700 tests)
+- yarn build: passed
+
+## Known Follow-up
+- Replace emoji-based seeded icons with maintained image/icon asset mapping.
+- Expand seeded catalog breadth using observed top projected IDs from real accounts.
+- Add API/Desktop parity contract for resolver metadata payloads.

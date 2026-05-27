@@ -7,6 +7,24 @@
  */
 class ProjectedItemCatalogResolver {
 	/**
+	 * Seeded deterministic entries for high-frequency projected item IDs.
+	 * These provide stable labels/icons before runtime metadata exists.
+	 *
+	 * @type {Record<string, {name: string, category: string, icon?: string}>}
+	 */
+	static SEEDED_CATALOG = {
+		xp_potion_l: { name: 'Large XP Potion', category: 'consumable', icon: '🧪' },
+		xp_potion_m: { name: 'Medium XP Potion', category: 'consumable', icon: '🧪' },
+		xp_potion_s: { name: 'Small XP Potion', category: 'consumable', icon: '🧪' },
+		gold_coin: { name: 'Gold', category: 'resource', icon: '🪙' },
+		item_red_fragment: { name: 'Red Fragment', category: 'fragment', icon: '🧩' },
+		item_violet_fragment: { name: 'Violet Fragment', category: 'fragment', icon: '🧩' },
+		item_orange_fragment: { name: 'Orange Fragment', category: 'fragment', icon: '🧩' },
+		item_green_fragment: { name: 'Green Fragment', category: 'fragment', icon: '🧩' },
+		item_blue_fragment: { name: 'Blue Fragment', category: 'fragment', icon: '🧩' },
+	};
+
+	/**
 	 * Build a runtime item metadata map keyed by item ID.
 	 *
 	 * @param {Array<{itemId: string, name?: string, category?: string}>} items - Parsed inventory items
@@ -43,10 +61,11 @@ class ProjectedItemCatalogResolver {
 	static resolveItemMeta(itemId, runtimeMetaMap = {}) {
 		const normalizedId = String(itemId || 'unknown_item').trim() || 'unknown_item';
 		const runtimeMeta = runtimeMetaMap[normalizedId] || {};
-		const category = String(runtimeMeta.category || '').trim();
+		const seededMeta = this.SEEDED_CATALOG[normalizedId] || {};
+		const category = String(runtimeMeta.category || seededMeta.category || '').trim();
 
-		const name = runtimeMeta.name || this.prettifyItemId(normalizedId);
-		const icon = runtimeMeta.icon || this.iconForItem(category, normalizedId);
+		const name = runtimeMeta.name || seededMeta.name || this.prettifyItemId(normalizedId);
+		const icon = runtimeMeta.icon || seededMeta.icon || this.iconForItem(category, normalizedId);
 
 		return {
 			itemId: normalizedId,
