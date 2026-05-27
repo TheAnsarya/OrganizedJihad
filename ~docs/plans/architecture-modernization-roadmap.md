@@ -96,6 +96,18 @@
 - Status: Completed on `feature/204-architecture-modernization`.
 - Outcome target: isolate compact-number and color-rank presentation helpers from `uiManager`.
 
+22. #227 Extract activity presentation helpers from uiManager into helper module
+- Status: Completed on `feature/204-architecture-modernization`.
+- Outcome target: isolate activity event icon/color helper mappings from `uiManager`.
+
+23. #228 Extract battle-team rendering from uiManager into renderer module
+- Status: Completed on `feature/204-architecture-modernization`.
+- Outcome target: isolate compressed battle-team rendering from `uiManager`.
+
+24. #229 Extract adventure-guide rendering from uiManager into renderer module
+- Status: Completed on `feature/204-architecture-modernization`.
+- Outcome target: isolate adventure-guide panel rendering and grouping logic from `uiManager`.
+
 ## Validation Strategy
 - API changes: run `dotnet test tests/OrganizedJihad.Api.Tests/OrganizedJihad.Api.Tests.csproj` and `dotnet test OrganizedJihad.sln`.
 - Userscript changes: run `yarn test --runInBand` and `yarn build`.
@@ -103,7 +115,7 @@
 
 ## Notes
 - Parallel issue creation caused issue-number drift; canonical mapping is documented in epic #206 comments.
-- Completed slices so far: #205, #208, #204, #207, #210, #211, #212, #213, #214, #215, #216, #217, #218, #219, #220, #221, #222, #223, #224, #225, and #226 (API seams + controller split + userscript renderer/binder extraction).
+- Completed slices so far: #205, #208, #204, #207, #210, #211, #212, #213, #214, #215, #216, #217, #218, #219, #220, #221, #222, #223, #224, #225, #226, #227, #228, and #229 (API seams + controller split + userscript renderer/binder extraction).
 - Existing unrelated dirty files remain intentionally untouched:
   - `userscript/package.json`
   - `~docs/oj-manual-prompts-log.txt`

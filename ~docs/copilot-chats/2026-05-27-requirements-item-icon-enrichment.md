@@ -904,6 +904,47 @@
 
 ## Session
 - Date: 2026-05-27
+- Session Number: 35
+- Scope: Continue both requested tracks with several medium-risk slices by extracting activity helpers and larger battle/adventure renderer blocks from `uiManager`.
+
+## Summary
+- Completed three medium-risk slices:
+	- #227 extracted activity presentation helpers into helper module
+	- #228 extracted battle-team rendering into renderer module
+	- #229 extracted adventure-guide rendering into renderer module
+- Preserved `uiManager` wrapper methods and existing call sites by delegating to extracted modules.
+
+## Files Modified
+- userscript/src/modules/uiManager.js
+- ~docs/plans/architecture-modernization-roadmap.md
+- ~docs/copilot-chats/2026-05-27-requirements-item-icon-enrichment.md
+
+## Files Created
+- userscript/src/modules/helpers/activityPresentationHelpers.js
+- userscript/src/modules/renderers/battleTeamRenderer.js
+- userscript/src/modules/renderers/adventureGuideRenderer.js
+
+## Issues Referenced
+- #206 Epic: Architecture modernization and module deepening across API/userscript
+- #227 Extract activity presentation helpers from uiManager into helper module
+- #228 Extract battle-team rendering from uiManager into renderer module
+- #229 Extract adventure-guide rendering from uiManager into renderer module
+
+## Validation
+- For each slice, `yarn test --runInBand` passed (18 suites, 706 tests)
+- For each slice, `yarn build` passed (webpack production build succeeded; existing bundle-size warnings only)
+
+## Key Decisions
+- Kept helper/renderer dependencies callback-based to avoid changing broader module contracts.
+- Split battle and adventure renderer extraction into separate slices to keep behavior verification focused.
+
+## Known Follow-up
+- Continue extracting remaining larger render blocks (for example, activity rows and dashboard card subsections) from `uiManager`.
+
+---
+
+## Session
+- Date: 2026-05-27
 - Session Number: 34
 - Scope: Continue with several modernization slices by extracting one more data-browser orchestration seam and additional shared helper logic from `uiManager`.
 
