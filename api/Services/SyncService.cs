@@ -33,8 +33,6 @@ namespace OrganizedJihad.Api.Services;
 /// - Transactions in EF Core: https://learn.microsoft.com/en-us/ef/core/saving/transactions
 /// </summary>
 public class SyncService {
-	private const string TeamRecommendationCalibrationMetadataKey = "team_recommendation_calibration_v1";
-	private const string TeamRecommendationTrendPreferencesMetadataKey = "team_recommendation_trend_preferences_v1";
 	private static readonly IReadOnlyList<int> SupportedCalibrationTrendWindowDays = [7, 30, 90];
 
 	private readonly IDbContextFactory<GameDatabaseContext> _contextFactory;
@@ -43,6 +41,7 @@ public class SyncService {
 	private readonly IReadOnlyList<IExternalRecommendationSignalProvider> _externalSignalProviders;
 	private readonly IProjectedItemCatalogProvider _projectedItemCatalogProvider;
 	private readonly IExternalToolCatalogProvider _externalToolCatalogProvider;
+	private readonly ITeamRecommendationStateStore _teamRecommendationStateStore;
 
 	/// <summary>
 	/// Initializes a new instance of the SyncService.
@@ -58,6 +57,7 @@ public class SyncService {
 		_externalSignalProviders = [new CuratedToolCatalogSignalProvider()];
 		_projectedItemCatalogProvider = new SeededProjectedItemCatalogProvider();
 		_externalToolCatalogProvider = new CuratedExternalToolCatalogProvider();
+		_teamRecommendationStateStore = new TeamRecommendationSyncMetadataStateStore();
 	}
 
 	/// <summary>
@@ -76,6 +76,7 @@ public class SyncService {
 		_externalSignalProviders = [new CuratedToolCatalogSignalProvider()];
 		_projectedItemCatalogProvider = projectedItemCatalogProvider;
 		_externalToolCatalogProvider = new CuratedExternalToolCatalogProvider();
+		_teamRecommendationStateStore = new TeamRecommendationSyncMetadataStateStore();
 	}
 
 	/// <summary>
@@ -96,6 +97,30 @@ public class SyncService {
 		_externalSignalProviders = [new CuratedToolCatalogSignalProvider()];
 		_projectedItemCatalogProvider = projectedItemCatalogProvider;
 		_externalToolCatalogProvider = externalToolCatalogProvider;
+		_teamRecommendationStateStore = new TeamRecommendationSyncMetadataStateStore();
+	}
+
+	/// <summary>
+	/// Initializes a new instance of the SyncService with explicit Team Recommendation state-store seam.
+	/// </summary>
+	/// <param name="contextFactory">Factory for creating database contexts</param>
+	/// <param name="logger">Logger for diagnostic information</param>
+	/// <param name="projectedItemCatalogProvider">Projected item catalog provider seam</param>
+	/// <param name="externalToolCatalogProvider">External tool catalog provider seam</param>
+	/// <param name="teamRecommendationStateStore">Team Recommendation state persistence seam</param>
+	public SyncService(
+		IDbContextFactory<GameDatabaseContext> contextFactory,
+		ILogger<SyncService> logger,
+		IProjectedItemCatalogProvider projectedItemCatalogProvider,
+		IExternalToolCatalogProvider externalToolCatalogProvider,
+		ITeamRecommendationStateStore teamRecommendationStateStore) {
+		_contextFactory = contextFactory;
+		_logger = logger;
+		_battleSimulator = new MonteCarloBattleSimulator(new BaselineBattleFeatureExtractor());
+		_externalSignalProviders = [new CuratedToolCatalogSignalProvider()];
+		_projectedItemCatalogProvider = projectedItemCatalogProvider;
+		_externalToolCatalogProvider = externalToolCatalogProvider;
+		_teamRecommendationStateStore = teamRecommendationStateStore;
 	}
 
 	/// <summary>
@@ -1885,7 +1910,7 @@ public class SyncService {
 	/// </summary>
 	public async Task<TeamRecommendationProfileMetadataResponse> GetTeamRecommendationProfileMetadataAsync() {
 		await using var context = await _contextFactory.CreateDbContextAsync();
-		var preferenceState = await LoadTeamRecommendationTrendPreferenceStateAsync(context);
+		var preferenceState = await _teamRecommendationStateStore.LoadTrendPreferenceStateAsync(context);
 
 		var modes = TeamRecommendationProfileCatalog.BuildModeOptions()
 			.Select(option => new TeamRecommendationModeOption {
@@ -1942,7 +1967,7 @@ public class SyncService {
 	/// </summary>
 	public async Task<TeamRecommendationTrendPreferenceResponse> GetTeamRecommendationTrendPreferencesAsync() {
 		await using var context = await _contextFactory.CreateDbContextAsync();
-		var preferenceState = await LoadTeamRecommendationTrendPreferenceStateAsync(context);
+		var preferenceState = await _teamRecommendationStateStore.LoadTrendPreferenceStateAsync(context);
 
 		var modes = TeamRecommendationProfileCatalog.SupportedModes
 			.Select(mode => new TeamRecommendationModeTrendPreference {
@@ -1969,12 +1994,11 @@ public class SyncService {
 		}
 
 		await using var context = await _contextFactory.CreateDbContextAsync();
-		var preferenceState = await LoadTeamRecommendationTrendPreferenceStateAsync(context);
+		var preferenceState = await _teamRecommendationStateStore.LoadTrendPreferenceStateAsync(context);
 		preferenceState.ModeTrendWindowDays[normalizedMode] = preferredTrendWindowDays;
 		preferenceState.UpdatedAtUtc = DateTime.UtcNow;
 
-		var serialized = JsonSerializer.Serialize(preferenceState);
-		await UpdateSyncMetadataAsync(context, TeamRecommendationTrendPreferencesMetadataKey, serialized);
+		await _teamRecommendationStateStore.SaveTrendPreferenceStateAsync(context, preferenceState);
 
 		return await GetTeamRecommendationTrendPreferencesAsync();
 	}
@@ -2127,8 +2151,8 @@ public class SyncService {
 	public async Task<TeamRecommendationCalibrationResponse> GetTeamRecommendationCalibrationAsync(string mode = "arena", int? preferredTrendWindowDays = null) {
 		var normalizedMode = NormalizeTeamRecommendationMode(mode);
 		await using var context = await _contextFactory.CreateDbContextAsync();
-		var state = await LoadTeamRecommendationCalibrationStateAsync(context);
-		var preferenceState = await LoadTeamRecommendationTrendPreferenceStateAsync(context);
+		var state = await _teamRecommendationStateStore.LoadCalibrationStateAsync(context);
+		var preferenceState = await _teamRecommendationStateStore.LoadTrendPreferenceStateAsync(context);
 
 		if (!state.Modes.TryGetValue(normalizedMode, out var modeState)) {
 			modeState = new TeamRecommendationCalibrationModeState();
@@ -2653,8 +2677,8 @@ public class SyncService {
 	}
 
 	private async Task<double> GetModeFrictionCalibrationScaleAsync(GameDatabaseContext context, string mode, int? preferredTrendWindowDays = null) {
-		var state = await LoadTeamRecommendationCalibrationStateAsync(context);
-		var preferenceState = await LoadTeamRecommendationTrendPreferenceStateAsync(context);
+		var state = await _teamRecommendationStateStore.LoadCalibrationStateAsync(context);
+		var preferenceState = await _teamRecommendationStateStore.LoadTrendPreferenceStateAsync(context);
 		if (state.Modes.TryGetValue(mode, out var modeState) && modeState.Samples > 0) {
 			var resolvedTrendWindowDays = TeamRecommendationCalibrationStateMath.ResolvePreferredCalibrationTrendWindowDays(modeState, preferenceState, mode, preferredTrendWindowDays, SupportedCalibrationTrendWindowDays);
 			return TeamRecommendationCalibrationStateMath.ResolveSuggestedScaleFromModeState(modeState, resolvedTrendWindowDays, DateTime.UtcNow);
@@ -2663,55 +2687,13 @@ public class SyncService {
 		return 1d;
 	}
 
-	private async Task<TeamRecommendationTrendPreferenceState> LoadTeamRecommendationTrendPreferenceStateAsync(GameDatabaseContext context) {
-		var metadata = await context.SyncMetadata
-			.AsNoTracking()
-			.FirstOrDefaultAsync(m => m.Key == TeamRecommendationTrendPreferencesMetadataKey);
-
-		if (metadata == null || string.IsNullOrWhiteSpace(metadata.Value)) {
-			return new TeamRecommendationTrendPreferenceState();
-		}
-
-		try {
-			var parsed = JsonSerializer.Deserialize<TeamRecommendationTrendPreferenceState>(metadata.Value);
-			if (parsed?.ModeTrendWindowDays == null) {
-				return new TeamRecommendationTrendPreferenceState();
-			}
-
-			return parsed;
-		} catch {
-			return new TeamRecommendationTrendPreferenceState();
-		}
-	}
-
-	private async Task<TeamRecommendationCalibrationState> LoadTeamRecommendationCalibrationStateAsync(GameDatabaseContext context) {
-		var metadata = await context.SyncMetadata
-			.AsNoTracking()
-			.FirstOrDefaultAsync(m => m.Key == TeamRecommendationCalibrationMetadataKey);
-
-		if (metadata == null || string.IsNullOrWhiteSpace(metadata.Value)) {
-			return new TeamRecommendationCalibrationState();
-		}
-
-		try {
-			var parsed = JsonSerializer.Deserialize<TeamRecommendationCalibrationState>(metadata.Value);
-			if (parsed?.Modes == null) {
-				return new TeamRecommendationCalibrationState();
-			}
-
-			return parsed;
-		} catch {
-			return new TeamRecommendationCalibrationState();
-		}
-	}
-
 	private async Task UpdateTeamRecommendationCalibrationStateAsync(GameDatabaseContext context, TeamRecommendationBacktestResponse backtest) {
 		if (backtest.MatchedTeamCount <= 0) {
 			return;
 		}
 
-		var state = await LoadTeamRecommendationCalibrationStateAsync(context);
-		var preferenceState = await LoadTeamRecommendationTrendPreferenceStateAsync(context);
+		var state = await _teamRecommendationStateStore.LoadCalibrationStateAsync(context);
+		var preferenceState = await _teamRecommendationStateStore.LoadTrendPreferenceStateAsync(context);
 		if (!state.Modes.TryGetValue(backtest.Mode, out var modeState)) {
 			modeState = new TeamRecommendationCalibrationModeState();
 			state.Modes[backtest.Mode] = modeState;
@@ -2726,8 +2708,7 @@ public class SyncService {
 		);
 
 		state.UpdatedAtUtc = DateTime.UtcNow;
-		var serialized = JsonSerializer.Serialize(state);
-		await UpdateSyncMetadataAsync(context, TeamRecommendationCalibrationMetadataKey, serialized);
+		await _teamRecommendationStateStore.SaveCalibrationStateAsync(context, state);
 	}
 
 	private static double ComputeResourcePressureScore(PlayerSnapshot? snapshot, InventorySnapshot? inventory) {

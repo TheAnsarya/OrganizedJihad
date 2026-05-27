@@ -904,6 +904,51 @@
 
 ## Session
 - Date: 2026-05-27
+- Session Number: 27
+- Scope: Continue open-issue execution by extracting Team Recommendation calibration/trend state persistence seams from `SyncService` (#175 continuation).
+
+## Summary
+- Created and implemented issue-backed slices #288-#293 as continuation work for #175.
+- Added Team Recommendation state-store abstraction and SyncMetadata-backed implementation for calibration/trend preference persistence.
+- Routed `SyncService` calibration/trend read-write flows through the injected state-store seam.
+- Added API tests covering state round-trip persistence, malformed metadata fallback, and SyncService compatibility with injected state-store.
+- Updated modernization roadmap with completed slices and boundary extraction notes.
+
+## Files Modified
+- api/Services/SyncService.cs
+- api/Services/TeamRecommendation/TeamRecommendationCalibrationStateMath.cs
+- api/Program.cs
+- ~docs/plans/architecture-modernization-roadmap.md
+- ~docs/copilot-chats/2026-05-27-requirements-item-icon-enrichment.md
+
+## Files Created
+- api/Services/TeamRecommendation/TeamRecommendationStateStore.cs
+- tests/OrganizedJihad.Api.Tests/TeamRecommendationStateStoreTests.cs
+
+## Issues Referenced
+- #175 Refactor: API service boundaries for Sync/Recommendation/Simulation
+- #288 Extract Team Recommendation calibration-state metadata load/save into dedicated state store service
+- #289 Add Team Recommendation state-store interface seam for SyncService injection
+- #290 Extract Team Recommendation trend-preference metadata load/save into dedicated state store service
+- #291 Route SyncService calibration/trend orchestration through injected state-store seam
+- #292 Add API tests covering Team Recommendation state-store persistence and malformed metadata fallback
+- #293 Document Team Recommendation state persistence boundary in architecture modernization roadmap
+
+## Validation
+- dotnet test tests/OrganizedJihad.Api.Tests/OrganizedJihad.Api.Tests.csproj: passed (56 tests)
+- dotnet test OrganizedJihad.sln: passed (95 tests)
+
+## Key Decisions
+- Kept endpoint payload contracts unchanged while extracting persistence to avoid behavior regressions.
+- Preserved existing constructors and added an explicit constructor overload with injected state-store to maintain test compatibility and DI evolution.
+
+## Known Follow-up
+- Continue #175 by extracting recommendation simulation orchestration seams from `SyncService` into dedicated modules.
+
+---
+
+## Session
+- Date: 2026-05-27
 - Session Number: 31
 - Scope: Execute a high-volume `uiManager` decomposition wave across battles/titans/pets/inventory, completing issues #252-#269.
 

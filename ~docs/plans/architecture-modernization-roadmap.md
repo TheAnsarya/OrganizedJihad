@@ -340,6 +340,30 @@
 - Status: Completed on `feature/204-architecture-modernization`.
 - Outcome target: isolate collected rewards aggregate/summary section rendering from `renderMail`.
 
+83. #288 Extract Team Recommendation calibration-state metadata load/save into dedicated state store service
+- Status: Completed on `feature/204-architecture-modernization`.
+- Outcome target: move calibration SyncMetadata persistence behind dedicated Team Recommendation state-store seam.
+
+84. #289 Add Team Recommendation state-store interface seam for SyncService injection
+- Status: Completed on `feature/204-architecture-modernization`.
+- Outcome target: reduce `SyncService` coupling by injecting an explicit Team Recommendation state persistence seam.
+
+85. #290 Extract Team Recommendation trend-preference metadata load/save into dedicated state store service
+- Status: Completed on `feature/204-architecture-modernization`.
+- Outcome target: move trend preference SyncMetadata persistence behind dedicated Team Recommendation state-store seam.
+
+86. #291 Route SyncService calibration/trend orchestration through injected state-store seam
+- Status: Completed on `feature/204-architecture-modernization`.
+- Outcome target: route calibration/trend preference flows through the injected Team Recommendation persistence seam.
+
+87. #292 Add API tests covering Team Recommendation state-store persistence and malformed metadata fallback
+- Status: Completed on `feature/204-architecture-modernization`.
+- Outcome target: verify state round-trip persistence and malformed metadata fallback behavior for trend/calibration state.
+
+88. #293 Document Team Recommendation state persistence boundary in architecture modernization roadmap
+- Status: Completed on `feature/204-architecture-modernization`.
+- Outcome target: keep modernization roadmap/session logs synchronized with the new Team Recommendation state-store boundary.
+
 ## Validation Strategy
 - API changes: run `dotnet test tests/OrganizedJihad.Api.Tests/OrganizedJihad.Api.Tests.csproj` and `dotnet test OrganizedJihad.sln`.
 - Userscript changes: run `yarn test --runInBand` and `yarn build`.
@@ -347,7 +371,7 @@
 
 ## Notes
 - Parallel issue creation caused issue-number drift; canonical mapping is documented in epic #206 comments.
-- Completed slices so far: #205, #208, #204, #207, #210, #211, #212, #213, #214, #215, #216, #217, #218, #219, #220, #221, #222, #223, #224, #225, #226, #227, #228, #229, #230, #231, #232, #233, #234, #235, #236, #237, #238, #239, #240, #241, #242, #243, #244, #245, #246, #247, #248, #249, #250, #251, #252, #253, #254, #255, #256, #257, #258, #259, #260, #261, #262, #263, #264, #265, #266, #267, #268, #269, #270, #271, #272, #273, #274, #275, #276, #277, #278, #279, #280, #281, #282, #283, #284, #285, #286, and #287 (API seams + controller split + userscript renderer/binder/helper extraction).
+- Completed slices so far: #205, #208, #204, #207, #210, #211, #212, #213, #214, #215, #216, #217, #218, #219, #220, #221, #222, #223, #224, #225, #226, #227, #228, #229, #230, #231, #232, #233, #234, #235, #236, #237, #238, #239, #240, #241, #242, #243, #244, #245, #246, #247, #248, #249, #250, #251, #252, #253, #254, #255, #256, #257, #258, #259, #260, #261, #262, #263, #264, #265, #266, #267, #268, #269, #270, #271, #272, #273, #274, #275, #276, #277, #278, #279, #280, #281, #282, #283, #284, #285, #286, #287, #288, #289, #290, #291, #292, and #293 (API seams + controller split + userscript renderer/binder/helper extraction + Team Recommendation state-store boundary extraction).
 - Existing unrelated dirty files remain intentionally untouched:
   - `userscript/package.json`
   - `~docs/oj-manual-prompts-log.txt`

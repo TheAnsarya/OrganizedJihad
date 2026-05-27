@@ -168,7 +168,7 @@ internal static class TeamRecommendationCalibrationStateMath {
 /// <summary>
 /// Serialized calibration state persisted in SyncMetadata.
 /// </summary>
-internal sealed class TeamRecommendationCalibrationState {
+public sealed class TeamRecommendationCalibrationState {
 	public Dictionary<string, TeamRecommendationCalibrationModeState> Modes { get; set; } = new(StringComparer.OrdinalIgnoreCase);
 	public DateTime UpdatedAtUtc { get; set; }
 }
@@ -176,7 +176,7 @@ internal sealed class TeamRecommendationCalibrationState {
 /// <summary>
 /// Serialized trend preference state persisted in SyncMetadata.
 /// </summary>
-internal sealed class TeamRecommendationTrendPreferenceState {
+public sealed class TeamRecommendationTrendPreferenceState {
 	public Dictionary<string, int> ModeTrendWindowDays { get; set; } = new(StringComparer.OrdinalIgnoreCase);
 	public DateTime UpdatedAtUtc { get; set; }
 }
@@ -184,7 +184,7 @@ internal sealed class TeamRecommendationTrendPreferenceState {
 /// <summary>
 /// Per-mode calibration aggregate and historical observations.
 /// </summary>
-internal sealed class TeamRecommendationCalibrationModeState {
+public sealed class TeamRecommendationCalibrationModeState {
 	public double SuggestedFrictionScale { get; set; } = 1d;
 	public int PreferredTrendWindowDays { get; set; } = 30;
 	public double MeanAbsoluteError { get; set; }
@@ -199,7 +199,7 @@ internal sealed class TeamRecommendationCalibrationModeState {
 /// <summary>
 /// Single calibration observation snapshot.
 /// </summary>
-internal sealed class TeamRecommendationCalibrationObservation {
+public sealed class TeamRecommendationCalibrationObservation {
 	public DateTime TimestampUtc { get; set; }
 	public double MeanAbsoluteError { get; set; }
 	public double MeanBrierScore { get; set; }
