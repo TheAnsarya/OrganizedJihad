@@ -15,9 +15,7 @@ import ProjectedItemCatalogResolver from './helpers/ProjectedItemCatalogResolver
 import TitanCompletionCalculator from './helpers/TitanCompletionCalculator.js';
 import PetCompletionCalculator from './helpers/PetCompletionCalculator.js';
 import { sortData, sortIndicator } from './helpers/dataBrowserSortHelpers.js';
-import { bindDataRowInteractions } from './binders/dataRowInteractionBinder.js';
-import { bindDataBrowserTableControls } from './binders/dataBrowserTableControlsBinder.js';
-import { bindDataBrowserMiscInteractions } from './binders/dataBrowserMiscBinder.js';
+import { bindDataBrowserViewInteractions } from './binders/dataBrowserViewOrchestrationBinder.js';
 import { bindDashboardFilters } from './binders/dashboardFiltersBinder.js';
 import { bindOverlayChromeControls } from './binders/overlayChromeControlsBinder.js';
 import { bindOverlayEscapeKey } from './binders/overlayEscapeKeyBinder.js';
@@ -26,7 +24,6 @@ import { bindSettingsHealthActions } from './binders/settingsHealthActionsBinder
 import { bindSettingsDataActions } from './binders/settingsDataActionsBinder.js';
 import { bindSettingsDisplayTracking } from './binders/settingsDisplayTrackingBinder.js';
 import { bindSettingsNotifications } from './binders/settingsNotificationBinder.js';
-import { bindProjectionInteractions } from './binders/projectionInteractionBinder.js';
 import { renderHeroRequirementsProjectionPanel } from './renderers/heroRequirementsProjectionRenderer.js';
 import { renderPagination, renderSearchBar } from './renderers/dataBrowserSharedRenderer.js';
 import {
@@ -4411,27 +4408,15 @@ class UIManager {
 		const vs = this._viewState[viewName];
 		if (!vs) return;
 
-		bindDataBrowserTableControls({
+		bindDataBrowserViewInteractions({
 			content,
 			viewState: vs,
 			viewName,
-			renderView: (nextView) => this.renderView(nextView),
-		});
-
-		bindDataRowInteractions({ content });
-
-		bindProjectionInteractions({
-			content,
 			heroesViewState: this._viewState.heroes || {},
-			saveProjectionSectionOpenPreference: (section, isOpen) => this._saveProjectionSectionOpenPreference(section, isOpen),
+			renderView: (nextView) => this.renderView(nextView),
 			renderHeroes: () => this.renderView('heroes'),
+			saveProjectionSectionOpenPreference: (section, isOpen) => this._saveProjectionSectionOpenPreference(section, isOpen),
 		});
-
-		bindDataBrowserMiscInteractions({
-			content,
-			renderResources: () => this.renderView('resources'),
-		});
-
 	}
 
 	/**
