@@ -904,6 +904,42 @@
 
 ## Session
 - Date: 2026-05-27
+- Session Number: 27
+- Scope: Complete issue #207 by decomposing userscript `uiManager` projection and diagnostics rendering logic into focused renderer modules.
+
+## Summary
+- Extracted heroes projection panel rendering from `uiManager` into `userscript/src/modules/renderers/heroRequirementsProjectionRenderer.js`.
+- Extracted install health diagnostics model/output rendering into `userscript/src/modules/renderers/installHealthDiagnosticsRenderer.js`.
+- Updated `uiManager` to consume renderer helpers while preserving existing user-visible behavior and controls.
+
+## Files Modified
+- userscript/src/modules/uiManager.js
+- ~docs/plans/architecture-modernization-roadmap.md
+- ~docs/copilot-chats/2026-05-27-requirements-item-icon-enrichment.md
+
+## Files Created
+- userscript/src/modules/renderers/heroRequirementsProjectionRenderer.js
+- userscript/src/modules/renderers/installHealthDiagnosticsRenderer.js
+
+## Issues Referenced
+- #206 Epic: Architecture modernization and module deepening across API/userscript
+- #207 Decompose userscript uiManager projection and diagnostics rendering modules
+
+## Validation
+- `yarn test --runInBand`: passed (18 suites, 706 tests)
+- `yarn build`: passed (webpack production build succeeded; existing bundle-size warnings only)
+
+## Key Decisions
+- Kept event wiring in `uiManager` for now and extracted rendering/model composition first to reduce risk.
+- Preserved output shape/markup semantics to avoid regressions in persisted projection controls and health-check UX.
+
+## Known Follow-up
+- Next modernization work can target listener/controller decomposition in userscript orchestration modules if needed.
+
+---
+
+## Session
+- Date: 2026-05-27
 - Session Number: 26
 - Scope: Commit pending API bootstrap file update and remove repository-level pause-for-confirmation wording for unexpected unrelated dirty files.
 

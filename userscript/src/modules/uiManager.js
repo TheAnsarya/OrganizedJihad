@@ -14,6 +14,11 @@ import HeroMaterialRequirementsCalculator from './helpers/HeroMaterialRequiremen
 import ProjectedItemCatalogResolver from './helpers/ProjectedItemCatalogResolver.js';
 import TitanCompletionCalculator from './helpers/TitanCompletionCalculator.js';
 import PetCompletionCalculator from './helpers/PetCompletionCalculator.js';
+import { renderHeroRequirementsProjectionPanel } from './renderers/heroRequirementsProjectionRenderer.js';
+import {
+	buildInstallHealthCheckModel,
+	renderInstallHealthDiagnosticsOutput,
+} from './renderers/installHealthDiagnosticsRenderer.js';
 import { TRACKING_CATEGORIES } from './gameTracker.js';
 import { decompressHeroStore, decompressTitanStore } from './heroCompression.js';
 import { resolveHeroName } from './heroNames.js';
@@ -2260,9 +2265,13 @@ class UIManager {
 	 * @private
 	 */
 	_renderHeroRequirementsPanel(projection, itemMetaMap = {}) {
-		if (!projection) {
-			return '';
-		}
+		return renderHeroRequirementsProjectionPanel({
+			projection,
+			itemMetaMap,
+			heroesViewState: this._viewState?.heroes || {},
+			prefStorage: this.prefStorage,
+			escapeHtml: (value) => this._escapeHtml(value),
+		});
 
 		const heroesViewState = this._viewState?.heroes || {};
 		const topItems = Array.isArray(projection.items) ? projection.items : [];
@@ -4622,46 +4631,12 @@ class UIManager {
 				this.idbStorage.getMetadata('currentPlayerId', 'unknown').catch(() => 'unknown'),
 			]);
 
-			const totalRecords = Object.values(stats).reduce((sum, value) => sum + Math.max(0, Number(value) || 0), 0);
-			const snapshots = Number(stats.snapshots || 0);
-			const heroRows = Number(stats.heroes || 0);
-			const playerBound = currentPlayerId && currentPlayerId !== 'unknown';
-
-			const checks = [
-				{
-					label: 'Local API reachable (http://localhost:5124)',
-					ok: apiOk,
-					hint: 'Run Install-OrganizedJihad.ps1 or start api with dotnet run --project api.',
-				},
-				{
-					label: 'Game account detected',
-					ok: playerBound,
-					hint: 'Open Hero Wars and wait for userGetInfo to be captured.',
-				},
-				{
-					label: 'Snapshot data captured',
-					ok: snapshots > 0,
-					hint: 'Play for 10-30 seconds to trigger initial API calls.',
-				},
-				{
-					label: 'Hero roster captured',
-					ok: heroRows > 0,
-					hint: 'Open the Heroes screen once to capture roster data.',
-				},
-			];
-
-			const passed = checks.filter((c) => c.ok).length;
-			const rows = checks.map((check) => {
-				const icon = check.ok ? 'OK' : 'FAIL';
-				const color = check.ok ? '#81c784' : '#ef9a9a';
-				const hint = check.ok ? '' : `<div style="color:#999;font-size:10px;margin-left:18px">${this._escapeHtml(check.hint)}</div>`;
-				return `<div style="margin-bottom:4px"><span style="color:${color}">${icon}</span> ${this._escapeHtml(check.label)}</div>${hint}`;
-			}).join('');
-
-			output.innerHTML =
-				`<div style="margin-bottom:6px"><strong>${passed}/${checks.length}</strong> checks passed • ` +
-				`${totalRecords.toLocaleString()} records captured locally</div>` +
-				rows;
+			const healthModel = buildInstallHealthCheckModel({ apiOk, stats, currentPlayerId });
+			output.innerHTML = renderInstallHealthDiagnosticsOutput(
+				healthModel.checks,
+				healthModel.totalRecords,
+				(value) => this._escapeHtml(value),
+			);
 		} catch (err) {
 			output.textContent = 'Health check failed. See console for details.';
 			console.error('[OrganizedJihad] Health check failed:', err);

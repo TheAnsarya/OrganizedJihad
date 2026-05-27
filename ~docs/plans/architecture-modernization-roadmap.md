@@ -25,7 +25,7 @@
 - Outcome target: separate read-focused controller/module while preserving route compatibility.
 
 4. #207 Decompose userscript uiManager projection and diagnostics rendering modules
-- Status: Planned.
+- Status: Completed on `feature/204-architecture-modernization`.
 - Outcome target: extract projection/diagnostics render seams to improve maintainability and test focus.
 
 ## Validation Strategy
@@ -35,7 +35,7 @@
 
 ## Notes
 - Parallel issue creation caused issue-number drift; canonical mapping is documented in epic #206 comments.
-- Completed slices so far: #205, #208, and #204 (API metadata seams + controller responsibility split).
+- Completed slices so far: #205, #208, #204, and #207 (API seams + controller split + userscript renderer extraction).
 - Existing unrelated dirty files remain intentionally untouched:
   - `userscript/package.json`
   - `~docs/oj-manual-prompts-log.txt`
