@@ -32,6 +32,12 @@ class HeroMaterialRequirementsCalculator {
 	/** @type {number} Number of projected top items to keep by default */
 	static DEFAULT_TOP_ITEM_LIMIT = 20;
 
+	/** @type {number} Number of top items to keep for each tier summary */
+	static DEFAULT_TIER_TOP_ITEM_LIMIT = 8;
+
+	/** @type {Array<string>} Deterministic progression tier order */
+	static COLOR_TIER_ORDER = ['Grey', 'Green', 'Blue', 'Violet', 'Orange', 'Red+'];
+
 	/**
 	 * Build projected item requirements for an entire hero roster.
 	 *
@@ -58,6 +64,19 @@ class HeroMaterialRequirementsCalculator {
 	 *  totalShortageItems: number,
 	 *  distinctItems: number,
 	 *  confidenceScore: number,
+	 *  tierSummaries: Array<{
+	 *   tierName: string,
+	 *   totalProjectedItems: number,
+	 *   totalOwnedForProjectedItems: number,
+	 *   totalShortageItems: number,
+	 *   distinctItems: number,
+	 *   items: Array<{
+	 *    itemId: string,
+	 *    quantity: number,
+	 *    ownedQuantity: number,
+	 *    shortageQuantity: number
+	 *   }>
+	 *  }>,
 	 *  coverage: {
 	 *   levelUpgradeSamples: number,
 	 *   colorUpgradeSamples: number,
@@ -85,12 +104,14 @@ class HeroMaterialRequirementsCalculator {
 		const targetLevel = Math.max(1, Number(input.targetLevel) || this.DEFAULT_TARGET_LEVEL);
 		const targetColorRank = Math.max(0, Number(input.targetColorRank) || this.DEFAULT_TARGET_COLOR_RANK);
 		const topItemLimit = Math.max(1, Number(input.topItemLimit) || this.DEFAULT_TOP_ITEM_LIMIT);
+		const topTierItemLimit = Math.max(1, Number(input.topTierItemLimit) || this.DEFAULT_TIER_TOP_ITEM_LIMIT);
 
 		const levelModel = this._buildLevelDemandModel(heroUpgrades, inventoryItemUsages);
 		const colorModel = this._buildColorDemandModel(heroUpgrades, equipmentChanges, inventoryItemUsages);
 
 		const projectedLevelItems = this._emptyTotals();
 		const projectedColorItems = this._emptyTotals();
+		const projectedColorItemsByTier = this._buildEmptyTierTotals();
 		let totalLevelDeficit = 0;
 		let totalColorDeficit = 0;
 
@@ -112,8 +133,12 @@ class HeroMaterialRequirementsCalculator {
 			if (colorDeficit > 0) {
 				for (let step = currentColor + 1; step <= targetColorRank; step++) {
 					const perStepDemand = colorModel.perStepByRank.get(step) || colorModel.globalPerStepDemand;
+					const tierName = this._tierNameForColorRank(step);
+					const tierTotals = projectedColorItemsByTier[tierName] || this._emptyTotals();
+					projectedColorItemsByTier[tierName] = tierTotals;
 					for (const [itemId, perStep] of Object.entries(perStepDemand)) {
 						this._addTotal(projectedColorItems, itemId, perStep);
+						this._addTotal(tierTotals, itemId, perStep);
 					}
 				}
 			}
@@ -146,6 +171,7 @@ class HeroMaterialRequirementsCalculator {
 		const totalProjectedItems = fullItems.reduce((sum, entry) => sum + entry.quantity, 0);
 		const totalOwnedForProjectedItems = fullItems.reduce((sum, entry) => sum + Math.min(entry.ownedQuantity, entry.quantity), 0);
 		const totalShortageItems = fullItems.reduce((sum, entry) => sum + entry.shortageQuantity, 0);
+		const tierSummaries = this._buildTierSummaries(projectedColorItemsByTier, ownedItemTotals, topTierItemLimit);
 		const confidenceScore = this._calculateConfidence(levelModel, colorModel);
 
 		return {
@@ -161,6 +187,7 @@ class HeroMaterialRequirementsCalculator {
 			totalShortageItems,
 			distinctItems: fullItems.length,
 			confidenceScore,
+			tierSummaries,
 			coverage: {
 				levelUpgradeSamples: levelModel.levelUpgradeSamples,
 				colorUpgradeSamples: colorModel.colorUpgradeSamples,
@@ -171,6 +198,78 @@ class HeroMaterialRequirementsCalculator {
 			},
 			items: sortedItems,
 		};
+	}
+
+	/**
+	 * Build deterministic per-tier summaries for color progression materials.
+	 *
+	 * @param {Record<string, ItemTotals>} tierTotalsMap - Tier totals keyed by tier name
+	 * @param {ItemTotals} ownedItemTotals - Owned inventory totals keyed by item ID
+	 * @param {number} topTierItemLimit - Max top items per tier
+	 * @returns {Array<object>} Tier summary array
+	 */
+	static _buildTierSummaries(tierTotalsMap, ownedItemTotals, topTierItemLimit) {
+		const summaries = [];
+		for (const tierName of this.COLOR_TIER_ORDER) {
+			const totals = tierTotalsMap[tierName] || this._emptyTotals();
+			const entries = Object.entries(totals)
+				.map(([itemId, quantity]) => {
+					const projectedQuantity = Math.ceil(quantity);
+					const ownedQuantity = Math.max(0, Math.floor(this._toNumber(ownedItemTotals[itemId])));
+					const shortageQuantity = Math.max(0, projectedQuantity - ownedQuantity);
+					return {
+						itemId,
+						quantity: projectedQuantity,
+						ownedQuantity,
+						shortageQuantity,
+					};
+				})
+				.filter((entry) => entry.quantity > 0)
+				.sort((a, b) => b.shortageQuantity - a.shortageQuantity || b.quantity - a.quantity || a.itemId.localeCompare(b.itemId));
+
+			const totalProjectedItems = entries.reduce((sum, entry) => sum + entry.quantity, 0);
+			const totalOwnedForProjectedItems = entries.reduce((sum, entry) => sum + Math.min(entry.ownedQuantity, entry.quantity), 0);
+			const totalShortageItems = entries.reduce((sum, entry) => sum + entry.shortageQuantity, 0);
+
+			summaries.push({
+				tierName,
+				totalProjectedItems,
+				totalOwnedForProjectedItems,
+				totalShortageItems,
+				distinctItems: entries.length,
+				items: entries.slice(0, topTierItemLimit),
+			});
+		}
+
+		return summaries;
+	}
+
+	/**
+	 * Build an empty tier totals container in deterministic tier order.
+	 *
+	 * @returns {Record<string, ItemTotals>} Empty tier totals map
+	 */
+	static _buildEmptyTierTotals() {
+		const map = {};
+		for (const tierName of this.COLOR_TIER_ORDER) {
+			map[tierName] = this._emptyTotals();
+		}
+		return map;
+	}
+
+	/**
+	 * Map a color rank to high-level progression tier.
+	 *
+	 * @param {number} rank - Numeric hero color rank
+	 * @returns {string} Tier label
+	 */
+	static _tierNameForColorRank(rank) {
+		if (rank <= 0) return 'Grey';
+		if (rank <= 2) return 'Green';
+		if (rank <= 5) return 'Blue';
+		if (rank <= 9) return 'Violet';
+		if (rank <= 14) return 'Orange';
+		return 'Red+';
 	}
 
 	/**

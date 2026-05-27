@@ -2274,9 +2274,23 @@ class UIManager {
 		}).join('');
 
 		const coverage = projection.coverage || {};
+		const tierSummaries = Array.isArray(projection.tierSummaries) ? projection.tierSummaries : [];
 		const totalNeeds = Number(projection.totalProjectedItems || 0).toLocaleString();
 		const totalOwned = Number(projection.totalOwnedForProjectedItems || 0).toLocaleString();
 		const totalShortage = Number(projection.totalShortageItems || 0).toLocaleString();
+		const tierRows = tierSummaries.map((tier) => {
+			const need = Number(tier.totalProjectedItems || 0);
+			const owned = Number(tier.totalOwnedForProjectedItems || 0);
+			const shortage = Number(tier.totalShortageItems || 0);
+			const shortageStyle = shortage > 0 ? 'color:#ef9a9a;font-weight:700' : 'color:#a5d6a7;font-weight:700';
+			return `<tr>` +
+				`<td><strong>${this._escapeHtml(tier.tierName || 'Unknown')}</strong></td>` +
+				`<td class="oj-num">${need.toLocaleString()}</td>` +
+				`<td class="oj-num">${owned.toLocaleString()}</td>` +
+				`<td class="oj-num" style="${shortageStyle}">${shortage.toLocaleString()}</td>` +
+				`<td class="oj-num oj-muted" style="font-size:11px">${Number(tier.distinctItems || 0).toLocaleString()}</td>` +
+			`</tr>`;
+		}).join('');
 
 		return `
 			<div class="oj-section" style="margin-bottom:10px;padding:10px 12px">
@@ -2295,6 +2309,10 @@ class UIManager {
 					<div class="oj-muted" style="font-size:11px">Shortage: <strong style="color:#ef9a9a">${totalShortage}</strong></div>
 					<div class="oj-muted" style="font-size:11px">Signals: lvlUp ${Number(coverage.levelUpgradeSamples || 0)}, colorUp ${Number(coverage.colorUpgradeSamples || 0)}, equip ${Number(coverage.equipmentChangeSamples || 0)}, itemUse ${Number(coverage.itemUsageSamples || 0)}</div>
 				</div>
+				${tierRows
+					? `<table class="oj-table" style="margin-top:4px"><thead><tr><th>Tier</th><th>Needed</th><th>Owned</th><th>Shortage</th><th>Distinct</th></tr></thead><tbody>${tierRows}</tbody></table>`
+					: ''
+				}
 				${hasSignal
 					? `<table class="oj-table" style="margin-top:4px"><thead><tr><th>Item</th><th>Needed</th><th>Owned</th><th>Shortage</th><th>Mix</th></tr></thead><tbody>${itemRows}</tbody></table>`
 					: `<p class="oj-empty" style="margin:0">Not enough tracked upgrade/equipment history yet to estimate concrete item IDs. Keep playing with tracking enabled and this panel will auto-fill.</p>`

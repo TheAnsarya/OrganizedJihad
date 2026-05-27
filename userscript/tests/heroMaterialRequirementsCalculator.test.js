@@ -108,6 +108,63 @@ describe('HeroMaterialRequirementsCalculator', () => {
 			expect(result.totalProjectedItems).toBeGreaterThan(result.items[0].quantity);
 		});
 
+		test('builds deterministic tier summaries for color progression', () => {
+			const result = HeroMaterialRequirementsCalculator.calculateProjectedRequirements({
+				heroes: [{ heroId: 1, level: 120, color: 10 }],
+				heroUpgrades: [
+					{ upgradeType: 'color', colorRankBefore: 9, colorRankAfter: 10 },
+				],
+				equipmentChanges: [
+					{ heroColorRank: 11, materialsConsumed: JSON.stringify({ orange_fragment: 5 }) },
+					{ heroColorRank: 15, materialsConsumed: JSON.stringify({ red_fragment: 7 }) },
+				],
+				targetLevel: 130,
+				targetColorRank: 19,
+				topTierItemLimit: 5,
+			});
+
+			expect(Array.isArray(result.tierSummaries)).toBe(true);
+			expect(result.tierSummaries.map((t) => t.tierName)).toEqual([
+				'Grey',
+				'Green',
+				'Blue',
+				'Violet',
+				'Orange',
+				'Red+',
+			]);
+
+			const orangeTier = result.tierSummaries.find((t) => t.tierName === 'Orange');
+			const redTier = result.tierSummaries.find((t) => t.tierName === 'Red+');
+			expect(orangeTier.totalProjectedItems).toBeGreaterThan(0);
+			expect(redTier.totalProjectedItems).toBeGreaterThan(0);
+			expect(redTier.items.some((i) => i.itemId === 'red_fragment')).toBe(true);
+		});
+
+		test('computes owned and shortage values in tier summaries', () => {
+			const result = HeroMaterialRequirementsCalculator.calculateProjectedRequirements({
+				heroes: [{ heroId: 1, level: 120, color: 14 }],
+				heroUpgrades: [
+					{ upgradeType: 'color', colorRankBefore: 13, colorRankAfter: 14 },
+				],
+				equipmentChanges: [
+					{ heroColorRank: 15, materialsConsumed: JSON.stringify({ red_fragment: 10 }) },
+				],
+				inventoryData: {
+					consumable: {
+						red_fragment: 3,
+					},
+				},
+				targetColorRank: 19,
+				topTierItemLimit: 5,
+			});
+
+			const redTier = result.tierSummaries.find((t) => t.tierName === 'Red+');
+			expect(redTier).toBeDefined();
+			expect(redTier.totalProjectedItems).toBeGreaterThan(0);
+			expect(redTier.totalOwnedForProjectedItems).toBeGreaterThan(0);
+			expect(redTier.totalShortageItems).toBeGreaterThan(0);
+		});
+
 	test('falls back cleanly with sparse signals', () => {
 		const result = HeroMaterialRequirementsCalculator.calculateProjectedRequirements({
 			heroes: [{ heroId: 1, level: 100, color: 10 }],

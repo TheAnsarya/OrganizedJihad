@@ -303,3 +303,44 @@
 
 ## Key Decisions
 - Implemented as an inline header action to preserve existing Settings workflow while improving navigation discoverability.
+
+---
+
+## Session
+- Date: 2026-05-27
+- Session Number: 10
+- Scope: Add userscript tier-by-tier hero material aggregation to max rank with overall totals.
+
+## Summary
+- Created and implemented issue #191.
+- Extended `HeroMaterialRequirementsCalculator` to compute deterministic color-tier summaries (`Grey`, `Green`, `Blue`, `Violet`, `Orange`, `Red+`) across roster progression to target rank.
+- Added per-tier aggregate totals:
+	- projected needed quantity
+	- owned quantity (matching IDs)
+	- shortage quantity
+	- distinct item count
+- Kept existing overall projection totals and shortage behavior intact.
+- Updated Heroes panel to render a tier summary table above top item rows.
+- Added tests for tier ordering and owned/shortage behavior in tier summaries.
+
+## Files Modified
+- userscript/src/modules/helpers/HeroMaterialRequirementsCalculator.js
+- userscript/src/modules/uiManager.js
+- userscript/tests/heroMaterialRequirementsCalculator.test.js
+- ~docs/copilot-chats/2026-05-27-requirements-item-icon-enrichment.md
+
+## Issues Referenced
+- #191 Add tier-by-tier hero material requirement aggregation to max rank with overall totals
+
+## Validation
+- yarn test heroMaterialRequirementsCalculator.test.js --runInBand: passed (7 tests)
+- yarn test --runInBand: passed (18 suites, 705 tests)
+- yarn build: passed (version 0.9.100)
+
+## Key Decisions
+- Tier summaries are grouped by color-rank bands to keep output stable and easy to scan (`Red+` includes Red and higher).
+- Tier summaries aggregate color progression requirements only, while overall totals still combine level and color projections.
+
+## Known Follow-up
+- Add optional expandable per-tier top-item details in UI for troubleshooting exact material drivers.
+- Add exact deterministic per-hero/per-rank recipe support (replace inferred per-step model where catalogs are available).
