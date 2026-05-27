@@ -242,6 +242,80 @@
 			</div>
 		</div>
 	</div>
+
+	<div class="row mt-4">
+		<div class="col-lg-10">
+			<div class="card border-secondary">
+				<div class="card-header bg-secondary text-white d-flex justify-content-between align-items-center">
+					<h5 class="mb-0">Projected Item Catalog Parity</h5>
+					<button class="btn btn-sm btn-light" @onclick="RefreshProjectedItemCatalogAsync">Refresh</button>
+				</div>
+				<div class="card-body">
+					@if (!string.IsNullOrWhiteSpace(ProjectedCatalogStatusMessage)) {
+						<div class="alert alert-secondary py-2 mb-3">
+							<small>@ProjectedCatalogStatusMessage</small>
+						</div>
+					}
+
+					@if (ProjectedItemCatalog is not null) {
+						<div class="row g-3 mb-3">
+							<div class="col-md-3">
+								<div class="border rounded p-2">
+									<div class="text-muted small">Generated (UTC)</div>
+									<div class="fw-semibold">@ProjectedItemCatalog.GeneratedAtUtc.ToString("yyyy-MM-dd HH:mm:ss")</div>
+								</div>
+							</div>
+							<div class="col-md-3">
+								<div class="border rounded p-2">
+									<div class="text-muted small">Canonical Items</div>
+									<div class="fw-semibold">@ProjectedItemCatalog.Items.Count</div>
+								</div>
+							</div>
+							<div class="col-md-3">
+								<div class="border rounded p-2">
+									<div class="text-muted small">Alias Mappings</div>
+									<div class="fw-semibold">@ProjectedItemCatalog.Aliases.Count</div>
+								</div>
+							</div>
+							<div class="col-md-3">
+								<div class="border rounded p-2">
+									<div class="text-muted small">Sample Rows</div>
+									<div class="fw-semibold">@ProjectedCatalogSampleRows.Count</div>
+								</div>
+							</div>
+						</div>
+
+						@if (ProjectedCatalogSampleRows.Any()) {
+							<div class="table-responsive">
+								<table class="table table-sm table-striped align-middle mb-0">
+									<thead>
+										<tr>
+											<th>Item ID</th>
+											<th>Name</th>
+											<th>Category</th>
+											<th>Icon</th>
+										</tr>
+									</thead>
+									<tbody>
+										@foreach (var item in ProjectedCatalogSampleRows) {
+											<tr>
+												<td><code>@item.ItemId</code></td>
+												<td>@item.DisplayName</td>
+												<td><span class="badge bg-dark">@item.Category</span></td>
+												<td>@item.Icon</td>
+											</tr>
+										}
+									</tbody>
+								</table>
+							</div>
+						}
+					} else {
+						<p class="text-muted mb-0">Projected item catalog not loaded yet.</p>
+					}
+				</div>
+			</div>
+		</div>
+	</div>
 </div>
 
 @code {
@@ -249,6 +323,7 @@
 	private string StatusMessage { get; set; } = string.Empty;
 	private string TeamRecommendationStatusMessage { get; set; } = string.Empty;
 	private string CatalogStatusMessage { get; set; } = string.Empty;
+	private string ProjectedCatalogStatusMessage { get; set; } = string.Empty;
 	private string SelectedCalibrationMode { get; set; } = "arena";
 	private List<TeamRecommendationModePreferenceModel> TeamRecommendationModePreferences { get; set; } = [];
 	private TeamRecommendationCalibrationResponseModel? TeamCalibration { get; set; }
@@ -261,11 +336,14 @@
 	private string CatalogCategory { get; set; } = string.Empty;
 	private string CatalogVerificationStatus { get; set; } = string.Empty;
 	private string CatalogSort { get; set; } = "confidence";
+	private ProjectedItemCatalogResponseModel? ProjectedItemCatalog { get; set; }
+	private List<ProjectedItemCatalogEntryModel> ProjectedCatalogSampleRows { get; set; } = [];
 
 	protected override void OnInitialized() {
 		RecommendationApiBaseUrl = RecommendationSettings.GetRecommendationApiBaseUrl();
 		_ = InitializeTeamRecommendationAsync();
 		_ = InitializeCatalogAsync();
+		_ = InitializeProjectedItemCatalogAsync();
 	}
 
 	private async Task InitializeTeamRecommendationAsync() {
@@ -361,6 +439,10 @@
 		await RefreshCatalogAsync();
 	}
 
+	private async Task InitializeProjectedItemCatalogAsync() {
+		await RefreshProjectedItemCatalogAsync();
+	}
+
 	private Task SaveAsync() {
 		var saved = RecommendationSettings.SaveRecommendationApiBaseUrl(RecommendationApiBaseUrl);
 		RecommendationApiBaseUrl = saved;
@@ -433,6 +515,28 @@
 		}
 	}
 
+	private async Task RefreshProjectedItemCatalogAsync() {
+		try {
+			var baseUrl = RecommendationSettings.GetRecommendationApiBaseUrl().TrimEnd('/');
+			using var client = new HttpClient { Timeout = TimeSpan.FromSeconds(3) };
+			var payload = await client.GetFromJsonAsync<ProjectedItemCatalogResponseModel>($"{baseUrl}/api/sync/projections/item-catalog");
+
+			ProjectedItemCatalog = payload;
+			ProjectedCatalogSampleRows = payload?.Items
+				.OrderBy(i => i.ItemId)
+				.Take(20)
+				.ToList() ?? [];
+
+			ProjectedCatalogStatusMessage = payload is null
+				? "Projected item catalog endpoint returned no payload."
+				: $"Loaded {payload.Items.Count} canonical items and {payload.Aliases.Count} aliases.";
+		} catch (Exception ex) {
+			ProjectedItemCatalog = null;
+			ProjectedCatalogSampleRows = [];
+			ProjectedCatalogStatusMessage = $"Projected item catalog unavailable: {ex.Message}";
+		}
+	}
+
 	private sealed class ToolCatalogResponseModel {
 		public List<ToolCatalogEntryModel> Tools { get; set; } = [];
 	}
@@ -490,6 +594,19 @@
 		public double MeanBrierScore { get; set; }
 		public double PredictionBias { get; set; }
 		public double SuggestedFrictionScale { get; set; }
+	}
+
+	private sealed class ProjectedItemCatalogResponseModel {
+		public DateTime GeneratedAtUtc { get; set; }
+		public List<ProjectedItemCatalogEntryModel> Items { get; set; } = [];
+		public Dictionary<string, string> Aliases { get; set; } = [];
+	}
+
+	private sealed class ProjectedItemCatalogEntryModel {
+		public string ItemId { get; set; } = string.Empty;
+		public string DisplayName { get; set; } = string.Empty;
+		public string Category { get; set; } = string.Empty;
+		public string Icon { get; set; } = string.Empty;
 	}
 
 	private static bool IsStale(DateTime lastReviewedUtc) {

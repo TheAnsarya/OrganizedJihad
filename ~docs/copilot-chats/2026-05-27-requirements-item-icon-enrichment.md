@@ -167,3 +167,37 @@
 - Decide if API payload should expose icon glyphs or stable icon asset tokens only.
 - Add desktop-app consumption path for `/api/sync/projections/item-catalog`.
 - Consider moving projected item catalog constants into a shared contract package for C#/JS parity.
+
+---
+
+## Session
+- Date: 2026-05-27
+- Session Number: 6
+- Scope: Add desktop-app consumption and UI parity for projected item catalog API endpoint.
+
+## Summary
+- Implemented issue #187 by adding desktop UI/API consumption for projected item catalog parity in Settings.
+- Added a new Settings card that calls `GET /api/sync/projections/item-catalog` and displays:
+	- Generated UTC timestamp
+	- Canonical item count
+	- Alias mapping count
+	- Deterministic sample rows (sorted, first 20)
+- Added graceful failure handling with user-visible status messaging when endpoint is unavailable.
+
+## Files Modified
+- desktop-app/Components/Pages/Settings.razor
+
+## Issues Referenced
+- #187 Consume projected item catalog endpoint in desktop-app UI
+
+## Validation
+- dotnet test OrganizedJihad.sln: passed (91 tests)
+- Razor diagnostics for Settings page: no errors
+
+## Key Decisions
+- Reused existing Settings API-consumption pattern (short-timeout `HttpClient` + typed payload models) to keep implementation consistent with existing Team Recommendation and Tool Catalog cards.
+- Kept this as a Settings card instead of creating a standalone page to ship parity quickly while minimizing navigation churn.
+
+## Known Follow-up
+- If this view becomes frequently used, promote it from Settings to a dedicated page under Economy or System.
+- Consider extracting repeated API call logic in Settings into shared desktop service abstractions.
