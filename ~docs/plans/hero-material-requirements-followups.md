@@ -49,7 +49,8 @@ Status update:
 - Optional post-install health-check execution is now available in installer via `-RunInstallHealthCheck` plus `-InstallHealthCheckJson` and `-InstallHealthCheckOpen` modes.
 - Browser-open modes and JSON output are now implemented for `yarn install:check` (`--json`, `--open [failed|required|all]`).
 - Installer now supports one-click diagnostics entry-point opening after setup via `-OpenUserscriptDiagnostics`.
-- Remaining: optional convenience switch that combines health-check + diagnostics opening for first-run flows.
+- Convenience first-run installer bundle is now implemented via `-FirstRunDiagnostics` (implies health-check + diagnostics opening + failed-endpoint browser-open default).
+- Remaining: optional alias naming (`-QuickStart`) for switch discoverability.
 
 ## Suggested Next Slices
 - Slice A: Deterministic recipe catalog ingestion (exact per-rank ingredient trees).

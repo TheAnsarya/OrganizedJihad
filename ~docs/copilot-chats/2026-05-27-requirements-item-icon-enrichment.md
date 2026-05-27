@@ -740,3 +740,40 @@
 
 ## Known Follow-up
 - Consider a convenience switch that combines post-install health check (`--open failed`) with diagnostics entry-point opening.
+
+---
+
+## Session
+- Date: 2026-05-27
+- Session Number: 22
+- Scope: Add a one-switch first-run diagnostics bundle for installer flows.
+
+## Summary
+- Created and implemented issue #203.
+- Added installer switch `-FirstRunDiagnostics` as a convenience bundle.
+- `-FirstRunDiagnostics` now implies:
+	- `-RunInstallHealthCheck`
+	- `-OpenUserscriptDiagnostics`
+	- health-check `--open failed` mode when `-InstallHealthCheckOpen` is not explicitly provided
+- Preserved explicit flag override behavior via `$PSBoundParameters` for `-InstallHealthCheckOpen`.
+- Updated install guide with one-command first-run diagnostics example.
+
+## Files Modified
+- Install-OrganizedJihad.ps1
+- userscript/INSTALL.md
+- ~docs/copilot-chats/2026-05-27-requirements-item-icon-enrichment.md
+
+## Issues Referenced
+- #203 Add convenience installer switch for first-run diagnostics bundle
+
+## Validation
+- PowerShell parse check for installer script: passed
+- yarn test --runInBand: passed (18 suites, 706 tests)
+- yarn build: passed (version 0.9.112)
+
+## Key Decisions
+- Implemented bundle behavior as effective runtime flags to avoid changing default behavior and to keep existing individual switches intact.
+- Used explicit-parameter detection (`$PSBoundParameters.ContainsKey`) so user-supplied `-InstallHealthCheckOpen` values are respected.
+
+## Known Follow-up
+- Consider adding a `-QuickStart` alias switch that maps to `-FirstRunDiagnostics` for discoverability.

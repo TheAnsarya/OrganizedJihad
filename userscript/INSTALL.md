@@ -38,6 +38,17 @@ Optional JSON output from installer-triggered health check:
 pwsh -ExecutionPolicy Bypass -File .\Install-OrganizedJihad.ps1 -RunInstallHealthCheck -InstallHealthCheckJson
 ```
 
+One-command first-run diagnostics bundle:
+
+```powershell
+pwsh -ExecutionPolicy Bypass -File .\Install-OrganizedJihad.ps1 -FirstRunDiagnostics
+```
+
+This implies:
+- `-RunInstallHealthCheck`
+- `-InstallHealthCheckOpen failed` (unless explicitly overridden)
+- `-OpenUserscriptDiagnostics`
+
 Open diagnostics entry points automatically after install:
 
 ```powershell

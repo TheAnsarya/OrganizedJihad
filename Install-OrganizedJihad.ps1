@@ -3,6 +3,7 @@ param(
 	[string]$ApiUrl = 'http://localhost:5124',
 	[switch]$SkipTampermonkeyBootstrap,
 	[switch]$SkipYarnInstall,
+	[switch]$FirstRunDiagnostics,
 	[switch]$RunInstallHealthCheck,
 	[switch]$InstallHealthCheckJson,
 	[switch]$OpenUserscriptDiagnostics,
@@ -99,6 +100,20 @@ $userscriptInstallDir = Join-Path $InstallRoot 'userscript'
 $apiExecutablePath = Join-Path $apiInstallDir 'OrganizedJihad.Api.exe'
 $taskName = 'OrganizedJihad.Api.Autostart'
 
+$effectiveRunInstallHealthCheck = $RunInstallHealthCheck
+$effectiveOpenUserscriptDiagnostics = $OpenUserscriptDiagnostics
+$effectiveInstallHealthCheckOpen = $InstallHealthCheckOpen
+
+if ($FirstRunDiagnostics) {
+	$effectiveRunInstallHealthCheck = $true
+	$effectiveOpenUserscriptDiagnostics = $true
+
+	# Respect explicit -InstallHealthCheckOpen value when provided.
+	if (-not $PSBoundParameters.ContainsKey('InstallHealthCheckOpen')) {
+		$effectiveInstallHealthCheckOpen = 'failed'
+	}
+}
+
 Write-Step "Validating prerequisites"
 Assert-Command -Name 'dotnet' -HelpText 'Install .NET SDK 10 preview or later.'
 Assert-Command -Name 'node' -HelpText 'Install Node.js 18+.'
@@ -151,7 +166,7 @@ if (-not $SkipTampermonkeyBootstrap) {
 	}
 }
 
-if ($RunInstallHealthCheck) {
+if ($effectiveRunInstallHealthCheck) {
 	Write-Step 'Running userscript install health check.'
 	$healthCheckScript = Join-Path $userscriptDir 'scripts\install-health-check.mjs'
 	if (-not (Test-Path -Path $healthCheckScript)) {
@@ -162,8 +177,8 @@ if ($RunInstallHealthCheck) {
 	if ($InstallHealthCheckJson) {
 		$healthCheckArgs += '--json'
 	}
-	if ($InstallHealthCheckOpen -ne 'none') {
-		$healthCheckArgs += @('--open', $InstallHealthCheckOpen)
+	if ($effectiveInstallHealthCheckOpen -ne 'none') {
+		$healthCheckArgs += @('--open', $effectiveInstallHealthCheckOpen)
 	}
 
 	& node @healthCheckArgs
@@ -174,7 +189,7 @@ if ($RunInstallHealthCheck) {
 	}
 }
 
-if ($OpenUserscriptDiagnostics) {
+if ($effectiveOpenUserscriptDiagnostics) {
 	Write-Step 'Opening userscript diagnostics entry points.'
 	$apiHealthUrl = "$ApiUrl/api/sync/health"
 	$apiDocsUrl = "$ApiUrl/api/sync"
@@ -201,3 +216,4 @@ Write-Host '- Confirm Tampermonkey has the OrganizedJihad script enabled'
 Write-Host '- Verify API health at http://localhost:5124/api/sync/health'
 Write-Host '- Optional: rerun check with browser-open failures: yarn install:check --open failed'
 Write-Host '- Optional: open diagnostics entry points automatically: -OpenUserscriptDiagnostics'
+Write-Host '- Optional: run first-run diagnostics bundle: -FirstRunDiagnostics'
