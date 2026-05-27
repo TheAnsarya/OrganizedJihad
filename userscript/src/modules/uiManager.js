@@ -20,6 +20,7 @@ import { bindDataBrowserMiscInteractions } from './binders/dataBrowserMiscBinder
 import { bindSettingsHealthActions } from './binders/settingsHealthActionsBinder.js';
 import { bindSettingsDataActions } from './binders/settingsDataActionsBinder.js';
 import { bindSettingsDisplayTracking } from './binders/settingsDisplayTrackingBinder.js';
+import { bindSettingsNotifications } from './binders/settingsNotificationBinder.js';
 import { bindProjectionInteractions } from './binders/projectionInteractionBinder.js';
 import { renderHeroRequirementsProjectionPanel } from './renderers/heroRequirementsProjectionRenderer.js';
 import {
@@ -4317,52 +4318,10 @@ class UIManager {
 			gameTracker: this.gameTracker,
 		});
 
-		// ── Notification settings (#52) ─────────────────────────────────
-		if (this.notificationManager) {
-			const nm = this.notificationManager;
-
-			// Master toggle
-			const masterCb = this.overlay.querySelector('#oj-notify-master');
-			if (masterCb) {
-				masterCb.addEventListener('change', (e) => {
-					nm.enabled = e.target.checked;
-					// Enable/disable child controls
-					const typeCbs = this.overlay.querySelectorAll('[data-notify-type]');
-					for (const cb of typeCbs) cb.disabled = !e.target.checked;
-					const quietStart = this.overlay.querySelector('#oj-quiet-start');
-					const quietEnd = this.overlay.querySelector('#oj-quiet-end');
-					if (quietStart) quietStart.disabled = !e.target.checked;
-					if (quietEnd) quietEnd.disabled = !e.target.checked;
-				});
-			}
-
-			// Request permission link
-			const requestLink = this.overlay.querySelector('#oj-notify-request');
-			if (requestLink) {
-				requestLink.addEventListener('click', async (e) => {
-					e.preventDefault();
-					const result = await nm.requestPermission();
-					requestLink.textContent = result === 'granted' ? '\u2705 Granted' : `\u274C ${result}`;
-				});
-			}
-
-			// Per-type toggles
-			const typeCbs = this.overlay.querySelectorAll('[data-notify-type]');
-			for (const cb of typeCbs) {
-				cb.addEventListener('change', (e) => {
-					nm.setTypeEnabled(e.target.dataset.notifyType, e.target.checked);
-				});
-			}
-
-			// Quiet hours inputs
-			const quietStart = this.overlay.querySelector('#oj-quiet-start');
-			const quietEnd = this.overlay.querySelector('#oj-quiet-end');
-			if (quietStart && quietEnd) {
-				const saveQuiet = () => nm.setQuietHours(quietStart.value, quietEnd.value);
-				quietStart.addEventListener('change', saveQuiet);
-				quietEnd.addEventListener('change', saveQuiet);
-			}
-		}
+		bindSettingsNotifications({
+			overlay: this.overlay,
+			notificationManager: this.notificationManager,
+		});
 
 		// ── Load storage stats asynchronously ───────────────────────────
 		this._loadStorageStats();
