@@ -23,6 +23,7 @@ import {
 	buildSuggestionsRows,
 	buildWinRateCards,
 } from './helpers/dashboardInsightsBuilders.js';
+import { getCachedApiPayload } from './helpers/cachedApiPayloadHelper.js';
 import { sortData, sortIndicator } from './helpers/dataBrowserSortHelpers.js';
 import { stalenessTag, timeAgo } from './helpers/stalenessHelpers.js';
 import { bindDataBrowserViewInteractions } from './binders/dataBrowserViewOrchestrationBinder.js';
@@ -48,6 +49,7 @@ import {
 import { renderExternalToolsSection } from './renderers/externalToolsSectionRenderer.js';
 import { renderDashboardPlayerHeaderSection } from './renderers/dashboardPlayerHeaderRenderer.js';
 import { renderTeamRecommendationEngineSection } from './renderers/teamRecommendationSectionRenderer.js';
+import { renderTeamRecommendationRows } from './renderers/teamRecommendationRowsRenderer.js';
 import {
 	renderDashboardQuickTipsSection,
 	renderDashboardStatusSection,
@@ -625,39 +627,41 @@ class UIManager {
 		todayStart.setHours(0, 0, 0, 0);
 		const todayISO = todayStart.toISOString();
 
-		// Quest totals from questGetAll metadata (#117, #118)
-		let questSummary = {};
-		try {
-			questSummary = (await this.idbStorage.getMetadata('questSummary', null)) || {};
-		} catch { /* empty */ }
+		const dashboardMetadata = await this._loadDashboardMetadataBundle();
+		const {
+			questSummary,
+			gwBrief,
+			cowData,
+			raidBoss,
+			arenaStats,
+			campaignProgress,
+			titanArenaStats,
+			battlePassData,
+			guildActivity,
+			gachaData,
+			towerState,
+			expeditionSlots,
+			outlandBosses,
+			adventurePassed,
+			workshopBuffs,
+			cosmeticCounts,
+			invasionData,
+			syncStatus,
+		} = dashboardMetadata;
+
 		const dailyQuestsCompleted = questSummary.dailyCompleted || 0;
 		const dailyQuestsTotal = questSummary.dailyTotal || 0;
 		const guildQuestsCompleted = questSummary.guildCompleted || 0;
 		const guildQuestsTotal = questSummary.guildTotal || 0;
 
-		// Guild War data from clanWarGetBriefInfo (#119)
-		let gwBrief = {};
-		try {
-			gwBrief = (await this.idbStorage.getMetadata('guildWarBrief', null)) || {};
-		} catch { /* empty */ }
 		// tries is remaining attacks; GW gives 2 attacks Mon-Fri
 		// When no active war, triesRemaining defaults to 0
 		const gwAttacksMax = 2;
 		const gwAttacksUsed = gwBrief.hasActiveWar ? (gwAttacksMax - (gwBrief.triesRemaining ?? 0)) : 0;
 
-		// Clash of Worlds data from crossClanWar_getInfo (#119)
-		let cowData = {};
-		try {
-			cowData = (await this.idbStorage.getMetadata('cowData', null)) || {};
-		} catch { /* empty */ }
 		const cowHeroUsed = cowData.heroAttacksMax ? (cowData.heroAttacksMax - (cowData.heroAttacksRemaining ?? 0)) : 0;
 		const cowTitanUsed = cowData.titanAttacksMax ? (cowData.titanAttacksMax - (cowData.titanAttacksRemaining ?? 0)) : 0;
 
-		// Raid Boss data from clanRaid_getInfo (#120)
-		let raidBoss = {};
-		try {
-			raidBoss = (await this.idbStorage.getMetadata('currentRaidBoss', null)) || {};
-		} catch { /* empty */ }
 		const raidBossLevel = raidBoss.bossLevel || 0;
 		const raidBossAttacksUsed = raidBoss.attemptsUsed || 0;
 		const raidBossAttacksMax = raidBoss.attemptsMax || 5;
@@ -673,80 +677,6 @@ class UIManager {
 			guildRaidMinionToday = todayBattles.filter((b) => b.battleType === 'RaidBoss').length;
 		} catch { /* empty */ }
 
-		// ── New: Arena stats from arenaGetAll (#112) ─────────────────
-		let arenaStats = {};
-		try {
-			arenaStats = (await this.idbStorage.getMetadata('arenaStats', null)) || {};
-		} catch { /* empty */ }
-
-		// ── New: Campaign progress from missionGetAll (#112) ─────────
-		let campaignProgress = {};
-		try {
-			campaignProgress = (await this.idbStorage.getMetadata('campaignProgress', null)) || {};
-		} catch { /* empty */ }
-
-		// ── New: Titan Arena stats from titanArenaGetStatus (#112) ───
-		let titanArenaStats = {};
-		try {
-			titanArenaStats = (await this.idbStorage.getMetadata('titanArenaStats', null)) || {};
-		} catch { /* empty */ }
-
-		// ── New: Battle Pass from battlePass_getInfo (#112) ──────────
-		let battlePassData = {};
-		try {
-			battlePassData = (await this.idbStorage.getMetadata('battlePassData', null)) || {};
-		} catch { /* empty */ }
-
-		// ── New: Guild Activity from clanGetActivityStat (#112) ──────
-		let guildActivity = {};
-		try {
-			guildActivity = (await this.idbStorage.getMetadata('guildActivityStats', null)) || {};
-		} catch { /* empty */ }
-
-		// ── New: Gacha pity from gacha_getInfo (#112) ────────────────
-		let gachaData = {};
-		try {
-			gachaData = (await this.idbStorage.getMetadata('gacha_heroGacha', null)) || {};
-		} catch { /* empty */ }
-
-		// ── Phase 13: New metadata caches (#121) ─────────────────────
-		let towerState = {};
-		try {
-			towerState = (await this.idbStorage.getMetadata('towerState', null)) || {};
-		} catch { /* empty */ }
-
-		let expeditionSlots = {};
-		try {
-			expeditionSlots = (await this.idbStorage.getMetadata('expeditionSlots', null)) || {};
-		} catch { /* empty */ }
-
-		let outlandBosses = {};
-		try {
-			outlandBosses = (await this.idbStorage.getMetadata('outlandBosses', null)) || {};
-		} catch { /* empty */ }
-
-		let adventurePassed = {};
-		try {
-			adventurePassed = (await this.idbStorage.getMetadata('adventurePassed', null)) || {};
-		} catch { /* empty */ }
-
-		let workshopBuffs = {};
-		try {
-			workshopBuffs = (await this.idbStorage.getMetadata('workshopBuffs', null)) || {};
-		} catch { /* empty */ }
-
-		let cosmeticCounts = { avatars: 0, frames: 0, stickers: 0 };
-		try {
-			const av = (await this.idbStorage.getMetadata('avatars', null)) || {};
-			const fr = (await this.idbStorage.getMetadata('avatarFrames', null)) || {};
-			const st = (await this.idbStorage.getMetadata('stickers', null)) || {};
-			cosmeticCounts = { avatars: av.count || 0, frames: fr.count || 0, stickers: st.count || 0 };
-		} catch { /* empty */ }
-
-		let invasionData = {};
-		try {
-			invasionData = (await this.idbStorage.getMetadata('invasionData', null)) || {};
-		} catch { /* empty */ }
 
 		// Gather counts from actual IndexedDB stores
 		const snapshotCount = await this._countStore('snapshots');
@@ -763,11 +693,7 @@ class UIManager {
 		// Error count from tracker
 		const errorCount = this.gameTracker?.errorCount || 0;
 
-		// Sync status from syncClient (#130)
-		let syncStatus = {};
-		try {
-			syncStatus = (await this.idbStorage.getMetadata('syncStatus', null)) || {};
-		} catch { /* empty */ }
+		// Sync status from syncClient (#130) is loaded in _loadDashboardMetadataBundle.
 
 		// Last snapshot time
 		const lastSnapshotTime = player.timestamp
@@ -775,6 +701,7 @@ class UIManager {
 			: 'None yet';
 
 		// ── Win Rate Statistics (#26) ─────────────────────────────────
+		const allBattles = await this.idbStorage.getAll('battles', FETCH_LIMIT_LARGE).catch(() => []);
 		const winRateSection = await this._renderWinRateCards(allBattles);
 
 		// ── Daily Summary (#26) ──────────────────────────────────────
@@ -871,6 +798,128 @@ class UIManager {
 				${renderDashboardQuickTipsSection()}
 			</div>
 		`;
+	}
+
+	/**
+	 * Load metadata bundles consumed by renderDashboard cards.
+	 *
+	 * @returns {Promise<object>} Dashboard metadata bundle
+	 * @private
+	 */
+	async _loadDashboardMetadataBundle() {
+		let questSummary = {};
+		try {
+			questSummary = (await this.idbStorage.getMetadata('questSummary', null)) || {};
+		} catch { /* empty */ }
+
+		let gwBrief = {};
+		try {
+			gwBrief = (await this.idbStorage.getMetadata('guildWarBrief', null)) || {};
+		} catch { /* empty */ }
+
+		let cowData = {};
+		try {
+			cowData = (await this.idbStorage.getMetadata('cowData', null)) || {};
+		} catch { /* empty */ }
+
+		let raidBoss = {};
+		try {
+			raidBoss = (await this.idbStorage.getMetadata('currentRaidBoss', null)) || {};
+		} catch { /* empty */ }
+
+		let arenaStats = {};
+		try {
+			arenaStats = (await this.idbStorage.getMetadata('arenaStats', null)) || {};
+		} catch { /* empty */ }
+
+		let campaignProgress = {};
+		try {
+			campaignProgress = (await this.idbStorage.getMetadata('campaignProgress', null)) || {};
+		} catch { /* empty */ }
+
+		let titanArenaStats = {};
+		try {
+			titanArenaStats = (await this.idbStorage.getMetadata('titanArenaStats', null)) || {};
+		} catch { /* empty */ }
+
+		let battlePassData = {};
+		try {
+			battlePassData = (await this.idbStorage.getMetadata('battlePassData', null)) || {};
+		} catch { /* empty */ }
+
+		let guildActivity = {};
+		try {
+			guildActivity = (await this.idbStorage.getMetadata('guildActivityStats', null)) || {};
+		} catch { /* empty */ }
+
+		let gachaData = {};
+		try {
+			gachaData = (await this.idbStorage.getMetadata('gacha_heroGacha', null)) || {};
+		} catch { /* empty */ }
+
+		let towerState = {};
+		try {
+			towerState = (await this.idbStorage.getMetadata('towerState', null)) || {};
+		} catch { /* empty */ }
+
+		let expeditionSlots = {};
+		try {
+			expeditionSlots = (await this.idbStorage.getMetadata('expeditionSlots', null)) || {};
+		} catch { /* empty */ }
+
+		let outlandBosses = {};
+		try {
+			outlandBosses = (await this.idbStorage.getMetadata('outlandBosses', null)) || {};
+		} catch { /* empty */ }
+
+		let adventurePassed = {};
+		try {
+			adventurePassed = (await this.idbStorage.getMetadata('adventurePassed', null)) || {};
+		} catch { /* empty */ }
+
+		let workshopBuffs = {};
+		try {
+			workshopBuffs = (await this.idbStorage.getMetadata('workshopBuffs', null)) || {};
+		} catch { /* empty */ }
+
+		let cosmeticCounts = { avatars: 0, frames: 0, stickers: 0 };
+		try {
+			const av = (await this.idbStorage.getMetadata('avatars', null)) || {};
+			const fr = (await this.idbStorage.getMetadata('avatarFrames', null)) || {};
+			const st = (await this.idbStorage.getMetadata('stickers', null)) || {};
+			cosmeticCounts = { avatars: av.count || 0, frames: fr.count || 0, stickers: st.count || 0 };
+		} catch { /* empty */ }
+
+		let invasionData = {};
+		try {
+			invasionData = (await this.idbStorage.getMetadata('invasionData', null)) || {};
+		} catch { /* empty */ }
+
+		let syncStatus = {};
+		try {
+			syncStatus = (await this.idbStorage.getMetadata('syncStatus', null)) || {};
+		} catch { /* empty */ }
+
+		return {
+			questSummary,
+			gwBrief,
+			cowData,
+			raidBoss,
+			arenaStats,
+			campaignProgress,
+			titanArenaStats,
+			battlePassData,
+			guildActivity,
+			gachaData,
+			towerState,
+			expeditionSlots,
+			outlandBosses,
+			adventurePassed,
+			workshopBuffs,
+			cosmeticCounts,
+			invasionData,
+			syncStatus,
+		};
 	}
 
 	/**
@@ -986,7 +1035,8 @@ class UIManager {
 	 * @private
 	 */
 	async _getBattleRecommendationsPayload() {
-		return this._getCachedApiPayload({
+		return getCachedApiPayload({
+			idbStorage: this.idbStorage,
 			cacheKey: 'battleRecommendations:arena',
 			ttlMs: RECOMMENDATIONS_CACHE_TTL_MS,
 			requestUrl: BATTLE_RECOMMENDATIONS_URL,
@@ -1072,77 +1122,10 @@ class UIManager {
 				? modeOption.supportedTrendWindowDays
 				: [7, 30, 90];
 
-			const rows = recs.slice(0, 3).map((rec, index) => {
-				const win = Number(rec.estimatedWinProbability || 0);
-				const ready = Number(rec.readinessScore || 0);
-				const confidence = Number(rec.confidenceScore || 0);
-				const finalScore = Number(rec.finalScore || 0);
-				const profile = this._escapeHtml(rec.modeProfile || 'default');
-				const topProvenance = Array.isArray(rec.provenance) && rec.provenance.length > 0
-					? rec.provenance[0]
-					: null;
-				const provenanceText = topProvenance
-					? `${this._escapeHtml(topProvenance.sourceName || 'source')} ${(Number(topProvenance.confidence || 0) * 100).toFixed(0)}%`
-					: 'no provenance';
-				const provenanceRows = Array.isArray(rec.provenance)
-					? rec.provenance.slice(0, 5).map((entry) => {
-						const sourceName = this._escapeHtml(entry?.sourceName || 'unknown source');
-						const sourceType = this._escapeHtml(entry?.sourceType || 'signal');
-						const entryConfidence = (Number(entry?.confidence || 0) * 100).toFixed(0);
-						const detail = this._escapeHtml(entry?.detail || 'no detail');
-						const contribution = entry?.contribution && typeof entry.contribution === 'object'
-							? entry.contribution
-							: null;
-						const contributionRows = contribution
-							? [
-								typeof contribution.winProbability === 'number' ? `W ${(contribution.winProbability * 100).toFixed(1)}%` : '',
-								typeof contribution.readiness === 'number' ? `R ${(contribution.readiness * 100).toFixed(1)}%` : '',
-								typeof contribution.confidence === 'number' ? `C ${(contribution.confidence * 100).toFixed(1)}%` : '',
-								typeof contribution.winWeight === 'number' ? `wW ${(contribution.winWeight * 100).toFixed(0)}%` : '',
-								typeof contribution.readinessWeight === 'number' ? `wR ${(contribution.readinessWeight * 100).toFixed(0)}%` : '',
-								typeof contribution.confidenceWeight === 'number' ? `wC ${(contribution.confidenceWeight * 100).toFixed(0)}%` : '',
-								typeof contribution.baseScore === 'number' ? `base ${(contribution.baseScore * 100).toFixed(1)}%` : '',
-								typeof contribution.externalBonus === 'number' ? `bonus ${(contribution.externalBonus * 100).toFixed(1)}%` : '',
-								typeof contribution.finalScore === 'number' ? `final ${(contribution.finalScore * 100).toFixed(1)}%` : '',
-								typeof contribution.externalModeWeight === 'number' ? `modeW ${(contribution.externalModeWeight * 100).toFixed(0)}%` : '',
-								typeof contribution.sourceScale === 'number' ? `scale ${(contribution.sourceScale * 100).toFixed(0)}%` : '',
-								typeof contribution.sourceConfidence === 'number' ? `srcConf ${(contribution.sourceConfidence * 100).toFixed(0)}%` : '',
-								typeof contribution.frictionPenalty === 'number' ? `friction ${(contribution.frictionPenalty * 100).toFixed(1)}%` : '',
-								typeof contribution.resourcePressure === 'number' ? `pressure ${(contribution.resourcePressure * 100).toFixed(0)}%` : '',
-							].filter(Boolean)
-							: [];
-						const sourceUrl = typeof entry?.sourceUrl === 'string' && entry.sourceUrl.trim()
-							? `<a href="${this._escapeHtml(entry.sourceUrl)}" target="_blank" rel="noopener noreferrer" style="color:#95d5b2;text-decoration:none">source</a>`
-							: '';
-
-						return `<div style="padding:4px 0;border-top:1px dashed #2d5845">
-							<div style="display:flex;justify-content:space-between;gap:8px;align-items:baseline">
-								<div style="font-size:10px;color:#9fd8bc">${sourceName} <span style="color:#739b89">(${sourceType})</span></div>
-								<div style="font-size:10px;color:#8ac9a8">${entryConfidence}% ${sourceUrl}</div>
-							</div>
-							<div style="font-size:10px;color:#7f9f92;margin-top:2px">${detail}</div>
-							${contributionRows.length > 0 ? `<div style="font-size:10px;color:#86b9a1;margin-top:2px">${this._escapeHtml(contributionRows.join(' • '))}</div>` : ''}
-						</div>`;
-					}).join('')
-					: '';
-				const preview = this._escapeHtml(rec.teamPreview || 'Unknown Team');
-				const rationale = this._escapeHtml(rec.rationale || 'No rationale available.');
-
-				return `<div style="padding:8px;border:1px solid #2f5a3f;border-radius:8px;background:#182b24;margin-top:${index === 0 ? '0' : '6px'}">
-					<div style="display:flex;justify-content:space-between;align-items:baseline;gap:8px">
-						<div style="font-size:12px;font-weight:700;color:#a8e6c8">${preview}</div>
-						<div style="font-size:11px;color:#8ad4ac">${this._escapeHtml(rec.source || 'engine')}</div>
-					</div>
-					<div style="font-size:10px;color:#7cc1a0;margin-top:2px">profile ${profile}</div>
-					<div style="font-size:11px;color:#9fc7b2;margin-top:4px">Win ${(win * 100).toFixed(1)}% • Ready ${(ready * 100).toFixed(0)}% • Conf ${(confidence * 100).toFixed(0)}% • Final ${(finalScore * 100).toFixed(1)}%</div>
-					<div style="font-size:10px;color:#7f9f92;margin-top:2px">${provenanceText}</div>
-					<div style="font-size:11px;color:#8c8c8c;margin-top:4px">${rationale}</div>
-					${provenanceRows ? `<details style="margin-top:6px">
-						<summary style="cursor:pointer;font-size:10px;color:#95d5b2">Provenance details</summary>
-						<div style="margin-top:4px;background:#13261f;border:1px solid #2a4739;border-radius:6px;padding:4px 6px">${provenanceRows}</div>
-					</details>` : ''}
-				</div>`;
-			}).join('');
+			const rows = renderTeamRecommendationRows({
+				recommendations: recs,
+				escapeHtml: (value) => this._escapeHtml(value),
+			});
 
 			return renderTeamRecommendationEngineSection({
 				profileSummary,
@@ -1208,7 +1191,8 @@ class UIManager {
 	 * @private
 	 */
 	async _getTeamRecommendationProfileMetadata() {
-		return this._getCachedApiPayload({
+		return getCachedApiPayload({
+			idbStorage: this.idbStorage,
 			cacheKey: 'teamRecommendationProfiles:metadata',
 			ttlMs: TOOLS_CATALOG_CACHE_TTL_MS,
 			requestUrl: TEAM_RECOMMENDATION_PROFILES_URL,
@@ -1234,7 +1218,8 @@ class UIManager {
 		url.searchParams.set('minSamples', '2');
 		url.searchParams.set('preferredTrendWindowDays', String(Math.max(1, Number(trendWindowDays || 30))));
 
-		return this._getCachedApiPayload({
+		return getCachedApiPayload({
+			idbStorage: this.idbStorage,
 			cacheKey,
 			ttlMs: RECOMMENDATIONS_CACHE_TTL_MS,
 			requestUrl: url.toString(),
@@ -1259,7 +1244,8 @@ class UIManager {
 		url.searchParams.set('limit', '3');
 		url.searchParams.set('minSamples', '2');
 
-		return this._getCachedApiPayload({
+		return getCachedApiPayload({
+			idbStorage: this.idbStorage,
 			cacheKey,
 			ttlMs: RECOMMENDATIONS_CACHE_TTL_MS,
 			requestUrl: url.toString(),
@@ -1281,7 +1267,8 @@ class UIManager {
 		url.searchParams.set('mode', mode || 'arena');
 		url.searchParams.set('preferredTrendWindowDays', String(Math.max(1, Number(trendWindowDays || 30))));
 
-		return this._getCachedApiPayload({
+		return getCachedApiPayload({
+			idbStorage: this.idbStorage,
 			cacheKey,
 			ttlMs: RECOMMENDATIONS_CACHE_TTL_MS,
 			requestUrl: url.toString(),
@@ -1337,7 +1324,8 @@ class UIManager {
 			url.searchParams.set('verificationStatus', selectedStatus);
 		}
 
-		return this._getCachedApiPayload({
+		return getCachedApiPayload({
+			idbStorage: this.idbStorage,
 			cacheKey,
 			ttlMs: TOOLS_CATALOG_CACHE_TTL_MS,
 			requestUrl: url.toString(),
@@ -1352,7 +1340,8 @@ class UIManager {
 	 * @private
 	 */
 	async _getExternalToolsFilterMetadata() {
-		return this._getCachedApiPayload({
+		return getCachedApiPayload({
+			idbStorage: this.idbStorage,
 			cacheKey: 'toolsCatalog:filters',
 			ttlMs: TOOLS_CATALOG_CACHE_TTL_MS,
 			requestUrl: TOOLS_CATALOG_FILTERS_URL,
@@ -1459,33 +1448,7 @@ class UIManager {
 		const vs = this._viewState.heroes;
 		const Calc = HeroCompletionCalculator;
 
-		// Prefer the metadata cache (latest roster, one row per hero)
-		let heroes = [];
-		try {
-			const cached = await this.idbStorage.getMetadata('heroesData', null);
-			if (Array.isArray(cached) && cached.length > 0) {
-				heroes = cached;
-			}
-		} catch { /* empty */ }
-
-		// Fallback: read from the heroes IDB store and deduplicate by heroId
-		// Handles both legacy individual records and compressed batches (#43)
-		if (heroes.length === 0) {
-			try {
-				const raw = await this.idbStorage.getAll('heroes', FETCH_LIMIT_LARGE);
-				const all = decompressHeroStore(raw);
-				if (all.length > 0) {
-					const byId = {};
-					for (const h of all) {
-						const key = h.heroId || h.id;
-						if (!byId[key] || (h.timestamp || '') > (byId[key].timestamp || '')) {
-							byId[key] = h;
-						}
-					}
-					heroes = Object.values(byId);
-				}
-			} catch { /* empty */ }
-		}
+		let heroes = await this._loadHeroesRoster();
 
 		if (heroes.length === 0) {
 			return `
@@ -1504,33 +1467,10 @@ class UIManager {
 		}
 
 		// Build projected overall item requirements for remaining hero progression.
-		let requirementsProjection = null;
-		let requirementItemMeta = {};
-		try {
-			const [heroUpgrades, equipmentChanges, inventoryItemUsages, inventoryData] = await Promise.all([
-				this.idbStorage.getAll('heroUpgrades', FETCH_LIMIT_LARGE).catch(() => []),
-				this.idbStorage.getAll('equipmentChanges', FETCH_LIMIT_LARGE).catch(() => []),
-				this.idbStorage.getAll('inventoryItemUsages', FETCH_LIMIT_LARGE).catch(() => []),
-				this.idbStorage.getMetadata('inventoryData', {}).catch(() => ({})),
-			]);
-
-			const parsedInventory = this._parseRawInventory(inventoryData || {});
-			requirementItemMeta = ProjectedItemCatalogResolver.buildRuntimeMetaMap(parsedInventory);
-
-			requirementsProjection = HeroMaterialRequirementsCalculator.calculateProjectedRequirements({
-				heroes,
-				heroUpgrades,
-				equipmentChanges,
-				inventoryItemUsages,
-				inventoryData,
-				targetLevel: HeroCompletionCalculator.MAX_LEVEL,
-				targetColorRank: 19,
-				topItemLimit: 24,
-			});
-		} catch {
-			requirementsProjection = null;
-			requirementItemMeta = {};
-		}
+		const {
+			requirementsProjection,
+			requirementItemMeta,
+		} = await this._loadHeroRequirementsProjectionData(heroes);
 
 		const requirementsPanelHtml = this._renderHeroRequirementsPanel(requirementsProjection, requirementItemMeta);
 
@@ -1632,6 +1572,75 @@ class UIManager {
 				${this._renderPagination(vs.page, totalPages, totalCount)}
 			</div>
 		`;
+	}
+
+	/**
+	 * Load latest hero roster with metadata-first + IDB dedupe fallback.
+	 *
+	 * @returns {Promise<Array<object>>} Hero roster
+	 * @private
+	 */
+	async _loadHeroesRoster() {
+		let heroes = [];
+		try {
+			const cached = await this.idbStorage.getMetadata('heroesData', null);
+			if (Array.isArray(cached) && cached.length > 0) {
+				heroes = cached;
+			}
+		} catch { /* empty */ }
+
+		if (heroes.length > 0) return heroes;
+
+		try {
+			const raw = await this.idbStorage.getAll('heroes', FETCH_LIMIT_LARGE);
+			const all = decompressHeroStore(raw);
+			if (all.length === 0) return [];
+			const byId = {};
+			for (const h of all) {
+				const key = h.heroId || h.id;
+				if (!byId[key] || (h.timestamp || '') > (byId[key].timestamp || '')) {
+					byId[key] = h;
+				}
+			}
+			return Object.values(byId);
+		} catch {
+			return [];
+		}
+	}
+
+	/**
+	 * Load hero projection datasets and compute requirements payload.
+	 *
+	 * @param {Array<object>} heroes - Hero roster
+	 * @returns {Promise<{requirementsProjection: object|null, requirementItemMeta: object}>} Projection payload
+	 * @private
+	 */
+	async _loadHeroRequirementsProjectionData(heroes) {
+		try {
+			const [heroUpgrades, equipmentChanges, inventoryItemUsages, inventoryData] = await Promise.all([
+				this.idbStorage.getAll('heroUpgrades', FETCH_LIMIT_LARGE).catch(() => []),
+				this.idbStorage.getAll('equipmentChanges', FETCH_LIMIT_LARGE).catch(() => []),
+				this.idbStorage.getAll('inventoryItemUsages', FETCH_LIMIT_LARGE).catch(() => []),
+				this.idbStorage.getMetadata('inventoryData', {}).catch(() => ({})),
+			]);
+
+			const parsedInventory = this._parseRawInventory(inventoryData || {});
+			const requirementItemMeta = ProjectedItemCatalogResolver.buildRuntimeMetaMap(parsedInventory);
+			const requirementsProjection = HeroMaterialRequirementsCalculator.calculateProjectedRequirements({
+				heroes,
+				heroUpgrades,
+				equipmentChanges,
+				inventoryItemUsages,
+				inventoryData,
+				targetLevel: HeroCompletionCalculator.MAX_LEVEL,
+				targetColorRank: 19,
+				topItemLimit: 24,
+			});
+
+			return { requirementsProjection, requirementItemMeta };
+		} catch {
+			return { requirementsProjection: null, requirementItemMeta: {} };
+		}
 	}
 
 	/**
