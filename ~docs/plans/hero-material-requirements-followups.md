@@ -31,6 +31,10 @@ Initial implementation in userscript projects roster-wide required item totals t
 - Add collapse/expand controls for tier and level-band sections.
 - Add sticky header + lightweight virtualization for large requirement tables.
 
+Status update:
+- Collapse/expand controls for tier and level-band sections are now implemented in Heroes projection panel.
+- Remaining: sticky headers + lightweight virtualization and persisted expand/collapse preferences.
+
 5. Model calibration
 - Recompute projection baselines by mode/time window (e.g., 30/90-day behavior).
 - Auto-adjust confidence based on recency and sample density.

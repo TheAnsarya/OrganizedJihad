@@ -426,3 +426,38 @@
 ## Known Follow-up
 - Add optional browser-open flag to launch failing endpoint URLs automatically on Windows.
 - Optionally emit JSON output mode for CI/setup automation.
+
+---
+
+## Session
+- Date: 2026-05-27
+- Session Number: 13
+- Scope: Improve Heroes projection panel readability with collapsible sections.
+
+## Summary
+- Created and implemented issue #194.
+- Updated Heroes projection panel to make dense sections independently collapsible while keeping top-level totals always visible.
+- Added collapsible sections for:
+	- Color Tier Summary
+	- Level Band Summary
+	- Top Projected Items
+- Kept defaults expanded so no information is hidden by default.
+
+## Files Modified
+- userscript/src/modules/uiManager.js
+- ~docs/copilot-chats/2026-05-27-requirements-item-icon-enrichment.md
+
+## Issues Referenced
+- #194 Add collapsible sections for hero projection tier/level summaries in userscript UI
+
+## Validation
+- yarn test --runInBand: passed (18 suites, 706 tests)
+- yarn build: passed (version 0.9.103)
+- UIManager diagnostics: no errors
+
+## Key Decisions
+- Used native `<details>/<summary>` for minimal overhead and reliable behavior in userscript context.
+- Left sections open by default to preserve existing visibility while still enabling user-controlled density.
+
+## Known Follow-up
+- Persist collapsed/expanded state per section in preferences so user panel density choices survive reloads.

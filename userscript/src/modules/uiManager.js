@@ -2279,6 +2279,8 @@ class UIManager {
 		const totalNeeds = Number(projection.totalProjectedItems || 0).toLocaleString();
 		const totalOwned = Number(projection.totalOwnedForProjectedItems || 0).toLocaleString();
 		const totalShortage = Number(projection.totalShortageItems || 0).toLocaleString();
+		const tierSummaryTotal = tierSummaries.reduce((sum, tier) => sum + Number(tier.totalProjectedItems || 0), 0);
+		const levelBandSummaryTotal = levelBandSummaries.reduce((sum, band) => sum + Number(band.totalProjectedItems || 0), 0);
 		const tierRows = tierSummaries.map((tier) => {
 			const need = Number(tier.totalProjectedItems || 0);
 			const owned = Number(tier.totalOwnedForProjectedItems || 0);
@@ -2326,15 +2328,24 @@ class UIManager {
 					<div class="oj-muted" style="font-size:11px">Signals: lvlUp ${Number(coverage.levelUpgradeSamples || 0)}, colorUp ${Number(coverage.colorUpgradeSamples || 0)}, equip ${Number(coverage.equipmentChangeSamples || 0)}, itemUse ${Number(coverage.itemUsageSamples || 0)}</div>
 				</div>
 				${tierRows
-					? `<table class="oj-table" style="margin-top:4px"><thead><tr><th>Tier</th><th>Needed</th><th>Owned</th><th>Shortage</th><th>Distinct</th></tr></thead><tbody>${tierRows}</tbody></table>`
+					? `<details open style="margin-top:4px">
+						<summary style="cursor:pointer;font-size:12px;font-weight:700;color:#d0d0d0;list-style:disclosure-closed">Color Tier Summary • ${tierSummaries.length} tiers • ${tierSummaryTotal.toLocaleString()} needed</summary>
+						<table class="oj-table" style="margin-top:6px"><thead><tr><th>Tier</th><th>Needed</th><th>Owned</th><th>Shortage</th><th>Distinct</th></tr></thead><tbody>${tierRows}</tbody></table>
+					</details>`
 					: ''
 				}
 				${levelBandRows
-					? `<table class="oj-table" style="margin-top:4px"><thead><tr><th>Level Band</th><th>Levels</th><th>Needed</th><th>Owned</th><th>Shortage</th><th>Distinct</th></tr></thead><tbody>${levelBandRows}</tbody></table>`
+					? `<details open style="margin-top:4px">
+						<summary style="cursor:pointer;font-size:12px;font-weight:700;color:#d0d0d0;list-style:disclosure-closed">Level Band Summary • ${levelBandSummaries.length} bands • ${levelBandSummaryTotal.toLocaleString()} needed</summary>
+						<table class="oj-table" style="margin-top:6px"><thead><tr><th>Level Band</th><th>Levels</th><th>Needed</th><th>Owned</th><th>Shortage</th><th>Distinct</th></tr></thead><tbody>${levelBandRows}</tbody></table>
+					</details>`
 					: ''
 				}
 				${hasSignal
-					? `<table class="oj-table" style="margin-top:4px"><thead><tr><th>Item</th><th>Needed</th><th>Owned</th><th>Shortage</th><th>Mix</th></tr></thead><tbody>${itemRows}</tbody></table>`
+					? `<details open style="margin-top:4px">
+						<summary style="cursor:pointer;font-size:12px;font-weight:700;color:#d0d0d0;list-style:disclosure-closed">Top Projected Items • ${topItems.length} rows</summary>
+						<table class="oj-table" style="margin-top:6px"><thead><tr><th>Item</th><th>Needed</th><th>Owned</th><th>Shortage</th><th>Mix</th></tr></thead><tbody>${itemRows}</tbody></table>
+					</details>`
 					: `<p class="oj-empty" style="margin:0">Not enough tracked upgrade/equipment history yet to estimate concrete item IDs. Keep playing with tracking enabled and this panel will auto-fill.</p>`
 				}
 			</div>
