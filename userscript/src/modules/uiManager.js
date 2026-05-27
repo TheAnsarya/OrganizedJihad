@@ -18,6 +18,7 @@ import { bindDataRowInteractions } from './binders/dataRowInteractionBinder.js';
 import { bindDataBrowserTableControls } from './binders/dataBrowserTableControlsBinder.js';
 import { bindDataBrowserMiscInteractions } from './binders/dataBrowserMiscBinder.js';
 import { bindSettingsHealthActions } from './binders/settingsHealthActionsBinder.js';
+import { bindSettingsDataActions } from './binders/settingsDataActionsBinder.js';
 import { bindProjectionInteractions } from './binders/projectionInteractionBinder.js';
 import { renderHeroRequirementsProjectionPanel } from './renderers/heroRequirementsProjectionRenderer.js';
 import {
@@ -4301,141 +4302,13 @@ class UIManager {
 	 * Attach event listeners for the Settings view.
 	 */
 	attachSettingsEventListeners() {
-		// ── Export curated data ──────────────────────────────────────────
-		const exportBtn = this.overlay.querySelector('#oj-export-data');
-		if (exportBtn) {
-			exportBtn.addEventListener('click', async () => {
-				try {
-					const data = await this.gameTracker.exportAllData();
-					this._downloadJson(data, 'organized-jihad-export');
-				} catch (err) {
-					console.error('[OrganizedJihad] Export failed:', err);
-					alert('Export failed \u2014 check console for details.');
-				}
-			});
-		}
-
-		// ── Export raw IDB dump ──────────────────────────────────────────
-		const exportRawBtn = this.overlay.querySelector('#oj-export-raw');
-		if (exportRawBtn) {
-			exportRawBtn.addEventListener('click', async () => {
-				try {
-					exportRawBtn.textContent = '\u23F3 Exporting...';
-					exportRawBtn.disabled = true;
-					const data = await this.gameTracker.exportRawData();
-					this._downloadJson(data, 'organized-jihad-raw-export');
-				} catch (err) {
-					console.error('[OrganizedJihad] Raw export failed:', err);
-					alert('Raw export failed \u2014 check console.');
-				} finally {
-					exportRawBtn.textContent = '\uD83D\uDCBE Export Raw';
-					exportRawBtn.disabled = false;
-				}
-			});
-		}
-
-		// ── Export API Samples (for AI/developer debugging) ────────────
-		const exportSamplesBtn = this.overlay.querySelector('#oj-export-api-samples');
-		if (exportSamplesBtn) {
-			exportSamplesBtn.addEventListener('click', () => {
-				try {
-					const count = this.gameTracker?.getApiSampleCount?.() || 0;
-					if (count === 0) {
-						alert('No API samples captured yet. Play the game for a while \u2014 visit different screens (arena, heroes, inventory, guild war) to populate samples.');
-						return;
-					}
-					const data = this.gameTracker.exportApiSamples();
-					this._downloadJson(data, 'hw-api-samples');
-					// Update the stats display
-					const statsEl = this.overlay.querySelector('#oj-api-sample-stats');
-					if (statsEl) {
-						statsEl.textContent = `Methods captured: ${count} \u2014 exported!`;
-					}
-				} catch (err) {
-					console.error('[OrganizedJihad] API samples export failed:', err);
-					alert('Export failed \u2014 check console.');
-				}
-			});
-		}
-
-		// ── Clear/reset API Samples ────────────────────────────────────
-		const clearSamplesBtn = this.overlay.querySelector('#oj-clear-api-samples');
-		if (clearSamplesBtn) {
-			clearSamplesBtn.addEventListener('click', () => {
-				if (confirm('Clear all captured API samples? They will be re-captured as you play.')) {
-					this.gameTracker?.clearApiSamples?.();
-					const statsEl = this.overlay.querySelector('#oj-api-sample-stats');
-					if (statsEl) {
-						statsEl.textContent = 'Methods captured: 0 \u2014 cleared! Play the game to re-capture.';
-					}
-				}
-			});
-		}
-
-		// ── Import data ─────────────────────────────────────────────────
-		const importBtn = this.overlay.querySelector('#oj-import-data');
-		const importFile = this.overlay.querySelector('#oj-import-file');
-		if (importBtn && importFile) {
-			importBtn.addEventListener('click', () => importFile.click());
-			importFile.addEventListener('change', async (e) => {
-				const file = e.target.files?.[0];
-				if (!file) return;
-
-				if (!confirm(`Import data from "${file.name}"?\n\nExisting records with the same keys will be skipped (not overwritten).`)) {
-					importFile.value = '';
-					return;
-				}
-
-				try {
-					importBtn.textContent = '\u23F3 Importing...';
-					importBtn.disabled = true;
-					const text = await file.text();
-					const data = JSON.parse(text);
-					const summary = await this.gameTracker.importRawData(data);
-
-					const imported = Object.values(summary.imported).reduce((a, b) => a + b, 0);
-					const skipped = Object.values(summary.skipped).reduce((a, b) => a + b, 0);
-					const errors = summary.errors.length;
-					alert(`Import complete!\n\n\u2705 ${imported} records imported\n\u23E9 ${skipped} duplicates skipped\n${errors > 0 ? `\u274C ${errors} errors` : ''}`);
-
-					// Refresh storage stats
-					this._loadStorageStats();
-				} catch (err) {
-					console.error('[OrganizedJihad] Import failed:', err);
-					alert('Import failed \u2014 check console. File may be invalid JSON.');
-				} finally {
-					importBtn.textContent = '\uD83D\uDCE4 Import';
-					importBtn.disabled = false;
-					importFile.value = '';
-				}
-			});
-		}
-
-		// ── Clear all data ──────────────────────────────────────────────
-		const clearBtn = this.overlay.querySelector('#oj-clear-data');
-		if (clearBtn) {
-			clearBtn.addEventListener('click', async () => {
-				if (confirm('\u26A0\uFE0F This will delete ALL tracked data (heroes, battles, snapshots, etc.).\n\nAre you sure?')) {
-					try {
-						// Clear preferences
-						this.prefStorage.clearAll();
-						// Delete IndexedDB
-						const dbName = 'OrganizedJihad';
-						const deleteReq = indexedDB.deleteDatabase(dbName);
-						deleteReq.onsuccess = () => {
-							alert('All data cleared. The page will reload.');
-							location.reload();
-						};
-						deleteReq.onerror = () => {
-							alert('Failed to clear IndexedDB. Try clearing manually in DevTools.');
-						};
-					} catch (err) {
-						console.error('[OrganizedJihad] Clear failed:', err);
-						alert('Clear failed \u2014 check console.');
-					}
-				}
-			});
-		}
+		bindSettingsDataActions({
+			overlay: this.overlay,
+			gameTracker: this.gameTracker,
+			prefStorage: this.prefStorage,
+			downloadJson: (data, prefix) => this._downloadJson(data, prefix),
+			refreshStorageStats: () => this._loadStorageStats(),
+		});
 
 		// ── Auto-show checkbox ──────────────────────────────────────────
 		const autoShowCb = this.overlay.querySelector('#oj-auto-show');
