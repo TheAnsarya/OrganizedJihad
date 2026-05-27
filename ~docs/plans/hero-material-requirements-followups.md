@@ -34,6 +34,7 @@ Initial implementation in userscript projects roster-wide required item totals t
 Status update:
 - Collapse/expand controls for tier and level-band sections are now implemented in Heroes projection panel.
 - Persisted expand/collapse preferences are now implemented for projection sections.
+- One-click Expand All / Collapse All controls are now implemented for projection sections.
 - Remaining: sticky headers + lightweight virtualization.
 
 5. Model calibration

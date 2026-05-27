@@ -496,3 +496,35 @@
 
 ## Known Follow-up
 - Add a one-click "Expand All / Collapse All" projection controls row for power users.
+
+---
+
+## Session
+- Date: 2026-05-27
+- Session Number: 15
+- Scope: Add one-click expand/collapse controls for Heroes projection summaries.
+
+## Summary
+- Created and implemented issue #196.
+- Added `Expand All` and `Collapse All` controls in Heroes projection panel.
+- Controls update all projection `<details>` sections in one action.
+- Reused existing preference persistence pathway so global actions immediately persist section state.
+
+## Files Modified
+- userscript/src/modules/uiManager.js
+- ~docs/copilot-chats/2026-05-27-requirements-item-icon-enrichment.md
+
+## Issues Referenced
+- #196 Add Expand All / Collapse All controls for Heroes projection summaries
+
+## Validation
+- yarn test --runInBand: passed (18 suites, 706 tests)
+- yarn build: passed (version 0.9.105)
+- UIManager diagnostics: no errors
+
+## Key Decisions
+- Implemented controls as lightweight buttons near projection summary tables to avoid extra navigation/UI clutter.
+- Added a shared preference-save helper to keep per-section toggle and global controls consistent.
+
+## Known Follow-up
+- Consider adding keyboard shortcuts for projection section expand/collapse controls in the overlay.

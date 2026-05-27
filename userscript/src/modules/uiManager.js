@@ -2330,6 +2330,10 @@ class UIManager {
 					<div class="oj-muted" style="font-size:11px">Shortage: <strong style="color:#ef9a9a">${totalShortage}</strong></div>
 					<div class="oj-muted" style="font-size:11px">Signals: lvlUp ${Number(coverage.levelUpgradeSamples || 0)}, colorUp ${Number(coverage.colorUpgradeSamples || 0)}, equip ${Number(coverage.equipmentChangeSamples || 0)}, itemUse ${Number(coverage.itemUsageSamples || 0)}</div>
 				</div>
+				<div style="display:flex;justify-content:flex-end;gap:6px;margin-bottom:4px">
+					<button type="button" class="oj-btn oj-btn-xs" data-projection-control="expandAll">Expand All</button>
+					<button type="button" class="oj-btn oj-btn-xs" data-projection-control="collapseAll">Collapse All</button>
+				</div>
 				${tierRows
 					? `<details ${isColorTierOpen ? 'open' : ''} data-projection-section="colorTier" style="margin-top:4px">
 						<summary style="cursor:pointer;font-size:12px;font-weight:700;color:#d0d0d0;list-style:disclosure-closed">Color Tier Summary • ${tierSummaries.length} tiers • ${tierSummaryTotal.toLocaleString()} needed</summary>
@@ -4884,17 +4888,19 @@ class UIManager {
 			detailsEl.addEventListener('toggle', () => {
 				const section = detailsEl.dataset.projectionSection;
 				const isOpen = detailsEl.open;
-				switch (section) {
-					case 'colorTier':
-						this.prefStorage.set('heroesProjectionColorTierOpen', isOpen);
-						break;
-					case 'levelBand':
-						this.prefStorage.set('heroesProjectionLevelBandOpen', isOpen);
-						break;
-					case 'topItems':
-						this.prefStorage.set('heroesProjectionTopItemsOpen', isOpen);
-						break;
-				}
+				this._saveProjectionSectionOpenPreference(section, isOpen);
+			});
+		});
+
+		// Projection section global controls (heroes view only)
+		content.querySelectorAll('[data-projection-control]').forEach((btn) => {
+			btn.addEventListener('click', () => {
+				const control = btn.dataset.projectionControl;
+				const shouldOpen = control === 'expandAll';
+				content.querySelectorAll('details[data-projection-section]').forEach((detailsEl) => {
+					detailsEl.open = shouldOpen;
+					this._saveProjectionSectionOpenPreference(detailsEl.dataset.projectionSection, shouldOpen);
+				});
 			});
 		});
 
@@ -4967,6 +4973,27 @@ class UIManager {
 				}
 			});
 		});
+	}
+
+	/**
+	 * Save projection section expand/collapse preference.
+	 *
+	 * @param {string} section - Section key
+	 * @param {boolean} isOpen - Whether section is expanded
+	 * @private
+	 */
+	_saveProjectionSectionOpenPreference(section, isOpen) {
+		switch (section) {
+			case 'colorTier':
+				this.prefStorage.set('heroesProjectionColorTierOpen', isOpen);
+				break;
+			case 'levelBand':
+				this.prefStorage.set('heroesProjectionLevelBandOpen', isOpen);
+				break;
+			case 'topItems':
+				this.prefStorage.set('heroesProjectionTopItemsOpen', isOpen);
+				break;
+		}
 	}
 
 	// =====================================================================
