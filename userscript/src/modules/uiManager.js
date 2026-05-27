@@ -16,6 +16,13 @@ import TitanCompletionCalculator from './helpers/TitanCompletionCalculator.js';
 import PetCompletionCalculator from './helpers/PetCompletionCalculator.js';
 import { activityColorClass, activityIcon } from './helpers/activityPresentationHelpers.js';
 import { colorRankClass, colorRankName, formatCompact } from './helpers/battlePresentationHelpers.js';
+import {
+	aggregateDailySummaryStats,
+	buildBattleRecommendationRows,
+	buildExternalToolsSectionModel,
+	buildSuggestionsRows,
+	buildWinRateCards,
+} from './helpers/dashboardInsightsBuilders.js';
 import { sortData, sortIndicator } from './helpers/dataBrowserSortHelpers.js';
 import { stalenessTag, timeAgo } from './helpers/stalenessHelpers.js';
 import { bindDataBrowserViewInteractions } from './binders/dataBrowserViewOrchestrationBinder.js';
@@ -877,41 +884,7 @@ class UIManager {
 	async _renderWinRateCards(battles = []) {
 		if (!battles || battles.length === 0) return '';
 
-		const now = Date.now();
-		const sevenDaysAgo = now - 7 * 24 * 60 * 60 * 1000;
-
-		// Group by type and calculate win rates
-		const types = [
-			{ key: 'Arena', label: '\u2694\uFE0F Arena', color: '#4fc3f7' },
-			{ key: 'TitanArena', label: '\uD83D\uDEE1\uFE0F Titan Arena', color: '#ce93d8' },
-			{ key: 'GrandArena', label: '\uD83C\uDFC6 Grand Arena', color: '#ffb74d' },
-		];
-
-		const cards = types.map(({ key, label, color }) => {
-			const all = battles.filter((b) => b.battleType === key);
-			const recent = all.filter((b) => {
-				const ts = b.timestamp ? new Date(b.timestamp).getTime() : 0;
-				return ts >= sevenDaysAgo;
-			});
-
-			if (all.length === 0) return null;
-
-			const allWins = all.filter((b) => b.isWin).length;
-			const allPct = Math.round((allWins / all.length) * 100);
-			const recentWins = recent.filter((b) => b.isWin).length;
-			const recentPct = recent.length > 0 ? Math.round((recentWins / recent.length) * 100) : 0;
-
-			return {
-				label,
-				color,
-				allPct,
-				allWins,
-				allLosses: all.length - allWins,
-				recentCount: recent.length,
-				recentWins,
-				recentPct,
-			};
-		}).filter(Boolean);
+		const cards = buildWinRateCards(battles);
 
 		return renderWinRateCardsSection({ cards });
 	}
@@ -930,38 +903,7 @@ class UIManager {
 			const suggestions = this.suggestionsEngine.getSuggestions();
 			if (!suggestions || suggestions.length === 0) return '';
 
-			/** Map priority to icon + colour */
-			const priMap = {
-				high: { icon: '\uD83D\uDD34', color: '#ef5350' },
-				medium: { icon: '\uD83D\uDFE1', color: '#ffb74d' },
-				low: { icon: '\uD83D\uDFE2', color: '#81c784' },
-			};
-
-			/** Map category/type to icon */
-			const catIcon = {
-				goal: '\uD83C\uDFAF',
-				resource: '\uD83D\uDCB0',
-				hero: '\uD83E\uDDB8',
-				battle: '\u2694\uFE0F',
-			};
-
-			// Show at most 6 suggestions, sorted by priority (high first)
-			const order = { high: 0, medium: 1, low: 2 };
-			const sorted = [...suggestions]
-				.sort((a, b) => (order[a.priority] ?? 9) - (order[b.priority] ?? 9))
-				.slice(0, 6);
-
-			const rows = sorted.map((s) => {
-				const pri = priMap[s.priority] || priMap.medium;
-				const icon = catIcon[s.type] || '\uD83D\uDCA1';
-				return {
-					icon,
-					priorityIcon: pri.icon,
-					priorityColor: pri.color,
-					title: this._escapeHtml(s.title),
-					description: this._escapeHtml(s.description),
-				};
-			});
+			const rows = buildSuggestionsRows(suggestions, (value) => this._escapeHtml(value));
 
 			const stats = this.suggestionsEngine.getStats();
 
@@ -988,23 +930,7 @@ class UIManager {
 			const recs = Array.isArray(payload?.recommendations) ? payload.recommendations : [];
 			if (recs.length === 0) return '';
 
-			const rows = recs.slice(0, 3).map((rec, index) => {
-				const sim = Number(rec.simulatedWinProbability || 0);
-				const low = Number(rec.simulationConfidenceLow || 0);
-				const high = Number(rec.simulationConfidenceHigh || 0);
-				const wr = Number(rec.weightedWinRate || rec.winRate || 0);
-				const preview = this._escapeHtml(rec.teamPreview || rec.teamKey || 'Unknown Team');
-				const rationale = this._escapeHtml(rec.rationale || 'No rationale available.');
-				return {
-					index,
-					simPct: sim * 100,
-					weightedPct: wr * 100,
-					lowPct: low * 100,
-					highPct: high * 100,
-					preview,
-					rationale,
-				};
-			});
+			const rows = buildBattleRecommendationRows(recs, (value) => this._escapeHtml(value));
 
 			return renderBattleRecommendationsSection({ rows });
 		} catch {
@@ -1373,17 +1299,14 @@ class UIManager {
 		try {
 			const metadata = await this._getExternalToolsFilterMetadata();
 			const payload = await this._getExternalToolsCatalogPayload();
-			const tools = Array.isArray(payload?.tools) ? payload.tools : [];
-			if (tools.length === 0) return '';
 			const selectedStatus = this.prefStorage.get('toolsCatalogStatusFilter', '');
-			const statusOptions = Array.isArray(metadata?.verificationStatuses) && metadata.verificationStatuses.length > 0
-				? metadata.verificationStatuses
-				: ['verified', 'partial', 'unverified', 'stale'];
+			const sectionModel = buildExternalToolsSectionModel(metadata, payload, selectedStatus);
+			if (sectionModel.tools.length === 0) return '';
 
 			return renderExternalToolsSection({
-				tools,
-				statusOptions,
-				selectedStatus,
+				tools: sectionModel.tools,
+				statusOptions: sectionModel.statusOptions,
+				selectedStatus: sectionModel.selectedStatus,
 				escapeHtml: (value) => this._escapeHtml(value),
 			});
 		} catch {
@@ -1455,38 +1378,17 @@ class UIManager {
 		todayStart.setHours(0, 0, 0, 0);
 		const todayISO = todayStart.toISOString();
 
-		let todayBattles = 0;
-		let todayWins = 0;
-		let todayChests = 0;
-		let todayQuests = 0;
-		let todayUpgrades = 0;
-
-		// Battles: filter pre-loaded array (no extra DB call)
-		try {
-			const todayB = (battles || []).filter((b) => b.timestamp >= todayISO);
-			todayBattles = todayB.length;
-			todayWins = todayB.filter((b) => b.isWin).length;
-		} catch { /* empty */ }
-
-		// Chests: index-range query on 'timestamp' — only today's records
-		try {
-			const todayC = await this.idbStorage.getByIndexRange('chests', 'timestamp', { lower: todayISO });
-			todayChests = todayC.length;
-		} catch { /* empty */ }
-
-		// Quests: index-range query on 'completedAt' — only today's records
-		try {
-			const dailyQ = await this.idbStorage.getByIndexRange('dailyQuestCompletions', 'completedAt', { lower: todayISO });
-			const guildQ = await this.idbStorage.getByIndexRange('guildQuestCompletions', 'completedAt', { lower: todayISO });
-			todayQuests = dailyQ.length + guildQ.length;
-		} catch { /* empty */ }
-
-		// Upgrades: index-range query on 'timestamp' — only today's records
-		try {
-			const heroUp = await this.idbStorage.getByIndexRange('heroUpgrades', 'timestamp', { lower: todayISO });
-			const titanUp = await this.idbStorage.getByIndexRange('titanUpgrades', 'timestamp', { lower: todayISO });
-			todayUpgrades = heroUp.length + titanUp.length;
-		} catch { /* empty */ }
+		const {
+			todayBattles,
+			todayWins,
+			todayChests,
+			todayQuests,
+			todayUpgrades,
+		} = await aggregateDailySummaryStats({
+			idbStorage: this.idbStorage,
+			battles,
+			todayISO,
+		});
 
 		return renderDailySummarySection({
 			todayBattles,
