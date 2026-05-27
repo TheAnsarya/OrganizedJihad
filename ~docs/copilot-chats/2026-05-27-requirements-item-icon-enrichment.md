@@ -277,3 +277,29 @@
 
 ## Known Follow-up
 - Consider extending this client-service pattern to Team Recommendation and Tool Catalog endpoint calls currently implemented directly in Settings.
+
+---
+
+## Session
+- Date: 2026-05-27
+- Session Number: 9
+- Scope: Improve projected catalog discoverability from Settings.
+
+## Summary
+- Created and implemented issue #190.
+- Added direct `Open Page` action in Settings projected parity card header to navigate to `/projected-item-catalog`.
+- Kept existing refresh/status behavior unchanged.
+
+## Files Modified
+- desktop-app/Components/Pages/Settings.razor
+- ~docs/copilot-chats/2026-05-27-requirements-item-icon-enrichment.md
+
+## Issues Referenced
+- #190 Add quick navigation from Settings projected parity card to dedicated projected catalog page
+
+## Validation
+- dotnet test OrganizedJihad.sln: passed (91 tests)
+- Razor diagnostics for Settings page: no errors
+
+## Key Decisions
+- Implemented as an inline header action to preserve existing Settings workflow while improving navigation discoverability.

@@ -249,7 +249,10 @@
 			<div class="card border-secondary">
 				<div class="card-header bg-secondary text-white d-flex justify-content-between align-items-center">
 					<h5 class="mb-0">Projected Item Catalog Parity</h5>
-					<button class="btn btn-sm btn-light" @onclick="RefreshProjectedItemCatalogAsync">Refresh</button>
+					<div class="d-flex gap-2">
+						<a class="btn btn-sm btn-light" href="projected-item-catalog">Open Page</a>
+						<button class="btn btn-sm btn-light" @onclick="RefreshProjectedItemCatalogAsync">Refresh</button>
+					</div>
 				</div>
 				<div class="card-body">
 					@if (!string.IsNullOrWhiteSpace(ProjectedCatalogStatusMessage)) {
