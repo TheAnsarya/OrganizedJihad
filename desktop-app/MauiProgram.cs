@@ -22,6 +22,7 @@ public static class MauiProgram {
 		// Register services
 		builder.Services.AddScoped<SyncService>();
 		builder.Services.AddScoped<RecommendationSettingsService>();
+		builder.Services.AddScoped<ProjectedItemCatalogClientService>();
 
 		// TODO: Add API host service once ASP.NET Core hosting is configured
 		// builder.Services.AddSingleton<ApiHostService>();

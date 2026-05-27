@@ -1,5 +1,6 @@
 @page "/settings"
 @inject RecommendationSettingsService RecommendationSettings
+@inject ProjectedItemCatalogClientService ProjectedCatalogClient
 @using System.Net.Http.Json
 
 <PageTitle>Settings - OrganizedJihad</PageTitle>
@@ -516,25 +517,15 @@
 	}
 
 	private async Task RefreshProjectedItemCatalogAsync() {
-		try {
-			var baseUrl = RecommendationSettings.GetRecommendationApiBaseUrl().TrimEnd('/');
-			using var client = new HttpClient { Timeout = TimeSpan.FromSeconds(3) };
-			var payload = await client.GetFromJsonAsync<ProjectedItemCatalogResponseModel>($"{baseUrl}/api/sync/projections/item-catalog");
-
-			ProjectedItemCatalog = payload;
-			ProjectedCatalogSampleRows = payload?.Items
-				.OrderBy(i => i.ItemId)
-				.Take(20)
-				.ToList() ?? [];
-
-			ProjectedCatalogStatusMessage = payload is null
-				? "Projected item catalog endpoint returned no payload."
-				: $"Loaded {payload.Items.Count} canonical items and {payload.Aliases.Count} aliases.";
-		} catch (Exception ex) {
-			ProjectedItemCatalog = null;
-			ProjectedCatalogSampleRows = [];
-			ProjectedCatalogStatusMessage = $"Projected item catalog unavailable: {ex.Message}";
-		}
+		var result = await ProjectedCatalogClient.GetProjectedItemCatalogAsync();
+		ProjectedItemCatalog = result.Payload;
+		ProjectedCatalogSampleRows = result.Payload?.Items
+			.OrderBy(i => i.ItemId)
+			.Take(20)
+			.ToList() ?? [];
+		ProjectedCatalogStatusMessage = result.IsSuccess && result.Payload is not null
+			? $"Loaded {result.Payload.Items.Count} canonical items and {result.Payload.Aliases.Count} aliases."
+			: result.Message;
 	}
 
 	private sealed class ToolCatalogResponseModel {
@@ -594,19 +585,6 @@
 		public double MeanBrierScore { get; set; }
 		public double PredictionBias { get; set; }
 		public double SuggestedFrictionScale { get; set; }
-	}
-
-	private sealed class ProjectedItemCatalogResponseModel {
-		public DateTime GeneratedAtUtc { get; set; }
-		public List<ProjectedItemCatalogEntryModel> Items { get; set; } = [];
-		public Dictionary<string, string> Aliases { get; set; } = [];
-	}
-
-	private sealed class ProjectedItemCatalogEntryModel {
-		public string ItemId { get; set; } = string.Empty;
-		public string DisplayName { get; set; } = string.Empty;
-		public string Category { get; set; } = string.Empty;
-		public string Icon { get; set; } = string.Empty;
 	}
 
 	private static bool IsStale(DateTime lastReviewedUtc) {

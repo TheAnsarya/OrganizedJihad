@@ -239,3 +239,41 @@
 
 ## Known Follow-up
 - Consider moving projected catalog payload models into shared desktop service classes to avoid repeated DTOs across pages.
+
+---
+
+## Session
+- Date: 2026-05-27
+- Session Number: 8
+- Scope: Extract projected item catalog API consumption into shared desktop service.
+
+## Summary
+- Created and implemented issue #189.
+- Added shared desktop service `ProjectedItemCatalogClientService` with centralized endpoint call and typed models.
+- Updated both consumers to use the shared service:
+	- Settings projected parity card
+	- Dedicated projected catalog page
+- Removed duplicated projected catalog DTO definitions from Razor pages.
+
+## Files Modified
+- desktop-app/MauiProgram.cs
+- desktop-app/Components/Pages/Settings.razor
+- desktop-app/Components/Pages/ProjectedItemCatalog.razor
+- ~docs/copilot-chats/2026-05-27-requirements-item-icon-enrichment.md
+
+## Files Created
+- desktop-app/Services/ProjectedItemCatalogClientService.cs
+
+## Issues Referenced
+- #189 Extract projected item catalog API client into shared desktop service
+
+## Validation
+- dotnet test OrganizedJihad.sln: passed (91 tests)
+- Razor/C# diagnostics for affected files: no errors
+
+## Key Decisions
+- Returned a simple result envelope (`ProjectedItemCatalogFetchResult`) from the shared service to preserve page-specific status rendering while centralizing transport and model concerns.
+- Registered service as scoped in MAUI DI to match existing page/service usage patterns.
+
+## Known Follow-up
+- Consider extending this client-service pattern to Team Recommendation and Tool Catalog endpoint calls currently implemented directly in Settings.

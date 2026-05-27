@@ -1,6 +1,5 @@
 @page "/projected-item-catalog"
-@inject RecommendationSettingsService RecommendationSettings
-@using System.Net.Http.Json
+@inject ProjectedItemCatalogClientService ProjectedCatalogClient
 
 <PageTitle>Projected Item Catalog - OrganizedJihad</PageTitle>
 
@@ -219,32 +218,11 @@
 	private async Task RefreshAsync() {
 		try {
 			IsLoading = true;
-			var baseUrl = RecommendationSettings.GetRecommendationApiBaseUrl().TrimEnd('/');
-			using var client = new HttpClient { Timeout = TimeSpan.FromSeconds(3) };
-			var response = await client.GetFromJsonAsync<ProjectedItemCatalogResponseModel>($"{baseUrl}/api/sync/projections/item-catalog");
-
-			Payload = response;
-			StatusMessage = response is null
-				? "Projected item catalog endpoint returned no payload."
-				: $"Loaded {response.Items.Count} canonical items and {response.Aliases.Count} aliases from API.";
-		} catch (Exception ex) {
-			Payload = null;
-			StatusMessage = $"Projected item catalog unavailable: {ex.Message}";
+			var result = await ProjectedCatalogClient.GetProjectedItemCatalogAsync();
+			Payload = result.Payload;
+			StatusMessage = result.Message;
 		} finally {
 			IsLoading = false;
 		}
-	}
-
-	private sealed class ProjectedItemCatalogResponseModel {
-		public DateTime GeneratedAtUtc { get; set; }
-		public List<ProjectedItemCatalogEntryModel> Items { get; set; } = [];
-		public Dictionary<string, string> Aliases { get; set; } = [];
-	}
-
-	private sealed class ProjectedItemCatalogEntryModel {
-		public string ItemId { get; set; } = string.Empty;
-		public string DisplayName { get; set; } = string.Empty;
-		public string Category { get; set; } = string.Empty;
-		public string Icon { get; set; } = string.Empty;
 	}
 }
