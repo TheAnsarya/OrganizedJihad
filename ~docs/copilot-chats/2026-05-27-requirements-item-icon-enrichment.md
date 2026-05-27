@@ -133,3 +133,37 @@
 - Replace emoji-based icon mapping with maintained sprite/asset IDs.
 - Continue seeding catalog entries based on observed top projected IDs.
 - Add API/Desktop parity contract for canonical item metadata payloads.
+
+---
+
+## Session
+- Date: 2026-05-27
+- Session Number: 5
+- Scope: Add API parity endpoint for projected item catalog metadata.
+
+## Summary
+- Created and implemented issue #186.
+- Added new API endpoint: `GET /api/sync/projections/item-catalog`.
+- Added API models for projected item catalog payload (canonical items + alias map).
+- Added seeded projected item catalog + aliases in `SyncService` and exposed through controller.
+- Added SyncController integration tests validating payload shape, seeded entries, aliases, and deterministic sorting.
+
+## Files Modified
+- api/Controllers/SyncController.cs
+- api/Services/SyncService.cs
+- tests/OrganizedJihad.Api.Tests/SyncControllerTests.cs
+
+## Files Created
+- api/Models/ProjectedItemCatalogModels.cs
+
+## Issues Referenced
+- #186 Add API endpoint for projected item catalog metadata parity
+
+## Validation
+- dotnet test tests/OrganizedJihad.Api.Tests/OrganizedJihad.Api.Tests.csproj --filter "ProjectedItemCatalog|ToolCatalog|SyncController": passed
+- dotnet test OrganizedJihad.sln: passed (91 tests)
+
+## Known Follow-up
+- Decide if API payload should expose icon glyphs or stable icon asset tokens only.
+- Add desktop-app consumption path for `/api/sync/projections/item-catalog`.
+- Consider moving projected item catalog constants into a shared contract package for C#/JS parity.

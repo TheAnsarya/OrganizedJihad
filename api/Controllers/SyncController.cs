@@ -18,6 +18,7 @@ namespace OrganizedJihad.Api.Controllers;
 /// - GET /api/sync/snapshots - Get recent player snapshots
 /// - GET /api/sync/battles - Get recent battle history
 /// - GET /api/sync/battles/recommendations - Get ranked battle team recommendations
+/// - GET /api/sync/projections/item-catalog - Get deterministic projected item metadata catalog
 /// - GET /api/sync/opponents - Get all tracked opponents
 /// - GET /api/sync/hero-upgrades - Get hero upgrade history
 /// - GET /api/sync/titan-upgrades - Get titan upgrade history
@@ -571,6 +572,31 @@ public class SyncController : ControllerBase {
 			return Ok(result);
 		} catch (Exception ex) {
 			_logger.LogError(ex, "Error retrieving external tool catalog filter metadata");
+			return StatusCode(500, new { error = ex.Message });
+		}
+	}
+
+	/// <summary>
+	/// Get deterministic projected-item catalog metadata for cross-client parity.
+	/// </summary>
+	/// <returns>Canonical item metadata and alias mappings</returns>
+	/// <response code="200">Returns projected item catalog payload</response>
+	/// <response code="500">Error occurred while building projected item catalog</response>
+	/// <remarks>
+	/// GET: api/sync/projections/item-catalog
+	///
+	/// This endpoint exposes canonical projected-item display metadata (labels,
+	/// categories, icon tokens, and aliases) used by userscript/desktop clients.
+	/// </remarks>
+	[HttpGet("projections/item-catalog")]
+	[ProducesResponseType(typeof(ProjectedItemCatalogResponse), StatusCodes.Status200OK)]
+	[ProducesResponseType(typeof(object), StatusCodes.Status500InternalServerError)]
+	public IActionResult GetProjectedItemCatalog() {
+		try {
+			var result = _syncService.GetProjectedItemCatalog();
+			return Ok(result);
+		} catch (Exception ex) {
+			_logger.LogError(ex, "Error retrieving projected item catalog metadata");
 			return StatusCode(500, new { error = ex.Message });
 		}
 	}

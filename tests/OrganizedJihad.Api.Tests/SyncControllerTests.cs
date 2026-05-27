@@ -370,6 +370,47 @@ public class SyncControllerTests : IClassFixture<WebApplicationFactory<Program>>
 	}
 
 	/// <summary>
+	/// Verifies projected item catalog endpoint returns canonical seeded entries and aliases.
+	/// </summary>
+	[Fact]
+	public async Task ProjectedItemCatalog_Should_Return_Seeded_Items_And_Aliases() {
+		// Act
+		var response = await _client.GetAsync("/api/sync/projections/item-catalog");
+
+		// Assert
+		response.StatusCode.Should().Be(HttpStatusCode.OK);
+		var payload = await response.Content.ReadFromJsonAsync<ProjectedItemCatalogResponse>();
+		payload.Should().NotBeNull();
+
+		payload!.GeneratedAtUtc.Should().NotBe(default);
+		payload.Items.Should().NotBeEmpty();
+		payload.Aliases.Should().NotBeEmpty();
+
+		payload.Items.Should().Contain(i => i.ItemId == "xp_potion_l" && i.DisplayName == "Large XP Potion");
+		payload.Items.Should().Contain(i => i.ItemId == "item_red_fragment" && i.Category == "fragment");
+		payload.Aliases.Should().ContainKey("xp_potion_large");
+		payload.Aliases["xp_potion_large"].Should().Be("xp_potion_l");
+	}
+
+	/// <summary>
+	/// Verifies projected item catalog endpoint returns deterministic sorted item IDs.
+	/// </summary>
+	[Fact]
+	public async Task ProjectedItemCatalog_Should_Return_Items_Sorted_By_ItemId() {
+		// Act
+		var response = await _client.GetAsync("/api/sync/projections/item-catalog");
+
+		// Assert
+		response.StatusCode.Should().Be(HttpStatusCode.OK);
+		var payload = await response.Content.ReadFromJsonAsync<ProjectedItemCatalogResponse>();
+		payload.Should().NotBeNull();
+
+		var sortedIds = payload!.Items.Select(i => i.ItemId).OrderBy(i => i).ToList();
+		var returnedIds = payload.Items.Select(i => i.ItemId).ToList();
+		returnedIds.Should().Equal(sortedIds);
+	}
+
+	/// <summary>
 	/// Verifies team recommendation engine endpoint returns mode-aware cards.
 	/// </summary>
 	[Fact]
