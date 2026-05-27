@@ -528,3 +528,36 @@
 
 ## Known Follow-up
 - Consider adding keyboard shortcuts for projection section expand/collapse controls in the overlay.
+
+---
+
+## Session
+- Date: 2026-05-27
+- Session Number: 16
+- Scope: Improve projection table readability with sticky headers and bounded scroll regions.
+
+## Summary
+- Created and implemented issue #197.
+- Added scroll-container wrappers around Heroes projection tables.
+- Added sticky-header table styling for projection summary/item tables so headers stay visible during scroll.
+- Kept projection math and collapse-state behavior unchanged.
+
+## Files Modified
+- userscript/src/modules/uiManager.js
+- userscript/src/styles/main.css
+- ~docs/copilot-chats/2026-05-27-requirements-item-icon-enrichment.md
+
+## Issues Referenced
+- #197 Add sticky headers and scroll containers for Heroes projection summary tables
+
+## Validation
+- yarn test --runInBand: passed (18 suites, 706 tests)
+- yarn build: passed (version 0.9.106)
+- UIManager diagnostics: no errors
+
+## Key Decisions
+- Used CSS-only sticky headers with lightweight scroll wrappers to avoid changing data render flow or adding JS complexity.
+- Reused existing table markup with narrow class additions (`oj-projection-scroll`, `oj-projection-table`).
+
+## Known Follow-up
+- Tune projection table max-height responsively by viewport size for small screens.

@@ -35,7 +35,8 @@ Status update:
 - Collapse/expand controls for tier and level-band sections are now implemented in Heroes projection panel.
 - Persisted expand/collapse preferences are now implemented for projection sections.
 - One-click Expand All / Collapse All controls are now implemented for projection sections.
-- Remaining: sticky headers + lightweight virtualization.
+- Sticky headers and bounded scroll containers are now implemented for projection tables.
+- Remaining: lightweight virtualization and responsive max-height tuning.
 
 5. Model calibration
 - Recompute projection baselines by mode/time window (e.g., 30/90-day behavior).
