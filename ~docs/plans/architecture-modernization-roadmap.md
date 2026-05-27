@@ -108,6 +108,18 @@
 - Status: Completed on `feature/204-architecture-modernization`.
 - Outcome target: isolate adventure-guide panel rendering and grouping logic from `uiManager`.
 
+25. #230 Extract activity event feed rendering from uiManager into renderer module
+- Status: Completed on `feature/204-architecture-modernization`.
+- Outcome target: isolate live activity event row/list rendering from `uiManager`.
+
+26. #231 Extract dashboard lower subsection rendering from uiManager into renderer module
+- Status: Completed on `feature/204-architecture-modernization`.
+- Outcome target: isolate dashboard Tracked Data, Status, and Quick Tips section rendering from `uiManager`.
+
+27. #232 Extract activity fallback API-log rendering from uiManager into renderer module
+- Status: Completed on `feature/204-architecture-modernization`.
+- Outcome target: isolate activity empty-state and API-log fallback table rendering from `uiManager`.
+
 ## Validation Strategy
 - API changes: run `dotnet test tests/OrganizedJihad.Api.Tests/OrganizedJihad.Api.Tests.csproj` and `dotnet test OrganizedJihad.sln`.
 - Userscript changes: run `yarn test --runInBand` and `yarn build`.
@@ -115,7 +127,7 @@
 
 ## Notes
 - Parallel issue creation caused issue-number drift; canonical mapping is documented in epic #206 comments.
-- Completed slices so far: #205, #208, #204, #207, #210, #211, #212, #213, #214, #215, #216, #217, #218, #219, #220, #221, #222, #223, #224, #225, #226, #227, #228, and #229 (API seams + controller split + userscript renderer/binder extraction).
+- Completed slices so far: #205, #208, #204, #207, #210, #211, #212, #213, #214, #215, #216, #217, #218, #219, #220, #221, #222, #223, #224, #225, #226, #227, #228, #229, #230, #231, and #232 (API seams + controller split + userscript renderer/binder extraction).
 - Existing unrelated dirty files remain intentionally untouched:
   - `userscript/package.json`
   - `~docs/oj-manual-prompts-log.txt`

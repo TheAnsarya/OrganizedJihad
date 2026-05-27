@@ -904,6 +904,46 @@
 
 ## Session
 - Date: 2026-05-27
+- Session Number: 31
+- Scope: Execute several medium-risk userscript uiManager renderer extraction slices for activity and dashboard sections.
+
+## Summary
+- Completed three medium-risk slices:
+	- #230 extracted activity event feed rendering from `uiManager` into `activityFeedRenderer`
+	- #231 extracted dashboard lower subsections (Tracked Data, Status, Quick Tips) into `dashboardLowerSectionsRenderer`
+	- #232 extracted activity fallback empty-state/API-log rendering into `activityFeedRenderer`
+- Preserved orchestration/data retrieval in `uiManager` while moving markup blocks into focused renderer modules.
+
+## Files Modified
+- userscript/src/modules/uiManager.js
+- userscript/src/modules/renderers/activityFeedRenderer.js
+- ~docs/plans/architecture-modernization-roadmap.md
+- ~docs/copilot-chats/2026-05-27-requirements-item-icon-enrichment.md
+
+## Files Created
+- userscript/src/modules/renderers/dashboardLowerSectionsRenderer.js
+
+## Issues Referenced
+- #206 Epic: Architecture modernization and module deepening across API/userscript
+- #230 Extract activity event feed rendering from uiManager into renderer module
+- #231 Extract dashboard lower subsection rendering from uiManager into renderer module
+- #232 Extract activity fallback API-log rendering from uiManager into renderer module
+
+## Validation
+- For each slice, `yarn test --runInBand` passed (18 suites, 706 tests)
+- For each slice, `yarn build` passed (webpack production build succeeded; existing bundle-size warnings only)
+
+## Key Decisions
+- Kept extraction boundaries renderer-only (no data/query flow changes) to maintain low regression risk.
+- Matched existing fallback/status markup semantics when moving activity/dashboard blocks.
+
+## Known Follow-up
+- Continue medium-risk renderer decomposition for remaining large dashboard/player-content blocks if desired.
+
+---
+
+## Session
+- Date: 2026-05-27
 - Session Number: 36
 - Scope: Continue both requested next-step tracks with several medium-risk slices focused on activity helpers and larger battle/adventure render seams in `uiManager`.
 
