@@ -904,6 +904,47 @@
 
 ## Session
 - Date: 2026-05-27
+- Session Number: 32
+- Scope: Continue architecture modernization with several additional slices across both tracks: listener orchestration decomposition and helper/renderer extraction from `uiManager`.
+
+## Summary
+- Completed three slices:
+	- #218 extracted dashboard filter listener wiring into binder module
+	- #219 extracted overlay chrome control listener wiring into binder module
+	- #220 extracted shared data-browser search/pagination helper rendering into renderer module
+- Preserved selectors and behavior contracts while reducing `uiManager` listener/helper density.
+
+## Files Modified
+- userscript/src/modules/uiManager.js
+- ~docs/plans/architecture-modernization-roadmap.md
+- ~docs/copilot-chats/2026-05-27-requirements-item-icon-enrichment.md
+
+## Files Created
+- userscript/src/modules/binders/dashboardFiltersBinder.js
+- userscript/src/modules/binders/overlayChromeControlsBinder.js
+- userscript/src/modules/renderers/dataBrowserSharedRenderer.js
+
+## Issues Referenced
+- #206 Epic: Architecture modernization and module deepening across API/userscript
+- #218 Extract dashboard filter listeners from uiManager into binder module
+- #219 Extract overlay chrome control listeners from uiManager into binder module
+- #220 Extract shared data-browser search/pagination render helpers from uiManager
+
+## Validation
+- For each slice, `yarn test --runInBand` passed (18 suites, 706 tests)
+- For each slice, `yarn build` passed (webpack production build succeeded; existing bundle-size warnings only)
+
+## Key Decisions
+- Kept drag/resize and document-level hotkey handling out of #219 to keep each slice narrow and low-risk.
+- Extracted shared render helpers via method delegation first, preserving all existing `uiManager` call sites.
+
+## Known Follow-up
+- Continue decomposing remaining document-level interaction orchestration and additional view-specific helper blocks from `uiManager`.
+
+---
+
+## Session
+- Date: 2026-05-27
 - Session Number: 31
 - Scope: Execute several additional settings-focused userscript architecture slices by extracting remaining `attachSettingsEventListeners` listener clusters from `uiManager`.
 

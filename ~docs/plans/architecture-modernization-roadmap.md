@@ -60,6 +60,18 @@
 - Status: Completed on `feature/204-architecture-modernization`.
 - Outcome target: isolate notification settings listener wiring (master/type/permission/quiet hours) from `uiManager`.
 
+13. #218 Extract dashboard filter listeners from uiManager into binder module
+- Status: Completed on `feature/204-architecture-modernization`.
+- Outcome target: isolate dashboard filter listener wiring (tools/team mode/objective/trend-window) from `uiManager`.
+
+14. #219 Extract overlay chrome control listeners from uiManager into binder module
+- Status: Completed on `feature/204-architecture-modernization`.
+- Outcome target: isolate top-level overlay chrome controls (nav/close/minimize/reset) from `uiManager`.
+
+15. #220 Extract shared data-browser search/pagination render helpers from uiManager
+- Status: Completed on `feature/204-architecture-modernization`.
+- Outcome target: isolate shared data-browser render helper markup from `uiManager`.
+
 ## Validation Strategy
 - API changes: run `dotnet test tests/OrganizedJihad.Api.Tests/OrganizedJihad.Api.Tests.csproj` and `dotnet test OrganizedJihad.sln`.
 - Userscript changes: run `yarn test --runInBand` and `yarn build`.
@@ -67,7 +79,7 @@
 
 ## Notes
 - Parallel issue creation caused issue-number drift; canonical mapping is documented in epic #206 comments.
-- Completed slices so far: #205, #208, #204, #207, #210, #211, #212, #213, #214, #215, #216, and #217 (API seams + controller split + userscript renderer/binder extraction).
+- Completed slices so far: #205, #208, #204, #207, #210, #211, #212, #213, #214, #215, #216, #217, #218, #219, and #220 (API seams + controller split + userscript renderer/binder extraction).
 - Existing unrelated dirty files remain intentionally untouched:
   - `userscript/package.json`
   - `~docs/oj-manual-prompts-log.txt`
