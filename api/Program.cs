@@ -20,6 +20,7 @@
 using Microsoft.EntityFrameworkCore;
 using OrganizedJihad.Api.Services.ProjectedItemCatalog;
 using OrganizedJihad.Api.Services;
+using OrganizedJihad.Api.Services.ToolCatalog;
 using OrganizedJihad.Data;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -47,6 +48,7 @@ builder.Services.AddDbContextFactory<GameDatabaseContext>(options =>
 // Scoped lifetime ensures one instance per HTTP request
 // https://learn.microsoft.com/en-us/dotnet/core/extensions/dependency-injection#service-lifetimes
 builder.Services.AddScoped<IProjectedItemCatalogProvider, SeededProjectedItemCatalogProvider>();
+builder.Services.AddScoped<IExternalToolCatalogProvider, CuratedExternalToolCatalogProvider>();
 builder.Services.AddScoped<SyncService>();
 
 var app = builder.Build();

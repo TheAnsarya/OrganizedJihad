@@ -13,11 +13,11 @@
 
 ## Workstream Backlog
 1. #205 Extract projected item catalog module from SyncService
-- Status: In progress on branch (implemented in this slice, pending issue close after commit push).
+- Status: Completed on `feature/204-architecture-modernization`.
 - Outcome target: `SyncService` delegates projected catalog payload construction to dedicated provider interface.
 
 2. #208 Extract external tool catalog module and filter metadata provider
-- Status: Planned.
+- Status: Completed on `feature/204-architecture-modernization`.
 - Outcome target: move tool catalog/filter metadata logic into dedicated adapter module and delegate from sync orchestration.
 
 3. #204 Split SyncController read/query endpoints from import orchestration surface
@@ -35,6 +35,7 @@
 
 ## Notes
 - Parallel issue creation caused issue-number drift; canonical mapping is documented in epic #206 comments.
+- Completed slices so far: #205 and #208 (both API metadata seams extracted from `SyncService`).
 - Existing unrelated dirty files remain intentionally untouched:
   - `userscript/package.json`
   - `~docs/oj-manual-prompts-log.txt`

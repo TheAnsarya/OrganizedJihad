@@ -4,6 +4,7 @@ using OrganizedJihad.Api.Models;
 using OrganizedJihad.Api.Services.ProjectedItemCatalog;
 using OrganizedJihad.Api.Services.Simulation;
 using OrganizedJihad.Api.Services.TeamRecommendation;
+using OrganizedJihad.Api.Services.ToolCatalog;
 using OrganizedJihad.Data;
 using OrganizedJihad.Data.Models;
 using System;
@@ -41,6 +42,7 @@ public class SyncService {
 	private readonly IBattleSimulator _battleSimulator;
 	private readonly IReadOnlyList<IExternalRecommendationSignalProvider> _externalSignalProviders;
 	private readonly IProjectedItemCatalogProvider _projectedItemCatalogProvider;
+	private readonly IExternalToolCatalogProvider _externalToolCatalogProvider;
 
 	/// <summary>
 	/// Initializes a new instance of the SyncService.
@@ -55,6 +57,7 @@ public class SyncService {
 		_battleSimulator = new MonteCarloBattleSimulator(new BaselineBattleFeatureExtractor());
 		_externalSignalProviders = [new CuratedToolCatalogSignalProvider()];
 		_projectedItemCatalogProvider = new SeededProjectedItemCatalogProvider();
+		_externalToolCatalogProvider = new CuratedExternalToolCatalogProvider();
 	}
 
 	/// <summary>
@@ -72,6 +75,27 @@ public class SyncService {
 		_battleSimulator = new MonteCarloBattleSimulator(new BaselineBattleFeatureExtractor());
 		_externalSignalProviders = [new CuratedToolCatalogSignalProvider()];
 		_projectedItemCatalogProvider = projectedItemCatalogProvider;
+		_externalToolCatalogProvider = new CuratedExternalToolCatalogProvider();
+	}
+
+	/// <summary>
+	/// Initializes a new instance of the SyncService with explicit metadata provider seams.
+	/// </summary>
+	/// <param name="contextFactory">Factory for creating database contexts</param>
+	/// <param name="logger">Logger for diagnostic information</param>
+	/// <param name="projectedItemCatalogProvider">Projected item catalog provider seam</param>
+	/// <param name="externalToolCatalogProvider">External tool catalog provider seam</param>
+	public SyncService(
+		IDbContextFactory<GameDatabaseContext> contextFactory,
+		ILogger<SyncService> logger,
+		IProjectedItemCatalogProvider projectedItemCatalogProvider,
+		IExternalToolCatalogProvider externalToolCatalogProvider) {
+		_contextFactory = contextFactory;
+		_logger = logger;
+		_battleSimulator = new MonteCarloBattleSimulator(new BaselineBattleFeatureExtractor());
+		_externalSignalProviders = [new CuratedToolCatalogSignalProvider()];
+		_projectedItemCatalogProvider = projectedItemCatalogProvider;
+		_externalToolCatalogProvider = externalToolCatalogProvider;
 	}
 
 	/// <summary>
@@ -2141,133 +2165,14 @@ public class SyncService {
 		string? verificationStatus = null,
 		string? sort = null
 	) {
-		var reviewedAtRecent = new DateTime(2026, 5, 26, 0, 0, 0, DateTimeKind.Utc);
-		var reviewedAtStale = new DateTime(2025, 12, 1, 0, 0, 0, DateTimeKind.Utc);
-
-		var tools = new List<ToolCatalogEntry> {
-			new ToolCatalogEntry {
-				Name = "Hero Wars Simulator (Chrome Extension)",
-				Url = "https://chromewebstore.google.com/detail/hero-wars-simulator/oolajlfdlkcekemoilmmhkajgneokggb",
-				Category = "simulator",
-				Capabilities = "Battle calculation/simulation for arena, guild war, raid, and cross-server contexts.",
-				Caveats = "Third-party service; treat as reference only. Do not copy proprietary implementation code.",
-				LastReviewedUtc = reviewedAtRecent,
-				ConfidenceScore = 0.80,
-			},
-			new ToolCatalogEntry {
-				Name = "HW-Simulator",
-				Url = "https://www.hw-simulator.com/",
-				Category = "simulator",
-				Capabilities = "Simulator-focused site with extension ecosystem and feature plans.",
-				Caveats = "Backend-dependent tool; availability and assumptions may change.",
-				LastReviewedUtc = reviewedAtRecent,
-				ConfidenceScore = 0.76,
-			},
-			new ToolCatalogEntry {
-				Name = "HW Assistant",
-				Url = "https://hw-assist.com/",
-				Category = "extension",
-				Capabilities = "Automation/assistant extension with logs and workflow helpers.",
-				Caveats = "Automation tooling may conflict with personal policy/risk tolerance.",
-				LastReviewedUtc = reviewedAtRecent,
-				ConfidenceScore = 0.70,
-			},
-			new ToolCatalogEntry {
-				Name = "Hero Wars Hub",
-				Url = "https://herowarshub.com/",
-				Category = "calculator",
-				Capabilities = "Tooling and guides including Mysterious Island simulator resources.",
-				Caveats = "Community-maintained content; verify against current game patches.",
-				LastReviewedUtc = reviewedAtRecent,
-				ConfidenceScore = 0.74,
-			},
-			new ToolCatalogEntry {
-				Name = "Hero Wars Calculator Hub",
-				Url = "https://www.hwcalculator.com/",
-				Category = "calculator",
-				Capabilities = "Resource planning calculators for evolution, artifacts, and upgrades.",
-				Caveats = "Treat outputs as planning aids; cross-check in-game values before committing resources.",
-				LastReviewedUtc = reviewedAtRecent,
-				ConfidenceScore = 0.78,
-			},
-			new ToolCatalogEntry {
-				Name = "Hero Wars Central",
-				Url = "https://www.herowarscentral.com/",
-				Category = "guides",
-				Capabilities = "Event guides, team suggestions, and strategy writeups.",
-				Caveats = "Content opinions vary; use as directional signal with local telemetry confirmation.",
-				LastReviewedUtc = reviewedAtStale,
-				ConfidenceScore = 0.72,
-			},
-		};
-
-		var now = DateTime.UtcNow;
-		foreach (var tool in tools) {
-			tool.VerificationStatus = ComputeVerificationStatus(tool, now);
-		}
-
-		if (minConfidence.HasValue) {
-			var threshold = Math.Clamp(minConfidence.Value, 0d, 1d);
-			tools = tools.Where(t => t.ConfidenceScore >= threshold).ToList();
-		}
-
-		if (!includeStale) {
-			tools = tools.Where(t => !string.Equals(t.VerificationStatus, "stale", StringComparison.OrdinalIgnoreCase)).ToList();
-		}
-
-		if (!string.IsNullOrWhiteSpace(category)) {
-			var categoryFilter = category.Trim();
-			tools = tools.Where(t => string.Equals(t.Category, categoryFilter, StringComparison.OrdinalIgnoreCase)).ToList();
-		}
-
-		if (!string.IsNullOrWhiteSpace(verificationStatus)) {
-			var statusFilter = verificationStatus.Trim();
-			tools = tools.Where(t => string.Equals(t.VerificationStatus, statusFilter, StringComparison.OrdinalIgnoreCase)).ToList();
-		}
-
-		var normalizedSort = (sort ?? "confidence").Trim().ToLowerInvariant();
-		tools = normalizedSort switch {
-			"name" => tools.OrderBy(t => t.Name).ToList(),
-			"reviewed" => tools.OrderByDescending(t => t.LastReviewedUtc).ToList(),
-			_ => tools.OrderByDescending(t => t.ConfidenceScore).ThenBy(t => t.Name).ToList(),
-		};
-
-		return new ToolCatalogResponse {
-			GeneratedAtUtc = now,
-			Tools = tools,
-		};
+		return _externalToolCatalogProvider.BuildCatalog(minConfidence, includeStale, category, verificationStatus, sort);
 	}
 
 	/// <summary>
 	/// Returns supported filter/sort metadata for the external tool catalog endpoint.
 	/// </summary>
 	public ToolCatalogFilterMetadataResponse GetExternalToolCatalogFilterMetadata() {
-		var now = DateTime.UtcNow;
-		var catalog = GetExternalToolCatalog(includeStale: true, sort: "name");
-
-		var categories = catalog.Tools
-			.Select(t => t.Category)
-			.Where(c => !string.IsNullOrWhiteSpace(c))
-			.Distinct(StringComparer.OrdinalIgnoreCase)
-			.OrderBy(c => c)
-			.ToList();
-
-		var statuses = catalog.Tools
-			.Select(t => t.VerificationStatus)
-			.Where(s => !string.IsNullOrWhiteSpace(s))
-			.Distinct(StringComparer.OrdinalIgnoreCase)
-			.OrderBy(s => s)
-			.ToList();
-
-		return new ToolCatalogFilterMetadataResponse {
-			GeneratedAtUtc = now,
-			Categories = categories,
-			VerificationStatuses = statuses,
-			SortOptions = ["confidence", "reviewed", "name"],
-			DefaultMinConfidence = 0.65,
-			DefaultIncludeStale = false,
-			DefaultSort = "confidence",
-		};
+		return _externalToolCatalogProvider.BuildFilterMetadata();
 	}
 
 	/// <summary>
@@ -2275,23 +2180,6 @@ public class SyncService {
 	/// </summary>
 	public ProjectedItemCatalogResponse GetProjectedItemCatalog() {
 		return _projectedItemCatalogProvider.BuildCatalog();
-	}
-
-	private static string ComputeVerificationStatus(ToolCatalogEntry entry, DateTime nowUtc) {
-		var ageDays = (nowUtc - entry.LastReviewedUtc).TotalDays;
-		if (entry.LastReviewedUtc == default || ageDays > 90) {
-			return "stale";
-		}
-
-		if (entry.ConfidenceScore >= 0.75) {
-			return "verified";
-		}
-
-		if (entry.ConfidenceScore >= 0.60) {
-			return "partial";
-		}
-
-		return "unverified";
 	}
 
 	private static string NormalizeTeamRecommendationMode(string? mode) {

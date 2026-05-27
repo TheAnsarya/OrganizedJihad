@@ -818,3 +818,44 @@
 
 ## Known Follow-up
 - Continue epic #206 by extracting external tool catalog/filter metadata logic from `SyncService` (#208).
+
+---
+
+## Session
+- Date: 2026-05-27
+- Session Number: 24
+- Scope: Continue architecture modernization epic with external tool catalog seam extraction.
+
+## Summary
+- Implemented issue #208 by extracting external tool catalog logic from `SyncService` into a dedicated provider seam.
+- Added `IExternalToolCatalogProvider` interface and `CuratedExternalToolCatalogProvider` adapter.
+- `SyncService` now delegates:
+	- `GetExternalToolCatalog(...)`
+	- `GetExternalToolCatalogFilterMetadata()`
+- Registered external tool catalog provider in API DI container.
+- Updated architecture roadmap statuses (marked #205 and #208 complete).
+
+## Files Modified
+- api/Services/SyncService.cs
+- api/Program.cs
+- ~docs/plans/architecture-modernization-roadmap.md
+- ~docs/copilot-chats/2026-05-27-requirements-item-icon-enrichment.md
+
+## Files Created
+- api/Services/ToolCatalog/ExternalToolCatalogContracts.cs
+- api/Services/ToolCatalog/CuratedExternalToolCatalogProvider.cs
+
+## Issues Referenced
+- #206 Epic: Architecture modernization and module deepening across API/userscript
+- #208 Extract external tool catalog module and filter metadata provider
+
+## Validation
+- dotnet test tests/OrganizedJihad.Api.Tests/OrganizedJihad.Api.Tests.csproj: passed (52 tests)
+- dotnet test OrganizedJihad.sln: passed (91 tests)
+
+## Key Decisions
+- Reused constructor-compatibility pattern in `SyncService` (default adapters in 2/3-arg constructors, full seam injection in 4-arg constructor).
+- Preserved endpoint contracts by moving logic only, without changing query parameter semantics or response models.
+
+## Known Follow-up
+- Continue epic #206 with #204 controller responsibility split and #207 userscript `uiManager` decomposition.
