@@ -31,6 +31,7 @@ import { renderHeroRequirementsProjectionPanel } from './renderers/heroRequireme
 import { renderBattleTeam } from './renderers/battleTeamRenderer.js';
 import { renderPagination, renderSearchBar } from './renderers/dataBrowserSharedRenderer.js';
 import { renderAdventureGuide } from './renderers/adventureGuideRenderer.js';
+import { renderActivityEventsFeed } from './renderers/activityFeedRenderer.js';
 import {
 	buildInstallHealthCheckModel,
 	renderInstallHealthDiagnosticsOutput,
@@ -1894,27 +1895,13 @@ class UIManager {
 			`;
 		}
 
-		// Render color-coded activity events
-		const displayLimit = DISPLAY_LIMIT_ACTIVITY;
-		const rows = events.slice(0, displayLimit).map((evt) => {
-			const time = evt.timestamp ? new Date(evt.timestamp).toLocaleTimeString() : '\u2014';
-			const colorClass = this._activityColorClass(evt);
-			const icon = this._activityIcon(evt);
-			return `
-				<div class="oj-activity-row ${colorClass}">
-					<span class="oj-activity-time oj-mono">${time}</span>
-					<span class="oj-activity-icon">${icon}</span>
-					<span class="oj-activity-msg">${this._escapeHtml(evt.message || '')}</span>
-				</div>
-			`;
-		}).join('');
-
-		return `
-			<div class="oj-activity">
-				<h3>\uD83D\uDCE1 Live Activity Feed <span class="oj-muted">(showing ${Math.min(events.length, displayLimit)} of ${events.length} events)</span></h3>
-				<div class="oj-activity-list">${rows}</div>
-			</div>
-		`;
+		return renderActivityEventsFeed({
+			events,
+			displayLimit: DISPLAY_LIMIT_ACTIVITY,
+			activityColorClass: (evt) => this._activityColorClass(evt),
+			activityIcon: (evt) => this._activityIcon(evt),
+			escapeHtml: (value) => this._escapeHtml(value),
+		});
 	}
 
 	/**
