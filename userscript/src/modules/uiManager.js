@@ -20,6 +20,7 @@ import { bindDataBrowserMiscInteractions } from './binders/dataBrowserMiscBinder
 import { bindDashboardFilters } from './binders/dashboardFiltersBinder.js';
 import { bindOverlayChromeControls } from './binders/overlayChromeControlsBinder.js';
 import { bindOverlayEscapeKey } from './binders/overlayEscapeKeyBinder.js';
+import { bindOverlayDraggable, bindOverlayResizable } from './binders/overlayPointerInteractionsBinder.js';
 import { bindSettingsHealthActions } from './binders/settingsHealthActionsBinder.js';
 import { bindSettingsDataActions } from './binders/settingsDataActionsBinder.js';
 import { bindSettingsDisplayTracking } from './binders/settingsDisplayTrackingBinder.js';
@@ -382,70 +383,13 @@ class UIManager {
 	 * dragged off-screen (#49).
 	 */
 	makeDraggable() {
-		const header = this.overlay.querySelector('.oj-header');
-		let isDragging = false;
-		let startX, startY, startLeft, startTop;
-
-		header.addEventListener('mousedown', (e) => {
-			// Don't start drag on button clicks
-			if (e.target.closest('button')) return;
-
-			isDragging = true;
-
-			// On first drag, switch from right-positioned to left-positioned
-			if (this.overlay.style.left === '' || this.overlay.style.left === 'auto') {
-				const rect = this.overlay.getBoundingClientRect();
-				this.overlay.style.left = rect.left + 'px';
-				this.overlay.style.top = rect.top + 'px';
-				this.overlay.style.right = 'auto';
-			}
-
-			startX = e.clientX;
-			startY = e.clientY;
-			startLeft = parseInt(this.overlay.style.left, 10) || 0;
-			startTop = parseInt(this.overlay.style.top, 10) || 0;
-
-			header.style.cursor = 'grabbing';
-			e.preventDefault();
-		});
-
-		this._addDocListener('mousemove', (e) => {
-			if (!isDragging) return;
-			e.preventDefault();
-
-			const dx = e.clientX - startX;
-			const dy = e.clientY - startY;
-
-			// Clamp to viewport boundaries (#49)
-			// Ensure at least 40px of the header stays visible so the user
-			// can always grab it to drag it back.
-			const w = this.overlay.offsetWidth;
-			const h = this.overlay.offsetHeight;
-			const vw = window.innerWidth;
-			const vh = window.innerHeight;
-			const minVisible = 40;
-
-			let newLeft = startLeft + dx;
-			let newTop = startTop + dy;
-
-			newLeft = Math.max(-w + minVisible, Math.min(newLeft, vw - minVisible));
-			newTop = Math.max(0, Math.min(newTop, vh - minVisible));
-
-			this.overlay.style.left = newLeft + 'px';
-			this.overlay.style.top = newTop + 'px';
-		});
-
-		this._addDocListener('mouseup', () => {
-			if (!isDragging) return;
-			isDragging = false;
-			header.style.cursor = 'grab';
-
-			// Persist position
-			this._savedPos = {
-				x: parseInt(this.overlay.style.left, 10),
-				y: parseInt(this.overlay.style.top, 10),
-			};
-			this.prefStorage.set('overlayPosition', this._savedPos);
+		bindOverlayDraggable({
+			overlay: this.overlay,
+			prefStorage: this.prefStorage,
+			addDocListener: (eventName, handler) => this._addDocListener(eventName, handler),
+			setSavedPos: (savedPos) => {
+				this._savedPos = savedPos;
+			},
 		});
 	}
 
@@ -455,63 +399,13 @@ class UIManager {
 	 * and persists size in localStorage. (#49 — viewport clamping)
 	 */
 	makeResizable() {
-		const handle = this.overlay.querySelector('#oj-resize-handle');
-		if (!handle) return;
-
-		const MIN_WIDTH = 400;
-		const MIN_HEIGHT = 300;
-		let isResizing = false;
-		let startX, startY, startW, startH;
-
-		handle.addEventListener('mousedown', (e) => {
-			isResizing = true;
-
-			// Need explicit left/top so resize works after position is set
-			if (this.overlay.style.left === '' || this.overlay.style.left === 'auto') {
-				const rect = this.overlay.getBoundingClientRect();
-				this.overlay.style.left = rect.left + 'px';
-				this.overlay.style.top = rect.top + 'px';
-				this.overlay.style.right = 'auto';
-			}
-
-			startX = e.clientX;
-			startY = e.clientY;
-			startW = this.overlay.offsetWidth;
-			startH = this.overlay.offsetHeight;
-
-			e.preventDefault();
-			e.stopPropagation();
-		});
-
-		this._addDocListener('mousemove', (e) => {
-			if (!isResizing) return;
-			e.preventDefault();
-
-			// Clamp max size to viewport from current position (#49)
-			const left = parseInt(this.overlay.style.left, 10) || 0;
-			const top = parseInt(this.overlay.style.top, 10) || 0;
-			const maxW = window.innerWidth - left;
-			const maxH = window.innerHeight - top;
-
-			const newW = Math.max(MIN_WIDTH, Math.min(startW + (e.clientX - startX), maxW));
-			const newH = Math.max(MIN_HEIGHT, Math.min(startH + (e.clientY - startY), maxH));
-
-			this.overlay.style.width = newW + 'px';
-			this.overlay.style.height = newH + 'px';
-			// Remove max-height constraint set by CSS so manual height works
-			this.overlay.style.maxHeight = 'none';
-		});
-
-		this._addDocListener('mouseup', () => {
-			if (!isResizing) return;
-			isResizing = false;
-
-			// Persist size
-			this._savedSize = {
-				w: this.overlay.offsetWidth,
-				h: this.overlay.offsetHeight,
-			};
-			this.prefStorage.set('overlaySize', this._savedSize);
+		bindOverlayResizable({
+			overlay: this.overlay,
+			prefStorage: this.prefStorage,
+			addDocListener: (eventName, handler) => this._addDocListener(eventName, handler),
+			setSavedSize: (savedSize) => {
+				this._savedSize = savedSize;
+			},
 		});
 	}
 
