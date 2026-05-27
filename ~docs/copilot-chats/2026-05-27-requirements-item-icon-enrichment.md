@@ -940,6 +940,41 @@
 ## Session
 - Date: 2026-05-27
 - Session Number: 32
+- Scope: Execute another 18-slice architecture wave (#270-#287) across `renderUpgrades`, `renderChests`, `renderResources`, and `renderMail`.
+
+## Summary
+- Created and completed 18 issue-backed slices in one wave:
+	- Upgrades: #270, #271, #272, #273
+	- Chests: #274, #275, #276, #277, #278, #279
+	- Resources: #280, #281, #282
+	- Mail: #283, #284, #285, #286, #287
+- Refactored `uiManager` to delegate all major loader/view-model/row-render responsibilities for these views into focused helper methods while preserving current behavior.
+
+## Files Modified
+- userscript/src/modules/uiManager.js
+- ~docs/plans/architecture-modernization-roadmap.md
+- ~docs/copilot-chats/2026-05-27-requirements-item-icon-enrichment.md
+
+## Issues Referenced
+- #206 Epic: Architecture modernization and module deepening across API/userscript
+- #270, #271, #272, #273, #274, #275, #276, #277, #278, #279, #280, #281, #282, #283, #284, #285, #286, #287
+
+## Validation
+- `yarn test --runInBand`: passed (18 suites, 706 tests)
+- `yarn build`: passed (webpack production build succeeded; existing bundle-size warnings only)
+
+## Key Decisions
+- Kept this wave as in-file helper extraction (no new module files) to maximize throughput and minimize merge friction.
+- Preserved UI contracts (selectors, tables, badge classes, pagination behavior, reward summaries) while reducing method complexity.
+
+## Known Follow-up
+- Continue the same issue-first decomposition approach on remaining complex rendering surfaces and long helper chains in `uiManager`.
+
+---
+
+## Session
+- Date: 2026-05-27
+- Session Number: 32
 - Scope: Execute a sustained issue-first multi-slice modernization wave across userscript `uiManager` dashboard/heroes recommendation seams.
 
 ## Summary

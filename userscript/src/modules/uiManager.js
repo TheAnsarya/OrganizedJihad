@@ -2080,25 +2080,12 @@ class UIManager {
 	async renderUpgrades() {
 		const vs = this._viewState.upgrades;
 
-		// ── Load all upgrade events from IDB stores ─────────────────────
-		let heroUpgrades = [];
-		let titanUpgrades = [];
-		let equipChanges = [];
-
-		try {
-			[heroUpgrades, titanUpgrades, equipChanges] = await Promise.all([
-				this.idbStorage.getAll('heroUpgrades', FETCH_LIMIT_LARGE).catch(() => []),
-				this.idbStorage.getAll('titanUpgrades', FETCH_LIMIT_LARGE).catch(() => []),
-				this.idbStorage.getAll('equipmentChanges', FETCH_LIMIT_LARGE).catch(() => []),
-			]);
-		} catch { /* empty */ }
-
-		// Tag each record with its source category
-		heroUpgrades.forEach((r) => { r._category = 'hero'; });
-		titanUpgrades.forEach((r) => { r._category = 'titan'; });
-		equipChanges.forEach((r) => { r._category = 'equipment'; r.upgradeType = r.changeType || 'equipped'; });
-
-		const allUpgrades = [...heroUpgrades, ...titanUpgrades, ...equipChanges];
+		const {
+			heroUpgrades,
+			titanUpgrades,
+			equipChanges,
+			allUpgrades,
+		} = await this._loadUpgradesDataset();
 
 		if (allUpgrades.length === 0) {
 			return `
@@ -2109,35 +2096,12 @@ class UIManager {
 			`;
 		}
 
-		// ── Sub-tab pills for category filtering ────────────────────────
-		const categoryCounts = {
-			all: allUpgrades.length,
-			hero: heroUpgrades.length,
-			titan: titanUpgrades.length,
-			equipment: equipChanges.length,
-		};
 
-		const subTab = vs.subTab || 'all';
-		let filtered = subTab === 'all'
-			? allUpgrades
-			: allUpgrades.filter((r) => r._category === subTab);
-
-		// ── Filter by name/type search ──────────────────────────────────
-		if (vs.filter) {
-			const q = vs.filter.toLowerCase();
-			filtered = filtered.filter((r) => {
-				const name = (r.heroName || r.titanName || '').toLowerCase();
-				const type = (r.upgradeType || '').toLowerCase();
-				return name.includes(q) || type.includes(q);
-			});
-		}
-
-		// ── Sort ────────────────────────────────────────────────────────
-		filtered.sort((a, b) => {
-			const ta = a.timestamp ? new Date(a.timestamp).getTime() : 0;
-			const tb = b.timestamp ? new Date(b.timestamp).getTime() : 0;
-			return vs.sortDir === 'asc' ? ta - tb : tb - ta;
-		});
+		const {
+			categoryCounts,
+			filtered,
+			subTab,
+		} = this._buildUpgradesViewModel(allUpgrades, heroUpgrades, titanUpgrades, equipChanges, vs);
 
 		// ── Paginate ────────────────────────────────────────────────────
 		const totalCount = filtered.length;
@@ -2145,73 +2109,11 @@ class UIManager {
 		vs.page = Math.min(vs.page, totalPages - 1);
 		const pageItems = filtered.slice(vs.page * this.PAGE_SIZE, (vs.page + 1) * this.PAGE_SIZE);
 
-		// ── Upgrade type icons ──────────────────────────────────────────
-		const typeIcons = {
-			skill: '\uD83D\uDCD6',      // 📖
-			artifact: '\uD83D\uDD2E',   // 🔮
-			skin: '\uD83C\uDFA8',       // 🎨
-			glyph: '\uD83D\uDD36',      // 🔶
-			level: '\uD83D\uDCC8',       // 📈
-			star: '\u2B50',              // ⭐
-			color: '\uD83C\uDF08',       // 🌈
-			equipped: '\uD83D\uDEE1\uFE0F', // 🛡️
-			upgraded: '\u2B06\uFE0F',    // ⬆️
-			evolved: '\uD83D\uDD04',     // 🔄
-		};
 
-		// ── Build rows ──────────────────────────────────────────────────
-		const rows = pageItems.map((r) => {
-			const ts = r.timestamp ? new Date(r.timestamp) : null;
-			const timeStr = ts ? ts.toLocaleString() : '\u2014';
-			const name = this._escapeHtml(r.heroName || r.titanName || '\u2014');
-			const type = r.upgradeType || 'unknown';
-			const icon = typeIcons[type] || '\u2728';
-			const categoryBadge = r._category === 'hero'
-				? '<span class="oj-badge-hero">Hero</span>'
-				: r._category === 'titan'
-					? '<span class="oj-badge-titan">Titan</span>'
-					: '<span class="oj-badge-equip">Equip</span>';
+		const rows = this._renderUpgradeRows(pageItems);
 
-			// Build detail string based on upgrade type
-			let detail = '';
-			if (type === 'skill') {
-				detail = `Skill #${r.skillSlot ?? 0} \u2192 Lv.${r.skillLevelAfter || '?'}`;
-			} else if (type === 'artifact') {
-				detail = `${r.artifactType || r.artifactName || 'Artifact'} \u2192 Lv.${r.levelAfter || '?'}`;
-			} else if (type === 'skin') {
-				detail = `${r.skinName || 'Skin'} \u2192 Lv.${r.levelAfter || '?'}${r.isNewUnlock ? ' \uD83C\uDD95' : ''}`;
-			} else if (type === 'glyph') {
-				detail = `${r.glyphType || 'Glyph'} enchanted`;
-			} else if (type === 'level') {
-				detail = `\u2192 Lv.${r.levelAfter || '?'}`;
-			} else if (type === 'star') {
-				detail = `${r.starsBefore || '?'}\u2605 \u2192 ${r.starsAfter || '?'}\u2605`;
-			} else if (type === 'color') {
-				detail = `${r.colorBefore || '?'} \u2192 ${r.colorAfter || '?'}`;
-			} else if (r._category === 'equipment') {
-				detail = `Slot ${r.slotIndex ?? '?'} ${type}`;
-			}
 
-			const powerStr = r.powerAfter ? r.powerAfter.toLocaleString() : '\u2014';
-
-			return `
-				<tr class="oj-upgrade-row">
-					<td class="oj-mono">${timeStr}</td>
-					<td>${categoryBadge}</td>
-					<td><strong>${name}</strong></td>
-					<td>${icon} ${this._escapeHtml(type)}</td>
-					<td>${detail}</td>
-					<td class="oj-num">${powerStr}</td>
-				</tr>
-			`;
-		}).join('');
-
-		// ── Sub-tab pills ───────────────────────────────────────────────
-		const pills = Object.entries(categoryCounts).map(([key, count]) => {
-			const active = key === subTab ? 'oj-pill-active' : '';
-			const labels = { all: 'All', hero: '\uD83E\uDDB8 Hero', titan: '\uD83D\uDCA0 Titan', equipment: '\uD83D\uDEE1\uFE0F Equipment' };
-			return `<button class="oj-pill-btn ${active}" data-sub-tab="${key}">${labels[key] || key} (${count})</button>`;
-		}).join('');
+		const pills = this._renderUpgradeSubTabPills(categoryCounts, subTab);
 
 		const sortInd = (field) => this._sortIndicator(vs.sortField, vs.sortDir, field);
 
@@ -2246,40 +2148,12 @@ class UIManager {
 	async renderChests() {
 		const vs = this._viewState.chests;
 
-		// ── Load chest openings from IDB store first (proper source) ────
-		let chests = [];
-		try {
-			chests = await this.idbStorage.getAll('chests', FETCH_LIMIT_LARGE);
-		} catch { /* empty */ }
-
-		// Fallback: metadata cache for pre-Phase-10 data
-		if (chests.length === 0) {
-			try {
-				const cached = await this.idbStorage.getMetadata('chestOpeningHistory', null);
-				if (Array.isArray(cached) && cached.length > 0) {
-					chests = cached;
-				}
-			} catch { /* empty */ }
-		}
-
-		// ── Load aggregated drop rates from metadata ────────────────────
-		let dropRates = {};
-		try {
-			dropRates = (await this.idbStorage.getMetadata('chestDropRates', null)) || {};
-		} catch { /* empty */ }
-
-		// Defer heavy consumableRewards load until we know it's needed.
-		// This avoids fetching up to 50,000 records when pre-aggregated
-		// drop rates already exist (#150 performance).
-		let allDrops = [];
-		let _dropsLoaded = false;
-		const _ensureDrops = async () => {
-			if (_dropsLoaded) return;
-			_dropsLoaded = true;
-			try {
-				allDrops = await this.idbStorage.getAll('consumableRewards', FETCH_LIMIT_DROPS);
-			} catch { /* empty */ }
-		};
+		const {
+			chests,
+			dropRates,
+			allDrops,
+			dropsLoaded,
+		} = await this._loadChestDatasetBundle();
 
 		if (chests.length === 0 && Object.keys(dropRates).length === 0) {
 			return `
@@ -2290,191 +2164,28 @@ class UIManager {
 			`;
 		}
 
-		// Sort openings newest first
-		chests.sort((a, b) => {
-			const ta = typeof a.timestamp === 'number' ? a.timestamp : new Date(a.timestamp || 0).getTime();
-			const tb = typeof b.timestamp === 'number' ? b.timestamp : new Date(b.timestamp || 0).getTime();
-			return tb - ta;
-		});
-
-		// ── Summary stats: count by type ────────────────────────────────
-		const byType = {};
-		for (const c of chests) {
-			const type = c.chestType || c.type || 'Unknown';
-			byType[type] = (byType[type] || 0) + 1;
-		}
-
 		const sourceLabels = {
 			genericChest: 'Chest', artifactChest: 'Artifact', titanArtifactChest: 'Titan Artifact',
 			petChest: 'Pet', lootBox: 'Loot Box', towerChest: 'Tower', outlandChest: 'Outland',
 		};
 
-		const typePills = Object.entries(byType).map(([type, count]) => {
-			const label = sourceLabels[type] || type;
-			return `<span class="oj-pill">\uD83C\uDF81 ${this._escapeHtml(label)}: ${count}</span>`;
-		}).join(' ');
-
-		// ── Drop Rate Analytics ─────────────────────────────────────────
-		let dropRateHtml = '';
-		if (Object.keys(dropRates).length > 0) {
-			const tables = [];
-			for (const [chestKey, info] of Object.entries(dropRates)) {
-				if (!info.itemDrops || Object.keys(info.itemDrops).length === 0) continue;
-
-				const label = sourceLabels[info.chestType] || info.chestType || chestKey;
-				const opens = info.openCount || 0;
-
-				// Sort items by drop count descending
-				const items = Object.values(info.itemDrops)
-					.sort((a, b) => (b.dropCount || 0) - (a.dropCount || 0));
-
-				const itemRows = items.map((item) => {
-					const rate = opens > 0 ? ((item.dropCount / opens) * 100).toFixed(1) : '0.0';
-					const avg = item.dropCount > 0 ? (item.totalAmount / item.dropCount).toFixed(1) : '0';
-					const name = this._escapeHtml(item.name || `${item.type}_${item.id}`);
-					return `
-						<tr>
-							<td>${name}</td>
-							<td class="oj-num">${item.dropCount}</td>
-							<td class="oj-num">${item.totalAmount.toLocaleString()}</td>
-							<td class="oj-num">${avg}</td>
-							<td class="oj-num oj-drop-rate">${rate}%</td>
-						</tr>
-					`;
-				}).join('');
-
-				tables.push(`
-					<div class="oj-drop-rate-section">
-						<h4 class="oj-section-sub">${this._escapeHtml(label)} <span class="oj-muted">(${opens} openings)</span></h4>
-						<table class="oj-table oj-table-compact">
-							<thead>
-								<tr><th>Item</th><th>Drops</th><th>Total Qty</th><th>Avg/Drop</th><th>Rate</th></tr>
-							</thead>
-							<tbody>${itemRows}</tbody>
-						</table>
-					</div>
-				`);
-			}
-			if (tables.length > 0) {
-				dropRateHtml = `
-					<div class="oj-drop-rates">
-						<h3>\uD83D\uDCCA Drop Rate Analysis</h3>
-						${tables.join('')}
-					</div>
-				`;
-			}
-		}
-
-		// Also build a drop-rate section from raw consumableRewards data if available
+		const typePills = this._renderChestTypePills(chests, sourceLabels);
+		let dropRateHtml = this._renderChestDropRatesFromMetadata(dropRates, sourceLabels);
 		if (!dropRateHtml) {
-			await _ensureDrops();
-		}
-		if (allDrops.length > 0 && !dropRateHtml) {
-			// Group by sourceType+sourceId → itemType+itemId
-			const grouped = {};
-			for (const drop of allDrops) {
-				const key = `${drop.sourceType}_${drop.sourceId}`;
-				if (!grouped[key]) {
-					grouped[key] = { sourceType: drop.sourceType, sourceId: drop.sourceId, openCount: 0, items: {} };
-				}
-				const itemKey = `${drop.itemType}_${drop.itemId}`;
-				if (!grouped[key].items[itemKey]) {
-					grouped[key].items[itemKey] = { type: drop.itemType, id: drop.itemId, count: 0, totalQty: 0 };
-				}
-				grouped[key].items[itemKey].count++;
-				grouped[key].items[itemKey].totalQty += drop.quantity || 0;
-			}
-
-			// Count openings per source from chests store
-			for (const c of chests) {
-				const key = `${c.chestType}_${c.sourceId || c.chestId || 'unknown'}`;
-				if (grouped[key]) grouped[key].openCount += (c.quantity || 1);
-			}
-
-			const tables = [];
-			for (const [key, info] of Object.entries(grouped)) {
-				const label = sourceLabels[info.sourceType] || info.sourceType || key;
-				const opens = info.openCount || Object.values(info.items).reduce((s, i) => Math.max(s, i.count), 0);
-
-				const items = Object.values(info.items).sort((a, b) => b.count - a.count);
-				const itemRows = items.map((item) => {
-					const rate = opens > 0 ? ((item.count / opens) * 100).toFixed(1) : '?';
-					const avg = item.count > 0 ? (item.totalQty / item.count).toFixed(1) : '0';
-					return `
-						<tr>
-							<td>${this._escapeHtml(`${item.type}:${item.id}`)}</td>
-							<td class="oj-num">${item.count}</td>
-							<td class="oj-num">${item.totalQty.toLocaleString()}</td>
-							<td class="oj-num">${avg}</td>
-							<td class="oj-num oj-drop-rate">${rate}%</td>
-						</tr>
-					`;
-				}).join('');
-
-				tables.push(`
-					<div class="oj-drop-rate-section">
-						<h4 class="oj-section-sub">${this._escapeHtml(label)} <span class="oj-muted">(~${opens} openings)</span></h4>
-						<table class="oj-table oj-table-compact">
-							<thead><tr><th>Item</th><th>Drops</th><th>Total Qty</th><th>Avg/Drop</th><th>Rate</th></tr></thead>
-							<tbody>${itemRows}</tbody>
-						</table>
-					</div>
-				`);
-			}
-			if (tables.length > 0) {
-				dropRateHtml = `<div class="oj-drop-rates"><h3>\uD83D\uDCCA Drop Rate Analysis</h3>${tables.join('')}</div>`;
-			}
+			dropRateHtml = this._renderChestDropRatesFromRawDrops(allDrops, chests, sourceLabels);
 		}
 
-		// ── Filter openings list ────────────────────────────────────────
-		let filteredChests = chests;
-		if (vs.filter) {
-			const q = vs.filter.toLowerCase();
-			filteredChests = chests.filter((c) => {
-				const type = (c.chestType || c.type || '').toLowerCase();
-				return type.includes(q);
-			});
-		}
 
-		// ── Paginate ────────────────────────────────────────────────────
-		const totalCount = filteredChests.length;
-		const totalPages = Math.max(1, Math.ceil(totalCount / this.PAGE_SIZE));
-		vs.page = Math.min(vs.page, totalPages - 1);
-		const pageItems = filteredChests.slice(vs.page * this.PAGE_SIZE, (vs.page + 1) * this.PAGE_SIZE);
-
-		const rows = pageItems.map((c) => {
-			const time = c.timestamp
-				? new Date(typeof c.timestamp === 'number' ? c.timestamp : c.timestamp).toLocaleString()
-				: '\u2014';
-			const type = this._escapeHtml(sourceLabels[c.chestType] || c.chestType || c.type || 'Unknown');
-			const drops = c.dropCount ?? (Array.isArray(c.rewards) ? c.rewards.length : '\u2014');
-
-			// Render individual reward items if available
-			let rewardDetail = '\u2014';
-			if (Array.isArray(c.rewards) && c.rewards.length > 0) {
-				rewardDetail = c.rewards.map((r) => {
-					const itemName = this._escapeHtml(r.name || r.itemName || `${r.type || r.itemType || '?'}:${r.id || r.itemId || '?'}`);
-					const qty = r.quantity || r.count || 1;
-					return `<span class="oj-reward-item">${itemName} \u00D7${qty}</span>`;
-				}).join(', ');
-			} else if (c.rewardSummary) {
-				rewardDetail = this._escapeHtml(c.rewardSummary);
-			}
-
-			return `
-				<tr>
-					<td class="oj-mono">${time}</td>
-					<td>${type}</td>
-					<td class="oj-num">${drops}</td>
-					<td class="oj-num">${c.quantity || 1}</td>
-					<td class="oj-reward-list">${rewardDetail}</td>
-				</tr>
-			`;
-		}).join('');
+		const {
+			pageItems,
+			totalCount,
+			totalPages,
+		} = this._buildChestHistoryViewModel(chests, vs);
+		const rows = this._renderChestOpeningRows(pageItems, sourceLabels);
 
 		return `
 			<div class="oj-chests" data-browser="chests">
-				<h3>\uD83C\uDF81 Chests & Drop Rates <span class="oj-muted">(${chests.length} openings${_dropsLoaded ? ` \u2022 ${allDrops.length} drops tracked` : ''})</span></h3>
+				<h3>\uD83C\uDF81 Chests & Drop Rates <span class="oj-muted">(${chests.length} openings${dropsLoaded ? ` \u2022 ${allDrops.length} drops tracked` : ''})</span></h3>
 				<div class="oj-pills">${typePills}</div>
 				${dropRateHtml}
 				<h4 class="oj-section-sub">Opening History</h4>
@@ -2621,35 +2332,7 @@ class UIManager {
 	 * @returns {Promise<string>} HTML content
 	 */
 	async renderResources() {
-		// Get current player data from metadata (set by trackPlayerData)
-		let playerData = null;
-		try {
-			playerData = await this.idbStorage.getMetadata('playerData', null);
-		} catch { /* empty */ }
-
-		// Also try the latest snapshot as fallback
-		let snap = null;
-		if (!playerData) {
-			try {
-				const snapshots = await this.idbStorage.getPage('snapshots', { limit: 1, direction: 'prev' });
-				if (snapshots.length > 0) {
-					snap = snapshots[0];
-				}
-			} catch { /* empty */ }
-		}
-
-		// Get recent resource transactions
-		let transactions = [];
-		try {
-			transactions = await this.idbStorage.getAll('resourceTransactions', FETCH_LIMIT_TRANSACTIONS);
-			transactions.sort((a, b) => {
-				const ta = a.timestamp ? new Date(a.timestamp).getTime() : 0;
-				const tb = b.timestamp ? new Date(b.timestamp).getTime() : 0;
-				return tb - ta;
-			});
-		} catch { /* empty */ }
-
-		const src = playerData || snap;
+		const { src, transactions } = await this._loadResourcesDataset();
 		if (!src && transactions.length === 0) {
 			return `
 				<div class="oj-resources">
@@ -2659,63 +2342,8 @@ class UIManager {
 			`;
 		}
 
-		// Current resources section
-		let cardsHtml = '';
-		if (src) {
-			const ts = src.timestamp ? new Date(src.timestamp).toLocaleString() : 'Unknown';
-			const resources = [
-				{ label: 'Gold', value: src.gold, icon: '\uD83E\uDE99' },
-				{ label: 'Emeralds', value: src.starmoney || src.emeralds, icon: '\uD83D\uDC8E' },
-				{ label: 'Energy', value: src.stamina || src.energy, icon: '\u26A1' },
-				{ label: 'Level', value: src.level, icon: '\uD83D\uDCC8' },
-				{ label: 'VIP Level', value: src.vipLevel || src.vip, icon: '\uD83D\uDC51' },
-				{ label: 'Arena Coins', value: src.arenaCoins, icon: '\uD83C\uDFC6' },
-				{ label: 'Tower Coins', value: src.towerCoins, icon: '\uD83C\uDFF0' },
-				{ label: 'Friendship Pts', value: src.friendshipPoints || src.friendship, icon: '\uD83E\uDD1D' },
-			].filter((r) => r.value !== undefined && r.value !== null);
-
-			const cards = resources.map((r) => `
-				<div class="oj-resource-card${r.label === 'Emeralds' ? ' oj-clickable' : ''}"${r.label === 'Emeralds' ? ' data-resource-filter="emeralds"' : ''}>
-					<div class="oj-resource-icon">${r.icon}</div>
-					<div class="oj-resource-amount">${typeof r.value === 'number' ? r.value.toLocaleString() : r.value}</div>
-					<div class="oj-resource-label">${r.label}</div>
-				</div>
-			`).join('');
-
-			cardsHtml = cards
-				? `<h4 class="oj-section-sub">Current Resources <span class="oj-muted">(as of ${ts})</span></h4>
-				   <div class="oj-stats-grid">${cards}</div>`
-				: '';
-		}
-
-		// Recent transactions section
-		let txHtml = '';
-		if (transactions.length > 0) {
-			const txRows = transactions.slice(0, 30).map((tx) => {
-				const time = tx.timestamp ? new Date(tx.timestamp).toLocaleString() : '\u2014';
-				const amount = tx.amount || 0;
-				const sign = amount >= 0 ? '+' : '';
-				const amtClass = amount >= 0 ? 'oj-positive' : 'oj-negative';
-				const type = this._escapeHtml(tx.resourceType || tx.type || '\u2014');
-				const source = this._escapeHtml(tx.source || tx.reason || '\u2014');
-				return `
-					<tr>
-						<td class="oj-mono">${time}</td>
-						<td>${type}</td>
-						<td class="${amtClass} oj-num">${sign}${amount.toLocaleString()}</td>
-						<td>${source}</td>
-					</tr>
-				`;
-			}).join('');
-
-			txHtml = `
-				<h4 class="oj-section-sub">Recent Transactions <span class="oj-muted">(${transactions.length})</span></h4>
-				<table class="oj-table">
-					<thead><tr><th>Time</th><th>Resource</th><th>Amount</th><th>Source</th></tr></thead>
-					<tbody>${txRows}</tbody>
-				</table>
-			`;
-		}
+		const cardsHtml = this._renderResourceCardsSection(src);
+		const txHtml = this._renderResourceTransactionsSection(transactions);
 
 		return `
 			<div class="oj-resources">
@@ -2739,17 +2367,7 @@ class UIManager {
 	 * @returns {Promise<string>} HTML content
 	 */
 	async renderMail() {
-		// ── Mail list from metadata ─────────────────────────────────────
-		let mailData = null;
-		try {
-			mailData = await this.idbStorage.getMetadata('mailData', null);
-		} catch { /* empty */ }
-
-		// ── Collected rewards from IDB ──────────────────────────────────
-		let rewards = [];
-		try {
-			rewards = await this.idbStorage.getAll('mailRewards', FETCH_LIMIT_MEDIUM);
-		} catch { /* empty */ }
+		const { mailData, rewards } = await this._loadMailDataset();
 
 		if (!mailData && rewards.length === 0) {
 			return `
@@ -2765,57 +2383,12 @@ class UIManager {
 		if (mailData && Array.isArray(mailData.items) && mailData.items.length > 0) {
 			const vs = this._viewState.mail;
 
-			let items = [...mailData.items];
-
-			// Filter
-			if (vs.filter) {
-				const q = vs.filter.toLowerCase();
-				items = items.filter((m) =>
-					(m.subject || '').toLowerCase().includes(q) ||
-					(m.mailType || '').toLowerCase().includes(q)
-				);
-			}
-
-			// Sort
-			items = this._sortData(items, vs.sortField, vs.sortDir);
-
-			// Paginate
-			const totalCount = items.length;
-			const totalPages = Math.max(1, Math.ceil(totalCount / this.PAGE_SIZE));
-			vs.page = Math.min(vs.page, totalPages - 1);
-			const pageItems = items.slice(vs.page * this.PAGE_SIZE, (vs.page + 1) * this.PAGE_SIZE);
-
-			const rows = pageItems.map((m) => {
-				const statusIcon = m.isCollected ? '\u2705' : m.isRead ? '\uD83D\uDCE8' : '\uD83D\uDCE9';
-				const subject = this._escapeHtml(m.subject || '(no subject)');
-				const type = this._escapeHtml(m.mailType || 'unknown');
-				const date = m.receivedAt ? new Date(m.receivedAt).toLocaleString() : '\u2014';
-
-				// Summarize attached rewards
-				let rewardSummary = '\u2014';
-				if (m.rewards && typeof m.rewards === 'object') {
-					const parts = [];
-					for (const [key, val] of Object.entries(m.rewards)) {
-						if (typeof val === 'number' && val > 0) {
-							parts.push(`${key}: ${val.toLocaleString()}`);
-						} else if (typeof val === 'object' && val !== null) {
-							const count = Object.values(val).reduce((s, v) => s + (typeof v === 'number' ? v : 0), 0);
-							if (count > 0) parts.push(`${key}: ${count.toLocaleString()} items`);
-						}
-					}
-					if (parts.length > 0) rewardSummary = parts.join(', ');
-				}
-
-				return `
-					<tr>
-						<td>${statusIcon}</td>
-						<td>${subject}</td>
-						<td><span class="oj-badge">${type}</span></td>
-						<td class="oj-muted">${date}</td>
-						<td class="oj-muted">${rewardSummary}</td>
-					</tr>
-				`;
-			}).join('');
+			const {
+				pageItems,
+				totalCount,
+				totalPages,
+			} = this._buildMailListViewModel(mailData.items, vs);
+			const rows = this._renderMailInboxRows(pageItems);
 
 			const sortInd = (field) => this._sortIndicator(vs.sortField, vs.sortDir, field);
 
@@ -2841,55 +2414,7 @@ class UIManager {
 		}
 
 		// ── Collected rewards section ───────────────────────────────────
-		let rewardHtml = '';
-		if (rewards.length > 0) {
-			// Group by rewardType for a summary view
-			const byType = {};
-			for (const r of rewards) {
-				const key = r.rewardType || 'unknown';
-				if (!byType[key]) byType[key] = { count: 0, totalQty: 0, items: {} };
-				byType[key].count++;
-				byType[key].totalQty += r.quantity || 0;
-				const itemKey = r.rewardId || 'unknown';
-				byType[key].items[itemKey] = (byType[key].items[itemKey] || 0) + (r.quantity || 0);
-			}
-
-			const typeRows = Object.entries(byType)
-				.sort((a, b) => b[1].totalQty - a[1].totalQty)
-				.map(([type, info]) => {
-					const topItems = Object.entries(info.items)
-						.sort((a, b) => b[1] - a[1])
-						.slice(0, 5)
-						.map(([id, qty]) => `${this._escapeHtml(resolveHeroName(id) || id)}: ${qty.toLocaleString()}`)
-						.join(', ');
-
-					return `
-						<tr>
-							<td><strong>${this._escapeHtml(type)}</strong></td>
-							<td class="oj-num">${info.count.toLocaleString()}</td>
-							<td class="oj-num">${info.totalQty.toLocaleString()}</td>
-							<td class="oj-muted">${topItems}</td>
-						</tr>
-					`;
-				}).join('');
-
-			rewardHtml = `
-				<div class="oj-mail-rewards">
-					<h4>\uD83C\uDF81 Collected Rewards <span class="oj-muted">(${rewards.length} entries)</span></h4>
-					<table class="oj-table">
-						<thead>
-							<tr>
-								<th>Type</th>
-								<th>Collections</th>
-								<th>Total Qty</th>
-								<th>Top Items</th>
-							</tr>
-						</thead>
-						<tbody>${typeRows}</tbody>
-					</table>
-				</div>
-			`;
-		}
+		const rewardHtml = this._renderMailCollectedRewardsSection(rewards);
 
 		return `
 			<div class="oj-mail">
@@ -4298,6 +3823,536 @@ class UIManager {
 		} catch {
 			return '';
 		}
+	}
+
+	async _loadUpgradesDataset() {
+		let heroUpgrades = [];
+		let titanUpgrades = [];
+		let equipChanges = [];
+
+		try {
+			[heroUpgrades, titanUpgrades, equipChanges] = await Promise.all([
+				this.idbStorage.getAll('heroUpgrades', FETCH_LIMIT_LARGE).catch(() => []),
+				this.idbStorage.getAll('titanUpgrades', FETCH_LIMIT_LARGE).catch(() => []),
+				this.idbStorage.getAll('equipmentChanges', FETCH_LIMIT_LARGE).catch(() => []),
+			]);
+		} catch { /* empty */ }
+
+		heroUpgrades.forEach((row) => { row._category = 'hero'; });
+		titanUpgrades.forEach((row) => { row._category = 'titan'; });
+		equipChanges.forEach((row) => { row._category = 'equipment'; row.upgradeType = row.changeType || 'equipped'; });
+
+		return {
+			heroUpgrades,
+			titanUpgrades,
+			equipChanges,
+			allUpgrades: [...heroUpgrades, ...titanUpgrades, ...equipChanges],
+		};
+	}
+
+	_buildUpgradesViewModel(allUpgrades, heroUpgrades, titanUpgrades, equipChanges, vs) {
+		const categoryCounts = {
+			all: allUpgrades.length,
+			hero: heroUpgrades.length,
+			titan: titanUpgrades.length,
+			equipment: equipChanges.length,
+		};
+
+		const subTab = vs.subTab || 'all';
+		let filtered = subTab === 'all'
+			? allUpgrades
+			: allUpgrades.filter((row) => row._category === subTab);
+
+		if (vs.filter) {
+			const q = vs.filter.toLowerCase();
+			filtered = filtered.filter((row) => {
+				const name = (row.heroName || row.titanName || '').toLowerCase();
+				const type = (row.upgradeType || '').toLowerCase();
+				return name.includes(q) || type.includes(q);
+			});
+		}
+
+		filtered.sort((a, b) => {
+			const ta = a.timestamp ? new Date(a.timestamp).getTime() : 0;
+			const tb = b.timestamp ? new Date(b.timestamp).getTime() : 0;
+			return vs.sortDir === 'asc' ? ta - tb : tb - ta;
+		});
+
+		return { categoryCounts, filtered, subTab };
+	}
+
+	_renderUpgradeRows(pageItems) {
+		const typeIcons = {
+			skill: '\uD83D\uDCD6',
+			artifact: '\uD83D\uDD2E',
+			skin: '\uD83C\uDFA8',
+			glyph: '\uD83D\uDD36',
+			level: '\uD83D\uDCC8',
+			star: '\u2B50',
+			color: '\uD83C\uDF08',
+			equipped: '\uD83D\uDEE1\uFE0F',
+			upgraded: '\u2B06\uFE0F',
+			evolved: '\uD83D\uDD04',
+		};
+
+		return pageItems.map((row) => {
+			const ts = row.timestamp ? new Date(row.timestamp) : null;
+			const timeStr = ts ? ts.toLocaleString() : '\u2014';
+			const name = this._escapeHtml(row.heroName || row.titanName || '\u2014');
+			const type = row.upgradeType || 'unknown';
+			const icon = typeIcons[type] || '\u2728';
+			const categoryBadge = row._category === 'hero'
+				? '<span class="oj-badge-hero">Hero</span>'
+				: row._category === 'titan'
+					? '<span class="oj-badge-titan">Titan</span>'
+					: '<span class="oj-badge-equip">Equip</span>';
+
+			let detail = '';
+			if (type === 'skill') {
+				detail = `Skill #${row.skillSlot ?? 0} \u2192 Lv.${row.skillLevelAfter || '?'}`;
+			} else if (type === 'artifact') {
+				detail = `${row.artifactType || row.artifactName || 'Artifact'} \u2192 Lv.${row.levelAfter || '?'}`;
+			} else if (type === 'skin') {
+				detail = `${row.skinName || 'Skin'} \u2192 Lv.${row.levelAfter || '?'}${row.isNewUnlock ? ' \uD83C\uDD95' : ''}`;
+			} else if (type === 'glyph') {
+				detail = `${row.glyphType || 'Glyph'} enchanted`;
+			} else if (type === 'level') {
+				detail = `\u2192 Lv.${row.levelAfter || '?'}`;
+			} else if (type === 'star') {
+				detail = `${row.starsBefore || '?'}\u2605 \u2192 ${row.starsAfter || '?'}\u2605`;
+			} else if (type === 'color') {
+				detail = `${row.colorBefore || '?'} \u2192 ${row.colorAfter || '?'}`;
+			} else if (row._category === 'equipment') {
+				detail = `Slot ${row.slotIndex ?? '?'} ${type}`;
+			}
+
+			const powerStr = row.powerAfter ? row.powerAfter.toLocaleString() : '\u2014';
+			return `
+				<tr class="oj-upgrade-row">
+					<td class="oj-mono">${timeStr}</td>
+					<td>${categoryBadge}</td>
+					<td><strong>${name}</strong></td>
+					<td>${icon} ${this._escapeHtml(type)}</td>
+					<td>${detail}</td>
+					<td class="oj-num">${powerStr}</td>
+				</tr>
+			`;
+		}).join('');
+	}
+
+	_renderUpgradeSubTabPills(categoryCounts, subTab) {
+		const labels = {
+			all: 'All',
+			hero: '\uD83E\uDDB8 Hero',
+			titan: '\uD83D\uDCA0 Titan',
+			equipment: '\uD83D\uDEE1\uFE0F Equipment',
+		};
+		return Object.entries(categoryCounts).map(([key, count]) => {
+			const active = key === subTab ? 'oj-pill-active' : '';
+			return `<button class="oj-pill-btn ${active}" data-sub-tab="${key}">${labels[key] || key} (${count})</button>`;
+		}).join('');
+	}
+
+	async _loadChestDatasetBundle() {
+		let chests = [];
+		try {
+			chests = await this.idbStorage.getAll('chests', FETCH_LIMIT_LARGE);
+		} catch { /* empty */ }
+
+		if (chests.length === 0) {
+			try {
+				const cached = await this.idbStorage.getMetadata('chestOpeningHistory', null);
+				if (Array.isArray(cached) && cached.length > 0) {
+					chests = cached;
+				}
+			} catch { /* empty */ }
+		}
+
+		let dropRates = {};
+		try {
+			dropRates = (await this.idbStorage.getMetadata('chestDropRates', null)) || {};
+		} catch { /* empty */ }
+
+		let allDrops = [];
+		let dropsLoaded = false;
+		if (Object.keys(dropRates).length === 0) {
+			try {
+				allDrops = await this.idbStorage.getAll('consumableRewards', FETCH_LIMIT_DROPS);
+				dropsLoaded = allDrops.length > 0;
+			} catch { /* empty */ }
+		}
+
+		chests.sort((a, b) => {
+			const ta = typeof a.timestamp === 'number' ? a.timestamp : new Date(a.timestamp || 0).getTime();
+			const tb = typeof b.timestamp === 'number' ? b.timestamp : new Date(b.timestamp || 0).getTime();
+			return tb - ta;
+		});
+
+		return { chests, dropRates, allDrops, dropsLoaded };
+	}
+
+	_renderChestTypePills(chests, sourceLabels) {
+		const byType = {};
+		for (const chest of chests) {
+			const type = chest.chestType || chest.type || 'Unknown';
+			byType[type] = (byType[type] || 0) + 1;
+		}
+
+		return Object.entries(byType).map(([type, count]) => {
+			const label = sourceLabels[type] || type;
+			return `<span class="oj-pill">\uD83C\uDF81 ${this._escapeHtml(label)}: ${count}</span>`;
+		}).join(' ');
+	}
+
+	_renderChestDropRatesFromMetadata(dropRates, sourceLabels) {
+		if (Object.keys(dropRates).length === 0) return '';
+
+		const tables = [];
+		for (const [chestKey, info] of Object.entries(dropRates)) {
+			if (!info.itemDrops || Object.keys(info.itemDrops).length === 0) continue;
+
+			const label = sourceLabels[info.chestType] || info.chestType || chestKey;
+			const opens = info.openCount || 0;
+			const items = Object.values(info.itemDrops).sort((a, b) => (b.dropCount || 0) - (a.dropCount || 0));
+
+			const itemRows = items.map((item) => {
+				const rate = opens > 0 ? ((item.dropCount / opens) * 100).toFixed(1) : '0.0';
+				const avg = item.dropCount > 0 ? (item.totalAmount / item.dropCount).toFixed(1) : '0';
+				const name = this._escapeHtml(item.name || `${item.type}_${item.id}`);
+				return `
+					<tr>
+						<td>${name}</td>
+						<td class="oj-num">${item.dropCount}</td>
+						<td class="oj-num">${item.totalAmount.toLocaleString()}</td>
+						<td class="oj-num">${avg}</td>
+						<td class="oj-num oj-drop-rate">${rate}%</td>
+					</tr>
+				`;
+			}).join('');
+
+			tables.push(`
+				<div class="oj-drop-rate-section">
+					<h4 class="oj-section-sub">${this._escapeHtml(label)} <span class="oj-muted">(${opens} openings)</span></h4>
+					<table class="oj-table oj-table-compact">
+						<thead>
+							<tr><th>Item</th><th>Drops</th><th>Total Qty</th><th>Avg/Drop</th><th>Rate</th></tr>
+						</thead>
+						<tbody>${itemRows}</tbody>
+					</table>
+				</div>
+			`);
+		}
+
+		if (tables.length === 0) return '';
+		return `<div class="oj-drop-rates"><h3>\uD83D\uDCCA Drop Rate Analysis</h3>${tables.join('')}</div>`;
+	}
+
+	_renderChestDropRatesFromRawDrops(allDrops, chests, sourceLabels) {
+		if (!Array.isArray(allDrops) || allDrops.length === 0) return '';
+
+		const grouped = {};
+		for (const drop of allDrops) {
+			const key = `${drop.sourceType}_${drop.sourceId}`;
+			if (!grouped[key]) {
+				grouped[key] = { sourceType: drop.sourceType, sourceId: drop.sourceId, openCount: 0, items: {} };
+			}
+			const itemKey = `${drop.itemType}_${drop.itemId}`;
+			if (!grouped[key].items[itemKey]) {
+				grouped[key].items[itemKey] = { type: drop.itemType, id: drop.itemId, count: 0, totalQty: 0 };
+			}
+			grouped[key].items[itemKey].count++;
+			grouped[key].items[itemKey].totalQty += drop.quantity || 0;
+		}
+
+		for (const chest of chests) {
+			const key = `${chest.chestType}_${chest.sourceId || chest.chestId || 'unknown'}`;
+			if (grouped[key]) grouped[key].openCount += (chest.quantity || 1);
+		}
+
+		const tables = [];
+		for (const [key, info] of Object.entries(grouped)) {
+			const label = sourceLabels[info.sourceType] || info.sourceType || key;
+			const opens = info.openCount || Object.values(info.items).reduce((s, i) => Math.max(s, i.count), 0);
+			const items = Object.values(info.items).sort((a, b) => b.count - a.count);
+
+			const itemRows = items.map((item) => {
+				const rate = opens > 0 ? ((item.count / opens) * 100).toFixed(1) : '?';
+				const avg = item.count > 0 ? (item.totalQty / item.count).toFixed(1) : '0';
+				return `
+					<tr>
+						<td>${this._escapeHtml(`${item.type}:${item.id}`)}</td>
+						<td class="oj-num">${item.count}</td>
+						<td class="oj-num">${item.totalQty.toLocaleString()}</td>
+						<td class="oj-num">${avg}</td>
+						<td class="oj-num oj-drop-rate">${rate}%</td>
+					</tr>
+				`;
+			}).join('');
+
+			tables.push(`
+				<div class="oj-drop-rate-section">
+					<h4 class="oj-section-sub">${this._escapeHtml(label)} <span class="oj-muted">(~${opens} openings)</span></h4>
+					<table class="oj-table oj-table-compact">
+						<thead><tr><th>Item</th><th>Drops</th><th>Total Qty</th><th>Avg/Drop</th><th>Rate</th></tr></thead>
+						<tbody>${itemRows}</tbody>
+					</table>
+				</div>
+			`);
+		}
+
+		if (tables.length === 0) return '';
+		return `<div class="oj-drop-rates"><h3>\uD83D\uDCCA Drop Rate Analysis</h3>${tables.join('')}</div>`;
+	}
+
+	_buildChestHistoryViewModel(chests, vs) {
+		let filteredChests = chests;
+		if (vs.filter) {
+			const q = vs.filter.toLowerCase();
+			filteredChests = chests.filter((chest) => {
+				const type = (chest.chestType || chest.type || '').toLowerCase();
+				return type.includes(q);
+			});
+		}
+
+		const totalCount = filteredChests.length;
+		const totalPages = Math.max(1, Math.ceil(totalCount / this.PAGE_SIZE));
+		vs.page = Math.min(vs.page, totalPages - 1);
+		const pageItems = filteredChests.slice(vs.page * this.PAGE_SIZE, (vs.page + 1) * this.PAGE_SIZE);
+		return { pageItems, totalCount, totalPages };
+	}
+
+	_renderChestOpeningRows(pageItems, sourceLabels) {
+		return pageItems.map((chest) => {
+			const time = chest.timestamp
+				? new Date(typeof chest.timestamp === 'number' ? chest.timestamp : chest.timestamp).toLocaleString()
+				: '\u2014';
+			const type = this._escapeHtml(sourceLabels[chest.chestType] || chest.chestType || chest.type || 'Unknown');
+			const drops = chest.dropCount ?? (Array.isArray(chest.rewards) ? chest.rewards.length : '\u2014');
+
+			let rewardDetail = '\u2014';
+			if (Array.isArray(chest.rewards) && chest.rewards.length > 0) {
+				rewardDetail = chest.rewards.map((reward) => {
+					const itemName = this._escapeHtml(reward.name || reward.itemName || `${reward.type || reward.itemType || '?'}:${reward.id || reward.itemId || '?'}`);
+					const qty = reward.quantity || reward.count || 1;
+					return `<span class="oj-reward-item">${itemName} \u00D7${qty}</span>`;
+				}).join(', ');
+			} else if (chest.rewardSummary) {
+				rewardDetail = this._escapeHtml(chest.rewardSummary);
+			}
+
+			return `
+				<tr>
+					<td class="oj-mono">${time}</td>
+					<td>${type}</td>
+					<td class="oj-num">${drops}</td>
+					<td class="oj-num">${chest.quantity || 1}</td>
+					<td class="oj-reward-list">${rewardDetail}</td>
+				</tr>
+			`;
+		}).join('');
+	}
+
+	async _loadResourcesDataset() {
+		let playerData = null;
+		try {
+			playerData = await this.idbStorage.getMetadata('playerData', null);
+		} catch { /* empty */ }
+
+		let snap = null;
+		if (!playerData) {
+			try {
+				const snapshots = await this.idbStorage.getPage('snapshots', { limit: 1, direction: 'prev' });
+				if (snapshots.length > 0) {
+					snap = snapshots[0];
+				}
+			} catch { /* empty */ }
+		}
+
+		let transactions = [];
+		try {
+			transactions = await this.idbStorage.getAll('resourceTransactions', FETCH_LIMIT_TRANSACTIONS);
+			transactions.sort((a, b) => {
+				const ta = a.timestamp ? new Date(a.timestamp).getTime() : 0;
+				const tb = b.timestamp ? new Date(b.timestamp).getTime() : 0;
+				return tb - ta;
+			});
+		} catch { /* empty */ }
+
+		return { src: playerData || snap, transactions };
+	}
+
+	_renderResourceCardsSection(src) {
+		if (!src) return '';
+
+		const ts = src.timestamp ? new Date(src.timestamp).toLocaleString() : 'Unknown';
+		const resources = [
+			{ label: 'Gold', value: src.gold, icon: '\uD83E\uDE99' },
+			{ label: 'Emeralds', value: src.starmoney || src.emeralds, icon: '\uD83D\uDC8E' },
+			{ label: 'Energy', value: src.stamina || src.energy, icon: '\u26A1' },
+			{ label: 'Level', value: src.level, icon: '\uD83D\uDCC8' },
+			{ label: 'VIP Level', value: src.vipLevel || src.vip, icon: '\uD83D\uDC51' },
+			{ label: 'Arena Coins', value: src.arenaCoins, icon: '\uD83C\uDFC6' },
+			{ label: 'Tower Coins', value: src.towerCoins, icon: '\uD83C\uDFF0' },
+			{ label: 'Friendship Pts', value: src.friendshipPoints || src.friendship, icon: '\uD83E\uDD1D' },
+		].filter((row) => row.value !== undefined && row.value !== null);
+
+		const cards = resources.map((row) => `
+			<div class="oj-resource-card${row.label === 'Emeralds' ? ' oj-clickable' : ''}"${row.label === 'Emeralds' ? ' data-resource-filter="emeralds"' : ''}>
+				<div class="oj-resource-icon">${row.icon}</div>
+				<div class="oj-resource-amount">${typeof row.value === 'number' ? row.value.toLocaleString() : row.value}</div>
+				<div class="oj-resource-label">${row.label}</div>
+			</div>
+		`).join('');
+
+		if (!cards) return '';
+		return `<h4 class="oj-section-sub">Current Resources <span class="oj-muted">(as of ${ts})</span></h4><div class="oj-stats-grid">${cards}</div>`;
+	}
+
+	_renderResourceTransactionsSection(transactions) {
+		if (!Array.isArray(transactions) || transactions.length === 0) return '';
+
+		const txRows = transactions.slice(0, 30).map((tx) => {
+			const time = tx.timestamp ? new Date(tx.timestamp).toLocaleString() : '\u2014';
+			const amount = tx.amount || 0;
+			const sign = amount >= 0 ? '+' : '';
+			const amtClass = amount >= 0 ? 'oj-positive' : 'oj-negative';
+			const type = this._escapeHtml(tx.resourceType || tx.type || '\u2014');
+			const source = this._escapeHtml(tx.source || tx.reason || '\u2014');
+			return `
+				<tr>
+					<td class="oj-mono">${time}</td>
+					<td>${type}</td>
+					<td class="${amtClass} oj-num">${sign}${amount.toLocaleString()}</td>
+					<td>${source}</td>
+				</tr>
+			`;
+		}).join('');
+
+		return `
+			<h4 class="oj-section-sub">Recent Transactions <span class="oj-muted">(${transactions.length})</span></h4>
+			<table class="oj-table">
+				<thead><tr><th>Time</th><th>Resource</th><th>Amount</th><th>Source</th></tr></thead>
+				<tbody>${txRows}</tbody>
+			</table>
+		`;
+	}
+
+	async _loadMailDataset() {
+		let mailData = null;
+		let rewards = [];
+
+		try {
+			mailData = await this.idbStorage.getMetadata('mailData', null);
+		} catch { /* empty */ }
+
+		try {
+			rewards = await this.idbStorage.getAll('mailRewards', FETCH_LIMIT_MEDIUM);
+		} catch { /* empty */ }
+
+		return { mailData, rewards };
+	}
+
+	_buildMailListViewModel(items, vs) {
+		let filtered = [...items];
+		if (vs.filter) {
+			const q = vs.filter.toLowerCase();
+			filtered = filtered.filter((mail) =>
+				(mail.subject || '').toLowerCase().includes(q) ||
+				(mail.mailType || '').toLowerCase().includes(q)
+			);
+		}
+
+		filtered = this._sortData(filtered, vs.sortField, vs.sortDir);
+		const totalCount = filtered.length;
+		const totalPages = Math.max(1, Math.ceil(totalCount / this.PAGE_SIZE));
+		vs.page = Math.min(vs.page, totalPages - 1);
+		const pageItems = filtered.slice(vs.page * this.PAGE_SIZE, (vs.page + 1) * this.PAGE_SIZE);
+		return { pageItems, totalCount, totalPages };
+	}
+
+	_buildMailRewardSummary(mail) {
+		if (!mail.rewards || typeof mail.rewards !== 'object') return '\u2014';
+
+		const parts = [];
+		for (const [key, val] of Object.entries(mail.rewards)) {
+			if (typeof val === 'number' && val > 0) {
+				parts.push(`${key}: ${val.toLocaleString()}`);
+			} else if (typeof val === 'object' && val !== null) {
+				const count = Object.values(val).reduce((sum, v) => sum + (typeof v === 'number' ? v : 0), 0);
+				if (count > 0) parts.push(`${key}: ${count.toLocaleString()} items`);
+			}
+		}
+
+		return parts.length > 0 ? parts.join(', ') : '\u2014';
+	}
+
+	_renderMailInboxRows(pageItems) {
+		return pageItems.map((mail) => {
+			const statusIcon = mail.isCollected ? '\u2705' : mail.isRead ? '\uD83D\uDCE8' : '\uD83D\uDCE9';
+			const subject = this._escapeHtml(mail.subject || '(no subject)');
+			const type = this._escapeHtml(mail.mailType || 'unknown');
+			const date = mail.receivedAt ? new Date(mail.receivedAt).toLocaleString() : '\u2014';
+			const rewardSummary = this._buildMailRewardSummary(mail);
+			return `
+				<tr>
+					<td>${statusIcon}</td>
+					<td>${subject}</td>
+					<td><span class="oj-badge">${type}</span></td>
+					<td class="oj-muted">${date}</td>
+					<td class="oj-muted">${rewardSummary}</td>
+				</tr>
+			`;
+		}).join('');
+	}
+
+	_renderMailCollectedRewardsSection(rewards) {
+		if (!Array.isArray(rewards) || rewards.length === 0) return '';
+
+		const byType = {};
+		for (const reward of rewards) {
+			const key = reward.rewardType || 'unknown';
+			if (!byType[key]) byType[key] = { count: 0, totalQty: 0, items: {} };
+			byType[key].count++;
+			byType[key].totalQty += reward.quantity || 0;
+			const itemKey = reward.rewardId || 'unknown';
+			byType[key].items[itemKey] = (byType[key].items[itemKey] || 0) + (reward.quantity || 0);
+		}
+
+		const typeRows = Object.entries(byType)
+			.sort((a, b) => b[1].totalQty - a[1].totalQty)
+			.map(([type, info]) => {
+				const topItems = Object.entries(info.items)
+					.sort((a, b) => b[1] - a[1])
+					.slice(0, 5)
+					.map(([id, qty]) => `${this._escapeHtml(resolveHeroName(id) || id)}: ${qty.toLocaleString()}`)
+					.join(', ');
+
+				return `
+					<tr>
+						<td><strong>${this._escapeHtml(type)}</strong></td>
+						<td class="oj-num">${info.count.toLocaleString()}</td>
+						<td class="oj-num">${info.totalQty.toLocaleString()}</td>
+						<td class="oj-muted">${topItems}</td>
+					</tr>
+				`;
+			}).join('');
+
+		return `
+			<div class="oj-mail-rewards">
+				<h4>\uD83C\uDF81 Collected Rewards <span class="oj-muted">(${rewards.length} entries)</span></h4>
+				<table class="oj-table">
+					<thead>
+						<tr>
+							<th>Type</th>
+							<th>Collections</th>
+							<th>Total Qty</th>
+							<th>Top Items</th>
+						</tr>
+					</thead>
+					<tbody>${typeRows}</tbody>
+				</table>
+			</div>
+		`;
 	}
 
 	/**

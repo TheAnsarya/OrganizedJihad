@@ -268,6 +268,78 @@
 - Status: Completed on `feature/204-architecture-modernization`.
 - Outcome target: isolate deterministic battle-detail row-id generation from row loop.
 
+65. #270 Extract upgrades sub-tab filtering and category count model from renderUpgrades
+- Status: Completed on `feature/204-architecture-modernization`.
+- Outcome target: isolate upgrades category counts and filtered/sorted view-model prep from `renderUpgrades`.
+
+66. #271 Extract upgrades sub-tab pill rendering from renderUpgrades into helper method
+- Status: Completed on `feature/204-architecture-modernization`.
+- Outcome target: isolate upgrades sub-tab pill markup generation from `renderUpgrades`.
+
+67. #272 Extract upgrades row rendering from renderUpgrades into helper method
+- Status: Completed on `feature/204-architecture-modernization`.
+- Outcome target: isolate upgrades row markup/details composition from `renderUpgrades`.
+
+68. #273 Extract upgrades dataset loader from renderUpgrades into helper method
+- Status: Completed on `feature/204-architecture-modernization`.
+- Outcome target: isolate upgrades multi-store loading and category tagging from `renderUpgrades`.
+
+69. #274 Extract chest dataset and metadata loading from renderChests into helper method
+- Status: Completed on `feature/204-architecture-modernization`.
+- Outcome target: isolate chests/opening-history/drop-rate dataset loading and sorting from `renderChests`.
+
+70. #275 Extract chest drop-rate analysis from metadata into helper method
+- Status: Completed on `feature/204-architecture-modernization`.
+- Outcome target: isolate metadata-driven drop-rate analytics section rendering from `renderChests`.
+
+71. #276 Extract chest type pills renderer from renderChests into helper method
+- Status: Completed on `feature/204-architecture-modernization`.
+- Outcome target: isolate chest type pill summary rendering from `renderChests`.
+
+72. #277 Extract chest drop-rate analysis fallback from raw consumable rewards into helper method
+- Status: Completed on `feature/204-architecture-modernization`.
+- Outcome target: isolate raw-drops fallback analytics model/render from `renderChests`.
+
+73. #278 Extract chest history filtering and pagination model from renderChests
+- Status: Completed on `feature/204-architecture-modernization`.
+- Outcome target: isolate chest history filter/pagination view-model prep from `renderChests`.
+
+74. #279 Extract chest opening row rendering from renderChests into helper method
+- Status: Completed on `feature/204-architecture-modernization`.
+- Outcome target: isolate chest opening row/reward-detail markup loop from `renderChests`.
+
+75. #280 Extract resources dataset loading from renderResources into helper method
+- Status: Completed on `feature/204-architecture-modernization`.
+- Outcome target: isolate player snapshot fallback and transaction loading/sorting from `renderResources`.
+
+76. #281 Extract resources card section renderer from renderResources into helper method
+- Status: Completed on `feature/204-architecture-modernization`.
+- Outcome target: isolate current resources cards section model/render from `renderResources`.
+
+77. #282 Extract resource transaction table renderer from renderResources into helper method
+- Status: Completed on `feature/204-architecture-modernization`.
+- Outcome target: isolate recent transactions table rendering from `renderResources`.
+
+78. #283 Extract mail dataset loading from renderMail into helper method
+- Status: Completed on `feature/204-architecture-modernization`.
+- Outcome target: isolate mail metadata/reward loading from `renderMail`.
+
+79. #284 Extract mail reward summary text builder from renderMail into helper method
+- Status: Completed on `feature/204-architecture-modernization`.
+- Outcome target: isolate per-mail reward-summary string composition from `renderMail`.
+
+80. #285 Extract mail list filter/sort/pagination model from renderMail
+- Status: Completed on `feature/204-architecture-modernization`.
+- Outcome target: isolate mail list view-model prep from `renderMail`.
+
+81. #286 Extract mail inbox row rendering from renderMail into helper method
+- Status: Completed on `feature/204-architecture-modernization`.
+- Outcome target: isolate mail inbox row markup generation from `renderMail`.
+
+82. #287 Extract collected mail rewards summary renderer from renderMail into helper method
+- Status: Completed on `feature/204-architecture-modernization`.
+- Outcome target: isolate collected rewards aggregate/summary section rendering from `renderMail`.
+
 ## Validation Strategy
 - API changes: run `dotnet test tests/OrganizedJihad.Api.Tests/OrganizedJihad.Api.Tests.csproj` and `dotnet test OrganizedJihad.sln`.
 - Userscript changes: run `yarn test --runInBand` and `yarn build`.
@@ -275,7 +347,7 @@
 
 ## Notes
 - Parallel issue creation caused issue-number drift; canonical mapping is documented in epic #206 comments.
-- Completed slices so far: #205, #208, #204, #207, #210, #211, #212, #213, #214, #215, #216, #217, #218, #219, #220, #221, #222, #223, #224, #225, #226, #227, #228, #229, #230, #231, #232, #233, #234, #235, #236, #237, #238, #239, #240, #241, #242, #243, #244, #245, #246, #247, #248, #249, #250, #251, #252, #253, #254, #255, #256, #257, #258, #259, #260, #261, #262, #263, #264, #265, #266, #267, #268, and #269 (API seams + controller split + userscript renderer/binder/helper extraction).
+- Completed slices so far: #205, #208, #204, #207, #210, #211, #212, #213, #214, #215, #216, #217, #218, #219, #220, #221, #222, #223, #224, #225, #226, #227, #228, #229, #230, #231, #232, #233, #234, #235, #236, #237, #238, #239, #240, #241, #242, #243, #244, #245, #246, #247, #248, #249, #250, #251, #252, #253, #254, #255, #256, #257, #258, #259, #260, #261, #262, #263, #264, #265, #266, #267, #268, #269, #270, #271, #272, #273, #274, #275, #276, #277, #278, #279, #280, #281, #282, #283, #284, #285, #286, and #287 (API seams + controller split + userscript renderer/binder/helper extraction).
 - Existing unrelated dirty files remain intentionally untouched:
   - `userscript/package.json`
   - `~docs/oj-manual-prompts-log.txt`
