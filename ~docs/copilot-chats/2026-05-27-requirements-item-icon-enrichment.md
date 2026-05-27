@@ -904,6 +904,47 @@
 
 ## Session
 - Date: 2026-05-27
+- Session Number: 33
+- Scope: Continue both modernization tracks with several additional slices: extract remaining overlay listener orchestration and shared helper logic from `uiManager`.
+
+## Summary
+- Completed three slices:
+	- #221 extracted overlay Escape-key listener wiring into binder module
+	- #222 extracted overlay drag/resize pointer interaction wiring into binder module
+	- #223 extracted shared data-browser sort helper logic into helper module
+- Preserved existing `uiManager` call sites and behavior by delegating through narrow wrappers/callbacks.
+
+## Files Modified
+- userscript/src/modules/uiManager.js
+- ~docs/plans/architecture-modernization-roadmap.md
+- ~docs/copilot-chats/2026-05-27-requirements-item-icon-enrichment.md
+
+## Files Created
+- userscript/src/modules/binders/overlayEscapeKeyBinder.js
+- userscript/src/modules/binders/overlayPointerInteractionsBinder.js
+- userscript/src/modules/helpers/dataBrowserSortHelpers.js
+
+## Issues Referenced
+- #206 Epic: Architecture modernization and module deepening across API/userscript
+- #221 Extract overlay escape-key listener from uiManager into binder module
+- #222 Extract overlay drag/resize pointer interactions from uiManager into binder module
+- #223 Extract shared data-browser sort helpers from uiManager into helper module
+
+## Validation
+- For each slice, `yarn test --runInBand` passed (18 suites, 706 tests)
+- For each slice, `yarn build` passed (webpack production build succeeded; existing bundle-size warnings only)
+
+## Key Decisions
+- Split overlay interaction extraction into two focused slices (#221 keyboard, #222 pointer) to keep behavior parity easy to validate.
+- Kept `uiManager` method surfaces intact while moving sort logic into shared helper module to reduce rendering-method clutter.
+
+## Known Follow-up
+- Continue extracting additional view-specific helper/render blocks from `uiManager` to dedicated modules.
+
+---
+
+## Session
+- Date: 2026-05-27
 - Session Number: 32
 - Scope: Continue architecture modernization with several additional slices across both tracks: listener orchestration decomposition and helper/renderer extraction from `uiManager`.
 

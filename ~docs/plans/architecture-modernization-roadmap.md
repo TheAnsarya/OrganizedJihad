@@ -72,6 +72,18 @@
 - Status: Completed on `feature/204-architecture-modernization`.
 - Outcome target: isolate shared data-browser render helper markup from `uiManager`.
 
+16. #221 Extract overlay escape-key listener from uiManager into binder module
+- Status: Completed on `feature/204-architecture-modernization`.
+- Outcome target: isolate Escape-key document-listener wiring from `uiManager`.
+
+17. #222 Extract overlay drag/resize pointer interactions from uiManager into binder module
+- Status: Completed on `feature/204-architecture-modernization`.
+- Outcome target: isolate drag/resize pointer-listener orchestration from `uiManager`.
+
+18. #223 Extract shared data-browser sort helpers from uiManager into helper module
+- Status: Completed on `feature/204-architecture-modernization`.
+- Outcome target: isolate shared data-browser sort helper logic from `uiManager`.
+
 ## Validation Strategy
 - API changes: run `dotnet test tests/OrganizedJihad.Api.Tests/OrganizedJihad.Api.Tests.csproj` and `dotnet test OrganizedJihad.sln`.
 - Userscript changes: run `yarn test --runInBand` and `yarn build`.
@@ -79,7 +91,7 @@
 
 ## Notes
 - Parallel issue creation caused issue-number drift; canonical mapping is documented in epic #206 comments.
-- Completed slices so far: #205, #208, #204, #207, #210, #211, #212, #213, #214, #215, #216, #217, #218, #219, and #220 (API seams + controller split + userscript renderer/binder extraction).
+- Completed slices so far: #205, #208, #204, #207, #210, #211, #212, #213, #214, #215, #216, #217, #218, #219, #220, #221, #222, and #223 (API seams + controller split + userscript renderer/binder extraction).
 - Existing unrelated dirty files remain intentionally untouched:
   - `userscript/package.json`
   - `~docs/oj-manual-prompts-log.txt`
