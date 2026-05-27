@@ -904,6 +904,47 @@
 
 ## Session
 - Date: 2026-05-27
+- Session Number: 34
+- Scope: Continue with several modernization slices by extracting one more data-browser orchestration seam and additional shared helper logic from `uiManager`.
+
+## Summary
+- Completed three slices:
+	- #224 extracted data-browser listener orchestration into binder module
+	- #225 extracted staleness/time formatting helpers into helper module
+	- #226 extracted battle presentation helpers into helper module
+- Reduced `uiManager` surface area while preserving method wrappers and existing render/listener call sites.
+
+## Files Modified
+- userscript/src/modules/uiManager.js
+- ~docs/plans/architecture-modernization-roadmap.md
+- ~docs/copilot-chats/2026-05-27-requirements-item-icon-enrichment.md
+
+## Files Created
+- userscript/src/modules/binders/dataBrowserViewOrchestrationBinder.js
+- userscript/src/modules/helpers/stalenessHelpers.js
+- userscript/src/modules/helpers/battlePresentationHelpers.js
+
+## Issues Referenced
+- #206 Epic: Architecture modernization and module deepening across API/userscript
+- #224 Extract data-browser listener orchestration from uiManager into binder module
+- #225 Extract staleness/time formatting helpers from uiManager into helper module
+- #226 Extract battle presentation helpers from uiManager into helper module
+
+## Validation
+- For each slice, `yarn test --runInBand` passed (18 suites, 706 tests)
+- For each slice, `yarn build` passed (webpack production build succeeded; existing bundle-size warnings only)
+
+## Key Decisions
+- Kept `_attachDataBrowserListeners` as a thin wrapper while moving binder composition into an orchestrator module.
+- Moved helper logic using delegation first to avoid touching downstream call sites.
+
+## Known Follow-up
+- Continue extracting remaining activity presentation helpers and additional view-specific render blocks from `uiManager`.
+
+---
+
+## Session
+- Date: 2026-05-27
 - Session Number: 33
 - Scope: Continue both modernization tracks with several additional slices: extract remaining overlay listener orchestration and shared helper logic from `uiManager`.
 
