@@ -18,6 +18,7 @@ import { bindDataRowInteractions } from './binders/dataRowInteractionBinder.js';
 import { bindDataBrowserTableControls } from './binders/dataBrowserTableControlsBinder.js';
 import { bindDataBrowserMiscInteractions } from './binders/dataBrowserMiscBinder.js';
 import { bindDashboardFilters } from './binders/dashboardFiltersBinder.js';
+import { bindOverlayChromeControls } from './binders/overlayChromeControlsBinder.js';
 import { bindSettingsHealthActions } from './binders/settingsHealthActionsBinder.js';
 import { bindSettingsDataActions } from './binders/settingsDataActionsBinder.js';
 import { bindSettingsDisplayTracking } from './binders/settingsDisplayTrackingBinder.js';
@@ -345,39 +346,18 @@ class UIManager {
 	 * Wire up all button / interaction handlers.
 	 */
 	attachEventListeners() {
-		// Navigation buttons
-		this.overlay.querySelectorAll('.oj-nav-btn').forEach((btn) => {
-			btn.addEventListener('click', (e) => {
-				this.switchView(e.target.dataset.view);
-			});
-		});
-
-		// Close button — hide overlay
-		this.overlay.querySelector('#oj-close').addEventListener('click', () => {
-			this.hide();
-		});
-
-		// Minimize button — collapse to header-only, persist state
-		this.overlay.querySelector('#oj-minimize').addEventListener('click', () => {
-			const isMinimized = this.overlay.classList.toggle('minimized');
-			const btn = this.overlay.querySelector('#oj-minimize');
-			btn.textContent = isMinimized ? '+' : '\u2212';
-			btn.title = isMinimized ? 'Expand' : 'Minimize';
-			this._isMinimized = isMinimized;
-			this.prefStorage.set('overlayMinimized', isMinimized);
-		});
-
-		// Reset position button — clear saved position/size, revert to CSS defaults
-		this.overlay.querySelector('#oj-reset-pos').addEventListener('click', () => {
-			this.overlay.style.left = '';
-			this.overlay.style.top = '';
-			this.overlay.style.right = '';
-			this.overlay.style.width = '';
-			this.overlay.style.height = '';
-			this._savedPos = null;
-			this._savedSize = null;
-			this.prefStorage.delete('overlayPosition');
-			this.prefStorage.delete('overlaySize');
+		bindOverlayChromeControls({
+			overlay: this.overlay,
+			switchView: (view) => this.switchView(view),
+			hide: () => this.hide(),
+			prefStorage: this.prefStorage,
+			setMinimized: (isMinimized) => {
+				this._isMinimized = isMinimized;
+			},
+			resetPositionAndSizeState: () => {
+				this._savedPos = null;
+				this._savedSize = null;
+			},
 		});
 
 		// Escape key — close overlay when visible
