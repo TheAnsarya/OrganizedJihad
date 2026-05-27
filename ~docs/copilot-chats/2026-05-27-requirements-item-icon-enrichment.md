@@ -978,6 +978,44 @@
 
 ## Session
 - Date: 2026-05-27
+- Session Number: 29
+- Scope: Execute issue #211 by extracting data-row expand/collapse and payload-toggle interaction wiring from `uiManager`.
+
+## Summary
+- Added `userscript/src/modules/binders/dataRowInteractionBinder.js`.
+- Delegated repeated interaction wiring from `uiManager` to binder for:
+	- hero/titan/pet detail row expand/collapse
+	- battle detail row expand/collapse
+	- API log payload show/hide toggles
+- Kept existing selectors, behavior, and UI state transitions unchanged.
+
+## Files Modified
+- userscript/src/modules/uiManager.js
+- ~docs/plans/architecture-modernization-roadmap.md
+- ~docs/copilot-chats/2026-05-27-requirements-item-icon-enrichment.md
+
+## Files Created
+- userscript/src/modules/binders/dataRowInteractionBinder.js
+
+## Issues Referenced
+- #206 Epic: Architecture modernization and module deepening across API/userscript
+- #211 Extract uiManager data-row expand/collapse interaction wiring into binder module
+
+## Validation
+- `yarn test --runInBand`: passed (18 suites, 706 tests)
+- `yarn build`: passed (webpack production build succeeded; existing bundle-size warnings only)
+
+## Key Decisions
+- Kept binder focused on row/payload wiring only, leaving projection/resource/inventory interactions in current locations to reduce change risk.
+- Introduced binder call once from `_attachDataBrowserListeners` to preserve lifecycle and re-render semantics.
+
+## Known Follow-up
+- Continue migrating remaining event-wiring clusters in `_attachDataBrowserListeners` to dedicated binders.
+
+---
+
+## Session
+- Date: 2026-05-27
 - Session Number: 26
 - Scope: Commit pending API bootstrap file update and remove repository-level pause-for-confirmation wording for unexpected unrelated dirty files.
 
