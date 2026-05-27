@@ -38,6 +38,9 @@ import {
 	renderSuggestionsSection,
 	renderWinRateCardsSection,
 } from './renderers/dashboardInsightsRenderer.js';
+import { renderExternalToolsSection } from './renderers/externalToolsSectionRenderer.js';
+import { renderDashboardPlayerHeaderSection } from './renderers/dashboardPlayerHeaderRenderer.js';
+import { renderTeamRecommendationEngineSection } from './renderers/teamRecommendationSectionRenderer.js';
 import {
 	renderDashboardQuickTipsSection,
 	renderDashboardStatusSection,
@@ -776,216 +779,50 @@ class UIManager {
 		const energy = Number(player.stamina || 0).toLocaleString();
 		const bottledEnergy = Number(player.bottledEnergy || 0).toLocaleString();
 
-		// ── Inline SVG icons for resources (cross-browser safe) ──────
-		// Unicode emojis like 🪙 (U+1FA99) don't render in many browsers.
-		// CSS hue-rotate on 💎 produces pink not green. Use inline SVGs instead.
-		const goldIcon = '<svg viewBox="0 0 24 24" width="20" height="20" style="vertical-align:middle"><circle cx="12" cy="12" r="10" fill="#FFD54F" stroke="#FFA000" stroke-width="1.5"/><text x="12" y="16" text-anchor="middle" font-size="12" font-weight="bold" fill="#E65100">$</text></svg>';
-		const emeraldIcon = '<svg viewBox="0 0 24 24" width="20" height="20" style="vertical-align:middle"><polygon points="12,2 22,8 22,16 12,22 2,16 2,8" fill="#43A047" stroke="#2E7D32" stroke-width="1.5"/><polygon points="12,5 18,9 18,15 12,19 6,15 6,9" fill="#66BB6A" stroke="#43A047" stroke-width="0.5"/></svg>';
-		const energyIcon = '<svg viewBox="0 0 24 24" width="20" height="20" style="vertical-align:middle"><polygon points="13,2 3,14 12,14 11,22 21,10 12,10" fill="#FFD600" stroke="#F9A825" stroke-width="1"/></svg>';
-
-		// ── Completion bar helper (inline, dark theme) ───────────────
-		const _miniBar = (pct, color) => {
-			const clamped = Math.min(100, Math.max(0, pct || 0));
-			return `<div style="flex:1;background:#333;border-radius:3px;height:8px;min-width:60px">` +
-				`<div style="background:${color};height:100%;border-radius:3px;width:${clamped}%;transition:width .3s"></div>` +
-				`</div>`;
-		};
-
-		// ── Player header section (#63) ──────────────────────────────
-		const playerSection = playerName
-			? `<div class="oj-section" style="padding:12px 14px">
-					<div style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:8px">
-						<span style="font-size:20px;font-weight:700;color:#e0e0e0">${this._escapeHtml(playerName)}</span>
-						<span style="font-size:18px;font-weight:600;color:#90caf9">Lv ${playerLevel}</span>
-					</div>
-					${playerGuild ? `<div style="font-size:11px;color:#888;margin-bottom:8px">\uD83C\uDFF0 ${this._escapeHtml(playerGuild)}</div>` : ''}
-					<div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">
-						<span style="font-size:11px;color:#aaa;white-space:nowrap">\uD83C\uDFAF Overall</span>
-						${_miniBar(overallAvg, '#7e57c2')}
-						<span style="font-size:12px;font-weight:600;color:#ce93d8;min-width:42px;text-align:right">${overallAvg.toFixed(1)}%</span>
-					</div>
-					<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px">
-						<div style="flex:1;min-width:100px;background:#2a2a2e;border-radius:6px;padding:8px;text-align:center">
-							<div style="font-size:18px">${goldIcon}</div>
-							<div style="font-size:14px;font-weight:700;color:#ffd54f">${gold}</div>
-							<div style="font-size:10px;color:#888">Gold</div>
-						</div>
-						<div style="flex:1;min-width:100px;background:#2a2a2e;border-radius:6px;padding:8px;text-align:center">
-							<div style="font-size:18px">${emeraldIcon}</div>
-							<div style="font-size:14px;font-weight:700;color:#66bb6a">${emeralds}</div>
-							<div style="font-size:10px;color:#888">Emeralds</div>
-						</div>
-						<div style="flex:1;min-width:100px;background:#2a2a2e;border-radius:6px;padding:8px;text-align:center">
-							<div style="font-size:18px">${energyIcon}</div>
-							<div style="font-size:14px;font-weight:700;color:#4fc3f7">${energy}</div>
-							<div style="font-size:10px;color:#888">Energy${bottledEnergy !== '0' ? ` <span style="color:#aaa">(${bottledEnergy} \uD83C\uDF76)</span>` : ''}</div>
-						</div>
-						<div style="flex:1;min-width:100px;background:#2a2a2e;border-radius:6px;padding:8px">
-							<div style="font-size:12px;margin-bottom:4px">\uD83E\uDDB8 Heroes</div>
-							<div style="display:flex;align-items:center;gap:4px">
-								${_miniBar(heroAvg, '#81c784')}
-								<span style="font-size:11px;font-weight:600;color:#81c784;min-width:36px;text-align:right">${heroAvg.toFixed(1)}%</span>
-							</div>
-						</div>
-						<div style="flex:1;min-width:100px;background:#2a2a2e;border-radius:6px;padding:8px">
-							<div style="font-size:12px;margin-bottom:4px">\uD83D\uDCA0 Titans</div>
-							<div style="display:flex;align-items:center;gap:4px">
-								${_miniBar(titanAvg, '#ce93d8')}
-								<span style="font-size:11px;font-weight:600;color:#ce93d8;min-width:36px;text-align:right">${titanAvg.toFixed(1)}%</span>
-							</div>
-						</div>
-						<div style="flex:1;min-width:100px;background:#2a2a2e;border-radius:6px;padding:8px">
-							<div style="font-size:12px;margin-bottom:4px">\uD83D\uDC3E Pets</div>
-							<div style="display:flex;align-items:center;gap:4px">
-								${_miniBar(petAvg, '#ffb74d')}
-								<span style="font-size:11px;font-weight:600;color:#ffb74d;min-width:36px;text-align:right">${petAvg.toFixed(1)}%</span>
-							</div>
-						</div>
-					</div>
-					<div style="display:flex;gap:6px;flex-wrap:wrap">
-						<div style="flex:1;min-width:100px;background:#2a2a2e;border-radius:6px;padding:6px 8px;text-align:center">
-							<div style="font-size:14px">\u2705</div>
-							<div style="font-size:16px;font-weight:700;color:#81c784">${dailyQuestsCompleted}/${dailyQuestsTotal || '?'}</div>
-							<div style="font-size:10px;color:#888">Daily Quests</div>
-							${this._stalenessTag(questSummary.lastUpdate)}
-						</div>
-						<div style="flex:1;min-width:100px;background:#2a2a2e;border-radius:6px;padding:6px 8px;text-align:center">
-							<div style="font-size:14px">\uD83C\uDFF0</div>
-							<div style="font-size:16px;font-weight:700;color:#ffb74d">${guildQuestsCompleted}/${guildQuestsTotal || '?'}</div>
-							<div style="font-size:10px;color:#888">Guild Quests</div>
-							${this._stalenessTag(questSummary.lastUpdate)}
-						</div>
-						<div style="flex:1;min-width:100px;background:#2a2a2e;border-radius:6px;padding:6px 8px;text-align:center">
-							<div style="font-size:14px">\u2694\uFE0F</div>
-							<div style="font-size:16px;font-weight:700;color:#ef9a9a">${gwBrief.hasActiveWar ? `${gwAttacksUsed}/${gwAttacksMax}` : 'No War'}</div>
-							<div style="font-size:10px;color:#888">Guild War</div>
-							${this._stalenessTag(gwBrief.lastUpdate)}
-						</div>
-						<div style="flex:1;min-width:100px;background:#2a2a2e;border-radius:6px;padding:6px 8px;text-align:center">
-							<div style="font-size:14px">\uD83C\uDF0D</div>
-							<div style="font-size:14px;font-weight:700;color:#ce93d8">${cowData.isActive ? `\uD83E\uDDB8${cowHeroUsed}/3 \uD83D\uDCA0${cowTitanUsed}/2` : 'No CoW'}</div>
-							<div style="font-size:10px;color:#888">Clash of Worlds</div>
-							${this._stalenessTag(cowData.lastUpdate)}
-						</div>
-						<div style="flex:1;min-width:100px;background:#2a2a2e;border-radius:6px;padding:6px 8px;text-align:center">
-							<div style="font-size:14px">\uD83D\uDC32</div>
-							<div style="font-size:14px;font-weight:700;color:#4fc3f7">${raidBossAttacksUsed}/${raidBossAttacksMax}</div>
-							<div style="font-size:10px;color:#888">Raid Boss${raidBossLevel ? ` (Lv${raidBossLevel})` : ''}</div>
-							${raidMyDamage > 0 ? `<div style="font-size:9px;color:#aaa">${raidMyDamage.toLocaleString()} dmg</div>` : ''}
-							${this._stalenessTag(raidBoss.lastUpdate)}
-						</div>
-					</div>
-					<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px">
-						<div style="flex:1;min-width:100px;background:#2a2a2e;border-radius:6px;padding:6px 8px;text-align:center">
-							<div style="font-size:14px">\uD83C\uDFC6</div>
-							<div style="font-size:16px;font-weight:700;color:#4fc3f7">${arenaStats.arenaPlace ? `#${arenaStats.arenaPlace}` : '\u2014'}</div>
-							<div style="font-size:10px;color:#888">Arena Rank</div>
-							${arenaStats.totalBattles ? `<div style="font-size:9px;color:#aaa">${arenaStats.winRate}% WR (${arenaStats.totalWins}/${arenaStats.totalBattles})</div>` : ''}
-							${this._stalenessTag(arenaStats.lastUpdate)}
-						</div>
-						<div style="flex:1;min-width:100px;background:#2a2a2e;border-radius:6px;padding:6px 8px;text-align:center">
-							<div style="font-size:14px">\uD83C\uDFDF\uFE0F</div>
-							<div style="font-size:16px;font-weight:700;color:#ffb74d">${arenaStats.grandPlace ? `#${arenaStats.grandPlace}` : '\u2014'}</div>
-							<div style="font-size:10px;color:#888">Grand Arena</div>
-							${this._stalenessTag(arenaStats.lastUpdate)}
-						</div>
-						<div style="flex:1;min-width:100px;background:#2a2a2e;border-radius:6px;padding:6px 8px;text-align:center">
-							<div style="font-size:14px">\uD83D\uDCA0</div>
-							<div style="font-size:16px;font-weight:700;color:#ce93d8">${titanArenaStats.rank ? `#${titanArenaStats.rank}` : '\u2014'}</div>
-							<div style="font-size:10px;color:#888">Titan Arena</div>
-							${titanArenaStats.tier ? `<div style="font-size:9px;color:#aaa">T${titanArenaStats.tier} · ${titanArenaStats.dailyScore?.toLocaleString() || 0} today</div>` : ''}
-							${this._stalenessTag(titanArenaStats.lastUpdate)}
-						</div>
-						<div style="flex:1;min-width:100px;background:#2a2a2e;border-radius:6px;padding:6px 8px;text-align:center">
-							<div style="font-size:14px">\uD83D\uDDFA\uFE0F</div>
-							<div style="font-size:14px;font-weight:700;color:#81c784">${campaignProgress.totalStars ? `${campaignProgress.totalStars}/${campaignProgress.maxStars}` : '\u2014'}</div>
-							<div style="font-size:10px;color:#888">Campaign Stars</div>
-							${campaignProgress.threeStarMissions ? `<div style="font-size:9px;color:#aaa">${campaignProgress.threeStarMissions}/${campaignProgress.totalMissions} ★★★</div>` : ''}
-							${this._stalenessTag(campaignProgress.lastUpdate)}
-						</div>
-						<div style="flex:1;min-width:100px;background:#2a2a2e;border-radius:6px;padding:6px 8px;text-align:center">
-							<div style="font-size:14px">\uD83C\uDFAB</div>
-							<div style="font-size:14px;font-weight:700;color:#fff176">${battlePassData.currentLevel ? `Lv${battlePassData.currentLevel}` : '\u2014'}</div>
-							<div style="font-size:10px;color:#888">Battle Pass${battlePassData.ticketLabel ? ` (${battlePassData.ticketLabel})` : ''}</div>
-							${battlePassData.exp ? `<div style="font-size:9px;color:#aaa">${battlePassData.exp?.toLocaleString()} XP</div>` : ''}
-							${this._stalenessTag(battlePassData.lastUpdate)}
-						</div>
-						<div style="flex:1;min-width:100px;background:#2a2a2e;border-radius:6px;padding:6px 8px;text-align:center">
-							<div style="font-size:14px">\uD83C\uDFB0</div>
-							<div style="font-size:14px;font-weight:700;color:#ef9a9a">${gachaData.pullsUntilPity != null && gachaData.pullsUntilPity >= 0 ? gachaData.pullsUntilPity : '\u2014'}</div>
-							<div style="font-size:10px;color:#888">Pity Counter</div>
-							${gachaData.totalOpenings ? `<div style="font-size:9px;color:#aaa">${gachaData.totalOpenings?.toLocaleString()} total pulls</div>` : ''}
-							${this._stalenessTag(gachaData.lastUpdate)}
-						</div>
-					</div>
-					${guildActivity.todayActivity ? `<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px">
-						<div style="flex:1;min-width:140px;background:#2a2a2e;border-radius:6px;padding:6px 8px;text-align:center">
-							<div style="font-size:14px">\u2B50</div>
-							<div style="font-size:14px;font-weight:700;color:#90caf9">${guildActivity.todayActivity.toLocaleString()}</div>
-							<div style="font-size:10px;color:#888">Guild Activity Today</div>
-							${this._stalenessTag(guildActivity.lastUpdate)}
-						</div>
-						<div style="flex:1;min-width:140px;background:#2a2a2e;border-radius:6px;padding:6px 8px;text-align:center">
-							<div style="font-size:14px">\uD83C\uDFF0</div>
-							<div style="font-size:14px;font-weight:700;color:#90caf9">${guildActivity.todayDungeonActivity}</div>
-							<div style="font-size:10px;color:#888">Dungeon Activity</div>
-						</div>
-						<div style="flex:1;min-width:140px;background:#2a2a2e;border-radius:6px;padding:6px 8px;text-align:center">
-							<div style="font-size:14px">\uD83D\uDCC8</div>
-							<div style="font-size:14px;font-weight:700;color:#90caf9">${guildActivity.activitySum?.toLocaleString()}</div>
-							<div style="font-size:10px;color:#888">Weekly Activity</div>
-						</div>
-					</div>` : ''}
-					${(towerState.floorNumber || expeditionSlots.totalSlots || outlandBosses.bossCount || adventurePassed.totalAdventures) ? `<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px">
-						${towerState.floorNumber ? `<div style="flex:1;min-width:100px;background:#2a2a2e;border-radius:6px;padding:6px 8px;text-align:center">
-							<div style="font-size:14px">\uD83C\uDFF0</div>
-							<div style="font-size:16px;font-weight:700;color:#b39ddb">F${towerState.floorNumber}</div>
-							<div style="font-size:10px;color:#888">Tower Floor</div>
-							<div style="font-size:9px;color:#aaa">${Number(towerState.points || 0).toLocaleString()} pts${towerState.maySkipFloor ? ` · Skip\u2264${towerState.maySkipFloor}` : ''}</div>
-							${this._stalenessTag(towerState.lastUpdate)}
-						</div>` : ''}
-						${expeditionSlots.totalSlots ? `<div style="flex:1;min-width:100px;background:#2a2a2e;border-radius:6px;padding:6px 8px;text-align:center">
-							<div style="font-size:14px">\u26F5</div>
-							<div style="font-size:16px;font-weight:700;color:#80cbc4">${expeditionSlots.completeCount}/${expeditionSlots.totalSlots}</div>
-							<div style="font-size:10px;color:#888">Expeditions</div>
-							${expeditionSlots.activeCount ? `<div style="font-size:9px;color:#aaa">${expeditionSlots.activeCount} active</div>` : ''}
-							${this._stalenessTag(expeditionSlots.lastUpdate)}
-						</div>` : ''}
-						${outlandBosses.bossCount ? `<div style="flex:1;min-width:100px;background:#2a2a2e;border-radius:6px;padding:6px 8px;text-align:center">
-							<div style="font-size:14px">\uD83D\uDC80</div>
-							<div style="font-size:16px;font-weight:700;color:#ef9a9a">${outlandBosses.totalChests}/${outlandBosses.bossCount * 3}</div>
-							<div style="font-size:10px;color:#888">Outland Chests</div>
-							${this._stalenessTag(outlandBosses.lastUpdate)}
-						</div>` : ''}
-						${adventurePassed.totalAdventures ? `<div style="flex:1;min-width:100px;background:#2a2a2e;border-radius:6px;padding:6px 8px;text-align:center">
-							<div style="font-size:14px">\uD83D\uDDFA\uFE0F</div>
-							<div style="font-size:16px;font-weight:700;color:#a5d6a7">${adventurePassed.totalCompletions}</div>
-							<div style="font-size:10px;color:#888">Adventures</div>
-							<div style="font-size:9px;color:#aaa">${adventurePassed.totalAdventures} maps</div>
-							${this._stalenessTag(adventurePassed.lastUpdate)}
-						</div>` : ''}
-						${workshopBuffs.totalBuffs ? `<div style="flex:1;min-width:100px;background:#2a2a2e;border-radius:6px;padding:6px 8px;text-align:center">
-							<div style="font-size:14px">\uD83D\uDD27</div>
-							<div style="font-size:16px;font-weight:700;color:#ffcc80">${workshopBuffs.activeBuffs}/${workshopBuffs.totalBuffs}</div>
-							<div style="font-size:10px;color:#888">Workshop Buffs</div>
-							${this._stalenessTag(workshopBuffs.lastUpdate)}
-						</div>` : ''}
-						${(cosmeticCounts.avatars + cosmeticCounts.frames + cosmeticCounts.stickers) > 0 ? `<div style="flex:1;min-width:100px;background:#2a2a2e;border-radius:6px;padding:6px 8px;text-align:center">
-							<div style="font-size:14px">\uD83C\uDFA8</div>
-							<div style="font-size:14px;font-weight:700;color:#f48fb1">${cosmeticCounts.avatars + cosmeticCounts.frames + cosmeticCounts.stickers}</div>
-							<div style="font-size:10px;color:#888">Cosmetics</div>
-							<div style="font-size:9px;color:#aaa">${cosmeticCounts.avatars}\uD83D\uDC64 ${cosmeticCounts.frames}\uD83D\uDDBC\uFE0F ${cosmeticCounts.stickers}\u2B50</div>
-						</div>` : ''}
-						${invasionData.id ? `<div style="flex:1;min-width:100px;background:#2a2a2e;border-radius:6px;padding:6px 8px;text-align:center">
-							<div style="font-size:14px">\uD83D\uDE80</div>
-							<div style="font-size:16px;font-weight:700;color:#ff8a65">Active</div>
-							<div style="font-size:10px;color:#888">Invasion</div>
-							${invasionData.bestPlace ? `<div style="font-size:9px;color:#aaa">Best: #${invasionData.bestPlace}</div>` : ''}
-							${this._stalenessTag(invasionData.lastUpdate)}
-						</div>` : ''}
-					</div>` : ''}
-				</div>`
-			: '';
+		const playerSection = renderDashboardPlayerHeaderSection({
+			playerName,
+			playerLevel,
+			playerGuild,
+			overallAvg,
+			heroAvg,
+			titanAvg,
+			petAvg,
+			gold,
+			emeralds,
+			energy,
+			bottledEnergy,
+			dailyQuestsCompleted,
+			dailyQuestsTotal,
+			guildQuestsCompleted,
+			guildQuestsTotal,
+			questSummary,
+			gwBrief,
+			gwAttacksUsed,
+			gwAttacksMax,
+			cowData,
+			cowHeroUsed,
+			cowTitanUsed,
+			raidBoss,
+			raidBossLevel,
+			raidBossAttacksUsed,
+			raidBossAttacksMax,
+			raidMyDamage,
+			arenaStats,
+			titanArenaStats,
+			campaignProgress,
+			battlePassData,
+			gachaData,
+			guildActivity,
+			towerState,
+			expeditionSlots,
+			outlandBosses,
+			adventurePassed,
+			workshopBuffs,
+			cosmeticCounts,
+			invasionData,
+			escapeHtml: (value) => this._escapeHtml(value),
+			stalenessTag: (value) => this._stalenessTag(value),
+		});
 
 		return `
 			<div class="oj-dashboard">
@@ -1176,19 +1013,28 @@ class UIManager {
 	}
 
 	/**
-	 * Get recommendations from cache/API for dashboard cards.
+	 * Resolve a metadata-backed API payload with cache-first fallback semantics.
 	 *
-	 * @returns {Promise<object|null>} API payload or cached payload
+	 * @param {object} params - Fetch params
+	 * @param {string} params.cacheKey - Metadata cache key
+	 * @param {number} params.ttlMs - Cache TTL in milliseconds
+	 * @param {string} params.requestUrl - Request URL
+	 * @param {object|null} [params.fallbackPayload=null] - Fallback payload when request and cache miss
+	 * @returns {Promise<object|null>} Payload or fallback
 	 * @private
 	 */
-	async _getBattleRecommendationsPayload() {
-		const cacheKey = 'battleRecommendations:arena';
-		const now = Date.now();
+	async _getCachedApiPayload(params) {
+		const cacheKey = params?.cacheKey;
+		const ttlMs = Number(params?.ttlMs || 0);
+		const requestUrl = params?.requestUrl;
+		const fallbackPayload = params?.fallbackPayload ?? null;
+		if (!cacheKey || !requestUrl) return fallbackPayload;
 
+		const now = Date.now();
 		let cached = null;
 		try {
 			cached = await this.idbStorage.getMetadata(cacheKey, null);
-			if (cached?.timestamp && (now - cached.timestamp) < RECOMMENDATIONS_CACHE_TTL_MS && cached?.payload) {
+			if (cached?.timestamp && (now - cached.timestamp) < ttlMs && cached?.payload) {
 				return cached.payload;
 			}
 		} catch {
@@ -1196,15 +1042,30 @@ class UIManager {
 		}
 
 		try {
-			const response = await fetch(BATTLE_RECOMMENDATIONS_URL);
+			const response = await fetch(requestUrl);
 			if (!response.ok) throw new Error(`HTTP ${response.status}`);
 
 			const payload = await response.json();
 			await this.idbStorage.setMetadata(cacheKey, { timestamp: now, payload });
 			return payload;
 		} catch {
-			return cached?.payload || null;
+			return cached?.payload || fallbackPayload;
 		}
+	}
+
+	/**
+	 * Get recommendations from cache/API for dashboard cards.
+	 *
+	 * @returns {Promise<object|null>} API payload or cached payload
+	 * @private
+	 */
+	async _getBattleRecommendationsPayload() {
+		return this._getCachedApiPayload({
+			cacheKey: 'battleRecommendations:arena',
+			ttlMs: RECOMMENDATIONS_CACHE_TTL_MS,
+			requestUrl: BATTLE_RECOMMENDATIONS_URL,
+			fallbackPayload: null,
+		});
 	}
 
 	/**
@@ -1357,39 +1218,19 @@ class UIManager {
 				</div>`;
 			}).join('');
 
-			return `<div class="oj-section">
-				<h3>🧠 Team Recommendation Engine</h3>
-				<div style="font-size:10px;color:#7dbba0;margin:2px 0 6px 0">${this._escapeHtml(profileSummary)}</div>
-				<div style="font-size:10px;color:#8bc9b0;margin:2px 0 6px 0">${calibrationSummary}</div>
-				<div style="margin:4px 0 8px 0;display:flex;align-items:center;gap:8px;flex-wrap:wrap">
-					<label for="oj-team-mode-filter" style="font-size:11px;color:#a7b3bb">Mode</label>
-					<select id="oj-team-mode-filter" style="background:#1f252b;border:1px solid #37474f;color:#cfd8dc;border-radius:6px;padding:3px 6px;font-size:11px">
-						${modeOptions.map((mode) => {
-							const value = this._escapeHtml(mode.value || 'arena');
-							const label = this._escapeHtml(mode.label || mode.value || 'arena');
-							return `<option value="${value}" ${selectedMode === mode.value ? 'selected' : ''}>${label}</option>`;
-						}).join('')}
-					</select>
-					<label for="oj-team-objective-filter" style="font-size:11px;color:#a7b3bb">Objective</label>
-					<select id="oj-team-objective-filter" style="background:#1f252b;border:1px solid #37474f;color:#cfd8dc;border-radius:6px;padding:3px 6px;font-size:11px">
-						${objectiveOptions.map((obj) => {
-							const value = this._escapeHtml(obj.value || 'balanced');
-							const label = this._escapeHtml(obj.label || obj.value || 'balanced');
-							return `<option value="${value}" ${selectedObjective === obj.value ? 'selected' : ''}>${label}</option>`;
-						}).join('')}
-					</select>
-					<label for="oj-team-trend-window-filter" style="font-size:11px;color:#a7b3bb">Trend</label>
-					<select id="oj-team-trend-window-filter" data-default-window="${this._escapeHtml(String(defaultTrendWindowDays))}" style="background:#1f252b;border:1px solid #37474f;color:#cfd8dc;border-radius:6px;padding:3px 6px;font-size:11px">
-						<option value="auto" ${selectedTrendWindowPreference === 'auto' ? 'selected' : ''}>Auto (${defaultTrendWindowDays}d)</option>
-						${trendWindowOptions.map((windowDays) => {
-							const numericDays = Number(windowDays || 0);
-							const value = Number.isFinite(numericDays) && numericDays > 0 ? String(numericDays) : '30';
-							return `<option value="${value}" ${selectedTrendWindowPreference === value ? 'selected' : ''}>${this._escapeHtml(value)}d</option>`;
-						}).join('')}
-					</select>
-				</div>
-				${rows}
-			</div>`;
+			return renderTeamRecommendationEngineSection({
+				profileSummary,
+				calibrationSummary,
+				modeOptions,
+				objectiveOptions,
+				trendWindowOptions,
+				selectedMode,
+				selectedObjective,
+				selectedTrendWindowPreference,
+				defaultTrendWindowDays,
+				rowsHtml: rows,
+				escapeHtml: (value) => this._escapeHtml(value),
+			});
 		} catch {
 			return '';
 		}
@@ -1441,29 +1282,12 @@ class UIManager {
 	 * @private
 	 */
 	async _getTeamRecommendationProfileMetadata() {
-		const cacheKey = 'teamRecommendationProfiles:metadata';
-		const now = Date.now();
-
-		let cached = null;
-		try {
-			cached = await this.idbStorage.getMetadata(cacheKey, null);
-			if (cached?.timestamp && (now - cached.timestamp) < TOOLS_CATALOG_CACHE_TTL_MS && cached?.payload) {
-				return cached.payload;
-			}
-		} catch {
-			cached = null;
-		}
-
-		try {
-			const response = await fetch(TEAM_RECOMMENDATION_PROFILES_URL);
-			if (!response.ok) throw new Error(`HTTP ${response.status}`);
-
-			const payload = await response.json();
-			await this.idbStorage.setMetadata(cacheKey, { timestamp: now, payload });
-			return payload;
-		} catch {
-			return cached?.payload || null;
-		}
+		return this._getCachedApiPayload({
+			cacheKey: 'teamRecommendationProfiles:metadata',
+			ttlMs: TOOLS_CATALOG_CACHE_TTL_MS,
+			requestUrl: TEAM_RECOMMENDATION_PROFILES_URL,
+			fallbackPayload: null,
+		});
 	}
 
 	/**
@@ -1477,35 +1301,19 @@ class UIManager {
 	 */
 	async _getTeamRecommendationEnginePayload(mode, objective, trendWindowDays = 30) {
 		const cacheKey = `teamRecommendations:${mode}:${objective}:${trendWindowDays}`;
-		const now = Date.now();
+		const url = new URL(TEAM_RECOMMENDATIONS_URL);
+		url.searchParams.set('mode', mode || 'arena');
+		url.searchParams.set('objective', objective || 'balanced');
+		url.searchParams.set('limit', '3');
+		url.searchParams.set('minSamples', '2');
+		url.searchParams.set('preferredTrendWindowDays', String(Math.max(1, Number(trendWindowDays || 30))));
 
-		let cached = null;
-		try {
-			cached = await this.idbStorage.getMetadata(cacheKey, null);
-			if (cached?.timestamp && (now - cached.timestamp) < RECOMMENDATIONS_CACHE_TTL_MS && cached?.payload) {
-				return cached.payload;
-			}
-		} catch {
-			cached = null;
-		}
-
-		try {
-			const url = new URL(TEAM_RECOMMENDATIONS_URL);
-			url.searchParams.set('mode', mode || 'arena');
-			url.searchParams.set('objective', objective || 'balanced');
-			url.searchParams.set('limit', '3');
-			url.searchParams.set('minSamples', '2');
-			url.searchParams.set('preferredTrendWindowDays', String(Math.max(1, Number(trendWindowDays || 30))));
-
-			const response = await fetch(url.toString());
-			if (!response.ok) throw new Error(`HTTP ${response.status}`);
-
-			const payload = await response.json();
-			await this.idbStorage.setMetadata(cacheKey, { timestamp: now, payload });
-			return payload;
-		} catch {
-			return cached?.payload || null;
-		}
+		return this._getCachedApiPayload({
+			cacheKey,
+			ttlMs: RECOMMENDATIONS_CACHE_TTL_MS,
+			requestUrl: url.toString(),
+			fallbackPayload: null,
+		});
 	}
 
 	/**
@@ -1518,35 +1326,19 @@ class UIManager {
 	 */
 	async _getTeamRecommendationBacktestPayload(mode, objective) {
 		const cacheKey = `teamRecommendationBacktest:${mode}:${objective}`;
-		const now = Date.now();
+		const url = new URL(TEAM_RECOMMENDATION_BACKTEST_URL);
+		url.searchParams.set('mode', mode || 'arena');
+		url.searchParams.set('objective', objective || 'balanced');
+		url.searchParams.set('lookbackDays', '30');
+		url.searchParams.set('limit', '3');
+		url.searchParams.set('minSamples', '2');
 
-		let cached = null;
-		try {
-			cached = await this.idbStorage.getMetadata(cacheKey, null);
-			if (cached?.timestamp && (now - cached.timestamp) < RECOMMENDATIONS_CACHE_TTL_MS && cached?.payload) {
-				return cached.payload;
-			}
-		} catch {
-			cached = null;
-		}
-
-		try {
-			const url = new URL(TEAM_RECOMMENDATION_BACKTEST_URL);
-			url.searchParams.set('mode', mode || 'arena');
-			url.searchParams.set('objective', objective || 'balanced');
-			url.searchParams.set('lookbackDays', '30');
-			url.searchParams.set('limit', '3');
-			url.searchParams.set('minSamples', '2');
-
-			const response = await fetch(url.toString());
-			if (!response.ok) throw new Error(`HTTP ${response.status}`);
-
-			const payload = await response.json();
-			await this.idbStorage.setMetadata(cacheKey, { timestamp: now, payload });
-			return payload;
-		} catch {
-			return cached?.payload || null;
-		}
+		return this._getCachedApiPayload({
+			cacheKey,
+			ttlMs: RECOMMENDATIONS_CACHE_TTL_MS,
+			requestUrl: url.toString(),
+			fallbackPayload: null,
+		});
 	}
 
 	/**
@@ -1559,32 +1351,16 @@ class UIManager {
 	 */
 	async _getTeamRecommendationCalibrationPayload(mode, trendWindowDays = 30) {
 		const cacheKey = `teamRecommendationCalibration:${mode}:${trendWindowDays}`;
-		const now = Date.now();
+		const url = new URL(TEAM_RECOMMENDATION_CALIBRATION_URL);
+		url.searchParams.set('mode', mode || 'arena');
+		url.searchParams.set('preferredTrendWindowDays', String(Math.max(1, Number(trendWindowDays || 30))));
 
-		let cached = null;
-		try {
-			cached = await this.idbStorage.getMetadata(cacheKey, null);
-			if (cached?.timestamp && (now - cached.timestamp) < RECOMMENDATIONS_CACHE_TTL_MS && cached?.payload) {
-				return cached.payload;
-			}
-		} catch {
-			cached = null;
-		}
-
-		try {
-			const url = new URL(TEAM_RECOMMENDATION_CALIBRATION_URL);
-			url.searchParams.set('mode', mode || 'arena');
-			url.searchParams.set('preferredTrendWindowDays', String(Math.max(1, Number(trendWindowDays || 30))));
-
-			const response = await fetch(url.toString());
-			if (!response.ok) throw new Error(`HTTP ${response.status}`);
-
-			const payload = await response.json();
-			await this.idbStorage.setMetadata(cacheKey, { timestamp: now, payload });
-			return payload;
-		} catch {
-			return cached?.payload || null;
-		}
+		return this._getCachedApiPayload({
+			cacheKey,
+			ttlMs: RECOMMENDATIONS_CACHE_TTL_MS,
+			requestUrl: url.toString(),
+			fallbackPayload: null,
+		});
 	}
 
 	/**
@@ -1604,42 +1380,12 @@ class UIManager {
 				? metadata.verificationStatuses
 				: ['verified', 'partial', 'unverified', 'stale'];
 
-			const rows = tools.slice(0, 4).map((tool) => {
-				const status = (tool.verificationStatus || 'unknown').toLowerCase();
-				const confidence = Number(tool.confidenceScore || 0);
-				const reviewed = tool.lastReviewedUtc ? new Date(tool.lastReviewedUtc) : null;
-				const ageDays = reviewed ? Math.floor((Date.now() - reviewed.getTime()) / (24 * 60 * 60 * 1000)) : 9999;
-				const staleTag = ageDays > 90 ? ' • stale' : '';
-				const statusColor = status === 'verified'
-					? '#81c784'
-					: status === 'partial'
-						? '#ffb74d'
-						: '#ef5350';
-
-				return `<div style="padding:8px;border:1px solid #37474f;border-radius:8px;background:#1f252b;margin-top:6px">
-					<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px">
-						<div style="font-size:12px;font-weight:700;color:#cfd8dc">${this._escapeHtml(tool.name || 'Unknown Tool')}</div>
-						<span style="font-size:10px;color:${statusColor}">${this._escapeHtml(status)} ${(confidence * 100).toFixed(0)}%</span>
-					</div>
-					<div style="font-size:11px;color:#a7b3bb;margin-top:3px">${this._escapeHtml(tool.category || 'tool')} • reviewed ${reviewed ? reviewed.toISOString().slice(0, 10) : 'n/a'}${staleTag}</div>
-					<div style="font-size:11px;color:#93a1aa;margin-top:4px">${this._escapeHtml(tool.capabilities || '')}</div>
-					<div style="font-size:10px;color:#7f8b92;margin-top:3px">${this._escapeHtml(tool.caveats || '')}</div>
-					<div style="margin-top:6px"><a href="${this._escapeHtml(tool.url || '#')}" target="_blank" rel="noopener noreferrer" style="font-size:11px;color:#64b5f6">Open Tool</a></div>
-				</div>`;
-			}).join('');
-
-			return `<div class="oj-section">
-				<h3>\uD83E\uDDF0 External Tools</h3>
-				<div style="margin:4px 0 8px 0;display:flex;align-items:center;gap:8px;flex-wrap:wrap">
-					<label for="oj-tools-status-filter" style="font-size:11px;color:#a7b3bb">Status</label>
-					<select id="oj-tools-status-filter" style="background:#1f252b;border:1px solid #37474f;color:#cfd8dc;border-radius:6px;padding:3px 6px;font-size:11px">
-						<option value="" ${selectedStatus === '' ? 'selected' : ''}>all</option>
-						${statusOptions.map((status) => `<option value="${this._escapeHtml(status)}" ${selectedStatus === status ? 'selected' : ''}>${this._escapeHtml(status)}</option>`).join('')}
-					</select>
-				</div>
-				${rows}
-				${tools.length > 4 ? `<div style="font-size:11px;color:#888;margin-top:6px;text-align:center">+ ${tools.length - 4} more in desktop Settings</div>` : ''}
-			</div>`;
+			return renderExternalToolsSection({
+				tools,
+				statusOptions,
+				selectedStatus,
+				escapeHtml: (value) => this._escapeHtml(value),
+			});
 		} catch {
 			return '';
 		}
@@ -1655,40 +1401,25 @@ class UIManager {
 		const metadata = await this._getExternalToolsFilterMetadata();
 		const selectedStatus = this.prefStorage.get('toolsCatalogStatusFilter', '');
 		const cacheKey = `toolsCatalog:external:${selectedStatus || 'all'}`;
-		const now = Date.now();
 
-		let cached = null;
-		try {
-			cached = await this.idbStorage.getMetadata(cacheKey, null);
-			if (cached?.timestamp && (now - cached.timestamp) < TOOLS_CATALOG_CACHE_TTL_MS && cached?.payload) {
-				return cached.payload;
-			}
-		} catch {
-			cached = null;
+		const url = new URL(TOOLS_CATALOG_URL);
+		const defaultMinConfidence = Number(metadata?.defaultMinConfidence);
+		const normalizedMinConfidence = Number.isFinite(defaultMinConfidence)
+			? Math.max(0, Math.min(1, defaultMinConfidence))
+			: 0.65;
+		url.searchParams.set('minConfidence', normalizedMinConfidence.toFixed(2));
+		url.searchParams.set('includeStale', metadata?.defaultIncludeStale ? 'true' : 'false');
+		url.searchParams.set('sort', metadata?.defaultSort || 'confidence');
+		if (selectedStatus) {
+			url.searchParams.set('verificationStatus', selectedStatus);
 		}
 
-		try {
-			const url = new URL(TOOLS_CATALOG_URL);
-			const defaultMinConfidence = Number(metadata?.defaultMinConfidence);
-			const normalizedMinConfidence = Number.isFinite(defaultMinConfidence)
-				? Math.max(0, Math.min(1, defaultMinConfidence))
-				: 0.65;
-			url.searchParams.set('minConfidence', normalizedMinConfidence.toFixed(2));
-			url.searchParams.set('includeStale', metadata?.defaultIncludeStale ? 'true' : 'false');
-			url.searchParams.set('sort', metadata?.defaultSort || 'confidence');
-			if (selectedStatus) {
-				url.searchParams.set('verificationStatus', selectedStatus);
-			}
-
-			const response = await fetch(url.toString());
-			if (!response.ok) throw new Error(`HTTP ${response.status}`);
-
-			const payload = await response.json();
-			await this.idbStorage.setMetadata(cacheKey, { timestamp: now, payload });
-			return payload;
-		} catch {
-			return cached?.payload || null;
-		}
+		return this._getCachedApiPayload({
+			cacheKey,
+			ttlMs: TOOLS_CATALOG_CACHE_TTL_MS,
+			requestUrl: url.toString(),
+			fallbackPayload: null,
+		});
 	}
 
 	/**
@@ -1698,34 +1429,17 @@ class UIManager {
 	 * @private
 	 */
 	async _getExternalToolsFilterMetadata() {
-		const cacheKey = 'toolsCatalog:filters';
-		const now = Date.now();
-
-		let cached = null;
-		try {
-			cached = await this.idbStorage.getMetadata(cacheKey, null);
-			if (cached?.timestamp && (now - cached.timestamp) < TOOLS_CATALOG_CACHE_TTL_MS && cached?.payload) {
-				return cached.payload;
-			}
-		} catch {
-			cached = null;
-		}
-
-		try {
-			const response = await fetch(TOOLS_CATALOG_FILTERS_URL);
-			if (!response.ok) throw new Error(`HTTP ${response.status}`);
-
-			const payload = await response.json();
-			await this.idbStorage.setMetadata(cacheKey, { timestamp: now, payload });
-			return payload;
-		} catch {
-			return cached?.payload || {
+		return this._getCachedApiPayload({
+			cacheKey: 'toolsCatalog:filters',
+			ttlMs: TOOLS_CATALOG_CACHE_TTL_MS,
+			requestUrl: TOOLS_CATALOG_FILTERS_URL,
+			fallbackPayload: {
 				verificationStatuses: ['verified', 'partial', 'unverified', 'stale'],
 				defaultMinConfidence: 0.65,
 				defaultIncludeStale: false,
 				defaultSort: 'confidence',
-			};
-		}
+			},
+		});
 	}
 
 	/**
