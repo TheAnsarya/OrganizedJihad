@@ -948,6 +948,43 @@
 
 ## Session
 - Date: 2026-05-27
+- Session Number: 39
+- Scope: Continue long-run autonomous throughput with a new batch quality uplift for Team Recommendation helper modules.
+
+## Summary
+- Created and completed batch issue #300 (6 high + 12 medium slices) focused on regression coverage for extracted Team Recommendation helper modules.
+- Added a new focused API test suite covering:
+	- `BattleRecommendationMath` normalization/clamp/filter/baseline/candidate pipeline behaviors
+	- `TeamRecommendationOrchestrationMath` mode/objective normalization, external-signal dedupe/sort, recommendation-limit clamp, and calibration scale/update orchestration behaviors
+- Included deterministic fakes for simulator, external signal providers, and state store to keep tests isolated and stable.
+
+## Files Modified
+- ~docs/plans/architecture-modernization-roadmap.md
+- ~docs/copilot-chats/2026-05-27-requirements-item-icon-enrichment.md
+
+## Files Created
+- tests/OrganizedJihad.Api.Tests/TeamRecommendationMathTests.cs
+
+## Issues Referenced
+- #206 Epic: Architecture modernization and module deepening across API/userscript
+- #178 Modernization: Test and benchmark architecture uplift
+- #300 Batch quality uplift: Team Recommendation math/orchestration test expansion (6 high + 12 medium slices)
+
+## Validation
+- `dotnet test tests/OrganizedJihad.Api.Tests/OrganizedJihad.Api.Tests.csproj --filter "TeamRecommendationMathTests"`: passed (20 tests)
+- `dotnet test OrganizedJihad.sln`: passed (115 tests)
+
+## Key Decisions
+- Prioritized deterministic helper-level coverage for extracted modules before further deep feature extraction, reducing risk of hidden behavior drift.
+- Used fake simulator/provider/state-store dependencies for precise assertions without changing production contracts.
+
+## Known Follow-up
+- Continue queued userscript batch decomposition issues #297 and #298.
+
+---
+
+## Session
+- Date: 2026-05-27
 - Session Number: 37
 - Scope: Continue high-throughput architecture modernization using batch issues for API recommendation seams, desktop parity client consolidation, and userscript build automation.
 
