@@ -63,6 +63,26 @@ yarn build
 
 This produces `userscript/dist/organized-jihad.user.js` — a single bundled JS file.
 
+## Step 2.5: Run One-Command Install Health Check (Recommended)
+
+From `userscript/`, run:
+
+```powershell
+yarn install:check
+```
+
+This checks key local API endpoints and prints `PASS` / `WARN` / `FAIL` status with next actions.
+
+- `PASS` on required checks means the userscript should sync correctly.
+- `WARN` means optional endpoints are unavailable; advanced views may show partial data.
+- `FAIL` means required sync health endpoint is not reachable.
+
+If your API is on a different host/port:
+
+```powershell
+node .\scripts\install-health-check.mjs --baseUrl http://localhost:5000
+```
+
 ---
 
 ## Step 3: Install the Script in TamperMonkey

@@ -388,3 +388,41 @@
 ## Known Follow-up
 - Add a compact toggle to collapse/expand tier + level-band tables when panel density is high.
 - Add exact recipe-aware calibration path so level-band summaries can be reconciled against deterministic game catalogs.
+
+---
+
+## Session
+- Date: 2026-05-27
+- Session Number: 12
+- Scope: Improve install ease with a one-command userscript environment health check.
+
+## Summary
+- Created and implemented issue #193.
+- Added new script: `userscript/scripts/install-health-check.mjs`.
+- Added package command: `yarn install:check`.
+- Script validates required and optional local API endpoints and prints actionable pass/warn/fail output.
+- Updated install guide with the new command and custom `--baseUrl` usage.
+
+## Files Modified
+- userscript/package.json
+- userscript/INSTALL.md
+- ~docs/copilot-chats/2026-05-27-requirements-item-icon-enrichment.md
+
+## Files Created
+- userscript/scripts/install-health-check.mjs
+
+## Issues Referenced
+- #193 Add one-command userscript install health check script and docs
+
+## Validation
+- yarn install:check: executed (expected non-zero when required local API endpoint unreachable)
+- yarn test --runInBand: passed (18 suites, 706 tests)
+- yarn build: passed (version 0.9.102)
+
+## Key Decisions
+- Marked `/api/sync/health` as required and projection/tool metadata endpoints as optional so users get useful setup feedback without blocking advanced features.
+- Returned explicit next steps on failure to reduce setup friction.
+
+## Known Follow-up
+- Add optional browser-open flag to launch failing endpoint URLs automatically on Windows.
+- Optionally emit JSON output mode for CI/setup automation.

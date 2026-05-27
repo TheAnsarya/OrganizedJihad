@@ -12,6 +12,7 @@ Initial implementation in userscript projects roster-wide required item totals t
 - API/Desktop parity shipped for projected item catalog metadata endpoints and desktop views.
 - Tier-by-tier material aggregates now rendered in Heroes panel (`Grey`, `Green`, `Blue`, `Violet`, `Orange`, `Red+`).
 - Level-band material aggregates now rendered in Heroes panel (`1-40`, `41-80`, `81-120`, `121-130`).
+- One-command install validation now available via `yarn install:check` with required/optional endpoint diagnostics.
 
 ## Deferred Work (Documented)
 1. Exact deterministic recipe catalog integration (still pending)
@@ -37,6 +38,7 @@ Initial implementation in userscript projects roster-wide required item totals t
 6. Installer/ease workflow enhancements
 - Add optional post-install health check summary and shortcut creation in installer.
 - Add one-click open of userscript diagnostics panel after installation.
+- Add browser-open flag and JSON output mode to install health-check script for automation.
 
 ## Suggested Next Slices
 - Slice A: Deterministic recipe catalog ingestion (exact per-rank ingredient trees).
