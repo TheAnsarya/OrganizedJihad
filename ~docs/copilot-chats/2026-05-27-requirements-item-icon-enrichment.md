@@ -904,6 +904,50 @@
 
 ## Session
 - Date: 2026-05-27
+- Session Number: 38
+- Scope: Continue autonomous issue throughput with new batch slices, including a large API Team Recommendation orchestration decomposition wave.
+
+## Summary
+- Created new batch issues for continued throughput using larger grouped slices:
+	- #297 userscript high-risk handler-registry extraction wave (6 high-risk slices)
+	- #298 userscript medium-risk registration-phase decomposition wave (12 medium-risk slices)
+	- #299 API Team Recommendation orchestration decomposition wave (6 high + 12 medium slices)
+- Implemented #299 by extracting SyncService recommendation orchestration into dedicated Team Recommendation modules:
+	- `BattleRecommendationMath` for battle recommendation normalization/filtering/baseline/candidate scoring pipeline
+	- `TeamRecommendationOrchestrationMath` for mode/objective normalization, external signal aggregation, recommendation limit normalization, and calibration scale/state update orchestration
+- Updated `SyncService` call sites to delegate to extracted modules and removed in-class duplicate helper logic.
+
+## Files Modified
+- api/Services/SyncService.cs
+- ~docs/plans/architecture-modernization-roadmap.md
+- ~docs/copilot-chats/2026-05-27-requirements-item-icon-enrichment.md
+
+## Files Created
+- api/Services/TeamRecommendation/BattleRecommendationMath.cs
+- api/Services/TeamRecommendation/TeamRecommendationOrchestrationMath.cs
+
+## Issues Referenced
+- #206 Epic: Architecture modernization and module deepening across API/userscript
+- #175 Refactor: API service boundaries for Sync/Recommendation/Simulation
+- #297 Batch refactor: gameTracker handler registry extraction wave (6 high-risk slices)
+- #298 Batch modernization: gameTracker registration phase decomposition (12 medium-risk slices)
+- #299 Batch refactor: Team Recommendation orchestration decomposition in SyncService (6 high + 12 medium slices)
+
+## Validation
+- `dotnet test tests/OrganizedJihad.Api.Tests/OrganizedJihad.Api.Tests.csproj`: passed (56 tests)
+- `dotnet test OrganizedJihad.sln`: passed (95 tests)
+
+## Key Decisions
+- Pivoted from an unsafe mechanical userscript extraction attempt to a proven API seam-extraction pattern to preserve reliability while still sustaining batch issue throughput.
+- Kept endpoint payload contracts and response shapes unchanged; this wave focuses on orchestration boundary extraction only.
+
+## Known Follow-up
+- Execute #297 and #298 in subsequent waves by extracting userscript `gameTracker` registration clusters into modular registry functions.
+
+---
+
+## Session
+- Date: 2026-05-27
 - Session Number: 37
 - Scope: Continue high-throughput architecture modernization using batch issues for API recommendation seams, desktop parity client consolidation, and userscript build automation.
 
