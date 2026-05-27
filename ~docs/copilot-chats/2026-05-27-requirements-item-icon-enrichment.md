@@ -461,3 +461,38 @@
 
 ## Known Follow-up
 - Persist collapsed/expanded state per section in preferences so user panel density choices survive reloads.
+
+---
+
+## Session
+- Date: 2026-05-27
+- Session Number: 14
+- Scope: Persist collapse/expand preferences for Heroes projection panel sections.
+
+## Summary
+- Created and implemented issue #195.
+- Added persisted preference keys for Heroes projection sections:
+	- `heroesProjectionColorTierOpen`
+	- `heroesProjectionLevelBandOpen`
+	- `heroesProjectionTopItemsOpen`
+- Projection panel now restores open/collapsed state from preferences on render.
+- Added toggle event persistence for each projection `<details>` section.
+
+## Files Modified
+- userscript/src/modules/uiManager.js
+- ~docs/copilot-chats/2026-05-27-requirements-item-icon-enrichment.md
+
+## Issues Referenced
+- #195 Persist hero projection section collapse preferences in userscript
+
+## Validation
+- yarn test --runInBand: passed (18 suites, 706 tests)
+- yarn build: passed (version 0.9.104)
+- UIManager diagnostics: no errors
+
+## Key Decisions
+- Stored booleans in prefStorage and resolved to open-by-default when unset.
+- Kept implementation local to UI manager listeners/render path to avoid cross-module coupling.
+
+## Known Follow-up
+- Add a one-click "Expand All / Collapse All" projection controls row for power users.

@@ -2276,6 +2276,9 @@ class UIManager {
 		const coverage = projection.coverage || {};
 		const tierSummaries = Array.isArray(projection.tierSummaries) ? projection.tierSummaries : [];
 		const levelBandSummaries = Array.isArray(projection.levelBandSummaries) ? projection.levelBandSummaries : [];
+		const isColorTierOpen = this.prefStorage.get('heroesProjectionColorTierOpen', true) !== false;
+		const isLevelBandOpen = this.prefStorage.get('heroesProjectionLevelBandOpen', true) !== false;
+		const isTopItemsOpen = this.prefStorage.get('heroesProjectionTopItemsOpen', true) !== false;
 		const totalNeeds = Number(projection.totalProjectedItems || 0).toLocaleString();
 		const totalOwned = Number(projection.totalOwnedForProjectedItems || 0).toLocaleString();
 		const totalShortage = Number(projection.totalShortageItems || 0).toLocaleString();
@@ -2328,21 +2331,21 @@ class UIManager {
 					<div class="oj-muted" style="font-size:11px">Signals: lvlUp ${Number(coverage.levelUpgradeSamples || 0)}, colorUp ${Number(coverage.colorUpgradeSamples || 0)}, equip ${Number(coverage.equipmentChangeSamples || 0)}, itemUse ${Number(coverage.itemUsageSamples || 0)}</div>
 				</div>
 				${tierRows
-					? `<details open style="margin-top:4px">
+					? `<details ${isColorTierOpen ? 'open' : ''} data-projection-section="colorTier" style="margin-top:4px">
 						<summary style="cursor:pointer;font-size:12px;font-weight:700;color:#d0d0d0;list-style:disclosure-closed">Color Tier Summary • ${tierSummaries.length} tiers • ${tierSummaryTotal.toLocaleString()} needed</summary>
 						<table class="oj-table" style="margin-top:6px"><thead><tr><th>Tier</th><th>Needed</th><th>Owned</th><th>Shortage</th><th>Distinct</th></tr></thead><tbody>${tierRows}</tbody></table>
 					</details>`
 					: ''
 				}
 				${levelBandRows
-					? `<details open style="margin-top:4px">
+					? `<details ${isLevelBandOpen ? 'open' : ''} data-projection-section="levelBand" style="margin-top:4px">
 						<summary style="cursor:pointer;font-size:12px;font-weight:700;color:#d0d0d0;list-style:disclosure-closed">Level Band Summary • ${levelBandSummaries.length} bands • ${levelBandSummaryTotal.toLocaleString()} needed</summary>
 						<table class="oj-table" style="margin-top:6px"><thead><tr><th>Level Band</th><th>Levels</th><th>Needed</th><th>Owned</th><th>Shortage</th><th>Distinct</th></tr></thead><tbody>${levelBandRows}</tbody></table>
 					</details>`
 					: ''
 				}
 				${hasSignal
-					? `<details open style="margin-top:4px">
+					? `<details ${isTopItemsOpen ? 'open' : ''} data-projection-section="topItems" style="margin-top:4px">
 						<summary style="cursor:pointer;font-size:12px;font-weight:700;color:#d0d0d0;list-style:disclosure-closed">Top Projected Items • ${topItems.length} rows</summary>
 						<table class="oj-table" style="margin-top:6px"><thead><tr><th>Item</th><th>Needed</th><th>Owned</th><th>Shortage</th><th>Mix</th></tr></thead><tbody>${itemRows}</tbody></table>
 					</details>`
@@ -4872,6 +4875,25 @@ class UIManager {
 					const isHidden = detailRow.style.display === 'none';
 					detailRow.style.display = isHidden ? '' : 'none';
 					row.classList.toggle('oj-expanded', isHidden);
+				}
+			});
+		});
+
+		// Persist projection section collapse state (heroes view only)
+		content.querySelectorAll('details[data-projection-section]').forEach((detailsEl) => {
+			detailsEl.addEventListener('toggle', () => {
+				const section = detailsEl.dataset.projectionSection;
+				const isOpen = detailsEl.open;
+				switch (section) {
+					case 'colorTier':
+						this.prefStorage.set('heroesProjectionColorTierOpen', isOpen);
+						break;
+					case 'levelBand':
+						this.prefStorage.set('heroesProjectionLevelBandOpen', isOpen);
+						break;
+					case 'topItems':
+						this.prefStorage.set('heroesProjectionTopItemsOpen', isOpen);
+						break;
 				}
 			});
 		});
