@@ -667,15 +667,11 @@ class UIManager {
 		const raidBossAttacksMax = raidBoss.attemptsMax || 5;
 		const raidMyDamage = raidBoss.myDamage || 0;
 
-		let guildWarBattlesToday = 0;
-		let guildRaidMinionToday = 0;
-
-		try {
-			// Only load today's battles via timestamp index instead of entire store (#150)
-			const todayBattles = await this.idbStorage.getByIndexRange('battles', 'timestamp', { lower: todayISO });
-			guildWarBattlesToday = todayBattles.filter((b) => b.battleType === 'GuildWar').length;
-			guildRaidMinionToday = todayBattles.filter((b) => b.battleType === 'RaidBoss').length;
-		} catch { /* empty */ }
+		const {
+			allBattles,
+			guildWarBattlesToday,
+			guildRaidMinionToday,
+		} = await this._loadDashboardBattleDatasets(todayISO);
 
 
 		// Gather counts from actual IndexedDB stores
@@ -701,7 +697,6 @@ class UIManager {
 			: 'None yet';
 
 		// ── Win Rate Statistics (#26) ─────────────────────────────────
-		const allBattles = await this.idbStorage.getAll('battles', FETCH_LIMIT_LARGE).catch(() => []);
 		const winRateSection = await this._renderWinRateCards(allBattles);
 
 		// ── Daily Summary (#26) ──────────────────────────────────────
@@ -920,6 +915,26 @@ class UIManager {
 			invasionData,
 			syncStatus,
 		};
+	}
+
+	/**
+	 * Load battle datasets used by dashboard cards and summaries.
+	 *
+	 * @param {string} todayISO - Start-of-day ISO timestamp
+	 * @returns {Promise<{allBattles:Array<object>, guildWarBattlesToday:number, guildRaidMinionToday:number}>} Battle datasets
+	 * @private
+	 */
+	async _loadDashboardBattleDatasets(todayISO) {
+		const allBattles = await this.idbStorage.getAll('battles', FETCH_LIMIT_LARGE).catch(() => []);
+		let guildWarBattlesToday = 0;
+		let guildRaidMinionToday = 0;
+		try {
+			const todayBattles = await this.idbStorage.getByIndexRange('battles', 'timestamp', { lower: todayISO });
+			guildWarBattlesToday = todayBattles.filter((b) => b.battleType === 'GuildWar').length;
+			guildRaidMinionToday = todayBattles.filter((b) => b.battleType === 'RaidBoss').length;
+		} catch { /* empty */ }
+
+		return { allBattles, guildWarBattlesToday, guildRaidMinionToday };
 	}
 
 	/**
