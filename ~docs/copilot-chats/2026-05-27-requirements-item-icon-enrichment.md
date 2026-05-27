@@ -703,3 +703,40 @@
 
 ## Known Follow-up
 - Consider adding a convenience switch that implies `-RunInstallHealthCheck -InstallHealthCheckOpen failed` for first-time setup flows.
+
+---
+
+## Session
+- Date: 2026-05-27
+- Session Number: 21
+- Scope: Add installer one-click diagnostics-entry opening for first-run verification.
+
+## Summary
+- Created and implemented issue #202.
+- Added installer switch `-OpenUserscriptDiagnostics` to open diagnostics entry points after install.
+- Installer now opens:
+	- `https://www.hero-wars.com/`
+	- `<ApiUrl>/api/sync/health`
+	- `<ApiUrl>/api/sync`
+- Added terminal guidance reminding users to press `Ctrl+Shift+H` in-game to open overlay diagnostics panel.
+- Updated install docs with new switch usage and behavior.
+
+## Files Modified
+- Install-OrganizedJihad.ps1
+- userscript/INSTALL.md
+- ~docs/copilot-chats/2026-05-27-requirements-item-icon-enrichment.md
+
+## Issues Referenced
+- #202 Add installer option to open userscript diagnostics entry points after setup
+
+## Validation
+- PowerShell parse check for installer script: passed
+- yarn test --runInBand: passed (18 suites, 706 tests)
+- yarn build: passed (version 0.9.111)
+
+## Key Decisions
+- Kept diagnostics-opening behavior explicitly opt-in to avoid surprising tab launches during unattended installs.
+- Reused existing `ApiUrl` parameter to ensure opened local diagnostics endpoints always match installer API target.
+
+## Known Follow-up
+- Consider a convenience switch that combines post-install health check (`--open failed`) with diagnostics entry-point opening.

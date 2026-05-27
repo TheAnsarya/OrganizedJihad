@@ -38,6 +38,17 @@ Optional JSON output from installer-triggered health check:
 pwsh -ExecutionPolicy Bypass -File .\Install-OrganizedJihad.ps1 -RunInstallHealthCheck -InstallHealthCheckJson
 ```
 
+Open diagnostics entry points automatically after install:
+
+```powershell
+pwsh -ExecutionPolicy Bypass -File .\Install-OrganizedJihad.ps1 -OpenUserscriptDiagnostics
+```
+
+This opens:
+- Hero Wars web page (for userscript overlay diagnostics)
+- API health URL (`/api/sync/health`)
+- API docs URL (`/api/sync`)
+
 ## Prerequisites
 
 - **Browser**: Chrome, Edge, Firefox, or any Chromium-based browser

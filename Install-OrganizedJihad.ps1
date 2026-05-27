@@ -5,6 +5,7 @@ param(
 	[switch]$SkipYarnInstall,
 	[switch]$RunInstallHealthCheck,
 	[switch]$InstallHealthCheckJson,
+	[switch]$OpenUserscriptDiagnostics,
 	[ValidateSet('none', 'failed', 'required', 'all')]
 	[string]$InstallHealthCheckOpen = 'none'
 )
@@ -173,6 +174,19 @@ if ($RunInstallHealthCheck) {
 	}
 }
 
+if ($OpenUserscriptDiagnostics) {
+	Write-Step 'Opening userscript diagnostics entry points.'
+	$apiHealthUrl = "$ApiUrl/api/sync/health"
+	$apiDocsUrl = "$ApiUrl/api/sync"
+	$heroWarsUrl = 'https://www.hero-wars.com/'
+
+	Start-Process $heroWarsUrl | Out-Null
+	Start-Process $apiHealthUrl | Out-Null
+	Start-Process $apiDocsUrl | Out-Null
+
+	Write-Step 'Opened Hero Wars + API health/docs URLs. In-game, press Ctrl+Shift+H to open overlay diagnostics panel.'
+}
+
 Write-Step 'Installation complete.'
 Write-Host ""
 Write-Host 'What was configured:' -ForegroundColor Green
@@ -186,3 +200,4 @@ Write-Host '- Open Hero Wars in your browser'
 Write-Host '- Confirm Tampermonkey has the OrganizedJihad script enabled'
 Write-Host '- Verify API health at http://localhost:5124/api/sync/health'
 Write-Host '- Optional: rerun check with browser-open failures: yarn install:check --open failed'
+Write-Host '- Optional: open diagnostics entry points automatically: -OpenUserscriptDiagnostics'
