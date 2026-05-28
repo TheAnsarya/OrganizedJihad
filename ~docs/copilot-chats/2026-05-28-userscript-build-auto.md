@@ -1003,3 +1003,36 @@
 
 ## Follow-up
 - Publish GitHub release using `~docs/plans/release-v0.2.1-github-body.md` for release body and `~docs/plans/release-v0.2.1.md` for full technical notes.
+
+---
+
+## Session
+- Date: 2026-05-28
+- Session Number: 39
+- Scope: #326 stable release cut + artifact publication
+
+## Summary
+- Added reproducible release artifact packaging script and generated stable v0.2.1 installer bundle + checksum manifest.
+- Published GitHub release `v0.2.1` and uploaded artifacts.
+- Updated docs with release URL and local release packaging command.
+
+## Files Modified
+- Publish-ReleaseArtifacts.ps1
+- README.md
+- ~docs/plans/release-v0.2.1.md
+- ~docs/plans/release-v0.2.1-github-body.md
+- ~docs/plans/architecture-modernization-roadmap.md
+- ~docs/copilot-chats/2026-05-28-userscript-build-auto.md
+
+## Issues
+- Created/implemented: #326
+- Referenced epic: #206
+- PR tracking: #209
+
+## Validation
+- pwsh -ExecutionPolicy Bypass -File .\Publish-ReleaseArtifacts.ps1 -Version 0.2.1 (pass)
+- gh release create v0.2.1 --notes-file ~docs/plans/release-v0.2.1-github-body.md ... (pass)
+- Release URL: https://github.com/TheAnsarya/OrganizedJihad/releases/tag/v0.2.1
+
+## Follow-up
+- Optional future slice: add detached signature file generation to release artifact pipeline.

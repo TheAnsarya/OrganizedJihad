@@ -1,5 +1,7 @@
 # 🎉 OrganizedJihad v0.2.1
 
+🔗 Release URL: https://github.com/TheAnsarya/OrganizedJihad/releases/tag/v0.2.1
+
 ## 🚀 Highlights
 
 - ✅ One-click installer UX is now GUI-first and beginner-friendly

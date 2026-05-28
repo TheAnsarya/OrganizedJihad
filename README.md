@@ -32,6 +32,18 @@ See [Tracking Reference](~docs/plans/tracking-reference.md) for the complete dat
 
 ## Quick Start
 
+### Stable Release Download (v0.2.1)
+
+- GitHub Release: https://github.com/TheAnsarya/OrganizedJihad/releases/tag/v0.2.1
+- Recommended asset: `OrganizedJihad-v0.2.1-windows-installer.zip`
+- Verify integrity using bundled `SHA256SUMS.txt`
+
+To build release artifacts locally:
+
+```powershell
+pwsh -ExecutionPolicy Bypass -File .\Publish-ReleaseArtifacts.ps1 -Version 0.2.1
+```
+
 ### Prerequisites
 
 - [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0)

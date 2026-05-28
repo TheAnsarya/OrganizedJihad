@@ -12,6 +12,7 @@
 | PR | #209 |
 | Primary Issues | #321, #322, #323, #324 |
 | Target Platform | Windows (single-run installer + GUI installer) |
+| GitHub Release | https://github.com/TheAnsarya/OrganizedJihad/releases/tag/v0.2.1 |
 
 ---
 
@@ -72,6 +73,11 @@ Result: users can install the full stack with fewer failure points, better diagn
 | Userscript | ✅ Included | Build + install flow integrated in installer |
 | GUI Installer | ✅ Included | Avalonia executable (`OrganizedJihad.Installer.exe`) |
 | CLI Installer | ✅ Included | PowerShell + cmd launcher with elevation support |
+
+Published assets:
+
+- `OrganizedJihad-v0.2.1-windows-installer.zip`
+- `SHA256SUMS.txt`
 
 ---
 
