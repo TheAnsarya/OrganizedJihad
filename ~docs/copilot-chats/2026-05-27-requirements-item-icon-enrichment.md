@@ -1024,6 +1024,52 @@
 ---
 
 ## Session
+- Date: 2026-05-28
+- Session Number: 41
+- Scope: Complete #297/#298 userscript registration decomposition by extracting remaining high-risk and medium-risk pre-Phase-11 handler clusters.
+
+## Summary
+- Added `GameTrackerGameplayRegistry` and moved the remaining pre-Phase-11 registration logic out of `gameTracker._buildHandlerRegistry` into modular exports.
+- Delegated monolithic registration blocks to:
+	- `registerBattleHandlers`
+	- `registerQuestRewardHandlers`
+	- `registerGuildAndSocialHandlers`
+	- `registerUpgradeHandlers`
+- Preserved handler labels/categories and method coverage while replacing inline registration with modular calls.
+- Completed targeted modernization outcome for:
+	- #297 high-risk clusters: battle, guild, chat, mail, chest, quest
+	- #298 medium-risk decomposition wave: 12+ phase/group slices delegated to registry modules
+
+## Files Modified
+- userscript/src/modules/gameTracker.js
+- userscript/package.json
+- ~docs/plans/architecture-modernization-roadmap.md
+- ~docs/copilot-chats/2026-05-27-requirements-item-icon-enrichment.md
+- ~docs/copilot-chats/2026-05-28-userscript-build-auto.md
+
+## Files Created
+- userscript/src/modules/trackers/GameTrackerGameplayRegistry.js
+
+## Issues Referenced
+- #206 Epic: Architecture modernization and module deepening across API/userscript
+- #209 PR tracking: architecture modernization wave updates
+- #297 Batch refactor: gameTracker handler registry extraction wave (6 high-risk slices)
+- #298 Batch modernization: gameTracker registration phase decomposition (12 medium-risk slices)
+
+## Validation
+- `yarn test --runInBand`: passed (18 suites, 706 tests)
+- `yarn build`: passed
+
+## Key Decisions
+- Extracted the full pre-Phase-11 registration seam in one validated wave after prior incremental chat/mail/core extraction proved stable.
+- Kept behavior parity by preserving registration metadata and handler call semantics while moving locality only.
+
+## Known Follow-up
+- Continue remaining `gameTracker` decomposition beyond pre-Phase-11 sections (Phase 11+ metadata and long-tail handlers) in additional batched modernization slices.
+
+---
+
+## Session
 - Date: 2026-05-27
 - Session Number: 37
 - Scope: Continue high-throughput architecture modernization using batch issues for API recommendation seams, desktop parity client consolidation, and userscript build automation.

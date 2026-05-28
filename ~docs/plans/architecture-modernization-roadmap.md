@@ -377,14 +377,14 @@
 - Outcome target: auto-append daily userscript build session logs in `~docs/copilot-chats/` from the userscript build pipeline.
 
 92. #297 Batch refactor: gameTracker handler registry extraction wave (6 high-risk slices)
-- Status: Planned/In Progress on `feature/204-architecture-modernization`.
+- Status: Completed on `feature/204-architecture-modernization`.
 - Outcome target: extract high-risk userscript handler-registration clusters (battle/guild/chat/mail/chest/quest) into modular registry boundaries.
-- Progress update: extracted chat and mail registration clusters into `userscript/src/modules/trackers/GameTrackerCoreRegistry.js` and delegated from `_buildHandlerRegistry`.
+- Progress update: extracted chat/mail/core clusters into `userscript/src/modules/trackers/GameTrackerCoreRegistry.js` and battle/guild/chest/quest gameplay clusters into `userscript/src/modules/trackers/GameTrackerGameplayRegistry.js`, with `_buildHandlerRegistry` now delegating to registry modules.
 
 93. #298 Batch modernization: gameTracker registration phase decomposition (12 medium-risk slices)
-- Status: Planned/In Progress on `feature/204-architecture-modernization`.
+- Status: Completed on `feature/204-architecture-modernization`.
 - Outcome target: decompose monolithic userscript registration surface into phase-oriented modular functions.
-- Progress update: extracted core player snapshot registration phase (`userGetInfo`, `heroGetAll`, `inventoryGet`) into `GameTrackerCoreRegistry` and delegated from `gameTracker`.
+- Progress update: completed decomposition of the pre-Phase-11 registration surface into modular phase functions (`registerBattleHandlers`, `registerQuestRewardHandlers`, `registerGuildAndSocialHandlers`, `registerUpgradeHandlers`) plus prior core/chat/mail extraction.
 
 94. #299 Batch refactor: Team Recommendation orchestration decomposition in SyncService (6 high + 12 medium slices)
 - Status: Completed on `feature/204-architecture-modernization`.
