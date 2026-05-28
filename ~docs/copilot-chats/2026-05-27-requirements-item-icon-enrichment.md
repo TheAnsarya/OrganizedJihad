@@ -1070,6 +1070,44 @@
 ---
 
 ## Session
+- Date: 2026-05-28
+- Session Number: 42
+- Scope: Execute additional post-#297/#298 modernization wave by extracting Phase 11 metadata/roster registration handlers into a dedicated module under a new batch issue.
+
+## Summary
+- Created batch issue #301 for grouped userscript modernization work covering 6 high-risk and 12 medium-risk slices in one issue.
+- Added new module `userscript/src/modules/trackers/GameTrackerPhase11Registry.js` with delegated Phase 11 registrations.
+- Rewired `gameTracker._buildHandlerRegistry` to call `registerPhase11MetadataHandlers(this)` instead of inline Phase 11 monolith block.
+
+## Files Modified
+- userscript/src/modules/gameTracker.js
+- userscript/package.json
+- ~docs/plans/architecture-modernization-roadmap.md
+- ~docs/copilot-chats/2026-05-27-requirements-item-icon-enrichment.md
+- ~docs/copilot-chats/2026-05-28-userscript-build-auto.md
+
+## Files Created
+- userscript/src/modules/trackers/GameTrackerPhase11Registry.js
+
+## Issues Referenced
+- #206 Epic: Architecture modernization and module deepening across API/userscript
+- #209 PR tracking: architecture modernization wave updates
+- #301 Batch userscript modernization: Phase 11 metadata/roster registry decomposition wave
+
+## Validation
+- `yarn test --runInBand`: passed (18 suites, 706 tests)
+- `yarn build`: passed
+
+## Key Decisions
+- Kept Phase 11 extraction isolated from Phase 12/13+ registration blocks to reduce merge and regression risk while maintaining forward decomposition momentum.
+- Preserved existing handler behavior and metadata keys; only registration locality changed.
+
+## Known Follow-up
+- Continue Phase 12/13 long-tail handler decomposition under new batched issue slices after this Phase 11 registry boundary.
+
+---
+
+## Session
 - Date: 2026-05-27
 - Session Number: 37
 - Scope: Continue high-throughput architecture modernization using batch issues for API recommendation seams, desktop parity client consolidation, and userscript build automation.
