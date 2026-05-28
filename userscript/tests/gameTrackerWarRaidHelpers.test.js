@@ -6,6 +6,7 @@ import {
 	buildGuildWarDataResponse,
 	buildGuildWarActivityPayload,
 	buildGuildWarBattleHistoryRecord,
+	buildGuildWarBattleStoreRecord,
 	buildGuildWarInfoMetadata,
 	buildGuildWarRewardIntents,
 	buildRaidBossDataResponse,
@@ -185,6 +186,27 @@ describe('GameTrackerWarRaidHelpers', () => {
 			{ resourceType: 'guild_war_coins', amount: 5, source: 'battle', sourceDetail: 'guild_war' },
 			{ resourceType: 'emeralds', amount: 1, source: 'battle', sourceDetail: 'guild_war' },
 		]);
+
+		const storeRow = buildGuildWarBattleStoreRecord(
+			args,
+			data,
+			currentWar,
+			(team) => team.length,
+			compressHeroTeam,
+			true,
+			'2026-05-28T00:00:00.000Z'
+		);
+		expect(storeRow).toEqual(expect.objectContaining({
+			battleType: 'GuildWar',
+			opponentId: 123,
+			opponentName: 'Nemesis',
+			isWin: true,
+			playerPower: 1,
+			opponentPower: 1,
+			mission: 7,
+			warId: 'w-1',
+			timestamp: '2026-05-28T00:00:00.000Z',
+		}));
 	});
 
 	test('raid side-effect builders preserve payload parity and token fallback', () => {

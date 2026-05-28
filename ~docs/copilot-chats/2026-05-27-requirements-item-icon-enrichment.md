@@ -1151,6 +1151,56 @@
 ---
 
 ## Session
+- Date: 2026-05-28
+- Session Number: 58
+- Scope: Continue large-batch modernization by extracting guild-war and raid battle execution orchestration into dedicated helpers.
+
+## Summary
+- Created and completed issue #317.
+- Added `userscript/src/modules/trackers/GameTrackerBattleExecutionHelpers.js` with:
+	- `executeGuildWarBattleTracking`
+	- `executeRaidBossAttackTracking`
+- Expanded `userscript/src/modules/trackers/GameTrackerWarRaidHelpers.js` with:
+	- `buildGuildWarBattleStoreRecord`
+- Rewired `userscript/src/modules/gameTracker.js` wrappers:
+	- `trackGuildWarBattle` now delegates to `executeGuildWarBattleTracking`
+	- `trackRaidBossAttack` now delegates to `executeRaidBossAttackTracking`
+- Added/expanded focused tests:
+	- `userscript/tests/gameTrackerBattleExecutionHelpers.test.js`
+	- `userscript/tests/gameTrackerWarRaidHelpers.test.js`
+
+## Files Modified
+- userscript/src/modules/gameTracker.js
+- userscript/src/modules/trackers/GameTrackerWarRaidHelpers.js
+- userscript/tests/gameTrackerWarRaidHelpers.test.js
+- userscript/package.json
+- ~docs/plans/architecture-modernization-roadmap.md
+- ~docs/copilot-chats/2026-05-27-requirements-item-icon-enrichment.md
+- ~docs/copilot-chats/2026-05-28-userscript-build-auto.md
+
+## Files Created
+- userscript/src/modules/trackers/GameTrackerBattleExecutionHelpers.js
+- userscript/tests/gameTrackerBattleExecutionHelpers.test.js
+
+## Issues Referenced
+- #206 Epic: Architecture modernization and module deepening across API/userscript
+- #209 PR tracking: architecture modernization wave updates
+- #317 Batch userscript modernization: guild-war and raid battle execution orchestration extraction
+
+## Validation
+- `yarn test --runInBand`: passed (33 suites, 791 tests)
+- `yarn build`: passed
+
+## Key Decisions
+- Kept wrapper signatures and behavior while relocating execution orchestration to helper module to lower `gameTracker` method complexity.
+- Preserved dedupe and side-effect ordering (history, conditional battle write, activity, reward transactions) during delegation.
+
+## Known Follow-up
+- Continue extraction of remaining battle execution surfaces with the same issue-first, validation-gated workflow.
+
+---
+
+## Session
 - Date: 2026-05-27
 - Session Number: 38
 - Scope: Continue autonomous issue throughput with new batch slices, including a large API Team Recommendation orchestration decomposition wave.

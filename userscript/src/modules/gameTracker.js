@@ -71,21 +71,19 @@ import {
 	persistCrossServerWarBattles,
 } from './trackers/GameTrackerCrossServerExecutionHelpers.js';
 import {
-	applyResourceTransactionIntents,
+	executeGuildWarBattleTracking,
+	executeRaidBossAttackTracking,
+} from './trackers/GameTrackerBattleExecutionHelpers.js';
+import {
 	appendBoundedHistory,
 	buildGuildWarDataResponse,
 	buildRaidBossDataResponse,
 	buildCrossServerWarInfoMetadata,
-	buildGuildWarActivityPayload,
-	buildGuildWarBattleHistoryRecord,
 	buildGuildWarInfoMetadata,
 	buildRaidBossAttackHistoryRecord,
-	buildRaidBossActivityPayload,
 	buildRaidBossBattleRecord,
 	buildRaidBossDamageSummary,
 	buildRaidBossInfoMetadata,
-	buildRaidBossRewardIntents,
-	buildGuildWarRewardIntents,
 	resolveCrossServerBattleResults,
 } from './trackers/GameTrackerWarRaidHelpers.js';
 import {
@@ -2272,58 +2270,7 @@ class GameTracker {
 	 * @private
 	 */
 	async trackGuildWarBattle(args, data) {
-		const isWin = data.result?.win || false;
-		const timestamp = new Date().toISOString();
-
-		// Resolve war context from cached data (#131)
-		const currentWar = await this.storage.getMetadata('currentGuildWar', {});
-
-		const battleRecord = buildGuildWarBattleHistoryRecord(
-			args,
-			data,
-			currentWar,
-			this.compressHeroTeam.bind(this),
-			isWin
-		);
-
-		const guildWarHistory = await this.storage.getMetadata('guildWarBattleHistory', []);
-		const nextGuildWarHistory = appendBoundedHistory(guildWarHistory, battleRecord, 500);
-
-		await this.storage.setMetadata('guildWarBattleHistory', nextGuildWarHistory);
-
-		// Write to IDB battles store for Battles tab display (#85)
-		// (#131) Include opponentId, warId, and opponent guild name
-		const battle = {
-			battleType: 'GuildWar',
-			opponentId: args.defenderId || null,
-			opponentName: currentWar.enemyGuildName || null,
-			isWin,
-			playerPower: data.attackers ? this.calculateTeamPower(data.attackers) : 0,
-			opponentPower: data.defenders ? this.calculateTeamPower(data.defenders) : 0,
-			playerHeroes: data.attackers ? JSON.stringify(this.compressHeroTeam(data.attackers)) : null,
-			opponentHeroes: data.defenders ? JSON.stringify(this.compressHeroTeam(data.defenders)) : null,
-			rewards: data.reward ? JSON.stringify(data.reward) : null,
-			mission: args.fortId || null,
-			warId: currentWar.warId || null,
-			timestamp,
-		};
-
-		if (!this._isBattleDuplicate(battle)) {
-			await this.storage.add('battles', battle);
-		}
-
-		// Live activity event
-		await this._logActivity('battle', `Guild War ${isWin ? 'WIN' : 'LOSS'} at fort #${args.fortId || '?'}`, { isWin });
-
-		// Track guild activity for guild war participation
-		// Hero Wars guild wars are major guild events
-		// See: https://community.hero-wars.com/discussion/guild-war-guide
-		const guildData = await this.storage.getMetadata('guildData', {});
-		await this.trackGuildActivity('war', buildGuildWarActivityPayload(guildData, args, battleRecord, data));
-
-		// Track resource rewards from guild war
-		const rewards = data.reward || {};
-		await applyResourceTransactionIntents(this, buildGuildWarRewardIntents(rewards));
+		await executeGuildWarBattleTracking(this, args, data);
 	}
 
 	/**
@@ -2355,33 +2302,7 @@ class GameTracker {
 	 * @private
 	 */
 	async trackRaidBossAttack(args, data) {
-		const timestamp = new Date().toISOString();
-
-		const attackRecord = buildRaidBossAttackHistoryRecord(args, data, this.compressHeroTeam.bind(this));
-
-		const raidHistory = await this.storage.getMetadata('raidBossAttackHistory', []);
-		const nextRaidHistory = appendBoundedHistory(raidHistory, attackRecord, 500);
-
-		await this.storage.setMetadata('raidBossAttackHistory', nextRaidHistory);
-
-		// Write to IDB battles store for Battles tab display (#85)
-		// Raid boss attacks are always successful (you always deal damage)
-		// (#131) Include damage in the IDB battle record for display
-		const battle = buildRaidBossBattleRecord(args, data, this.compressHeroTeam.bind(this), timestamp);
-
-		if (!this._isBattleDuplicate(battle)) {
-			await this.storage.add('battles', battle);
-		}
-
-		// Track guild activity for raid boss attacks
-		// Guild raids are cooperative PvE events
-		// See: https://community.hero-wars.com/discussion/guild-raid-boss-guide
-		const guildData = await this.storage.getMetadata('guildData', {});
-		await this.trackGuildActivity('raid', buildRaidBossActivityPayload(guildData, args, data));
-
-		// Track resource rewards from raid boss
-		const rewards = data.reward || {};
-		await applyResourceTransactionIntents(this, buildRaidBossRewardIntents(rewards));
+		await executeRaidBossAttackTracking(this, args, data);
 	}
 
 	/**

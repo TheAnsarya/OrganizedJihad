@@ -233,6 +233,43 @@ export function buildGuildWarBattleHistoryRecord(args, data, currentWar, compres
 }
 
 /**
+ * Build guild-war battle row for battles IDB store.
+ *
+ * @param {Object} args - battle request args
+ * @param {Object} data - battle response payload
+ * @param {Object} currentWar - cached war metadata
+ * @param {Function} calculateTeamPower - team power callback
+ * @param {Function} compressHeroTeam - team compression callback
+ * @param {boolean} isWin - battle result flag
+ * @param {string} timestampIso - ISO timestamp for battle row
+ * @returns {Object} battles row
+ */
+export function buildGuildWarBattleStoreRecord(
+	args,
+	data,
+	currentWar,
+	calculateTeamPower,
+	compressHeroTeam,
+	isWin,
+	timestampIso
+) {
+	return {
+		battleType: 'GuildWar',
+		opponentId: args.defenderId || null,
+		opponentName: currentWar.enemyGuildName || null,
+		isWin,
+		playerPower: data.attackers ? calculateTeamPower(data.attackers) : 0,
+		opponentPower: data.defenders ? calculateTeamPower(data.defenders) : 0,
+		playerHeroes: data.attackers ? JSON.stringify(compressHeroTeam(data.attackers)) : null,
+		opponentHeroes: data.defenders ? JSON.stringify(compressHeroTeam(data.defenders)) : null,
+		rewards: data.reward ? JSON.stringify(data.reward) : null,
+		mission: args.fortId || null,
+		warId: currentWar.warId || null,
+		timestamp: timestampIso,
+	};
+}
+
+/**
  * Build guild-war activity payload.
  *
  * @param {Object} guildData - guild metadata
