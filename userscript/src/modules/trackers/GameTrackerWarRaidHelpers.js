@@ -175,6 +175,39 @@ export function buildRaidBossDamageSummary(history) {
 }
 
 /**
+ * Build guild-war getter response payload.
+ *
+ * @param {Object|null} currentWar - current guild war metadata
+ * @param {Array<Object>} history - guild war history rows
+ * @param {Object} stats - computed stats object
+ * @returns {{currentWar:Object|null, history:Array<Object>, stats:Object}} response payload
+ */
+export function buildGuildWarDataResponse(currentWar, history, stats) {
+	return {
+		currentWar,
+		history,
+		stats,
+	};
+}
+
+/**
+ * Build raid-boss getter response payload.
+ *
+ * @param {Object|null} currentBoss - current raid-boss metadata
+ * @param {Array<Object>} history - raid history rows
+ * @param {{totalDamage:number, averageDamage:number}} summary - precomputed summary
+ * @returns {{currentBoss:Object|null, history:Array<Object>, totalDamage:number, averageDamage:number}} response payload
+ */
+export function buildRaidBossDataResponse(currentBoss, history, summary) {
+	return {
+		currentBoss,
+		history,
+		totalDamage: summary.totalDamage,
+		averageDamage: summary.averageDamage,
+	};
+}
+
+/**
  * Build guild-war history record payload.
  *
  * @param {Object} args - battle request args

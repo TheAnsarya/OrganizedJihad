@@ -1100,6 +1100,57 @@
 ---
 
 ## Session
+- Date: 2026-05-28
+- Session Number: 57
+- Scope: Continue large-batch modernization by extracting cross-server execution and war/raid getter response composition seams.
+
+## Summary
+- Created and completed issue #316.
+- Added `userscript/src/modules/trackers/GameTrackerCrossServerExecutionHelpers.js` with cross-server execution helper:
+	- `persistCrossServerWarBattles` (build rows, dedupe check, conditional persistence)
+- Expanded `userscript/src/modules/trackers/GameTrackerWarRaidHelpers.js` with getter response builders:
+	- `buildGuildWarDataResponse`
+	- `buildRaidBossDataResponse`
+- Rewired `userscript/src/modules/gameTracker.js`:
+	- `trackCrossServerWarResults` now delegates persistence loop to cross-server execution helper
+	- `getGuildWarData` now delegates response composition to helper
+	- `getRaidBossData` now delegates response composition to helper (still using existing damage summary helper)
+- Added focused tests:
+	- `userscript/tests/gameTrackerCrossServerExecutionHelpers.test.js`
+	- expanded `userscript/tests/gameTrackerWarRaidHelpers.test.js` for getter response builders
+
+## Files Modified
+- userscript/src/modules/gameTracker.js
+- userscript/src/modules/trackers/GameTrackerWarRaidHelpers.js
+- userscript/tests/gameTrackerWarRaidHelpers.test.js
+- userscript/package.json
+- ~docs/plans/architecture-modernization-roadmap.md
+- ~docs/copilot-chats/2026-05-27-requirements-item-icon-enrichment.md
+- ~docs/copilot-chats/2026-05-28-userscript-build-auto.md
+
+## Files Created
+- userscript/src/modules/trackers/GameTrackerCrossServerExecutionHelpers.js
+- userscript/tests/gameTrackerCrossServerExecutionHelpers.test.js
+
+## Issues Referenced
+- #206 Epic: Architecture modernization and module deepening across API/userscript
+- #209 PR tracking: architecture modernization wave updates
+- #316 Batch userscript modernization: cross-server execution and war-raid getter response seam extraction
+
+## Validation
+- `yarn test --runInBand`: passed (32 suites, 788 tests)
+- `yarn build`: passed
+
+## Key Decisions
+- Preserved wrapper-level `_logActivity`/console sequencing in cross-server tracking while extracting only persistence loop mechanics.
+- Kept raid summary math source unchanged (`buildRaidBossDamageSummary`) and extracted only final getter response object composition to minimize behavior drift.
+
+## Known Follow-up
+- Continue extracting remaining battle wrapper orchestration concerns into execution helpers while preserving dedupe and logging order.
+
+---
+
+## Session
 - Date: 2026-05-27
 - Session Number: 38
 - Scope: Continue autonomous issue throughput with new batch slices, including a large API Team Recommendation orchestration decomposition wave.

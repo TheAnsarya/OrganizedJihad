@@ -3,10 +3,12 @@ import {
 	appendBoundedHistory,
 	buildCrossServerWarBattleRecord,
 	buildCrossServerWarInfoMetadata,
+	buildGuildWarDataResponse,
 	buildGuildWarActivityPayload,
 	buildGuildWarBattleHistoryRecord,
 	buildGuildWarInfoMetadata,
 	buildGuildWarRewardIntents,
+	buildRaidBossDataResponse,
 	buildRaidBossAttackHistoryRecord,
 	buildRaidBossActivityPayload,
 	buildRaidBossBattleRecord,
@@ -217,5 +219,22 @@ describe('GameTrackerWarRaidHelpers', () => {
 
 		expect(tracker.trackResourceTransaction).toHaveBeenNthCalledWith(1, 'gold', 1, 'battle', 'guild_war');
 		expect(tracker.trackResourceTransaction).toHaveBeenNthCalledWith(2, 'emeralds', 2, 'battle', 'guild_raid');
+	});
+
+	test('getter response builders return parity object shapes', () => {
+		const guildWarPayload = buildGuildWarDataResponse({ id: 'w1' }, [{ id: 1 }], { wins: 5 });
+		expect(guildWarPayload).toEqual({
+			currentWar: { id: 'w1' },
+			history: [{ id: 1 }],
+			stats: { wins: 5 },
+		});
+
+		const raidPayload = buildRaidBossDataResponse({ id: 'b1' }, [{ damage: 10 }], { totalDamage: 10, averageDamage: 10 });
+		expect(raidPayload).toEqual({
+			currentBoss: { id: 'b1' },
+			history: [{ damage: 10 }],
+			totalDamage: 10,
+			averageDamage: 10,
+		});
 	});
 });

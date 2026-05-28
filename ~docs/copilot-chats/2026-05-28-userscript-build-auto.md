@@ -372,3 +372,28 @@
 
 ## Generated
 - Timestamp UTC: 2026-05-28T18:48:51.901Z
+---
+
+## Session
+- Date: 2026-05-28
+- Session Number: 17
+- Scope: Automated userscript build session logging
+
+## Summary
+- Auto-generated entry from userscript build pipeline.
+- Captures a timestamp and a git working-tree snapshot for traceability.
+
+## Files Modified
+- serscript/package.json
+- userscript/src/modules/gameTracker.js
+- userscript/src/modules/trackers/GameTrackerWarRaidHelpers.js
+- userscript/tests/gameTrackerWarRaidHelpers.test.js
+- ~docs/oj-manual-prompts-log.txt
+- userscript/src/modules/trackers/GameTrackerCrossServerExecutionHelpers.js
+- userscript/tests/gameTrackerCrossServerExecutionHelpers.test.js
+
+## Validation
+- yarn build
+
+## Generated
+- Timestamp UTC: 2026-05-28T18:51:21.718Z

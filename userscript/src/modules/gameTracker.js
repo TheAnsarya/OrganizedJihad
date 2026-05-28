@@ -68,9 +68,13 @@ import {
 	trackTitaniteTransactionHelper,
 } from './trackers/GameTrackerGuildCurrencyHelpers.js';
 import {
+	persistCrossServerWarBattles,
+} from './trackers/GameTrackerCrossServerExecutionHelpers.js';
+import {
 	applyResourceTransactionIntents,
 	appendBoundedHistory,
-	buildCrossServerWarBattleRecord,
+	buildGuildWarDataResponse,
+	buildRaidBossDataResponse,
 	buildCrossServerWarInfoMetadata,
 	buildGuildWarActivityPayload,
 	buildGuildWarBattleHistoryRecord,
@@ -3378,21 +3382,7 @@ class GameTracker {
 	async trackCrossServerWarResults(args, data) {
 		const battles = resolveCrossServerBattleResults(data);
 
-		for (const result of battles) {
-			const battle = buildCrossServerWarBattleRecord(
-				args,
-				result,
-				this.calculateTeamPower.bind(this),
-				this.compressHeroTeam.bind(this)
-			);
-
-			if (this._isBattleDuplicate(battle)) {
-				console.log('[OrganizedJihad] Skipping duplicate CrossServerWar battle');
-				continue;
-			}
-
-			await this.storage.add('battles', battle);
-		}
+		await persistCrossServerWarBattles(this, args, battles);
 
 		await this._logActivity('battle', `Cross-server war results tracked (${battles.length} battle(s))`);
 		console.log(`[OrganizedJihad] Cross-server war: ${battles.length} battle result(s) tracked`);
@@ -3942,11 +3932,7 @@ class GameTracker {
 		const history = await this.storage.getMetadata('guildWarBattleHistory', []);
 		const stats = this.calculateBattleStats(history);
 
-		return {
-			currentWar,
-			history,
-			stats,
-		};
+		return buildGuildWarDataResponse(currentWar, history, stats);
 	}
 
 	/**
@@ -3958,12 +3944,7 @@ class GameTracker {
 		const history = await this.storage.getMetadata('raidBossAttackHistory', []);
 		const summary = buildRaidBossDamageSummary(history);
 
-		return {
-			currentBoss,
-			history,
-			totalDamage: summary.totalDamage,
-			averageDamage: summary.averageDamage,
-		};
+		return buildRaidBossDataResponse(currentBoss, history, summary);
 	}
 
 	/**
