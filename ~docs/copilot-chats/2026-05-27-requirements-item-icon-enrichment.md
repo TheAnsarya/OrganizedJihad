@@ -1108,6 +1108,46 @@
 ---
 
 ## Session
+- Date: 2026-05-28
+- Session Number: 43
+- Scope: Continue long-tail userscript decomposition by extracting Phase 12 and Phase 13 registration blocks into a dedicated extended registry module.
+
+## Summary
+- Created new batch issue #302 to cover grouped high-risk and medium-risk Phase 12/13 extraction slices.
+- Added `userscript/src/modules/trackers/GameTrackerExtendedRegistry.js` with:
+	- `registerPhase12Handlers`
+	- `registerPhase13Handlers`
+- Rewired `gameTracker._buildHandlerRegistry` to delegate Phase 12 and Phase 13 registration blocks to the extended registry functions.
+
+## Files Modified
+- userscript/src/modules/gameTracker.js
+- userscript/package.json
+- ~docs/plans/architecture-modernization-roadmap.md
+- ~docs/copilot-chats/2026-05-27-requirements-item-icon-enrichment.md
+- ~docs/copilot-chats/2026-05-28-userscript-build-auto.md
+
+## Files Created
+- userscript/src/modules/trackers/GameTrackerExtendedRegistry.js
+
+## Issues Referenced
+- #206 Epic: Architecture modernization and module deepening across API/userscript
+- #209 PR tracking: architecture modernization wave updates
+- #302 Batch userscript modernization: Phase 12/13 extended registry decomposition wave
+
+## Validation
+- `yarn test --runInBand`: passed (18 suites, 706 tests)
+- `yarn build`: passed
+
+## Key Decisions
+- Extracted remaining Phase 12/13 handler registration blocks as a single validated wave to reduce repeated merge risk in `gameTracker` while preserving behavior.
+- Maintained existing registration labels/categories and handler semantics; changed registration locality only.
+
+## Known Follow-up
+- Continue decomposition of any remaining large registry/helper surfaces and consider adding focused registry delegation tests for Phase 12/13 modules.
+
+---
+
+## Session
 - Date: 2026-05-27
 - Session Number: 37
 - Scope: Continue high-throughput architecture modernization using batch issues for API recommendation seams, desktop parity client consolidation, and userscript build automation.
