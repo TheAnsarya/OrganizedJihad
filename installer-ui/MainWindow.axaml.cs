@@ -65,6 +65,7 @@ public partial class MainWindow : Window {
 		}
 
 		var args = BuildInstallerArguments(scriptPath, installRoot, apiUrl, browserArg);
+		AppendLog("[Installer UI] Please give us admin privileges so we can install fully. If needed, approve the Windows UAC prompt.");
 		await RunInstallProcessAsync(shell, args);
 	}
 

@@ -56,6 +56,8 @@ The GUI installer orchestrates:
 - browser bootstrap links for Tampermonkey + userscript import
 - first-run diagnostics and health checks
 
+At the beginning of install, OJ requests administrator privileges so the full setup can complete (system startup task registration and full install permissions).
+
 Installer UX hardening notes:
 
 - Preflight checks validate install path and API URL before execution.
@@ -101,6 +103,7 @@ Optional flags:
 - `-TampermonkeyBrowsers chrome,operaGX` to target specific browser bootstrap pages
 - `-SkipDesktopAppInstall` to skip desktop publish/install when only backend/userscript is needed
 - `-SkipYarnInstall` to skip `yarn install` during repeat installs
+- `-AllowNonAdmin` to bypass the elevation prompt (reduced install capabilities; no full system-level startup registration)
 - `-InstallRoot "D:\Apps\OrganizedJihad"` to customize install location
 
 ### Build & Run

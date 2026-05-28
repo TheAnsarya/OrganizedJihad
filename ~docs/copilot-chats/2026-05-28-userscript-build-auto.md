@@ -935,3 +935,38 @@
 
 ## Follow-up
 - Consider adding an optional in-app cancel/stop action for long-running installs in a future slice.
+
+---
+
+## Session
+- Date: 2026-05-28
+- Session Number: 37
+- Scope: #324 release prep for v0.2.1 + installer admin-elevation-first flow
+
+## Summary
+- Implemented admin-elevation-first behavior for installer entry points to support full install execution.
+- Added explicit elevation prompt messaging and constrained non-admin override path (`-AllowNonAdmin`).
+- Authored detailed v0.2.1 release notes package with release header, validation matrix, component/status tables, and sign-off checklist.
+
+## Files Modified
+- Install-OrganizedJihad.ps1
+- Install-OrganizedJihad.cmd
+- installer-ui/MainWindow.axaml.cs
+- README.md
+- userscript/INSTALL.md
+- ~docs/plans/architecture-modernization-roadmap.md
+- ~docs/copilot-chats/2026-05-28-userscript-build-auto.md
+- ~docs/releases/v0.2.1-release-notes.md
+
+## Issues
+- Created/implemented: #324
+- Referenced epic: #206
+- PR tracking: #209
+
+## Validation
+- dotnet build installer-ui/OrganizedJihad.Installer.csproj (pass)
+- pwsh -ExecutionPolicy Bypass -File .\Publish-InstallerUI.ps1 (pass)
+- dotnet build OrganizedJihad.sln (pass)
+
+## Follow-up
+- Publish GitHub Release `v0.2.1` using `~docs/releases/v0.2.1-release-notes.md` as canonical release body.

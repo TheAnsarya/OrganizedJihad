@@ -4,6 +4,8 @@ param(
 	[switch]$SkipDesktopAppInstall,
 	[switch]$SkipTampermonkeyBootstrap,
 	[switch]$SkipYarnInstall,
+	[switch]$AllowNonAdmin,
+	[switch]$ElevationAttempted,
 	[switch]$FirstRunDiagnostics,
 	[switch]$RunInstallHealthCheck,
 	[switch]$InstallHealthCheckJson,
@@ -43,6 +45,102 @@ function Test-IsAdministrator {
 	$currentIdentity = [Security.Principal.WindowsIdentity]::GetCurrent()
 	$principal = New-Object Security.Principal.WindowsPrincipal($currentIdentity)
 	return $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+}
+
+function Convert-BoundParametersToArgumentList {
+	param(
+		[hashtable]$BoundParameters,
+		[string[]]$SkipKeys = @()
+	)
+
+	$arguments = @()
+	foreach ($entry in $BoundParameters.GetEnumerator()) {
+		if ($SkipKeys -contains $entry.Key) {
+			continue
+		}
+
+		$key = "-$($entry.Key)"
+		$value = $entry.Value
+
+		if ($value -is [System.Management.Automation.SwitchParameter]) {
+			if ($value.IsPresent) {
+				$arguments += $key
+			}
+			continue
+		}
+
+		if ($null -eq $value) {
+			continue
+		}
+
+		if ($value -is [Array]) {
+			if ($value.Count -gt 0) {
+				$arguments += $key
+				foreach ($item in $value) {
+					$arguments += [string]$item
+				}
+			}
+			continue
+		}
+
+		$arguments += $key
+		$arguments += [string]$value
+	}
+
+	return $arguments
+}
+
+function Resolve-PowerShellForElevation {
+	if (Get-Command -Name 'pwsh' -ErrorAction SilentlyContinue) {
+		return (Get-Command -Name 'pwsh').Source
+	}
+
+	if (Get-Command -Name 'powershell' -ErrorAction SilentlyContinue) {
+		return (Get-Command -Name 'powershell').Source
+	}
+
+	return $null
+}
+
+function Ensure-InstallerElevation {
+	param(
+		[hashtable]$BoundParameters,
+		[string]$ScriptPath
+	)
+
+	if ($AllowNonAdmin) {
+		Write-Step 'Non-admin mode explicitly requested via -AllowNonAdmin. Some startup task capabilities may be limited.'
+		return
+	}
+
+	if (Test-IsAdministrator) {
+		Write-Step 'Installer is running with administrator privileges.'
+		return
+	}
+
+	if ($ElevationAttempted) {
+		throw 'Installer requires administrator privileges for full installation, but elevation did not complete.'
+	}
+
+	Write-Host ''
+	Write-Host '[OJ Installer] Please give us admin privileges so we can install fully.' -ForegroundColor Yellow
+	Write-Host '[OJ Installer] A Windows UAC prompt will open now.' -ForegroundColor Yellow
+
+	$psExecutable = Resolve-PowerShellForElevation
+	if (-not $psExecutable) {
+		throw 'Could not find pwsh or powershell to request elevation.'
+	}
+
+	$elevatedArgs = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $ScriptPath)
+	$elevatedArgs += Convert-BoundParametersToArgumentList -BoundParameters $BoundParameters -SkipKeys @('ElevationAttempted')
+	$elevatedArgs += '-ElevationAttempted'
+
+	try {
+		$proc = Start-Process -FilePath $psExecutable -ArgumentList $elevatedArgs -Verb RunAs -Wait -PassThru
+		exit $proc.ExitCode
+	} catch {
+		throw 'Administrator privileges were not granted. Re-run and accept the UAC prompt to install fully.'
+	}
 }
 
 function Ensure-AutostartTask {
@@ -262,6 +360,8 @@ $effectiveRunInstallHealthCheck = $RunInstallHealthCheck
 $effectiveOpenUserscriptDiagnostics = $OpenUserscriptDiagnostics
 $effectiveInstallHealthCheckOpen = $InstallHealthCheckOpen
 $desktopPublishDir = $null
+
+Ensure-InstallerElevation -BoundParameters $PSBoundParameters -ScriptPath $PSCommandPath
 
 if ($FirstRunDiagnostics) {
 	$effectiveRunInstallHealthCheck = $true

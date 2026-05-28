@@ -12,6 +12,7 @@ Preferred release flow for non-technical users:
 4. Wait for completion status in the installer window.
 
 The GUI installer uses the same hardened install pipeline and runs first-run checks automatically.
+At startup, the installer requests administrator privileges so full install steps can complete.
 
 Additional GUI hardening behavior:
 
@@ -38,6 +39,9 @@ From the repository root, run:
 ```powershell
 pwsh -ExecutionPolicy Bypass -File .\Install-OrganizedJihad.ps1
 ```
+
+By default, the script requests administrator privileges near startup.
+If you intentionally need a non-admin run, append `-AllowNonAdmin` (reduced capabilities).
 
 Or double-click:
 
