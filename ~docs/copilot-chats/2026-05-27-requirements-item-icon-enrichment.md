@@ -1401,6 +1401,58 @@
 ---
 
 ## Session
+- Date: 2026-05-28
+- Session Number: 47
+- Scope: Complete next userscript modernization wave by extracting registry orchestration engine/bootstrap seams from `gameTracker`.
+
+## Summary
+- Created and completed issue #306.
+- Added `userscript/src/modules/trackers/GameTrackerRegistryEngine.js` with shared helpers for:
+	- registry creation
+	- method/dependency normalization
+	- entry registration
+	- topological dependency ordering
+- Added `userscript/src/modules/trackers/GameTrackerRegistryBootstrap.js` with ordered default registrar composition and application helper.
+- Refactored `userscript/src/modules/gameTracker.js` to delegate:
+	- `registerHandler` -> `registerTrackerHandler`
+	- `_topologicalSortMethods` -> `topologicalSortHandlerMethods`
+	- `_buildHandlerRegistry` -> `createHandlerRegistry` + `applyDefaultTrackerRegistrars`
+- Added focused regression tests:
+	- `userscript/tests/gameTrackerRegistryEngine.test.js`
+	- `userscript/tests/gameTrackerRegistryBootstrap.test.js`
+
+## Files Modified
+- userscript/src/modules/gameTracker.js
+- userscript/package.json
+- ~docs/plans/architecture-modernization-roadmap.md
+- ~docs/copilot-chats/2026-05-27-requirements-item-icon-enrichment.md
+- ~docs/copilot-chats/2026-05-28-userscript-build-auto.md
+
+## Files Created
+- userscript/src/modules/trackers/GameTrackerRegistryEngine.js
+- userscript/src/modules/trackers/GameTrackerRegistryBootstrap.js
+- userscript/tests/gameTrackerRegistryEngine.test.js
+- userscript/tests/gameTrackerRegistryBootstrap.test.js
+
+## Issues Referenced
+- #206 Epic: Architecture modernization and module deepening across API/userscript
+- #209 PR tracking: architecture modernization wave updates
+- #306 Batch userscript modernization: registry orchestration engine extraction and dispatch simplification
+
+## Validation
+- `yarn test --runInBand`: passed (21 suites, 733 tests)
+- `yarn build`: passed
+
+## Key Decisions
+- Kept runtime behavior stable by extracting orchestration logic into pure helpers and preserving existing call contracts in `gameTracker` wrappers.
+- Added focused module tests for engine/bootstrap seams to reduce coupling with large integration tests and make future refactors safer.
+
+## Known Follow-up
+- Consider moving shared tracker registration order constants into a test-visible contract module if future registry waves introduce plugin-style registrar injection.
+
+---
+
+## Session
 - Date: 2026-05-27
 - Session Number: 31
 - Scope: Execute a high-volume `uiManager` decomposition wave across battles/titans/pets/inventory, completing issues #252-#269.

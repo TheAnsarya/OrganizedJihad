@@ -24,16 +24,13 @@
 
 import IndexedDBStorage from './indexedDBStorage.js';
 import UpgradeTracker from './trackers/UpgradeTracker.js';
-import { registerChatHandlers, registerCorePlayerHandlers, registerMailHandlers } from './trackers/GameTrackerCoreRegistry.js';
-import {
-	registerBattleHandlers,
-	registerGuildAndSocialHandlers,
-	registerQuestRewardHandlers,
-	registerUpgradeHandlers,
-} from './trackers/GameTrackerGameplayRegistry.js';
-import { registerPhase11MetadataHandlers } from './trackers/GameTrackerPhase11Registry.js';
-import { registerPhase12Handlers, registerPhase13Handlers } from './trackers/GameTrackerExtendedRegistry.js';
 import { trackGenericEvent, trackGenericUpgrade } from './trackers/GameTrackerGenericTrackingHelpers.js';
+import {
+	createHandlerRegistry,
+	registerTrackerHandler,
+	topologicalSortHandlerMethods,
+} from './trackers/GameTrackerRegistryEngine.js';
+import { applyDefaultTrackerRegistrars } from './trackers/GameTrackerRegistryBootstrap.js';
 import { compressHeroBatch, compressTitanBatch } from './heroCompression.js';
 import { resolveHeroName, resolveTitanElement } from './heroNames.js';
 
@@ -1386,24 +1383,7 @@ class GameTracker {
 	 *     One of: player, battles, chests, guild, quests, upgrades.
 	 */
 	registerHandler(methods, handler, label = handler.name || '(anonymous)', options = {}) {
-		const methodList = Array.isArray(methods) ? methods : [methods];
-		const dependsOn = options.dependsOn || [];
-		const category = options.category || null;
-
-		// Validate: detect obviously circular self-dependencies
-		for (const method of methodList) {
-			if (dependsOn.includes(method)) {
-				console.warn(`[OrganizedJihad] Handler "${label}" has circular self-dependency on "${method}" — ignoring dependency`);
-				dependsOn.splice(dependsOn.indexOf(method), 1);
-			}
-		}
-
-		for (const method of methodList) {
-			if (!this._handlerRegistry.has(method)) {
-				this._handlerRegistry.set(method, []);
-			}
-			this._handlerRegistry.get(method).push({ handler, label, dependsOn, category });
-		}
+		registerTrackerHandler(this._handlerRegistry, methods, handler, label, options, console.warn);
 	}
 
 	/**
@@ -1419,78 +1399,7 @@ class GameTracker {
 	 * @private
 	 */
 	_topologicalSortMethods(methodNames) {
-		const nameSet = new Set(methodNames);
-
-		// Build forward deps (method → deps it needs) and reverse map
-		// (dep → methods that depend on it) for O(E) inner loop in Kahn's. (#142)
-		/** @type {Map<string, Set<string>>} */
-		const deps = new Map();
-		/** @type {Map<string, Set<string>>} */
-		const dependents = new Map();
-
-		for (const name of methodNames) {
-			deps.set(name, new Set());
-			dependents.set(name, new Set());
-		}
-
-		for (const name of methodNames) {
-			const handlers = this._handlerRegistry.get(name) || [];
-			for (const entry of handlers) {
-				for (const dep of entry.dependsOn || []) {
-					if (nameSet.has(dep) && dep !== name) {
-						deps.get(name).add(dep);
-						dependents.get(dep).add(name);
-					}
-				}
-			}
-		}
-
-		// in-degree = number of in-batch deps each method has
-		/** @type {Map<string, number>} */
-		const inDegree = new Map();
-		for (const [name, depSet] of deps) {
-			inDegree.set(name, depSet.size);
-		}
-
-		// Kahn's algorithm — index-based queue avoids O(n) shift(),
-		// Set avoids O(n) includes() checks (#142)
-		const queue = [];
-		for (const [name, degree] of inDegree) {
-			if (degree === 0) {
-				queue.push(name);
-			}
-		}
-
-		const sorted = [];
-		const sortedSet = new Set();
-		let qi = 0;
-		while (qi < queue.length) {
-			const current = queue[qi++];
-			sorted.push(current);
-			sortedSet.add(current);
-
-			// Only iterate methods that actually depend on `current`
-			for (const dependent of (dependents.get(current) || [])) {
-				const depSet = deps.get(dependent);
-				if (depSet?.has(current)) {
-					depSet.delete(current);
-					if (depSet.size === 0 && !sortedSet.has(dependent)) {
-						queue.push(dependent);
-					}
-				}
-			}
-		}
-
-		// Detect cycles: any remaining methods not in sorted
-		if (sorted.length < methodNames.length) {
-			const remaining = methodNames.filter((n) => !sortedSet.has(n));
-			if (remaining.length > 0) {
-				console.warn(`[OrganizedJihad] Circular handler dependencies detected: ${remaining.join(', ')} — appending in original order`);
-				sorted.push(...remaining);
-			}
-		}
-
-		return sorted;
+		return topologicalSortHandlerMethods(methodNames, this._handlerRegistry, console.warn);
 	}
 
 	/**
@@ -1502,43 +1411,8 @@ class GameTracker {
 	 */
 	_buildHandlerRegistry() {
 		/** @type {Map<string, Array<{handler: Function, label: string}>>} */
-		this._handlerRegistry = new Map();
-
-		// ── Core player data ───────────────────────────────────────────
-		registerCorePlayerHandlers(this);
-
-		// ── Gameplay registration modules (Phase 14 decomposition) ──────
-		registerBattleHandlers(this);
-		registerQuestRewardHandlers(this);
-		registerGuildAndSocialHandlers(this);
-		registerUpgradeHandlers(this);
-
-		// ── Chat and communication ──────────────────────────────────────
-		registerChatHandlers(this);
-
-		// ── Mail tracking (Phase 12, #94) ───────────────────────────────
-		registerMailHandlers(this);
-
-		// NOTE: towerGetState handler is defined below in Phase 12 block
-		// with richer metadata caching (floor, teamHealth, etc.)
-
-		// ═════════════════════════════════════════════════════════════════
-		// Phase 11: Comprehensive tracking for previously-unhandled methods
-		// See ~docs/API-Call-Reference.md §15 for full list of captured methods
-		// ═════════════════════════════════════════════════════════════════
-		registerPhase11MetadataHandlers(this);
-
-		// ═════════════════════════════════════════════════════════════════
-		// Phase 12: Additional guild, war, rankings, and economy handlers
-		// Covers 57+ previously-unhandled API methods from §15 reference
-		// ═════════════════════════════════════════════════════════════════
-		registerPhase12Handlers(this);
-
-		// =============================================================
-		// Phase 13: Second API Samples Analysis (#121)
-		// 30 new API methods discovered in hw-api-samples-2026-02-27 (2).json
-		// =============================================================
-		registerPhase13Handlers(this);
+		this._handlerRegistry = createHandlerRegistry();
+		applyDefaultTrackerRegistrars(this);
 	}
 
 	// =====================================================================
