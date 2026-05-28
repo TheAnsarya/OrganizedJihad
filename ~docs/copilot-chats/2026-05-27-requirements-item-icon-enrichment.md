@@ -946,6 +946,59 @@
 ---
 
 ## Session
+- Date: 2026-05-28
+- Session Number: 54
+- Scope: Continue batch modernization by extracting guild participation execution and guild currency seams from gameTracker.
+
+## Summary
+- Created and completed issue #313.
+- Added `userscript/src/modules/trackers/GameTrackerGuildParticipationExecutionHelpers.js` with execution helpers for:
+	- participation row persistence loops
+	- titanite transaction dispatch loops
+	- war/raid/dungeon execution orchestration wrappers returning participant counts
+- Added `userscript/src/modules/trackers/GameTrackerGuildCurrencyHelpers.js` with helpers for:
+	- stored guild ID resolution from metadata
+	- titanite transaction record normalization and persistence
+- Rewired `userscript/src/modules/gameTracker.js`:
+	- war/raid/dungeon participation handlers now delegate execution orchestration to helper module
+	- `trackTitaniteTransaction` now delegates to helper module
+	- `getStoredGuildId` now delegates to helper module
+- Added focused tests:
+	- `userscript/tests/gameTrackerGuildParticipationExecutionHelpers.test.js`
+	- `userscript/tests/gameTrackerGuildCurrencyHelpers.test.js`
+
+## Files Modified
+- userscript/src/modules/gameTracker.js
+- userscript/package.json
+- ~docs/plans/architecture-modernization-roadmap.md
+- ~docs/copilot-chats/2026-05-27-requirements-item-icon-enrichment.md
+- ~docs/copilot-chats/2026-05-28-userscript-build-auto.md
+
+## Files Created
+- userscript/src/modules/trackers/GameTrackerGuildParticipationExecutionHelpers.js
+- userscript/src/modules/trackers/GameTrackerGuildCurrencyHelpers.js
+- userscript/tests/gameTrackerGuildParticipationExecutionHelpers.test.js
+- userscript/tests/gameTrackerGuildCurrencyHelpers.test.js
+
+## Issues Referenced
+- #206 Epic: Architecture modernization and module deepening across API/userscript
+- #209 PR tracking: architecture modernization wave updates
+- #313 Batch userscript modernization: guild participation execution + guild currency seam extraction
+
+## Validation
+- `yarn test --runInBand`: passed (30 suites, 776 tests)
+- `yarn build`: passed
+
+## Key Decisions
+- Preserved wrapper-level guard/try-catch/log semantics in `gameTracker` while extracting only execution and currency seams to avoid behavior regressions.
+- Kept participation normalization helpers unchanged and layered execution helpers on top to minimize risk in existing field mappings.
+
+## Known Follow-up
+- Continue extracting remaining guild analytics/summary logic in adjacent methods into dedicated helpers to further reduce gameTracker method complexity.
+
+---
+
+## Session
 - Date: 2026-05-27
 - Session Number: 38
 - Scope: Continue autonomous issue throughput with new batch slices, including a large API Team Recommendation orchestration decomposition wave.

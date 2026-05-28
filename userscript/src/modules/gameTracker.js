@@ -59,10 +59,14 @@ import {
 	trackGuildDataHelper,
 } from './trackers/GameTrackerGuildTrackingHelpers.js';
 import {
-	buildGuildDungeonParticipationRecords,
-	buildGuildRaidParticipationRecords,
-	buildGuildWarParticipationRecords,
-} from './trackers/GameTrackerGuildParticipationHelpers.js';
+	executeGuildDungeonParticipationTracking,
+	executeGuildRaidParticipationTracking,
+	executeGuildWarParticipationTracking,
+} from './trackers/GameTrackerGuildParticipationExecutionHelpers.js';
+import {
+	getStoredGuildIdHelper,
+	trackTitaniteTransactionHelper,
+} from './trackers/GameTrackerGuildCurrencyHelpers.js';
 import {
 	finalizeProcessApiResponseLifecycle,
 } from './trackers/GameTrackerResponseLifecycleHelpers.js';
@@ -3778,13 +3782,9 @@ class GameTracker {
 			}
 
 			const guildId = data.clan?.id || await this.getStoredGuildId();
-			const trackingPayload = buildGuildWarParticipationRecords(data, guildId);
+			const participantCount = await executeGuildWarParticipationTracking(this, data, guildId);
 
-			for (const participation of trackingPayload.records) {
-				await this.storage.add('guildWarParticipations', participation);
-			}
-
-			console.log(`[OrganizedJihad] Tracked Guild War participation for ${Object.keys(trackingPayload.participants).length} members`);
+			console.log(`[OrganizedJihad] Tracked Guild War participation for ${participantCount} members`);
 		} catch (error) {
 			console.error('[OrganizedJihad] Error tracking guild war participation:', error);
 		}
@@ -3807,25 +3807,9 @@ class GameTracker {
 			}
 
 			const guildId = data.clan?.id || await this.getStoredGuildId();
-			const trackingPayload = buildGuildRaidParticipationRecords(data, guildId);
+			const participantCount = await executeGuildRaidParticipationTracking(this, data, guildId);
 
-			for (const participation of trackingPayload.records) {
-				await this.storage.add('guildRaidParticipations', participation);
-			}
-
-			for (const transaction of trackingPayload.titaniteTransactions) {
-				await this.trackTitaniteTransaction(
-					transaction.playerId,
-					transaction.playerName,
-					transaction.guildId,
-					transaction.transactionType,
-					transaction.amount,
-					transaction.source,
-					transaction.description
-				);
-			}
-
-			console.log(`[OrganizedJihad] Tracked Guild Raid participation for ${Object.keys(trackingPayload.participants).length} members`);
+			console.log(`[OrganizedJihad] Tracked Guild Raid participation for ${participantCount} members`);
 		} catch (error) {
 			console.error('[OrganizedJihad] Error tracking guild raid participation:', error);
 		}
@@ -3846,25 +3830,9 @@ class GameTracker {
 			}
 
 			const guildId = data.clan?.id || await this.getStoredGuildId();
-			const trackingPayload = buildGuildDungeonParticipationRecords(data, guildId);
+			const participantCount = await executeGuildDungeonParticipationTracking(this, data, guildId);
 
-			for (const participation of trackingPayload.records) {
-				await this.storage.add('guildDungeonParticipations', participation);
-			}
-
-			for (const transaction of trackingPayload.titaniteTransactions) {
-				await this.trackTitaniteTransaction(
-					transaction.playerId,
-					transaction.playerName,
-					transaction.guildId,
-					transaction.transactionType,
-					transaction.amount,
-					transaction.source,
-					transaction.description
-				);
-			}
-
-			console.log(`[OrganizedJihad] Tracked Guild Dungeon participation for ${Object.keys(trackingPayload.participants).length} members`);
+			console.log(`[OrganizedJihad] Tracked Guild Dungeon participation for ${participantCount} members`);
 		} catch (error) {
 			console.error('[OrganizedJihad] Error tracking guild dungeon participation:', error);
 		}
@@ -3885,21 +3853,16 @@ class GameTracker {
 	 */
 	async trackTitaniteTransaction(playerId, playerName, guildId, transactionType, amount, source, description = null) {
 		try {
-			const transaction = {
-				timestamp: new Date(),
-				playerId: playerId,
-				playerName: playerName,
-				guildId: guildId,
-				transactionType: transactionType,
-				amount: amount,
-				source: source,
-				purchaseDescription: description,
-				balanceAfter: null, // Could be calculated if we track running balance
-			};
-
-			await this.storage.add('titaniteTransactions', transaction);
-
-			console.log(`[OrganizedJihad] Tracked titanite ${transactionType}: ${amount} from ${source}`);
+			await trackTitaniteTransactionHelper(
+				this,
+				playerId,
+				playerName,
+				guildId,
+				transactionType,
+				amount,
+				source,
+				description
+			);
 		} catch (error) {
 			console.error('[OrganizedJihad] Error tracking titanite transaction:', error);
 		}
@@ -3911,8 +3874,7 @@ class GameTracker {
 	 * @private
 	 */
 	async getStoredGuildId() {
-		const guildData = await this.storage.getMetadata('guildData', {});
-		return guildData.id || 0;
+		return await getStoredGuildIdHelper(this.storage);
 	}
 
 	/**
