@@ -1644,6 +1644,52 @@
 ---
 
 ## Session
+- Date: 2026-05-28
+- Session Number: 52
+- Scope: Continue modernization throughput with guild-tracking extraction wave.
+
+## Summary
+- Implemented and completed issue #311.
+- Added `userscript/src/modules/trackers/GameTrackerGuildTrackingHelpers.js` with extracted seams for:
+	- guild metadata normalization
+	- guild membership transition action derivation (join/leave/change)
+	- guild roster + snapshot payload mapping
+	- batch persistence orchestration for roster/snapshots
+- Rewired `userscript/src/modules/gameTracker.js`:
+	- `trackGuildData` now delegates to `trackGuildDataHelper`
+	- `trackGuildMembers` now delegates payload build/persist paths via helper module
+- Added focused test coverage in `userscript/tests/gameTrackerGuildTrackingHelpers.test.js`.
+
+## Files Modified
+- userscript/src/modules/gameTracker.js
+- userscript/package.json
+- ~docs/plans/architecture-modernization-roadmap.md
+- ~docs/copilot-chats/2026-05-27-requirements-item-icon-enrichment.md
+- ~docs/copilot-chats/2026-05-28-userscript-build-auto.md
+
+## Files Created
+- userscript/src/modules/trackers/GameTrackerGuildTrackingHelpers.js
+- userscript/tests/gameTrackerGuildTrackingHelpers.test.js
+
+## Issues Referenced
+- #206 Epic: Architecture modernization and module deepening across API/userscript
+- #209 PR tracking: architecture modernization wave updates
+- #311 Batch userscript modernization: guild tracking seam extraction (membership transitions + roster mapping)
+
+## Validation
+- `yarn test --runInBand`: passed (27 suites, 765 tests)
+- `yarn build`: passed
+
+## Key Decisions
+- Kept guild transition sequencing deterministic (`leave` before `join` on guild change) in helper output to preserve behavioral parity.
+- Retained roster logging/count semantics in `gameTracker` wrapper while moving record assembly to helper seams for lower future churn.
+
+## Known Follow-up
+- Extract guild war/raid/dungeon participation normalization helpers to continue reducing method complexity and improve targeted regression testing.
+
+---
+
+## Session
 - Date: 2026-05-27
 - Session Number: 31
 - Scope: Execute a high-volume `uiManager` decomposition wave across battles/titans/pets/inventory, completing issues #252-#269.

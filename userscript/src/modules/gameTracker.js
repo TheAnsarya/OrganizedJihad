@@ -54,6 +54,11 @@ import {
 	trackInventoryItemUsageHelper,
 } from './trackers/GameTrackerInventoryTrackingHelpers.js';
 import {
+	buildGuildMemberSnapshotPayload,
+	persistGuildMemberSnapshotPayload,
+	trackGuildDataHelper,
+} from './trackers/GameTrackerGuildTrackingHelpers.js';
+import {
 	finalizeProcessApiResponseLifecycle,
 } from './trackers/GameTrackerResponseLifecycleHelpers.js';
 import { compressHeroBatch, compressTitanBatch } from './heroCompression.js';
@@ -3503,50 +3508,7 @@ class GameTracker {
 	 * @private
 	 */
 	async trackGuildData(data) {
-		const oldGuildData = await this.storage.getMetadata('guildData', {});
-
-		const guildData = {
-			id: data.clan?.id || null,
-			name: data.clan?.name || 'No Guild',
-			level: data.clan?.level || 0,
-			members: Object.keys(data.clan?.members || {}).length,
-			lastUpdate: Date.now(),
-		};
-
-		await this.storage.setMetadata('guildData', guildData);
-
-		// Track guild join/leave events by detecting guild ID changes
-		// Hero Wars allows players to leave and join guilds
-		// See: https://community.hero-wars.com/discussion/guild-management
-		if (oldGuildData.id !== guildData.id) {
-			if (guildData.id && !oldGuildData.id) {
-				// Joined a guild
-				await this.trackGuildActivity('join', {
-					guildId: guildData.id,
-					guildName: guildData.name,
-					guildLevel: guildData.level,
-					memberCount: guildData.members,
-				});
-			} else if (!guildData.id && oldGuildData.id) {
-				// Left a guild
-				await this.trackGuildActivity('leave', {
-					guildId: oldGuildData.id,
-					guildName: oldGuildData.name,
-				});
-			} else if (guildData.id && oldGuildData.id) {
-				// Changed guilds (leave old, join new)
-				await this.trackGuildActivity('leave', {
-					guildId: oldGuildData.id,
-					guildName: oldGuildData.name,
-				});
-				await this.trackGuildActivity('join', {
-					guildId: guildData.id,
-					guildName: guildData.name,
-					guildLevel: guildData.level,
-					memberCount: guildData.members,
-				});
-			}
-		}
+		await trackGuildDataHelper(this, data);
 	}
 
 	/**
@@ -3785,61 +3747,10 @@ class GameTracker {
 			const playerData = await this.storage.getMetadata('playerData', {});
 			const currentPlayerId = playerData.player?.id || 0;
 
-			// Build all guild member records and snapshots, then batch-write (#141)
-			const guildMemberRecords = [];
-			const snapshotRecords = [];
-
-			for (const [memberId, memberInfo] of Object.entries(members)) {
-				// Skip tracking self (already tracked in playerData)
-				if (parseInt(memberId) === currentPlayerId) continue;
-
-				// Build guild member record
-				// Matches GuildMember entity model in database
-				const guildMember = {
-					guildId: guildId,
-					guildName: guildName,
-					playerId: parseInt(memberId),
-					playerName: memberInfo.name || 'Unknown',
-					level: memberInfo.level || 0,
-					teamPower: memberInfo.power || memberInfo.teamPower || 0,
-					guildRank: memberInfo.rank || memberInfo.role || 'member',
-					vipLevel: memberInfo.vipLevel || null,
-					lastOnline: new Date(memberInfo.lastOnlineTime || Date.now()),
-					isOnline: memberInfo.isOnline || false,
-					joinedAt: memberInfo.joinedAt ? new Date(memberInfo.joinedAt) : null,
-					currentContribution: memberInfo.contribution || memberInfo.weeklyContribution || 0,
-					totalContribution: memberInfo.totalContribution || memberInfo.lifetimeContribution || 0,
-					arenaRank: memberInfo.arenaRank || null,
-					grandArenaRank: memberInfo.grandArenaRank || null,
-					titanArenaRank: memberInfo.titanArenaRank || null,
-					prestige: memberInfo.prestige || 0,
-					isActive: true,
-					heroRoster: memberInfo.heroes ? JSON.stringify(memberInfo.heroes) : null,
-					titanRoster: memberInfo.titans ? JSON.stringify(memberInfo.titans) : null,
-				};
-
-				guildMemberRecords.push(guildMember);
-
-				// Create historical snapshot for trend tracking
-				snapshotRecords.push({
-					timestamp: new Date(),
-					playerId: guildMember.playerId,
-					playerName: guildMember.playerName,
-					guildId: guildId,
-					level: guildMember.level,
-					teamPower: guildMember.teamPower,
-					guildRank: guildMember.guildRank,
-					contribution: guildMember.currentContribution,
-					totalContribution: guildMember.totalContribution,
-					prestige: guildMember.prestige,
-					isOnline: guildMember.isOnline,
-					lastOnline: guildMember.lastOnline,
-				});
-			}
+			const trackingPayload = buildGuildMemberSnapshotPayload(data, currentPlayerId);
 
 			// Batch upsert current roster + batch insert snapshots (2 txs total)
-			await this.storage.putBatch('guildMembers', guildMemberRecords);
-			await this.storage.addBatch('guildMemberSnapshots', snapshotRecords);
+			await persistGuildMemberSnapshotPayload(this.storage, trackingPayload);
 
 			console.log(`[OrganizedJihad] Tracked ${Object.keys(members).length} guild members from ${guildName}`);
 		} catch (error) {
