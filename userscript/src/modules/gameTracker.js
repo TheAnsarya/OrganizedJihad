@@ -41,6 +41,16 @@ import {
 	buildDispatchConsoleMessages,
 	buildUnexpectedFormatDiagnostics,
 } from './trackers/GameTrackerResponseDiagnosticsHelpers.js';
+import {
+	trackBatchQuestFarmHelper,
+	trackDailyBonusInfoHelper,
+	trackDailyQuestFarmHelper,
+	trackGuildActivityHelper,
+	trackInventoryItemUsageHelper,
+	trackLoginRewardHelper,
+	trackQuestsDataHelper,
+	trackResourceTransactionHelper,
+} from './trackers/GameTrackerActivityEconomyHelpers.js';
 import { compressHeroBatch, compressTitanBatch } from './heroCompression.js';
 import { resolveHeroName, resolveTitanElement } from './heroNames.js';
 
@@ -3025,22 +3035,7 @@ class GameTracker {
 	 * @private
 	 */
 	async trackResourceTransaction(resourceType, amount, source, sourceDetail = '') {
-		const playerId = (await this.storage.getMetadata('currentPlayerId')) || 'unknown';
-		const timestamp = new Date().toISOString();
-
-		const transaction = {
-			timestamp: timestamp,
-			resourceType: resourceType, // gold, emeralds, arena_coins, guild_war_coins, titan_potion, etc.
-			amount: amount, // Positive for gains, negative for spending
-			source: source, // battle, shop, quest, chest, levelup, etc.
-			sourceDetail: sourceDetail, // Additional context
-			playerId: playerId,
-		};
-
-		await this.storage.add('resourceTransactions', transaction);
-		console.log(
-			`[OrganizedJihad] Resource transaction: ${amount > 0 ? '+' : ''}${amount} ${resourceType} from ${source}`
-		);
+		await trackResourceTransactionHelper(this, resourceType, amount, source, sourceDetail);
 	}
 
 	/**
@@ -3056,20 +3051,7 @@ class GameTracker {
 	 * @private
 	 */
 	async trackGuildActivity(activityType, data) {
-		const playerId = (await this.storage.getMetadata('currentPlayerId')) || 'unknown';
-		const timestamp = new Date().toISOString();
-
-		const activity = {
-			timestamp: timestamp,
-			guildId: data.guildId || 'unknown',
-			guildName: data.guildName || `Guild_${data.guildId}`,
-			activityType: activityType, // join, leave, donation, raid, war, chat, etc.
-			activityData: JSON.stringify(data),
-			playerId: playerId,
-		};
-
-		await this.storage.add('guildActivities', activity);
-		console.log(`[OrganizedJihad] Guild activity tracked: ${activity.activityType} in ${activity.guildName}`);
+		await trackGuildActivityHelper(this, activityType, data);
 	}
 
 	/**
@@ -3515,47 +3497,7 @@ class GameTracker {
 	 * @private
 	 */
 	async trackQuestsData(data) {
-		// questGetAll returns a flat array of ALL quests (daily, guild, battlepass, raid, story).
-		// Quest type identification (from API samples):
-		//   - Daily quests: ID 10001-10999 (tracked via questFarm)
-		//   - Guild quests: ID 20000xxx, reward has `clanQuestsPoints`, has `order` field
-		//   - Battle Pass: ID 1797xxxxxx+, reward has `battlePassExp`
-		//   - Clan Raid: ID 11xxx, has `order` field, consumable rewards
-		//   - Story/regular: everything else
-		// State: 1 = in-progress, 2 = completed/claimable
-		const quests = Array.isArray(data) ? data : [];
-
-		// Categorize quests for dashboard display (#117, #118)
-		const dailyQuests = quests.filter((q) => {
-			const id = q.id || 0;
-			return id >= 10001 && id <= 10999;
-		});
-		const guildQuests = quests.filter((q) => {
-			const id = q.id || 0;
-			return id >= 20000000 && id <= 20999999;
-		});
-
-		// Save categorized quest summary for dashboard
-		await this.storage.setMetadata('questSummary', {
-			dailyTotal: dailyQuests.length,
-			dailyCompleted: dailyQuests.filter((q) => q.state === 2).length,
-			guildTotal: guildQuests.length,
-			guildCompleted: guildQuests.filter((q) => q.state === 2).length,
-			allTotal: quests.length,
-			allCompleted: quests.filter((q) => q.state === 2).length,
-			lastUpdate: Date.now(),
-		});
-
-		// Also save the full quests array for detailed views
-		const questsData = quests.map((quest) => ({
-			id: quest.id,
-			state: quest.state,
-			progress: quest.progress || 0,
-			lastUpdate: Date.now(),
-		}));
-		await this.storage.setMetadata('questsData', questsData);
-
-		console.log(`[OrganizedJihad] Quests: ${dailyQuests.filter((q) => q.state === 2).length}/${dailyQuests.length} daily, ${guildQuests.filter((q) => q.state === 2).length}/${guildQuests.length} guild`);
+		await trackQuestsDataHelper(this, data);
 	}
 
 	/**
@@ -4260,43 +4202,8 @@ class GameTracker {
 	 * @returns {Object} Arena data with history and stats
 	 */
 	async getArenaData() {
+		const currentEnemies = await this.storage.getMetadata('currentArenaEnemies', []);
 		const history = await this.storage.getMetadata('arenaBattleHistory', []);
-		const currentEnemies = await this.storage.getMetadata('arenaEnemies', []);
-		const encounters = await this.storage.getMetadata('arenaEncounterHistory', []);
-
-		const stats = this.calculateBattleStats(history);
-
-		return {
-			currentEnemies,
-			history,
-			encounters,
-			stats,
-		};
-	}
-
-	/**
-	 * Get titan arena data
-	 * @returns {Object} Titan arena data
-	 */
-	async getTitanArenaData() {
-		const history = await this.storage.getMetadata('titanArenaBattleHistory', []);
-		const currentEnemies = await this.storage.getMetadata('titanArenaEnemies', []);
-		const stats = this.calculateBattleStats(history);
-
-		return {
-			currentEnemies,
-			history,
-			stats,
-		};
-	}
-
-	/**
-	 * Get grand arena data
-	 * @returns {Object} Grand arena data
-	 */
-	async getGrandArenaData() {
-		const history = await this.storage.getMetadata('grandArenaBattleHistory', []);
-		const currentEnemies = await this.storage.getMetadata('grandArenaEnemies', []);
 		const stats = this.calculateBattleStats(history);
 
 		return {
@@ -4690,47 +4597,7 @@ class GameTracker {
 	 * @private
 	 */
 	async trackDailyQuestFarm(args, responseData) {
-		const playerId = await this._getPlayerId();
-		const timestamp = new Date().toISOString();
-		const questId = String(args.questId || args.id || 0);
-		const questIdNum = parseInt(questId, 10);
-
-		// Determine if this is a daily quest (10001-10999) or guild quest
-		const isDailyQuest = questIdNum >= 10000 && questIdNum < 11000;
-
-		if (isDailyQuest) {
-			// Store as daily quest completion
-			const record = {
-				completedAt: timestamp,
-				questDate: new Date().toISOString().split('T')[0], // Date-only portion
-				questId,
-				questName: `Daily Quest ${questId}`,
-				category: null, // Would need quest name mapping
-				activityPoints: responseData?.reward?.activityPoints || 0,
-				rewardData: JSON.stringify(responseData?.reward || responseData || {}),
-				playerId,
-			};
-
-			await this.storage.add('dailyQuestCompletions', record);
-			console.log(`[OrganizedJihad] Daily quest farmed: ${questId}`);
-		} else {
-			// Store as guild quest completion
-			const guildId = (await this.storage.getMetadata('currentGuildId')) || 0;
-			const record = {
-				completedAt: timestamp,
-				questDate: new Date().toISOString().split('T')[0],
-				questId,
-				questName: `Guild Quest ${questId}`,
-				difficulty: null,
-				guildActivityPoints: responseData?.reward?.guildActivityPoints || 0,
-				rewardData: JSON.stringify(responseData?.reward || responseData || {}),
-				playerId,
-				guildId,
-			};
-
-			await this.storage.add('guildQuestCompletions', record);
-			console.log(`[OrganizedJihad] Guild quest farmed: ${questId}`);
-		}
+		await trackDailyQuestFarmHelper(this, args, responseData);
 	}
 
 	/**
@@ -4745,14 +4612,7 @@ class GameTracker {
 	 * @private
 	 */
 	async trackBatchQuestFarm(args, responseData) {
-		const questIds = args.questIds || [];
-
-		// Process each quest ID as a separate farm event
-		for (const questId of questIds) {
-			await this.trackDailyQuestFarm({ questId }, responseData);
-		}
-
-		console.log(`[OrganizedJihad] Batch quest farm: ${questIds.length} quests`);
+		await trackBatchQuestFarmHelper(this, args, responseData);
 	}
 
 	/**
@@ -4767,21 +4627,7 @@ class GameTracker {
 	 * @private
 	 */
 	async trackLoginReward(args, responseData) {
-		const playerId = await this._getPlayerId();
-		const timestamp = new Date().toISOString();
-		const isVip = args.vip || false;
-
-		const record = {
-			claimedAt: timestamp,
-			dayNumber: responseData?.day || responseData?.dayCount || 0,
-			streakLength: responseData?.loginCount || responseData?.streak || 0,
-			isVipBonus: isVip,
-			rewardData: JSON.stringify(responseData?.reward || responseData || {}),
-			playerId,
-		};
-
-		await this.storage.add('loginRewards', record);
-		console.log(`[OrganizedJihad] Login reward claimed: day ${record.dayNumber}, VIP: ${isVip}`);
+		await trackLoginRewardHelper(this, args, responseData);
 	}
 
 	/**
@@ -4796,15 +4642,7 @@ class GameTracker {
 	 * @private
 	 */
 	async trackDailyBonusInfo(responseData) {
-		// Cache the daily bonus info for use when farming
-		if (responseData?.day || responseData?.dayCount) {
-			await this.storage.setMetadata('dailyBonusDay', responseData.day || responseData.dayCount);
-		}
-		if (responseData?.loginCount || responseData?.streak) {
-			await this.storage.setMetadata('dailyBonusStreak', responseData.loginCount || responseData.streak);
-		}
-
-		console.log('[OrganizedJihad] Daily bonus info cached');
+		await trackDailyBonusInfoHelper(this, responseData);
 	}
 
 	/**
@@ -4822,23 +4660,7 @@ class GameTracker {
 	 * @private
 	 */
 	async trackInventoryItemUsage(args, responseData, category, usageContext) {
-		const playerId = await this._getPlayerId();
-		const timestamp = new Date().toISOString();
-
-		const record = {
-			timestamp,
-			itemId: String(args.libId || args.itemId || 'unknown'),
-			itemName: `Item_${args.libId || args.itemId || 'unknown'}`, // Name lookup not available
-			category,
-			quantityUsed: args.amount || 1,
-			quantityRemaining: 0, // Not always available in response
-			usageContext,
-			targetEntity: args.heroId ? resolveHeroName(args.heroId) : (args.titanId ? resolveHeroName(args.titanId) : null),
-			playerId,
-		};
-
-		await this.storage.add('inventoryItemUsages', record);
-		console.log(`[OrganizedJihad] Inventory item used: ${record.itemId} x${record.quantityUsed} for ${usageContext}`);
+		await trackInventoryItemUsageHelper(this, args, responseData, category, usageContext);
 	}
 
 }

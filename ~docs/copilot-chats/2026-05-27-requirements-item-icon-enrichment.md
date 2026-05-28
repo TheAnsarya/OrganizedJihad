@@ -1542,6 +1542,53 @@
 ---
 
 ## Session
+- Date: 2026-05-28
+- Session Number: 50
+- Scope: Complete second consecutive modernization wave by extracting activity/economy tracking methods to helper seams.
+
+## Summary
+- Implemented and completed issue #308.
+- Added `userscript/src/modules/trackers/GameTrackerActivityEconomyHelpers.js` for extracted tracking logic covering:
+	- resource transactions
+	- guild activity
+	- quest summary/cache tracking
+	- daily/guild quest farming (single + batch)
+	- login reward tracking
+	- daily bonus metadata caching
+	- inventory item usage tracking
+- Refactored `userscript/src/modules/gameTracker.js` wrappers to delegate these methods to helper functions while preserving runtime contracts.
+- Added focused helper tests in `userscript/tests/gameTrackerActivityEconomyHelpers.test.js`.
+
+## Files Modified
+- userscript/src/modules/gameTracker.js
+- userscript/package.json
+- ~docs/plans/architecture-modernization-roadmap.md
+- ~docs/copilot-chats/2026-05-27-requirements-item-icon-enrichment.md
+- ~docs/copilot-chats/2026-05-28-userscript-build-auto.md
+
+## Files Created
+- userscript/src/modules/trackers/GameTrackerActivityEconomyHelpers.js
+- userscript/tests/gameTrackerActivityEconomyHelpers.test.js
+
+## Issues Referenced
+- #206 Epic: Architecture modernization and module deepening across API/userscript
+- #209 PR tracking: architecture modernization wave updates
+- #308 Batch userscript modernization: activity and economy tracking helper seam extraction
+
+## Validation
+- `yarn test --runInBand`: passed (24 suites, 751 tests)
+- `yarn build`: passed
+
+## Key Decisions
+- Kept `gameTracker` wrapper method signatures unchanged to avoid handler-registration contract churn.
+- Consolidated high-churn activity/economy persistence row-building in one helper module for easier future extraction by domain.
+
+## Known Follow-up
+- Consider splitting `GameTrackerActivityEconomyHelpers` further into domain-specific helper files (`quest`, `economy`, `inventory`) if method count continues to grow.
+
+---
+
+## Session
 - Date: 2026-05-27
 - Session Number: 31
 - Scope: Execute a high-volume `uiManager` decomposition wave across battles/titans/pets/inventory, completing issues #252-#269.
