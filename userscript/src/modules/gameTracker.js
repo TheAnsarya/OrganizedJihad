@@ -68,14 +68,20 @@ import {
 	trackTitaniteTransactionHelper,
 } from './trackers/GameTrackerGuildCurrencyHelpers.js';
 import {
+	applyResourceTransactionIntents,
 	appendBoundedHistory,
 	buildCrossServerWarBattleRecord,
 	buildCrossServerWarInfoMetadata,
+	buildGuildWarActivityPayload,
+	buildGuildWarBattleHistoryRecord,
 	buildGuildWarInfoMetadata,
 	buildRaidBossAttackHistoryRecord,
+	buildRaidBossActivityPayload,
 	buildRaidBossBattleRecord,
 	buildRaidBossDamageSummary,
 	buildRaidBossInfoMetadata,
+	buildRaidBossRewardIntents,
+	buildGuildWarRewardIntents,
 	resolveCrossServerBattleResults,
 } from './trackers/GameTrackerWarRaidHelpers.js';
 import {
@@ -2268,27 +2274,18 @@ class GameTracker {
 		// Resolve war context from cached data (#131)
 		const currentWar = await this.storage.getMetadata('currentGuildWar', {});
 
-		const battleRecord = {
-			type: 'guildWar',
-			defenderId: args.defenderId,
-			fortId: args.fortId,
-			warId: currentWar.warId || null,
-			enemyGuildName: currentWar.enemyGuildName || null,
-			result: isWin ? 'victory' : 'defeat',
-			myTeam: data.attackers ? this.compressHeroTeam(data.attackers) : null,
-			enemyTeam: data.defenders ? this.compressHeroTeam(data.defenders) : null,
-			reward: data.reward || {},
-			timestamp: Date.now(),
-		};
+		const battleRecord = buildGuildWarBattleHistoryRecord(
+			args,
+			data,
+			currentWar,
+			this.compressHeroTeam.bind(this),
+			isWin
+		);
 
 		const guildWarHistory = await this.storage.getMetadata('guildWarBattleHistory', []);
-		guildWarHistory.push(battleRecord);
+		const nextGuildWarHistory = appendBoundedHistory(guildWarHistory, battleRecord, 500);
 
-		if (guildWarHistory.length > 500) {
-			guildWarHistory.shift();
-		}
-
-		await this.storage.setMetadata('guildWarBattleHistory', guildWarHistory);
+		await this.storage.setMetadata('guildWarBattleHistory', nextGuildWarHistory);
 
 		// Write to IDB battles store for Battles tab display (#85)
 		// (#131) Include opponentId, warId, and opponent guild name
@@ -2318,25 +2315,11 @@ class GameTracker {
 		// Hero Wars guild wars are major guild events
 		// See: https://community.hero-wars.com/discussion/guild-war-guide
 		const guildData = await this.storage.getMetadata('guildData', {});
-		await this.trackGuildActivity('war', {
-			guildId: guildData.id || 'unknown',
-			guildName: guildData.name || 'Unknown Guild',
-			fortId: args.fortId,
-			result: battleRecord.result,
-			damage: data.damage || 0,
-		});
+		await this.trackGuildActivity('war', buildGuildWarActivityPayload(guildData, args, battleRecord, data));
 
 		// Track resource rewards from guild war
 		const rewards = data.reward || {};
-		if (rewards.gold) {
-			await this.trackResourceTransaction('gold', rewards.gold, 'battle', 'guild_war');
-		}
-		if (rewards.guildWarToken) {
-			await this.trackResourceTransaction('guild_war_coins', rewards.guildWarToken, 'battle', 'guild_war');
-		}
-		if (rewards.starmoney) {
-			await this.trackResourceTransaction('emeralds', rewards.starmoney, 'battle', 'guild_war');
-		}
+		await applyResourceTransactionIntents(this, buildGuildWarRewardIntents(rewards));
 	}
 
 	/**
@@ -2390,29 +2373,11 @@ class GameTracker {
 		// Guild raids are cooperative PvE events
 		// See: https://community.hero-wars.com/discussion/guild-raid-boss-guide
 		const guildData = await this.storage.getMetadata('guildData', {});
-		await this.trackGuildActivity('raid', {
-			guildId: guildData.id || 'unknown',
-			guildName: guildData.name || 'Unknown Guild',
-			bossId: args.bossId,
-			damage: data.damage || 0,
-		});
+		await this.trackGuildActivity('raid', buildRaidBossActivityPayload(guildData, args, data));
 
 		// Track resource rewards from raid boss
 		const rewards = data.reward || {};
-		if (rewards.gold) {
-			await this.trackResourceTransaction('gold', rewards.gold, 'battle', 'guild_raid');
-		}
-		if (rewards.guildToken || rewards.clanToken) {
-			await this.trackResourceTransaction(
-				'guild_coins',
-				rewards.guildToken || rewards.clanToken,
-				'battle',
-				'guild_raid'
-			);
-		}
-		if (rewards.starmoney) {
-			await this.trackResourceTransaction('emeralds', rewards.starmoney, 'battle', 'guild_raid');
-		}
+		await applyResourceTransactionIntents(this, buildRaidBossRewardIntents(rewards));
 	}
 
 	/**

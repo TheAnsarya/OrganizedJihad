@@ -173,3 +173,130 @@ export function buildRaidBossDamageSummary(history) {
 		averageDamage,
 	};
 }
+
+/**
+ * Build guild-war history record payload.
+ *
+ * @param {Object} args - battle request args
+ * @param {Object} data - battle response payload
+ * @param {Object} currentWar - cached war metadata
+ * @param {Function} compressHeroTeam - team compression callback
+ * @param {boolean} isWin - battle result flag
+ * @returns {Object} guild-war history row
+ */
+export function buildGuildWarBattleHistoryRecord(args, data, currentWar, compressHeroTeam, isWin) {
+	return {
+		type: 'guildWar',
+		defenderId: args.defenderId,
+		fortId: args.fortId,
+		warId: currentWar.warId || null,
+		enemyGuildName: currentWar.enemyGuildName || null,
+		result: isWin ? 'victory' : 'defeat',
+		myTeam: data.attackers ? compressHeroTeam(data.attackers) : null,
+		enemyTeam: data.defenders ? compressHeroTeam(data.defenders) : null,
+		reward: data.reward || {},
+		timestamp: Date.now(),
+	};
+}
+
+/**
+ * Build guild-war activity payload.
+ *
+ * @param {Object} guildData - guild metadata
+ * @param {Object} args - battle request args
+ * @param {Object} battleRecord - guild war history row
+ * @param {Object} data - battle response payload
+ * @returns {Object} guild activity payload
+ */
+export function buildGuildWarActivityPayload(guildData, args, battleRecord, data) {
+	return {
+		guildId: guildData.id || 'unknown',
+		guildName: guildData.name || 'Unknown Guild',
+		fortId: args.fortId,
+		result: battleRecord.result,
+		damage: data.damage || 0,
+	};
+}
+
+/**
+ * Build guild-war reward transaction intents.
+ *
+ * @param {Object} rewards - reward payload
+ * @returns {Array<Object>} transaction intents
+ */
+export function buildGuildWarRewardIntents(rewards) {
+	const intents = [];
+
+	if (rewards.gold) {
+		intents.push({ resourceType: 'gold', amount: rewards.gold, source: 'battle', sourceDetail: 'guild_war' });
+	}
+	if (rewards.guildWarToken) {
+		intents.push({
+			resourceType: 'guild_war_coins',
+			amount: rewards.guildWarToken,
+			source: 'battle',
+			sourceDetail: 'guild_war',
+		});
+	}
+	if (rewards.starmoney) {
+		intents.push({ resourceType: 'emeralds', amount: rewards.starmoney, source: 'battle', sourceDetail: 'guild_war' });
+	}
+
+	return intents;
+}
+
+/**
+ * Build raid-boss activity payload.
+ *
+ * @param {Object} guildData - guild metadata
+ * @param {Object} args - attack request args
+ * @param {Object} data - attack response payload
+ * @returns {Object} guild activity payload
+ */
+export function buildRaidBossActivityPayload(guildData, args, data) {
+	return {
+		guildId: guildData.id || 'unknown',
+		guildName: guildData.name || 'Unknown Guild',
+		bossId: args.bossId,
+		damage: data.damage || 0,
+	};
+}
+
+/**
+ * Build raid-boss reward transaction intents.
+ *
+ * @param {Object} rewards - reward payload
+ * @returns {Array<Object>} transaction intents
+ */
+export function buildRaidBossRewardIntents(rewards) {
+	const intents = [];
+
+	if (rewards.gold) {
+		intents.push({ resourceType: 'gold', amount: rewards.gold, source: 'battle', sourceDetail: 'guild_raid' });
+	}
+	if (rewards.guildToken || rewards.clanToken) {
+		intents.push({
+			resourceType: 'guild_coins',
+			amount: rewards.guildToken || rewards.clanToken,
+			source: 'battle',
+			sourceDetail: 'guild_raid',
+		});
+	}
+	if (rewards.starmoney) {
+		intents.push({ resourceType: 'emeralds', amount: rewards.starmoney, source: 'battle', sourceDetail: 'guild_raid' });
+	}
+
+	return intents;
+}
+
+/**
+ * Apply resource transaction intents via tracker API.
+ *
+ * @param {Object} tracker - gameTracker instance
+ * @param {Array<Object>} intents - transaction intents
+ */
+export async function applyResourceTransactionIntents(tracker, intents) {
+	for (const intent of intents) {
+		await tracker.trackResourceTransaction(intent.resourceType, intent.amount, intent.source, intent.sourceDetail);
+	}
+}

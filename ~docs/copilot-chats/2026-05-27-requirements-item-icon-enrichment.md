@@ -1053,6 +1053,53 @@
 ---
 
 ## Session
+- Date: 2026-05-28
+- Session Number: 56
+- Scope: Continue batch modernization by extracting guild-war and raid battle side-effect composition seams.
+
+## Summary
+- Created and completed issue #315.
+- Expanded `userscript/src/modules/trackers/GameTrackerWarRaidHelpers.js` with new side-effect builders/helpers:
+	- `buildGuildWarBattleHistoryRecord`
+	- `buildGuildWarActivityPayload`
+	- `buildGuildWarRewardIntents`
+	- `buildRaidBossActivityPayload`
+	- `buildRaidBossRewardIntents`
+	- `applyResourceTransactionIntents`
+- Rewired `userscript/src/modules/gameTracker.js` to delegate side-effect composition in:
+	- `trackGuildWarBattle`
+	- `trackRaidBossAttack`
+- Preserved wrapper execution order (history update, battle dedupe/store, activity tracking, reward transaction tracking).
+- Expanded focused coverage in `userscript/tests/gameTrackerWarRaidHelpers.test.js` for new builder/intents behavior.
+
+## Files Modified
+- userscript/src/modules/gameTracker.js
+- userscript/src/modules/trackers/GameTrackerWarRaidHelpers.js
+- userscript/tests/gameTrackerWarRaidHelpers.test.js
+- userscript/package.json
+- ~docs/plans/architecture-modernization-roadmap.md
+- ~docs/copilot-chats/2026-05-27-requirements-item-icon-enrichment.md
+- ~docs/copilot-chats/2026-05-28-userscript-build-auto.md
+
+## Issues Referenced
+- #206 Epic: Architecture modernization and module deepening across API/userscript
+- #209 PR tracking: architecture modernization wave updates
+- #315 Batch userscript modernization: guild-war and raid battle orchestration side-effect seam extraction
+
+## Validation
+- `yarn test --runInBand`: passed (31 suites, 785 tests)
+- `yarn build`: passed
+
+## Key Decisions
+- Kept dedupe checks and logging-order semantics in wrappers while extracting only side-effect payload/intent composition into helpers.
+- Reused bounded-history helper path in guild-war battle tracking to keep cap behavior consistent with raid history handling.
+
+## Known Follow-up
+- Continue extraction of remaining guild-war/raid wrapper orchestration segments into helper seams while preserving side-effect order and existing logs.
+
+---
+
+## Session
 - Date: 2026-05-27
 - Session Number: 38
 - Scope: Continue autonomous issue throughput with new batch slices, including a large API Team Recommendation orchestration decomposition wave.

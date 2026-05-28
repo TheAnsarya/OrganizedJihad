@@ -1,12 +1,18 @@
 import {
+	applyResourceTransactionIntents,
 	appendBoundedHistory,
 	buildCrossServerWarBattleRecord,
 	buildCrossServerWarInfoMetadata,
+	buildGuildWarActivityPayload,
+	buildGuildWarBattleHistoryRecord,
 	buildGuildWarInfoMetadata,
+	buildGuildWarRewardIntents,
 	buildRaidBossAttackHistoryRecord,
+	buildRaidBossActivityPayload,
 	buildRaidBossBattleRecord,
 	buildRaidBossDamageSummary,
 	buildRaidBossInfoMetadata,
+	buildRaidBossRewardIntents,
 	resolveCrossServerBattleResults,
 } from '../src/modules/trackers/GameTrackerWarRaidHelpers.js';
 
@@ -142,5 +148,74 @@ describe('GameTrackerWarRaidHelpers', () => {
 			totalDamage: 60,
 			averageDamage: 20,
 		});
+	});
+
+	test('guild-war side-effect builders preserve payload parity', () => {
+		const compressHeroTeam = (team) => team.map((unit) => ({ id: unit.id }));
+		const currentWar = { warId: 'w-1', enemyGuildName: 'Nemesis' };
+		const args = { defenderId: 123, fortId: 7 };
+		const data = { attackers: [{ id: 1 }], defenders: [{ id: 2 }], reward: { gold: 100, guildWarToken: 5, starmoney: 1 }, damage: 999 };
+
+		const historyRecord = buildGuildWarBattleHistoryRecord(args, data, currentWar, compressHeroTeam, true);
+		expect(historyRecord).toEqual(expect.objectContaining({
+			type: 'guildWar',
+			defenderId: 123,
+			fortId: 7,
+			warId: 'w-1',
+			enemyGuildName: 'Nemesis',
+			result: 'victory',
+			myTeam: [{ id: 1 }],
+			enemyTeam: [{ id: 2 }],
+			reward: { gold: 100, guildWarToken: 5, starmoney: 1 },
+		}));
+
+		const activityPayload = buildGuildWarActivityPayload({ id: 11, name: 'Guild A' }, args, historyRecord, data);
+		expect(activityPayload).toEqual({
+			guildId: 11,
+			guildName: 'Guild A',
+			fortId: 7,
+			result: 'victory',
+			damage: 999,
+		});
+
+		expect(buildGuildWarRewardIntents({ gold: 100, guildWarToken: 5, starmoney: 1 })).toEqual([
+			{ resourceType: 'gold', amount: 100, source: 'battle', sourceDetail: 'guild_war' },
+			{ resourceType: 'guild_war_coins', amount: 5, source: 'battle', sourceDetail: 'guild_war' },
+			{ resourceType: 'emeralds', amount: 1, source: 'battle', sourceDetail: 'guild_war' },
+		]);
+	});
+
+	test('raid side-effect builders preserve payload parity and token fallback', () => {
+		const args = { bossId: 4 };
+		const data = { damage: 321, reward: { gold: 10, clanToken: 3, starmoney: 2 } };
+		const payload = buildRaidBossActivityPayload({ id: 15, name: 'Guild B' }, args, data);
+
+		expect(payload).toEqual({
+			guildId: 15,
+			guildName: 'Guild B',
+			bossId: 4,
+			damage: 321,
+		});
+
+		expect(buildRaidBossRewardIntents({ gold: 10, clanToken: 3, starmoney: 2 })).toEqual([
+			{ resourceType: 'gold', amount: 10, source: 'battle', sourceDetail: 'guild_raid' },
+			{ resourceType: 'guild_coins', amount: 3, source: 'battle', sourceDetail: 'guild_raid' },
+			{ resourceType: 'emeralds', amount: 2, source: 'battle', sourceDetail: 'guild_raid' },
+		]);
+	});
+
+	test('applyResourceTransactionIntents replays intents through tracker', async () => {
+		const tracker = {
+			trackResourceTransaction: jest.fn(async () => {}),
+		};
+		const intents = [
+			{ resourceType: 'gold', amount: 1, source: 'battle', sourceDetail: 'guild_war' },
+			{ resourceType: 'emeralds', amount: 2, source: 'battle', sourceDetail: 'guild_raid' },
+		];
+
+		await applyResourceTransactionIntents(tracker, intents);
+
+		expect(tracker.trackResourceTransaction).toHaveBeenNthCalledWith(1, 'gold', 1, 'battle', 'guild_war');
+		expect(tracker.trackResourceTransaction).toHaveBeenNthCalledWith(2, 'emeralds', 2, 'battle', 'guild_raid');
 	});
 });
