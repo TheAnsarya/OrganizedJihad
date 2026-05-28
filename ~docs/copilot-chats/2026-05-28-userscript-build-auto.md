@@ -1036,3 +1036,65 @@
 
 ## Follow-up
 - Optional future slice: add detached signature file generation to release artifact pipeline.
+
+---
+
+## Session
+- Date: 2026-05-28
+- Session Number: 40
+- Scope: #327 hotfix for standalone v0.2.1 bundle installer failure
+
+## Summary
+- Fixed installer behavior for downloaded release bundles by adding source-vs-bundle payload detection.
+- Updated release packaging to include API/Desktop/userscript payloads and optional health-check script inside zip.
+- Replaced v0.2.1 release assets in-place with corrected standalone bundle artifacts.
+
+## Files Modified
+- Install-OrganizedJihad.ps1
+- Publish-ReleaseArtifacts.ps1
+- installer-ui/MainWindow.axaml.cs
+- README.md
+- ~docs/plans/release-v0.2.1.md
+- ~docs/plans/release-v0.2.1-github-body.md
+- ~docs/plans/architecture-modernization-roadmap.md
+- ~docs/copilot-chats/2026-05-28-userscript-build-auto.md
+
+## Issues
+- Created/implemented: #327
+- Referenced epic: #206
+- PR tracking: #209
+
+## Validation
+- pwsh -ExecutionPolicy Bypass -File .\Publish-ReleaseArtifacts.ps1 -Version 0.2.1 (pass)
+- Verified bundle includes `bundled/api`, `bundled/desktop-app`, `organized-jihad.user.js`, `install-health-check.mjs`
+- gh release upload v0.2.1 --clobber ... (pass)
+- gh release edit v0.2.1 --notes-file ~docs/plans/release-v0.2.1-github-body.md (pass)
+
+## Follow-up
+- Optional: smoke-test the corrected release zip from a clean non-repo folder on another machine profile.
+---
+
+## Session
+- Date: 2026-05-28
+- Session Number: 40
+- Scope: Automated userscript build session logging
+
+## Summary
+- Auto-generated entry from userscript build pipeline.
+- Captures a timestamp and a git working-tree snapshot for traceability.
+
+## Files Modified
+- nstall-OrganizedJihad.ps1
+- Publish-ReleaseArtifacts.ps1
+- README.md
+- installer-ui/MainWindow.axaml.cs
+- userscript/package.json
+- ~docs/oj-manual-prompts-log.txt
+- ~docs/plans/release-v0.2.1-github-body.md
+- ~docs/plans/release-v0.2.1.md
+
+## Validation
+- yarn build
+
+## Generated
+- Timestamp UTC: 2026-05-28T20:53:47.607Z

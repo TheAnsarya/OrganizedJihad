@@ -343,6 +343,11 @@ $desktopProject = Join-Path $repoRoot 'desktop-app\OrganizedJihad.Desktop.csproj
 $userscriptDir = Join-Path $repoRoot 'userscript'
 $userscriptDist = Join-Path $userscriptDir 'dist'
 $userscriptFile = Join-Path $userscriptDist 'organized-jihad.user.js'
+$bundledRoot = Join-Path $repoRoot 'bundled'
+$bundledApiPublishDir = Join-Path $bundledRoot 'api'
+$bundledDesktopPublishDir = Join-Path $bundledRoot 'desktop-app'
+$bundledUserscriptFile = Join-Path $repoRoot 'organized-jihad.user.js'
+$bundledHealthCheckScript = Join-Path $repoRoot 'install-health-check.mjs'
 $publishDir = Join-Path $repoRoot 'api\bin\Release\net10.0\win-x64\publish'
 $desktopPublishCandidates = @(
 	(Join-Path $repoRoot 'desktop-app\bin\Release\net10.0-windows10.0.19041.0\win-x64\publish'),
@@ -360,6 +365,9 @@ $effectiveRunInstallHealthCheck = $RunInstallHealthCheck
 $effectiveOpenUserscriptDiagnostics = $OpenUserscriptDiagnostics
 $effectiveInstallHealthCheckOpen = $InstallHealthCheckOpen
 $desktopPublishDir = $null
+$apiPublishDir = $null
+$userscriptArtifactPath = $null
+$isBundledPayloadMode = (Test-Path -Path $bundledApiPublishDir) -or (Test-Path -Path $bundledUserscriptFile)
 
 Ensure-InstallerElevation -BoundParameters $PSBoundParameters -ScriptPath $PSCommandPath
 
@@ -374,58 +382,84 @@ if ($FirstRunDiagnostics) {
 }
 
 Write-Step "Validating prerequisites"
-Assert-Command -Name 'dotnet' -HelpText 'Install .NET SDK 10 preview or later.'
-Assert-Command -Name 'node' -HelpText 'Install Node.js 18+.'
-Assert-Command -Name 'yarn' -HelpText 'Install Yarn (classic) and Node.js 18+.'
+if ((Test-Path -Path $userscriptDir) -and (Test-Path -Path $apiProject)) {
+	Assert-Command -Name 'dotnet' -HelpText 'Install .NET SDK 10 preview or later.'
+	Assert-Command -Name 'node' -HelpText 'Install Node.js 18+.'
+	Assert-Command -Name 'yarn' -HelpText 'Install Yarn (classic) and Node.js 18+.'
 
-Write-Step "Building userscript bundle"
-Push-Location $userscriptDir
-try {
-	if (-not $SkipYarnInstall) {
-		yarn install --frozen-lockfile
+	Write-Step 'Building userscript bundle from source repository.'
+	Push-Location $userscriptDir
+	try {
+		if (-not $SkipYarnInstall) {
+			yarn install --frozen-lockfile
+		}
+		yarn build
+	} finally {
+		Pop-Location
 	}
-	yarn build
-} finally {
-	Pop-Location
-}
 
-if (-not (Test-Path -Path $userscriptFile)) {
-	throw "Userscript bundle not found at '$userscriptFile'."
-}
+	if (-not (Test-Path -Path $userscriptFile)) {
+		throw "Userscript bundle not found at '$userscriptFile'."
+	}
+	$userscriptArtifactPath = $userscriptFile
 
-Write-Step "Publishing API backend"
-dotnet publish $apiProject -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true
+	Write-Step 'Publishing API backend from source repository.'
+	dotnet publish $apiProject -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true
 
-if (-not (Test-Path -Path $publishDir)) {
-	throw "API publish output not found at '$publishDir'."
-}
+	if (-not (Test-Path -Path $publishDir)) {
+		throw "API publish output not found at '$publishDir'."
+	}
+	$apiPublishDir = $publishDir
 
-if (-not $SkipDesktopAppInstall) {
-	Write-Step 'Publishing desktop app (Windows).'
-	dotnet publish $desktopProject -f net10.0-windows10.0.19041.0 -c Release -p:WindowsPackageType=None
+	if (-not $SkipDesktopAppInstall) {
+		Write-Step 'Publishing desktop app (Windows) from source repository.'
+		dotnet publish $desktopProject -f net10.0-windows10.0.19041.0 -c Release -p:WindowsPackageType=None
 
-	foreach ($candidate in $desktopPublishCandidates) {
-		if (Test-Path -Path $candidate) {
-			$desktopPublishDir = $candidate
-			break
+		foreach ($candidate in $desktopPublishCandidates) {
+			if (Test-Path -Path $candidate) {
+				$desktopPublishDir = $candidate
+				break
+			}
+		}
+
+		if ((-not $desktopPublishDir) -or (-not (Test-Path -Path $desktopPublishDir))) {
+			throw "Desktop publish output not found at any expected path: $($desktopPublishCandidates -join '; ')."
 		}
 	}
+} elseif ($isBundledPayloadMode) {
+	Write-Step 'Source project structure not found. Using bundled release payloads.'
 
-	if ((-not $desktopPublishDir) -or (-not (Test-Path -Path $desktopPublishDir))) {
-		throw "Desktop publish output not found at any expected path: $($desktopPublishCandidates -join '; ')."
+	if (-not (Test-Path -Path $bundledApiPublishDir)) {
+		throw "Bundled API payload not found at '$bundledApiPublishDir'."
 	}
+	$apiPublishDir = $bundledApiPublishDir
+
+	if (-not $SkipDesktopAppInstall) {
+		if (-not (Test-Path -Path $bundledDesktopPublishDir)) {
+			throw "Bundled desktop payload not found at '$bundledDesktopPublishDir'."
+		}
+		$desktopPublishDir = $bundledDesktopPublishDir
+	}
+
+	if (-not (Test-Path -Path $bundledUserscriptFile)) {
+		throw "Bundled userscript artifact not found at '$bundledUserscriptFile'."
+	}
+	$userscriptArtifactPath = $bundledUserscriptFile
+} else {
+	throw 'Could not locate either source project structure or bundled release payloads.'
 }
 
 Write-Step "Installing artifacts into '$InstallRoot'"
 Ensure-Directory -Path $InstallRoot
 Stop-InstalledApiProcess -ExecutablePath $apiExecutablePath
-Copy-BuildArtifacts -Source $publishDir -Destination $apiInstallDir
+Copy-BuildArtifacts -Source $apiPublishDir -Destination $apiInstallDir
 
 if (-not $SkipDesktopAppInstall) {
 	Copy-BuildArtifacts -Source $desktopPublishDir -Destination $desktopInstallDir
 }
 
-Copy-BuildArtifacts -Source $userscriptDist -Destination $userscriptInstallDir
+Ensure-Directory -Path $userscriptInstallDir
+Copy-Item -Path $userscriptArtifactPath -Destination (Join-Path $userscriptInstallDir 'organized-jihad.user.js') -Force
 
 if (-not (Test-Path -Path $apiExecutablePath)) {
 	throw "Expected API executable missing at '$apiExecutablePath'."
@@ -449,23 +483,31 @@ if ($effectiveRunInstallHealthCheck) {
 
 	Write-Step 'Running userscript install health check.'
 	$healthCheckScript = Join-Path $userscriptDir 'scripts\install-health-check.mjs'
+	if ((-not (Test-Path -Path $healthCheckScript)) -and (Test-Path -Path $bundledHealthCheckScript)) {
+		$healthCheckScript = $bundledHealthCheckScript
+	}
+
 	if (-not (Test-Path -Path $healthCheckScript)) {
-		throw "Install health-check script not found at '$healthCheckScript'."
+		Write-Step 'Install health-check script is not included in this package. Skipping health check step.'
+		$effectiveRunInstallHealthCheck = $false
 	}
 
-	$healthCheckArgs = @($healthCheckScript, '--baseUrl', $ApiUrl)
-	if ($InstallHealthCheckJson) {
-		$healthCheckArgs += '--json'
-	}
-	if ($effectiveInstallHealthCheckOpen -ne 'none') {
-		$healthCheckArgs += @('--open', $effectiveInstallHealthCheckOpen)
-	}
+	if ($effectiveRunInstallHealthCheck) {
+		Assert-Command -Name 'node' -HelpText 'Install Node.js 18+ for install health-check execution.'
+		$healthCheckArgs = @($healthCheckScript, '--baseUrl', $ApiUrl)
+		if ($InstallHealthCheckJson) {
+			$healthCheckArgs += '--json'
+		}
+		if ($effectiveInstallHealthCheckOpen -ne 'none') {
+			$healthCheckArgs += @('--open', $effectiveInstallHealthCheckOpen)
+		}
 
-	& node @healthCheckArgs
-	if ($LASTEXITCODE -ne 0) {
-		Write-Step "Health check reported issues (exit code $LASTEXITCODE). Review output above."
-	} else {
-		Write-Step 'Health check passed.'
+		& node @healthCheckArgs
+		if ($LASTEXITCODE -ne 0) {
+			Write-Step "Health check reported issues (exit code $LASTEXITCODE). Review output above."
+		} else {
+			Write-Step 'Health check passed.'
+		}
 	}
 }
 

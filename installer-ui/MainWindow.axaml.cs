@@ -81,7 +81,6 @@ public partial class MainWindow : Window {
 			"-File", Quote(scriptPath),
 			"-InstallRoot", Quote(installRoot),
 			"-ApiUrl", Quote(apiUrl),
-			"-AllowNonAdmin",
 			"-RunInstallHealthCheck",
 			"-TampermonkeyBrowsers", browserArg,
 		};

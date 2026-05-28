@@ -25,6 +25,8 @@
 
 ### Recommended (No CLI)
 
+Release zip is standalone: API/Desktop/userscript payloads are bundled, so no source repo checkout is needed.
+
 1. Run `OrganizedJihad.Installer.exe`.
 2. Approve UAC when asked.
 3. Choose browser target.

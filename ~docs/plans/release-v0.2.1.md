@@ -102,6 +102,10 @@ Published assets:
 4. Click `Install Ecosystem`.
 5. Wait for completion and review logs if needed.
 
+Bundle note:
+
+- `OrganizedJihad-v0.2.1-windows-installer.zip` contains bundled API/Desktop/userscript payloads for standalone installation (no local source checkout required).
+
 ### CLI Fallback
 
 ```powershell

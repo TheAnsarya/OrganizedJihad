@@ -37,6 +37,7 @@ See [Tracking Reference](~docs/plans/tracking-reference.md) for the complete dat
 - GitHub Release: https://github.com/TheAnsarya/OrganizedJihad/releases/tag/v0.2.1
 - Recommended asset: `OrganizedJihad-v0.2.1-windows-installer.zip`
 - Verify integrity using bundled `SHA256SUMS.txt`
+- The zip is self-contained (API + desktop + userscript payloads included); source repository files are not required.
 
 To build release artifacts locally:
 
