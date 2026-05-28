@@ -68,6 +68,17 @@ import {
 	trackTitaniteTransactionHelper,
 } from './trackers/GameTrackerGuildCurrencyHelpers.js';
 import {
+	appendBoundedHistory,
+	buildCrossServerWarBattleRecord,
+	buildCrossServerWarInfoMetadata,
+	buildGuildWarInfoMetadata,
+	buildRaidBossAttackHistoryRecord,
+	buildRaidBossBattleRecord,
+	buildRaidBossDamageSummary,
+	buildRaidBossInfoMetadata,
+	resolveCrossServerBattleResults,
+} from './trackers/GameTrackerWarRaidHelpers.js';
+import {
 	finalizeProcessApiResponseLifecycle,
 } from './trackers/GameTrackerResponseLifecycleHelpers.js';
 import { compressHeroBatch, compressTitanBatch } from './heroCompression.js';
@@ -2238,16 +2249,7 @@ class GameTracker {
 	 * @private
 	 */
 	async trackGuildWarInfo(data) {
-		const warData = {
-			warId: data.warId || data.war?.id,
-			enemyGuildId: data.enemyClanId || data.enemyClan?.id,
-			enemyGuildName: data.enemyClanName || data.enemyClan?.name,
-			myGuildScore: data.myScore || 0,
-			enemyScore: data.enemyScore || 0,
-			defenders: data.defenders || {},
-			attackers: data.attackers || {},
-			timestamp: Date.now(),
-		};
+		const warData = buildGuildWarInfoMetadata(data);
 
 		await this.storage.setMetadata('currentGuildWar', warData);
 	}
@@ -2352,20 +2354,7 @@ class GameTracker {
 		//   bossAttempts: 5       ← max boss attacks per day
 		//   nodes: { "1": {...}, ... "9": {...} }  ← minion nodes
 		//   coins: 800            ← raid coins earned
-		const bossData = {
-			bossLevel: data.boss?.level || 0,
-			currentBoss: data.stats?.currentBoss || '0',
-			clanPoints: data.stats?.points || '0',
-			bossKilled: data.stats?.bossKilled || [],
-			myDamage: parseInt(data.userStats?.damage || '0', 10),
-			myPoints: parseInt(data.userStats?.points || '0', 10),
-			usedHeroes: data.userStats?.usedHeroes || [],
-			attemptsUsed: data.attempts || 0,
-			attemptsMax: data.bossAttempts || 5,
-			coins: data.coins || 0,
-			nodeCount: Object.keys(data.nodes || {}).length,
-			timestamp: Date.now(),
-		};
+		const bossData = buildRaidBossInfoMetadata(data);
 
 		await this.storage.setMetadata('currentRaidBoss', bossData);
 		console.log(`[OrganizedJihad] Raid boss info: Level ${bossData.bossLevel}, boss #${bossData.currentBoss}, attacks ${bossData.attemptsUsed}/${bossData.attemptsMax}, damage ${bossData.myDamage}`);
@@ -2381,36 +2370,17 @@ class GameTracker {
 	async trackRaidBossAttack(args, data) {
 		const timestamp = new Date().toISOString();
 
-		const attackRecord = {
-			bossId: args.bossId,
-			damage: data.damage || 0,
-			myTeam: data.attackers ? this.compressHeroTeam(data.attackers) : null,
-			reward: data.reward || {},
-			timestamp: Date.now(),
-		};
+		const attackRecord = buildRaidBossAttackHistoryRecord(args, data, this.compressHeroTeam.bind(this));
 
 		const raidHistory = await this.storage.getMetadata('raidBossAttackHistory', []);
-		raidHistory.push(attackRecord);
+		const nextRaidHistory = appendBoundedHistory(raidHistory, attackRecord, 500);
 
-		if (raidHistory.length > 500) {
-			raidHistory.shift();
-		}
-
-		await this.storage.setMetadata('raidBossAttackHistory', raidHistory);
+		await this.storage.setMetadata('raidBossAttackHistory', nextRaidHistory);
 
 		// Write to IDB battles store for Battles tab display (#85)
 		// Raid boss attacks are always successful (you always deal damage)
 		// (#131) Include damage in the IDB battle record for display
-		const battle = {
-			battleType: 'RaidBoss',
-			isWin: true,
-			damage: data.damage || 0,
-			playerHeroes: data.attackers ? JSON.stringify(this.compressHeroTeam(data.attackers)) : null,
-			opponentHeroes: null,
-			rewards: data.reward ? JSON.stringify(data.reward) : null,
-			mission: args.bossId || null,
-			timestamp,
-		};
+		const battle = buildRaidBossBattleRecord(args, data, this.compressHeroTeam.bind(this), timestamp);
 
 		if (!this._isBattleDuplicate(battle)) {
 			await this.storage.add('battles', battle);
@@ -3441,23 +3411,15 @@ class GameTracker {
 	 * @private
 	 */
 	async trackCrossServerWarResults(args, data) {
-		const battles = Array.isArray(data.battles) ? data.battles : (data.results || [data]);
+		const battles = resolveCrossServerBattleResults(data);
 
 		for (const result of battles) {
-			const battle = {
-				battleType: 'CrossServerWar',
-				opponentId: result.defenderId || result.opponentId || args.defenderId || null,
-				opponentName: result.defenderName || null,
-				isWin: result.result?.win ?? result.win ?? false,
-				playerPower: result.attackers ? this.calculateTeamPower(result.attackers) : 0,
-				opponentPower: result.defenders ? this.calculateTeamPower(result.defenders) : 0,
-				playerHeroes: result.attackers ? JSON.stringify(this.compressHeroTeam(result.attackers)) : null,
-				opponentHeroes: result.defenders ? JSON.stringify(this.compressHeroTeam(result.defenders)) : null,
-				rewards: result.reward ? JSON.stringify(result.reward) : null,
-				fortId: result.fortId || args.fortId || null,
-				warId: result.warId || args.warId || null,
-				timestamp: new Date().toISOString(),
-			};
+			const battle = buildCrossServerWarBattleRecord(
+				args,
+				result,
+				this.calculateTeamPower.bind(this),
+				this.compressHeroTeam.bind(this)
+			);
 
 			if (this._isBattleDuplicate(battle)) {
 				console.log('[OrganizedJihad] Skipping duplicate CrossServerWar battle');
@@ -3484,17 +3446,7 @@ class GameTracker {
 	 * @private
 	 */
 	async trackCrossServerWarInfo(data) {
-		const warData = {
-			warId: data.warId || data.id,
-			isCrossServer: true,
-			enemyGuildId: data.enemy?.id || data.enemyClanId,
-			enemyGuildName: data.enemy?.name || data.enemyClanName || 'Unknown',
-			enemyServer: data.enemy?.serverId || data.enemyServerId || null,
-			myScore: data.myScore ?? data.score ?? 0,
-			enemyScore: data.enemyScore ?? data.enemy?.score ?? 0,
-			state: data.state || data.phase,
-			timestamp: Date.now(),
-		};
+		const warData = buildCrossServerWarInfoMetadata(data);
 
 		await this.storage.setMetadata('currentCrossServerWar', warData);
 		console.log(`[OrganizedJihad] Cross-server war info tracked: vs ${warData.enemyGuildName} (server ${warData.enemyServer || '?'})`);
@@ -4039,15 +3991,13 @@ class GameTracker {
 	async getRaidBossData() {
 		const currentBoss = await this.storage.getMetadata('currentRaidBoss', null);
 		const history = await this.storage.getMetadata('raidBossAttackHistory', []);
-
-		const totalDamage = history.reduce((sum, attack) => sum + attack.damage, 0);
-		const averageDamage = history.length > 0 ? totalDamage / history.length : 0;
+		const summary = buildRaidBossDamageSummary(history);
 
 		return {
 			currentBoss,
 			history,
-			totalDamage,
-			averageDamage,
+			totalDamage: summary.totalDamage,
+			averageDamage: summary.averageDamage,
 		};
 	}
 

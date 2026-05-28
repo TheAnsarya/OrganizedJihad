@@ -999,6 +999,60 @@
 ---
 
 ## Session
+- Date: 2026-05-28
+- Session Number: 55
+- Scope: Continue large-batch modernization by extracting war/raid/cross-server metadata and summary helpers from gameTracker.
+
+## Summary
+- Created and completed issue #314.
+- Added `userscript/src/modules/trackers/GameTrackerWarRaidHelpers.js` with extracted seams for:
+	- guild war metadata normalization
+	- raid boss metadata normalization
+	- raid boss attack history record builder
+	- bounded history append helper
+	- raid boss battle record builder
+	- cross-server war metadata normalization
+	- cross-server result-list resolution and battle record mapping
+	- raid boss damage summary computation
+- Rewired `userscript/src/modules/gameTracker.js` to delegate helper paths in:
+	- `trackGuildWarInfo`
+	- `trackRaidBossInfo`
+	- `trackRaidBossAttack`
+	- `trackCrossServerWarResults`
+	- `trackCrossServerWarInfo`
+	- `getRaidBossData`
+- Added focused tests in `userscript/tests/gameTrackerWarRaidHelpers.test.js`.
+
+## Files Modified
+- userscript/src/modules/gameTracker.js
+- userscript/package.json
+- ~docs/plans/architecture-modernization-roadmap.md
+- ~docs/copilot-chats/2026-05-27-requirements-item-icon-enrichment.md
+- ~docs/copilot-chats/2026-05-28-userscript-build-auto.md
+
+## Files Created
+- userscript/src/modules/trackers/GameTrackerWarRaidHelpers.js
+- userscript/tests/gameTrackerWarRaidHelpers.test.js
+
+## Issues Referenced
+- #206 Epic: Architecture modernization and module deepening across API/userscript
+- #209 PR tracking: architecture modernization wave updates
+- #314 Batch userscript modernization: war/raid/cross-server metadata and summary helper extraction
+
+## Validation
+- `yarn test --runInBand`: passed (31 suites, 782 tests)
+- `yarn build`: passed
+
+## Key Decisions
+- Preserved existing wrapper sequencing and side-effect behavior while extracting only normalization/building/summarization seams into helper modules.
+- Kept dedupe checks and activity logging at wrapper level to avoid changing tracking-order semantics.
+
+## Known Follow-up
+- Continue extraction for guild war/raid battle orchestration and reward/activity side-effect composition into dedicated helper seams.
+
+---
+
+## Session
 - Date: 2026-05-27
 - Session Number: 38
 - Scope: Continue autonomous issue throughput with new batch slices, including a large API Team Recommendation orchestration decomposition wave.
