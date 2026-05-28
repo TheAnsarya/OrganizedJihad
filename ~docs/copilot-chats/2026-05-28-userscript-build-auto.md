@@ -603,3 +603,241 @@
 
 ## Follow-up
 - Continue next batch seams from remaining high-churn `gameTracker` flows.
+---
+
+## Session
+- Date: 2026-05-28
+- Session Number: 25
+- Scope: Automated userscript build session logging
+
+## Summary
+- Auto-generated entry from userscript build pipeline.
+- Captures a timestamp and a git working-tree snapshot for traceability.
+
+## Files Modified
+- nstall-OrganizedJihad.ps1
+- README.md
+- userscript/INSTALL.md
+- userscript/README.md
+- userscript/package.json
+- ~docs/oj-manual-prompts-log.txt
+
+## Validation
+- yarn build
+
+## Generated
+- Timestamp UTC: 2026-05-28T19:23:51.975Z
+---
+
+## Session
+- Date: 2026-05-28
+- Session Number: 26
+- Scope: Automated userscript build session logging
+
+## Summary
+- Auto-generated entry from userscript build pipeline.
+- Captures a timestamp and a git working-tree snapshot for traceability.
+
+## Files Modified
+- nstall-OrganizedJihad.ps1
+- README.md
+- userscript/INSTALL.md
+- userscript/README.md
+- userscript/package.json
+- ~docs/copilot-chats/2026-05-28-userscript-build-auto.md
+- ~docs/oj-manual-prompts-log.txt
+
+## Validation
+- yarn build
+
+## Generated
+- Timestamp UTC: 2026-05-28T19:24:18.012Z
+---
+
+## Session
+- Date: 2026-05-28
+- Session Number: 27
+- Scope: Automated userscript build session logging
+
+## Summary
+- Auto-generated entry from userscript build pipeline.
+- Captures a timestamp and a git working-tree snapshot for traceability.
+
+## Files Modified
+- nstall-OrganizedJihad.ps1
+- README.md
+- userscript/INSTALL.md
+- userscript/README.md
+- userscript/package.json
+- ~docs/copilot-chats/2026-05-28-userscript-build-auto.md
+- ~docs/oj-manual-prompts-log.txt
+
+## Validation
+- yarn build
+
+## Generated
+- Timestamp UTC: 2026-05-28T19:24:45.204Z
+---
+
+## Session
+- Date: 2026-05-28
+- Session Number: 28
+- Scope: Automated userscript build session logging
+
+## Summary
+- Auto-generated entry from userscript build pipeline.
+- Captures a timestamp and a git working-tree snapshot for traceability.
+
+## Files Modified
+- nstall-OrganizedJihad.ps1
+- README.md
+- userscript/INSTALL.md
+- userscript/README.md
+- userscript/package.json
+- ~docs/copilot-chats/2026-05-28-userscript-build-auto.md
+- ~docs/oj-manual-prompts-log.txt
+
+## Validation
+- yarn build
+
+## Generated
+- Timestamp UTC: 2026-05-28T19:25:23.001Z
+---
+
+## Session
+- Date: 2026-05-28
+- Session Number: 29
+- Scope: Automated userscript build session logging
+
+## Summary
+- Auto-generated entry from userscript build pipeline.
+- Captures a timestamp and a git working-tree snapshot for traceability.
+
+## Files Modified
+- nstall-OrganizedJihad.ps1
+- README.md
+- userscript/INSTALL.md
+- userscript/README.md
+- userscript/package.json
+- ~docs/copilot-chats/2026-05-28-userscript-build-auto.md
+- ~docs/oj-manual-prompts-log.txt
+
+## Validation
+- yarn build
+
+## Generated
+- Timestamp UTC: 2026-05-28T19:26:46.463Z
+---
+
+## Session
+- Date: 2026-05-28
+- Session Number: 30
+- Scope: Automated userscript build session logging
+
+## Summary
+- Auto-generated entry from userscript build pipeline.
+- Captures a timestamp and a git working-tree snapshot for traceability.
+
+## Files Modified
+- nstall-OrganizedJihad.ps1
+- README.md
+- userscript/INSTALL.md
+- userscript/README.md
+- userscript/package.json
+- ~docs/copilot-chats/2026-05-28-userscript-build-auto.md
+- ~docs/oj-manual-prompts-log.txt
+
+## Validation
+- yarn build
+
+## Generated
+- Timestamp UTC: 2026-05-28T19:27:30.883Z
+---
+
+## Session
+- Date: 2026-05-28
+- Session Number: 31
+- Scope: Automated userscript build session logging
+
+## Summary
+- Auto-generated entry from userscript build pipeline.
+- Captures a timestamp and a git working-tree snapshot for traceability.
+
+## Files Modified
+- nstall-OrganizedJihad.ps1
+- README.md
+- userscript/INSTALL.md
+- userscript/README.md
+- userscript/package.json
+- ~docs/copilot-chats/2026-05-28-userscript-build-auto.md
+- ~docs/oj-manual-prompts-log.txt
+
+## Validation
+- yarn build
+
+## Generated
+- Timestamp UTC: 2026-05-28T19:28:14.655Z
+---
+
+## Session
+- Date: 2026-05-28
+- Session Number: 32
+- Scope: Automated userscript build session logging
+
+## Summary
+- Auto-generated entry from userscript build pipeline.
+- Captures a timestamp and a git working-tree snapshot for traceability.
+
+## Files Modified
+- nstall-OrganizedJihad.ps1
+- README.md
+- userscript/INSTALL.md
+- userscript/README.md
+- userscript/package.json
+- ~docs/copilot-chats/2026-05-28-userscript-build-auto.md
+- ~docs/oj-manual-prompts-log.txt
+
+## Validation
+- yarn build
+
+## Generated
+- Timestamp UTC: 2026-05-28T19:28:48.807Z
+
+---
+
+## Session
+- Date: 2026-05-28
+- Session Number: 33
+- Scope: #321 release hardening for single-run installer ecosystem bootstrap
+
+## Summary
+- Completed issue #321 by hardening `Install-OrganizedJihad.ps1` for a true single-run ecosystem setup flow.
+- Added desktop app publish/install orchestration to installer so API + Desktop + userscript artifacts are installed together.
+- Added browser-targeted Tampermonkey bootstrap with Opera GX support (`-TampermonkeyBrowsers`) and Opera GX executable detection.
+- Hardened non-admin install behavior with scheduled-task fallback messaging and direct API process start for current session.
+- Added API process lock handling before artifact copy for repeat installer runs.
+- Added API health readiness wait before running userscript install health-check.
+
+## Files Modified
+- Install-OrganizedJihad.ps1
+- README.md
+- userscript/INSTALL.md
+- userscript/README.md
+- userscript/package.json
+- ~docs/plans/architecture-modernization-roadmap.md
+- ~docs/copilot-chats/2026-05-28-userscript-build-auto.md
+
+## Issues
+- Created/implemented: #321
+- Referenced epic: #206
+- PR tracking: #209
+
+## Validation
+- dotnet test (pass; 115/115)
+- yarn test --runInBand (pass; 36/36 suites)
+- yarn build (pass; existing webpack asset-size warnings only)
+- Installer smoke tests executed repeatedly; fixed RID mismatch, task fallback behavior, API readiness race, and locked executable handling.
+
+## Follow-up
+- Run installer as Administrator for startup-task registration at system logon/startup.
+- For Opera GX users, run installer without `-SkipTampermonkeyBootstrap` and include `-TampermonkeyBrowsers operaGX`.

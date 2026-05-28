@@ -49,7 +49,7 @@ pwsh -ExecutionPolicy Bypass -File .\Install-OrganizedJihad.ps1
 
 Or double-click:
 
-```
+```text
 Install-OrganizedJihad.cmd
 ```
 
@@ -57,15 +57,18 @@ What it does:
 
 - Builds the latest TamperMonkey userscript bundle
 - Publishes the API backend as a self-contained Windows executable
+- Publishes and installs the Desktop app for Windows (`OrganizedJihad.Desktop.exe`)
 - Installs/updates artifacts in `%LOCALAPPDATA%\OrganizedJihad`
 - Registers `OrganizedJihad.Api.Autostart` scheduled task (runs on logon)
 - Registers `OrganizedJihad.Api.Autostart` for system startup + logon when installer is run as Administrator
 - Falls back to logon startup when not elevated
-- Opens Tampermonkey extension install pages and opens the latest userscript file for import/update
+- Opens Tampermonkey install pages and userscript import flow (including Opera GX support)
 
 Optional flags:
 
 - `-SkipTampermonkeyBootstrap` to skip opening extension/script pages
+- `-TampermonkeyBrowsers chrome,operaGX` to target specific browser bootstrap pages
+- `-SkipDesktopAppInstall` to skip desktop publish/install when only backend/userscript is needed
 - `-SkipYarnInstall` to skip `yarn install` during repeat installs
 - `-InstallRoot "D:\Apps\OrganizedJihad"` to customize install location
 
@@ -105,7 +108,7 @@ yarn test
 
 ## Project Structure
 
-```
+```text
 OrganizedJihad/
 ├── api/                    # ASP.NET Core Web API (Tier 3)
 │   ├── Controllers/        #   SyncController (import/query endpoints)

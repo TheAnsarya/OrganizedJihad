@@ -20,6 +20,7 @@ A comprehensive TamperMonkey userscript for tracking and managing your Hero Wars
    - [Chrome](https://chrome.google.com/webstore/detail/tampermonkey/dhdgffkkebhmkfjojejmpbldmpobfkfo)
    - [Firefox](https://addons.mozilla.org/en-US/firefox/addon/tampermonkey/)
    - [Edge](https://microsoftedge.microsoft.com/addons/detail/tampermonkey/iikmkjmpaadaobahmlepeloendndfphd)
+   - [Opera GX](https://addons.opera.com/en/extensions/details/install-chrome-extensions/) + [Tampermonkey (Chrome Web Store)](https://chromewebstore.google.com/detail/tampermonkey/dhdgffkkebhmkfjojejmpbldmpobfkfo)
    - [Safari](https://apps.apple.com/us/app/tampermonkey/id1482490089)
 
 ### Install the Userscript
@@ -97,17 +98,17 @@ git clone https://github.com/yourusername/OrganizedJihad.git
 cd OrganizedJihad
 
 # Install dependencies
-npm install
+yarn install
 ```
 
 ### Build
 
 ```powershell
 # Development build (with watch mode)
-npm run dev
+yarn dev
 
 # Production build
-npm run build
+yarn build
 ```
 
 The compiled userscript will be in `dist/organized-jihad.user.js`

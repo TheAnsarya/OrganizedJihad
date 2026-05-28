@@ -18,13 +18,26 @@ This installer will:
 
 - build the latest userscript (`userscript/dist/organized-jihad.user.js`)
 - publish and install/update the API backend
+- publish and install/update the Desktop app (`OrganizedJihad.Desktop.exe`)
 - register API startup task (`OrganizedJihad.Api.Autostart`)
    - when elevated: system startup + logon triggers
    - when not elevated: logon fallback trigger
-- open Tampermonkey extension install pages
+- open Tampermonkey extension install pages (including Opera GX bootstrap links)
 - open the generated `.user.js` file so Tampermonkey can install/update the script
 
 Use `-SkipTampermonkeyBootstrap` if you only want backend/userscript artifact updates.
+
+Target specific browser bootstrap pages (example with Opera GX):
+
+```powershell
+pwsh -ExecutionPolicy Bypass -File .\Install-OrganizedJihad.ps1 -TampermonkeyBrowsers operaGX,chrome
+```
+
+Skip desktop app publish/install if needed:
+
+```powershell
+pwsh -ExecutionPolicy Bypass -File .\Install-OrganizedJihad.ps1 -SkipDesktopAppInstall
+```
 
 Optional post-install health-check run from installer:
 
@@ -65,6 +78,12 @@ This opens:
 - **Browser**: Chrome, Edge, Firefox, or any Chromium-based browser
 - **TamperMonkey**: Browser extension for running userscripts
 - **Hero Wars Account**: Web version at <https://www.hero-wars.com/> (Facebook, Google, or direct login)
+
+### Opera GX Notes
+
+- The installer supports `operaGX` in `-TampermonkeyBrowsers`.
+- It opens Opera Add-ons pages and Tampermonkey install links for Chromium compatibility.
+- If Opera GX is installed in the default location, the installer opens bootstrap links directly in Opera GX.
 
 ---
 
