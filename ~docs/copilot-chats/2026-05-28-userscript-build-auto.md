@@ -543,3 +543,63 @@
 
 ## Follow-up
 - Continue additional high-throughput batch slices using the same wrapper-preserving extraction pattern.
+---
+
+## Session
+- Date: 2026-05-28
+- Session Number: 23
+- Scope: Automated userscript build session logging
+
+## Summary
+- Auto-generated entry from userscript build pipeline.
+- Captures a timestamp and a git working-tree snapshot for traceability.
+
+## Files Modified
+- serscript/package.json
+- userscript/src/modules/gameTracker.js
+- ~docs/oj-manual-prompts-log.txt
+- userscript/src/modules/trackers/GameTrackerProgressionTrackingHelpers.js
+- userscript/tests/gameTrackerProgressionTrackingHelpers.test.js
+
+## Validation
+- yarn build
+
+## Generated
+- Timestamp UTC: 2026-05-28T19:17:15.125Z
+
+---
+
+## Session
+- Date: 2026-05-28
+- Session Number: 24
+- Scope: #320 mission/tower progression orchestration extraction
+
+## Summary
+- Completed issue #320 by extracting mission/tower progression orchestration seams from `gameTracker` into a dedicated helper module while preserving wrapper behavior and logging semantics.
+- Delegated existing-row lookup with null-on-miss parity, mission/tower progress record builders, log message composition, tower type normalization, and resource-intent execution helper.
+- Kept mission and tower sourceDetail formats unchanged by reusing existing reward-intent builders.
+
+## Files Modified
+- userscript/src/modules/gameTracker.js
+- userscript/src/modules/trackers/GameTrackerProgressionTrackingHelpers.js
+- userscript/tests/gameTrackerProgressionTrackingHelpers.test.js
+- userscript/package.json
+- ~docs/plans/architecture-modernization-roadmap.md
+- ~docs/copilot-chats/2026-05-28-userscript-build-auto.md
+
+## Issues
+- Created/implemented: #320
+- Referenced epic: #206
+- PR tracking: #209
+
+## Key Decisions
+- Preserved wrapper method signatures in `gameTracker` and extracted only composition/orchestration helpers to minimize integration risk.
+- Centralized mission/tower progression merge semantics (max stars/floor, completion increment, fallback values) in helper builders.
+- Added focused tests for helper semantics and ordered resource-intent execution.
+
+## Validation
+- yarn test --runInBand (pass)
+- yarn build (pass; existing webpack asset-size warnings only)
+
+## Follow-up
+- Continue next batch seams from remaining high-churn `gameTracker` flows.

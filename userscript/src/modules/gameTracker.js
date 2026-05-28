@@ -98,6 +98,15 @@ import {
 	resolveRewardPayload,
 } from './trackers/GameTrackerRewardEconomyHelpers.js';
 import {
+	buildMissionProgressLogMessage,
+	buildMissionProgressRecord,
+	buildTowerProgressLogMessage,
+	buildTowerProgressRecord,
+	executeResourceTransactionIntents,
+	getExistingProgressRecord,
+	resolveTowerType,
+} from './trackers/GameTrackerProgressionTrackingHelpers.js';
+import {
 	appendBoundedHistory,
 	buildGuildWarDataResponse,
 	buildRaidBossDataResponse,
@@ -2606,39 +2615,18 @@ class GameTracker {
 	async trackMissionProgress(args, data) {
 		const playerId = (await this.storage.getMetadata('currentPlayerId')) || 'unknown';
 		const missionId = `${args.missionId || args.id}_${args.isHeroic ? 'heroic' : 'normal'}`;
-
-		// Try to get existing progress
-		let existing = null;
-		try {
-			existing = await this.storage.get('missionProgress', missionId);
-		} catch (e) {
-			// Doesn't exist yet
-		}
-
-		const newStars = data.stars || 0;
-		const currentStars = existing?.stars || 0;
-
-		const progress = {
-			missionId: missionId,
-			missionName: args.missionName || data.missionName || `Mission_${args.missionId}`,
-			stars: Math.max(newStars, currentStars), // Keep highest stars
-			highestLevel: args.level || existing?.highestLevel || 1,
-			isHeroic: args.isHeroic || false,
-			lastCompleted: new Date().toISOString(),
-			completionCount: (existing?.completionCount || 0) + 1,
-			playerId: playerId,
-		};
+		const existing = await getExistingProgressRecord(this.storage, 'missionProgress', missionId);
+		const progress = buildMissionProgressRecord(args, data, existing, playerId, new Date().toISOString());
 
 		await this.storage.put('missionProgress', progress);
-		console.log(`[OrganizedJihad] Mission progress updated: ${progress.missionName} - ${progress.stars} stars`);
+		console.log(buildMissionProgressLogMessage(progress));
 
 		// Track resource rewards from mission completion
 		// Campaign missions reward gold, experience, and sometimes items
 		// See: https://community.hero-wars.com/discussion/campaign-rewards
 		const rewards = resolveRewardPayload(data);
-		for (const intent of buildMissionResourceRewardIntents(rewards, progress.missionName)) {
-			await this.trackResourceTransaction(intent.resourceType, intent.amount, intent.source, intent.sourceDetail);
-		}
+		const intents = buildMissionResourceRewardIntents(rewards, progress.missionName);
+		await executeResourceTransactionIntents(this, intents);
 	}
 
 	/**
@@ -2654,37 +2642,20 @@ class GameTracker {
 	 */
 	async trackTowerProgress(args, data) {
 		const playerId = (await this.storage.getMetadata('currentPlayerId')) || 'unknown';
-		const towerType = args.towerType || args.type || 'regular'; // regular, outland, guild
-
-		// Try to get existing progress
-		let existing = null;
-		try {
-			existing = await this.storage.get('towerProgress', towerType);
-		} catch (e) {
-			// Doesn't exist yet
-		}
-
+		const towerType = resolveTowerType(args); // regular, outland, guild
+		const existing = await getExistingProgressRecord(this.storage, 'towerProgress', towerType);
 		const newFloor = data.floor || args.floor || 1;
-		const currentFloor = existing?.highestFloor || 0;
-
-		const progress = {
-			towerType: towerType,
-			highestFloor: Math.max(newFloor, currentFloor), // Keep highest floor reached
-			lastUpdate: new Date().toISOString(),
-			floorData: JSON.stringify(data.floorDetails || {}),
-			playerId: playerId,
-		};
+		const progress = buildTowerProgressRecord(data, existing, playerId, towerType, newFloor, new Date().toISOString());
 
 		await this.storage.put('towerProgress', progress);
-		console.log(`[OrganizedJihad] Tower progress updated: ${progress.towerType} - floor ${progress.highestFloor}`);
+		console.log(buildTowerProgressLogMessage(progress));
 
 		// Track resource rewards from tower floor completion
 		// Tower rewards vary by floor: gold, items, sometimes emeralds
 		// See: https://community.hero-wars.com/discussion/tower-rewards
 		const rewards = resolveRewardPayload(data);
-		for (const intent of buildTowerResourceRewardIntents(rewards, towerType, newFloor)) {
-			await this.trackResourceTransaction(intent.resourceType, intent.amount, intent.source, intent.sourceDetail);
-		}
+		const intents = buildTowerResourceRewardIntents(rewards, towerType, newFloor);
+		await executeResourceTransactionIntents(this, intents);
 	}
 
 	/**
