@@ -1498,6 +1498,50 @@
 ---
 
 ## Session
+- Date: 2026-05-28
+- Session Number: 49
+- Scope: Continue consecutive modernization waves by extracting malformed-response diagnostics and dispatch console-message synthesis from `processAPIResponse`.
+
+## Summary
+- Implemented and completed issue #309.
+- Added `userscript/src/modules/trackers/GameTrackerResponseDiagnosticsHelpers.js` with helpers for:
+	- safe object-key extraction
+	- safe JSON snippet extraction with unstringifiable fallback
+	- unexpected-format diagnostics + API log payload composition
+	- dispatch console success/no-match/error message synthesis
+- Refactored `userscript/src/modules/gameTracker.js` `processAPIResponse` to delegate malformed-path diagnostics and console-summary formatting through the new helper module.
+- Added focused helper tests in `userscript/tests/gameTrackerResponseDiagnosticsHelpers.test.js`.
+
+## Files Modified
+- userscript/src/modules/gameTracker.js
+- userscript/package.json
+- ~docs/plans/architecture-modernization-roadmap.md
+- ~docs/copilot-chats/2026-05-27-requirements-item-icon-enrichment.md
+- ~docs/copilot-chats/2026-05-28-userscript-build-auto.md
+
+## Files Created
+- userscript/src/modules/trackers/GameTrackerResponseDiagnosticsHelpers.js
+- userscript/tests/gameTrackerResponseDiagnosticsHelpers.test.js
+
+## Issues Referenced
+- #206 Epic: Architecture modernization and module deepening across API/userscript
+- #209 PR tracking: architecture modernization wave updates
+- #309 Batch userscript modernization: processAPIResponse diagnostics and log-message synthesis extraction
+
+## Validation
+- `yarn test --runInBand`: passed (23 suites, 744 tests)
+- `yarn build`: passed
+
+## Key Decisions
+- Preserved all existing console/log semantics while extracting formatting/diagnostics responsibilities into pure helper functions.
+- Kept malformed-path diagnostics shape explicit to support future API intercept debugging without growing `gameTracker` complexity.
+
+## Known Follow-up
+- Continue with #308 activity/economy tracking helper seam extraction in the same consecutive-wave flow.
+
+---
+
+## Session
 - Date: 2026-05-27
 - Session Number: 31
 - Scope: Execute a high-volume `uiManager` decomposition wave across battles/titans/pets/inventory, completing issues #252-#269.

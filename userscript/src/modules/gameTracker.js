@@ -37,6 +37,10 @@ import {
 	buildSortedResults,
 	dispatchSortedResults,
 } from './trackers/GameTrackerResponseDispatchHelpers.js';
+import {
+	buildDispatchConsoleMessages,
+	buildUnexpectedFormatDiagnostics,
+} from './trackers/GameTrackerResponseDiagnosticsHelpers.js';
 import { compressHeroBatch, compressTitanBatch } from './heroCompression.js';
 import { resolveHeroName, resolveTitanElement } from './heroNames.js';
 
@@ -1168,37 +1172,20 @@ class GameTracker {
 		const extracted = this._extractCalls(request, response);
 
 		if (!extracted) {
-			// Diagnostic logging: show what we actually received.
-			// Wrap JSON.stringify in try/catch because non-serializable data
-			// (BigInt, circular refs, etc.) would throw and silently kill the
-			// entire function before we ever push to the API log.
-			let reqKeys = '(null)';
-			let resKeys = '(null)';
-			let reqSnippet = '(null)';
-			let resSnippet = '(null)';
-			try {
-				reqKeys = request ? Object.keys(request).join(', ') : '(null)';
-				resKeys = response ? Object.keys(response).join(', ') : '(null)';
-			} catch { /* ignore */ }
-			try {
-				reqSnippet = JSON.stringify(request)?.substring(0, 200) || '(null)';
-			} catch {
-				reqSnippet = `(unstringifiable: ${typeof request})`;
-			}
-			try {
-				resSnippet = JSON.stringify(response)?.substring(0, 200) || '(null)';
-			} catch {
-				resSnippet = `(unstringifiable: ${typeof response})`;
-			}
-			const detail = `No .calls/.results | req keys=[${reqKeys}] res keys=[${resKeys}]`;
-			console.warn('[OrganizedJihad] processAPIResponse: unexpected format', {
-				requestKeys: reqKeys,
-				responseKeys: resKeys,
-				requestSnippet: reqSnippet,
-				responseSnippet: resSnippet,
-				page: this._pageHost,
-			});
-			this._pushApiLog([], 'skipped', detail, `req: ${reqSnippet} | res: ${resSnippet}`, this._lastInterceptedUrl);
+			const diagnostics = buildUnexpectedFormatDiagnostics(
+				request,
+				response,
+				this._pageHost,
+				this._lastInterceptedUrl
+			);
+			console.warn('[OrganizedJihad] processAPIResponse: unexpected format', diagnostics.warningContext);
+			this._pushApiLog(
+				diagnostics.apiLogPayload.callNames,
+				diagnostics.apiLogPayload.status,
+				diagnostics.apiLogPayload.detail,
+				diagnostics.apiLogPayload.error,
+				diagnostics.apiLogPayload.url
+			);
 			return;
 		}
 
@@ -1227,25 +1214,15 @@ class GameTracker {
 		this._pushApiLog(allCallNames, status, detail, errors.length > 0 ? errors.join('; ') : null, this._lastInterceptedUrl, payload);
 
 		// Diagnostic: console summary of dispatch results (#61)
-		if (dispatched.length > 0) {
-			console.log(
-				`%c[OJ]%c ✓ Dispatched: ${dispatched.join(', ')}` +
-				(unhandled.length > 0 ? ` | Skipped: ${unhandled.length}` : ''),
-				'color:#4CAF50;font-weight:bold',
-				'color:#8BC34A'
-			);
-		} else {
-			console.log(
-				`%c[OJ]%c ○ No handlers matched: ${allCallNames.join(', ')}`,
-				'color:#FF9800;font-weight:bold',
-				'color:#FFB74D'
-			);
+		const consoleMessages = buildDispatchConsoleMessages(dispatched, unhandled, errors, allCallNames);
+		if (consoleMessages.successMessage) {
+			console.log(consoleMessages.successMessage, 'color:#4CAF50;font-weight:bold', 'color:#8BC34A');
 		}
-		if (errors.length > 0) {
-			console.warn(`%c[OJ]%c ✗ Handler errors: ${errors.join('; ')}`,
-				'color:#F44336;font-weight:bold',
-				'color:#EF9A9A'
-			);
+		if (consoleMessages.noMatchMessage) {
+			console.log(consoleMessages.noMatchMessage, 'color:#FF9800;font-weight:bold', 'color:#FFB74D');
+		}
+		if (consoleMessages.errorMessage) {
+			console.warn(consoleMessages.errorMessage, 'color:#F44336;font-weight:bold', 'color:#EF9A9A');
 		}
 
 		// Trigger debounced data snapshot (#28)
