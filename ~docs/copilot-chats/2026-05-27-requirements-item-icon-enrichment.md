@@ -1357,6 +1357,50 @@
 ---
 
 ## Session
+- Date: 2026-05-28
+- Session Number: 46
+- Scope: Complete batch userscript hardening for registry contracts, overlap policy, and metadata integrity guards.
+
+## Summary
+- Created and completed issue #305.
+- Added shared registry contract constants for core/gameplay/phase methods and intentional overlaps.
+- Added reusable registration harness utilities for registry module tests.
+- Refactored tracker registry test suite to consume shared contracts/harness and enforce:
+	- duplicate method rejection per registry registration function
+	- registration metadata integrity (non-empty label, required category)
+	- intentional overlap policy checks via centralized overlap constants
+- Kept helper seam tests green and integrated with new contract assertions.
+
+## Files Modified
+- userscript/tests/trackerRegistryModules.test.js
+- userscript/package.json
+- ~docs/plans/architecture-modernization-roadmap.md
+- ~docs/copilot-chats/2026-05-27-requirements-item-icon-enrichment.md
+- ~docs/copilot-chats/2026-05-28-userscript-build-auto.md
+
+## Files Created
+- userscript/tests/support/registryContracts.js
+- userscript/tests/support/trackerRegistryTestHarness.js
+
+## Issues Referenced
+- #206 Epic: Architecture modernization and module deepening across API/userscript
+- #209 PR tracking: architecture modernization wave updates
+- #305 Batch userscript quality hardening: registry contracts, overlap policy, and metadata integrity guards
+
+## Validation
+- `yarn test --runInBand`: passed (19 suites, 722 tests)
+- `yarn build`: passed
+
+## Key Decisions
+- Centralized registry method and overlap contracts in shared test support to reduce drift across future extraction waves.
+- Added metadata and duplicate-method guards in module-level tests rather than runtime to preserve zero-behavior-change hardening.
+
+## Known Follow-up
+- Consider adding optional development-only runtime diagnostics for registry contract drift if future handler-surface churn increases.
+
+---
+
+## Session
 - Date: 2026-05-27
 - Session Number: 31
 - Scope: Execute a high-volume `uiManager` decomposition wave across battles/titans/pets/inventory, completing issues #252-#269.
