@@ -75,6 +75,15 @@ import {
 	executeRaidBossAttackTracking,
 } from './trackers/GameTrackerBattleExecutionHelpers.js';
 import {
+	appendChestHistory,
+	applyChestDropRateUpdates,
+	buildChestHistoryEntry,
+	buildChestOpeningRecord,
+	buildChestResourceTransactionIntents,
+	buildConsumableDropRecords,
+	sourceTypeLabel,
+} from './trackers/GameTrackerConsumableOpeningHelpers.js';
+import {
 	appendBoundedHistory,
 	buildGuildWarDataResponse,
 	buildRaidBossDataResponse,
@@ -2356,13 +2365,7 @@ class GameTracker {
 		}
 
 		// ── 1. Write to chests IDB store ────────────────────────────────
-		const chestRecord = {
-			chestType: sourceType,
-			sourceId,
-			quantity,
-			dropCount: drops.length,
-			timestamp,
-		};
+		const chestRecord = buildChestOpeningRecord(sourceType, sourceId, quantity, drops, timestamp);
 
 		let openingId = null;
 		try {
@@ -2373,15 +2376,7 @@ class GameTracker {
 
 		// ── 2. Write all drops in a single IDB transaction (#141) ──────
 		try {
-			const dropRecords = drops.map((drop) => ({
-				timestamp,
-				sourceType,
-				sourceId,
-				itemType: drop.itemType,
-				itemId: String(drop.itemId),
-				quantity: drop.quantity,
-				openingId: openingId || 0,
-			}));
+			const dropRecords = buildConsumableDropRecords(drops, timestamp, sourceType, sourceId, openingId);
 			await this.storage.addBatch('consumableRewards', dropRecords);
 		} catch (err) {
 			console.warn('[OrganizedJihad] Failed to write drop records:', err);
@@ -2390,19 +2385,13 @@ class GameTracker {
 		// ── 3. Mirror to metadata cache (for backward compat) ───────────
 		try {
 			const chestHistory = await this.storage.getMetadata('chestOpeningHistory', []);
-			chestHistory.push({
-				chestId: sourceId,
-				chestType: sourceType,
-				quantity,
-				rewards: drops,
-				timestamp,
-			});
-			if (chestHistory.length > 1000) chestHistory.shift();
-			await this.storage.setMetadata('chestOpeningHistory', chestHistory);
+			const historyEntry = buildChestHistoryEntry(sourceId, sourceType, quantity, drops, timestamp);
+			const nextHistory = appendChestHistory(chestHistory, historyEntry, 1000);
+			await this.storage.setMetadata('chestOpeningHistory', nextHistory);
 		} catch { /* non-critical */ }
 
 		// ── 4. Live activity event ──────────────────────────────────────
-		const typeLabel = this._sourceTypeLabel(sourceType);
+		const typeLabel = sourceTypeLabel(sourceType);
 		await this._logActivity('chest', `${typeLabel} opened: ${sourceId} (${quantity}x, ${drops.length} drops)`);
 
 		// ── 5. Update aggregated drop-rate statistics ────────────────────
@@ -2415,17 +2404,8 @@ class GameTracker {
 
 		// ── 6. Track resource rewards as resource transactions ──────────
 		const chestName = `${sourceType}_${sourceId}`;
-		for (const drop of drops) {
-			if (drop.itemType === 'gold') {
-				await this.trackResourceTransaction('gold', drop.quantity, 'chest', chestName);
-			} else if (drop.itemType === 'starmoney') {
-				await this.trackResourceTransaction('emeralds', drop.quantity, 'chest', chestName);
-			} else if (drop.itemType === 'coin') {
-				// Coin subtypes: 3 = arena, 4 = outland, 5 = tower, 7 = skull
-				const coinNames = { '3': 'arena_coins', '4': 'outland_coins', '5': 'tower_coins', '7': 'skull_coins' };
-				const resName = coinNames[drop.itemId] || `coin_${drop.itemId}`;
-				await this.trackResourceTransaction(resName, drop.quantity, 'chest', chestName);
-			}
+		for (const intent of buildChestResourceTransactionIntents(drops, chestName)) {
+			await this.trackResourceTransaction(intent.resourceType, intent.amount, intent.source, intent.sourceDetail);
 		}
 	}
 
@@ -2546,16 +2526,7 @@ class GameTracker {
 	 * @private
 	 */
 	_sourceTypeLabel(sourceType) {
-		const labels = {
-			genericChest: 'Chest',
-			artifactChest: 'Artifact Chest',
-			titanArtifactChest: 'Titan Artifact Chest',
-			petChest: 'Pet Chest',
-			lootBox: 'Loot Box',
-			towerChest: 'Tower Chest',
-			outlandChest: 'Outland Chest',
-		};
-		return labels[sourceType] || sourceType;
+		return sourceTypeLabel(sourceType);
 	}
 
 	/**
@@ -2567,38 +2538,8 @@ class GameTracker {
 	 */
 	async updateChestDropRates(chestRecord) {
 		const dropRates = await this.storage.getMetadata('chestDropRates', {});
-		const chestKey = `${chestRecord.chestType}_${chestRecord.chestId}`;
-
-		if (!dropRates[chestKey]) {
-			dropRates[chestKey] = {
-				chestType: chestRecord.chestType,
-				chestId: chestRecord.chestId,
-				openCount: 0,
-				itemDrops: {},
-			};
-		}
-
-		dropRates[chestKey].openCount += chestRecord.quantity;
-
-		// Count each normalised drop
-		if (Array.isArray(chestRecord.rewards)) {
-			for (const drop of chestRecord.rewards) {
-				const itemKey = `${drop.itemType}_${drop.itemId}`;
-				if (!dropRates[chestKey].itemDrops[itemKey]) {
-					dropRates[chestKey].itemDrops[itemKey] = {
-						type: drop.itemType,
-						id: drop.itemId,
-						name: drop.itemName || itemKey,
-						dropCount: 0,
-						totalAmount: 0,
-					};
-				}
-				dropRates[chestKey].itemDrops[itemKey].dropCount += 1;
-				dropRates[chestKey].itemDrops[itemKey].totalAmount += drop.quantity || 1;
-			}
-		}
-
-		await this.storage.setMetadata('chestDropRates', dropRates);
+		const nextDropRates = applyChestDropRateUpdates(dropRates, chestRecord);
+		await this.storage.setMetadata('chestDropRates', nextDropRates);
 	}
 
 	/**

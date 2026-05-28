@@ -422,3 +422,63 @@
 
 ## Generated
 - Timestamp UTC: 2026-05-28T19:03:40.438Z
+---
+
+## Session
+- Date: 2026-05-28
+- Session Number: 19
+- Scope: Automated userscript build session logging
+
+## Summary
+- Auto-generated entry from userscript build pipeline.
+- Captures a timestamp and a git working-tree snapshot for traceability.
+
+## Files Modified
+- serscript/package.json
+- userscript/src/modules/gameTracker.js
+- ~docs/oj-manual-prompts-log.txt
+- userscript/src/modules/trackers/GameTrackerConsumableOpeningHelpers.js
+- userscript/tests/gameTrackerConsumableOpeningHelpers.test.js
+
+## Validation
+- yarn build
+
+## Generated
+- Timestamp UTC: 2026-05-28T19:06:39.260Z
+
+---
+
+## Session
+- Date: 2026-05-28
+- Session Number: 20
+- Scope: #318 consumable opening pipeline helper extraction
+
+## Summary
+- Completed issue #318 by extracting the consumable/chest opening composition pipeline from `gameTracker` into dedicated helper seams while preserving wrapper behavior and side-effect ordering.
+- Delegated record builders, chest history append/cap logic, drop-rate aggregation updates, source-type label mapping, and resource transaction intent composition.
+- Kept `_normalizeRewards` and `_extractDrops` logic in `gameTracker` unchanged for strict reward-shape parity.
+
+## Files Modified
+- userscript/src/modules/gameTracker.js
+- userscript/src/modules/trackers/GameTrackerConsumableOpeningHelpers.js
+- userscript/tests/gameTrackerConsumableOpeningHelpers.test.js
+- userscript/package.json
+- ~docs/plans/architecture-modernization-roadmap.md
+- ~docs/copilot-chats/2026-05-28-userscript-build-auto.md
+
+## Issues
+- Created/implemented: #318
+- Referenced epic: #206
+- PR tracking: #209
+
+## Key Decisions
+- Preserved wrapper API and side-effect order in `trackConsumableOpening`; only moved pure composition/aggregation logic into helper module.
+- Kept `_sourceTypeLabel` and `updateChestDropRates` methods as wrapper-compatible entry points, now delegating to helper functions to minimize call-site churn.
+- Added focused helper tests for record shape parity, history cap behavior, drop-rate aggregation math, and resource-intent mapping.
+
+## Validation
+- yarn test --runInBand (pass)
+- yarn build (pass; existing webpack asset-size warnings only)
+
+## Follow-up
+- Continue next modernization slices after #318 using the same wrapper-preserving extraction pattern.
