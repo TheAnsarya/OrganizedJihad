@@ -11,6 +11,11 @@ Preferred release flow for non-technical users:
 3. Click `Install Ecosystem`.
 4. Wait for completion status in the installer window.
 
+UX expectation:
+
+- EXE path is UI-only and does not require command prompt interaction.
+- CLI is only for users intentionally running install commands from terminal/PowerShell.
+
 The GUI installer uses the same hardened install pipeline and runs first-run checks automatically.
 At startup, the installer requests administrator privileges so full install steps can complete.
 

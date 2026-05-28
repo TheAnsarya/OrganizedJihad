@@ -6,6 +6,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
+using System.Runtime.Versioning;
 using System.Text;
 using System.Threading.Tasks;
 
@@ -39,6 +40,10 @@ public partial class MainWindow : Window {
 			return;
 		}
 
+		if (!EnsureElevatedUiContext()) {
+			return;
+		}
+
 		if (!ValidatePreflight(out var installRoot, out var apiUrl, out var preflightMessage)) {
 			SetStatus($"Status: {preflightMessage}");
 			AppendLog($"[Installer UI] Preflight failed: {preflightMessage}");
@@ -65,17 +70,18 @@ public partial class MainWindow : Window {
 		}
 
 		var args = BuildInstallerArguments(scriptPath, installRoot, apiUrl, browserArg);
-		AppendLog("[Installer UI] Please give us admin privileges so we can install fully. If needed, approve the Windows UAC prompt.");
 		await RunInstallProcessAsync(shell, args);
 	}
 
 	private string BuildInstallerArguments(string scriptPath, string installRoot, string apiUrl, string browserArg) {
 		var args = new List<string> {
 			"-NoProfile",
+			"-WindowStyle", "Hidden",
 			"-ExecutionPolicy", "Bypass",
 			"-File", Quote(scriptPath),
 			"-InstallRoot", Quote(installRoot),
 			"-ApiUrl", Quote(apiUrl),
+			"-AllowNonAdmin",
 			"-RunInstallHealthCheck",
 			"-TampermonkeyBrowsers", browserArg,
 		};
@@ -104,7 +110,7 @@ public partial class MainWindow : Window {
 		PersistLogLine("[Installer UI] Log initialized.");
 
 		SetStatus("Status: Installing...");
-		AppendLog($"[Installer UI] Running: {shell} {args}");
+		AppendLog("[Installer UI] Running install pipeline in hidden shell mode (GUI-only experience).");
 
 		var startInfo = new ProcessStartInfo {
 			FileName = shell,
@@ -153,6 +159,51 @@ public partial class MainWindow : Window {
 			_isInstalling = false;
 			UpdateQuickActionState();
 		}
+	}
+
+	private bool EnsureElevatedUiContext() {
+		if (!OperatingSystem.IsWindows()) {
+			AppendLog("[Installer UI] Non-Windows runtime detected; skipping Windows UAC elevation flow.");
+			return true;
+		}
+
+		if (IsAdministrator()) {
+			AppendLog("[Installer UI] Elevated UI session confirmed.");
+			return true;
+		}
+
+		SetStatus("Status: Elevation required.");
+		AppendLog("[Installer UI] Please give us admin privileges so we can install fully.");
+		AppendLog("[Installer UI] Requesting Windows UAC prompt for installer UI relaunch...");
+
+		var exePath = Environment.ProcessPath;
+		if (string.IsNullOrWhiteSpace(exePath) || !File.Exists(exePath)) {
+			AppendLog("[Installer UI] Could not resolve current installer executable for elevation.");
+			SetStatus("Status: Could not request elevation.");
+			return false;
+		}
+
+		try {
+			Process.Start(new ProcessStartInfo {
+				FileName = exePath,
+				UseShellExecute = true,
+				Verb = "runas",
+			});
+
+			Close();
+			return false;
+		} catch (Exception ex) {
+			AppendLog($"[Installer UI] Elevation request did not complete: {ex.Message}");
+			SetStatus("Status: Elevation was not granted.");
+			return false;
+		}
+	}
+
+	[SupportedOSPlatform("windows")]
+	private static bool IsAdministrator() {
+		var identity = System.Security.Principal.WindowsIdentity.GetCurrent();
+		var principal = new System.Security.Principal.WindowsPrincipal(identity);
+		return principal.IsInRole(System.Security.Principal.WindowsBuiltInRole.Administrator);
 	}
 
 	private bool ValidatePreflight(out string installRoot, out string apiUrl, out string message) {

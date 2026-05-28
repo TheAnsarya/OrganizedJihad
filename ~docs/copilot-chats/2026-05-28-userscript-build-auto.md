@@ -970,3 +970,36 @@
 
 ## Follow-up
 - Publish GitHub Release `v0.2.1` using `~docs/plans/release-v0.2.1.md` as canonical release body.
+
+---
+
+## Session
+- Date: 2026-05-28
+- Session Number: 38
+- Scope: #325 UI-only elevated installer flow + release body finalization
+
+## Summary
+- Hardened one-click EXE install path so users stay in GUI flow, including elevation and script execution.
+- Added docs clarifying no command-prompt interaction is needed unless user intentionally runs CLI installer.
+- Added GitHub-release-ready body doc for v0.2.1 publishing.
+
+## Files Modified
+- installer-ui/MainWindow.axaml.cs
+- README.md
+- userscript/INSTALL.md
+- ~docs/plans/release-v0.2.1-github-body.md
+- ~docs/plans/architecture-modernization-roadmap.md
+- ~docs/copilot-chats/2026-05-28-userscript-build-auto.md
+
+## Issues
+- Created/implemented: #325
+- Referenced epic: #206
+- PR tracking: #209
+
+## Validation
+- dotnet build installer-ui/OrganizedJihad.Installer.csproj (pass)
+- pwsh -ExecutionPolicy Bypass -File .\Publish-InstallerUI.ps1 (pass)
+- dotnet build OrganizedJihad.sln (pass)
+
+## Follow-up
+- Publish GitHub release using `~docs/plans/release-v0.2.1-github-body.md` for release body and `~docs/plans/release-v0.2.1.md` for full technical notes.

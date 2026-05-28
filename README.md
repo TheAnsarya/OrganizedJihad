@@ -48,6 +48,12 @@ For release/live testing, use the Avalonia GUI installer executable and avoid co
 3. Click `Install Ecosystem`.
 4. Wait for `Status: Install complete` in the installer window.
 
+GUI-first behavior guarantee:
+
+- If you launch the EXE installer, installation stays in the installer UI flow.
+- The installer requests Windows UAC elevation inside that UI flow.
+- No command prompt usage is required unless you intentionally run the CLI installer from a terminal.
+
 The GUI installer orchestrates:
 
 - API install/startup setup
