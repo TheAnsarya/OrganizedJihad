@@ -1148,6 +1148,51 @@
 ---
 
 ## Session
+- Date: 2026-05-28
+- Session Number: 44
+- Scope: Execute additional batch quality wave for userscript registry confidence and generic helper seam extraction.
+
+## Summary
+- Created and completed batch issue #303 for grouped high/medium slices.
+- Added comprehensive registry parity suite `userscript/tests/trackerRegistryModules.test.js` covering:
+	- Core/chat/mail registry methods
+	- Gameplay registry methods
+	- Phase 11/12/13 registry method sets
+	- intentional-overlap guard assertions for delegated registry ownership
+- Extracted generic helper seam to `userscript/src/modules/trackers/GameTrackerGenericTrackingHelpers.js` and delegated from `gameTracker`:
+	- `_trackGenericUpgrade`
+	- `_trackGenericEvent`
+
+## Files Modified
+- userscript/src/modules/gameTracker.js
+- userscript/package.json
+- ~docs/plans/architecture-modernization-roadmap.md
+- ~docs/copilot-chats/2026-05-27-requirements-item-icon-enrichment.md
+- ~docs/copilot-chats/2026-05-28-userscript-build-auto.md
+
+## Files Created
+- userscript/src/modules/trackers/GameTrackerGenericTrackingHelpers.js
+- userscript/tests/trackerRegistryModules.test.js
+
+## Issues Referenced
+- #206 Epic: Architecture modernization and module deepening across API/userscript
+- #209 PR tracking: architecture modernization wave updates
+- #303 Batch userscript quality wave: registry parity tests and generic helper seam extraction
+
+## Validation
+- `yarn test --runInBand`: passed (19 suites, 720 tests)
+- `yarn build`: passed
+
+## Key Decisions
+- Prioritized test expansion after major registry decomposition waves to lock in delegated ownership and reduce regression risk in future slices.
+- Kept helper extraction behavior-preserving by delegating existing `gameTracker` methods to external helper functions without changing call contracts.
+
+## Known Follow-up
+- Continue deeper userscript modernization with additional seam extraction in high-churn helper surfaces and add targeted behavior tests where registry overlap is intentional.
+
+---
+
+## Session
 - Date: 2026-05-27
 - Session Number: 37
 - Scope: Continue high-throughput architecture modernization using batch issues for API recommendation seams, desktop parity client consolidation, and userscript build automation.

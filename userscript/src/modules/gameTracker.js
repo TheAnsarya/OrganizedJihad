@@ -33,6 +33,7 @@ import {
 } from './trackers/GameTrackerGameplayRegistry.js';
 import { registerPhase11MetadataHandlers } from './trackers/GameTrackerPhase11Registry.js';
 import { registerPhase12Handlers, registerPhase13Handlers } from './trackers/GameTrackerExtendedRegistry.js';
+import { trackGenericEvent, trackGenericUpgrade } from './trackers/GameTrackerGenericTrackingHelpers.js';
 import { compressHeroBatch, compressTitanBatch } from './heroCompression.js';
 import { resolveHeroName, resolveTitanElement } from './heroNames.js';
 
@@ -1555,13 +1556,7 @@ class GameTracker {
 	 * @private
 	 */
 	async _trackGenericUpgrade(entityType, upgradeType, args, data) {
-		const entityId = args.heroId || args.titanId || args.petId || args.id || 0;
-		const label = `${entityType} ${upgradeType}`;
-		await this._logActivity('upgrade', `${label} #${entityId}`, {
-			entityType,
-			upgradeType,
-			entityId,
-		});
+		await trackGenericUpgrade(this, entityType, upgradeType, args, data);
 	}
 
 	/**
@@ -1576,11 +1571,7 @@ class GameTracker {
 	 * @private
 	 */
 	async _trackGenericEvent(category, eventType, args, data) {
-		await this._logActivity(category, eventType, {
-			category,
-			eventType,
-			hasReward: !!data.reward,
-		});
+		await trackGenericEvent(this, category, eventType, args, data);
 	}
 
 	/**
