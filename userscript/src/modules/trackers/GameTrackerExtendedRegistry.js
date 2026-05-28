@@ -5,6 +5,31 @@
  */
 
 /**
+ * Canonical system no-op registrations used to suppress unhandled noise.
+ * Keep labels stable to preserve behavior and regression tests.
+ */
+export const SYSTEM_NOOP_REGISTRATIONS = [
+	{ method: 'getTime', label: 'ignoreGetTime' },
+	{ method: 'registration', label: 'ignoreRegistration' },
+	{ method: 'tutorialGetInfo', label: 'ignoreTutorialInfo' },
+	{ method: 'splitGetAll', label: 'ignoreSplitGetAll' },
+	{ method: 'stashClient', label: 'ignoreStashClient' },
+	{ method: 'freebieHaveGroup', label: 'ignoreFreebieHaveGroup' },
+	{ method: 'mechanicAvailability', label: 'ignoreMechanicAvailability' },
+	{ method: 'mechanicsBan_getInfo', label: 'ignoreMechanicsBan' },
+	{ method: 'playable_getAvailable', label: 'ignorePlayableAvailable' },
+	{ method: 'userMergeGetStatus', label: 'ignoreUserMergeStatus' },
+];
+
+function registerSystemNoOpHandlers(tracker) {
+	for (const registration of SYSTEM_NOOP_REGISTRATIONS) {
+		tracker.registerHandler(registration.method, async () => {
+			// No-op: suppress low-value system/config endpoint noise.
+		}, registration.label, { category: 'system' });
+	}
+}
+
+/**
  * Register Phase 12 handlers.
  *
  * @param {import('../gameTracker.js').default} tracker GameTracker instance
@@ -678,43 +703,5 @@ export function registerPhase13Handlers(tracker) {
 		});
 	}, 'trackSaleShowcase', { category: 'economy' });
 
-	tracker.registerHandler('getTime', async () => {
-		// No-op: server timestamp
-	}, 'ignoreGetTime', { category: 'system' });
-
-	tracker.registerHandler('registration', async () => {
-		// No-op: session registration
-	}, 'ignoreRegistration', { category: 'system' });
-
-	tracker.registerHandler('tutorialGetInfo', async () => {
-		// No-op: tutorial flags
-	}, 'ignoreTutorialInfo', { category: 'system' });
-
-	tracker.registerHandler('splitGetAll', async () => {
-		// No-op: A/B test splits
-	}, 'ignoreSplitGetAll', { category: 'system' });
-
-	tracker.registerHandler('stashClient', async () => {
-		// No-op: client stash flags
-	}, 'ignoreStashClient', { category: 'system' });
-
-	tracker.registerHandler('freebieHaveGroup', async () => {
-		// No-op: freebie group flag
-	}, 'ignoreFreebieHaveGroup', { category: 'system' });
-
-	tracker.registerHandler('mechanicAvailability', async () => {
-		// No-op: feature flags
-	}, 'ignoreMechanicAvailability', { category: 'system' });
-
-	tracker.registerHandler('mechanicsBan_getInfo', async () => {
-		// No-op: mechanics ban list
-	}, 'ignoreMechanicsBan', { category: 'system' });
-
-	tracker.registerHandler('playable_getAvailable', async () => {
-		// No-op: playable character list
-	}, 'ignorePlayableAvailable', { category: 'system' });
-
-	tracker.registerHandler('userMergeGetStatus', async () => {
-		// No-op: merge status
-	}, 'ignoreUserMergeStatus', { category: 'system' });
+	registerSystemNoOpHandlers(tracker);
 }

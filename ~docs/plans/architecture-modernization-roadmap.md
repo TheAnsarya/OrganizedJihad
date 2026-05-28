@@ -409,6 +409,11 @@
 - Outcome target: increase regression confidence for extracted registry modules and extract remaining generic tracking helper seam from `gameTracker`.
 - Progress update: added `userscript/tests/trackerRegistryModules.test.js`, introduced `userscript/src/modules/trackers/GameTrackerGenericTrackingHelpers.js`, and delegated `_trackGenericUpgrade`/`_trackGenericEvent` through helper module functions.
 
+99. #304 Batch userscript hardening: table-driven system no-op registration and drift guards
+- Status: Completed on `feature/204-architecture-modernization`.
+- Outcome target: reduce long-tail no-op handler drift risk by centralizing Phase 13 system suppression registrations and locking behavior with targeted tests.
+- Progress update: added `SYSTEM_NOOP_REGISTRATIONS` table in `userscript/src/modules/trackers/GameTrackerExtendedRegistry.js`, delegated no-op registration through helper, and expanded `userscript/tests/trackerRegistryModules.test.js` with no-op method/label/category drift guards.
+
 ## Validation Strategy
 - API changes: run `dotnet test tests/OrganizedJihad.Api.Tests/OrganizedJihad.Api.Tests.csproj` and `dotnet test OrganizedJihad.sln`.
 - Userscript changes: run `yarn test --runInBand` and `yarn build`.
@@ -416,6 +421,6 @@
 
 ## Notes
 - Parallel issue creation caused issue-number drift; canonical mapping is documented in epic #206 comments.
-- Completed slices so far: #205, #208, #204, #207, #210, #211, #212, #213, #214, #215, #216, #217, #218, #219, #220, #221, #222, #223, #224, #225, #226, #227, #228, #229, #230, #231, #232, #233, #234, #235, #236, #237, #238, #239, #240, #241, #242, #243, #244, #245, #246, #247, #248, #249, #250, #251, #252, #253, #254, #255, #256, #257, #258, #259, #260, #261, #262, #263, #264, #265, #266, #267, #268, #269, #270, #271, #272, #273, #274, #275, #276, #277, #278, #279, #280, #281, #282, #283, #284, #285, #286, #287, #288, #289, #290, #291, #292, #293, #294, #295, #296, #299, #300, #301, #302, and #303 (API seams + controller split + userscript renderer/binder/helper extraction + Team Recommendation boundary extraction + desktop typed client parity + userscript build log automation + recommendation orchestration decomposition + Team Recommendation regression test expansion + userscript Phase 11/12/13 registry decomposition + registry parity test expansion + generic helper seam extraction).
+- Completed slices so far: #205, #208, #204, #207, #210, #211, #212, #213, #214, #215, #216, #217, #218, #219, #220, #221, #222, #223, #224, #225, #226, #227, #228, #229, #230, #231, #232, #233, #234, #235, #236, #237, #238, #239, #240, #241, #242, #243, #244, #245, #246, #247, #248, #249, #250, #251, #252, #253, #254, #255, #256, #257, #258, #259, #260, #261, #262, #263, #264, #265, #266, #267, #268, #269, #270, #271, #272, #273, #274, #275, #276, #277, #278, #279, #280, #281, #282, #283, #284, #285, #286, #287, #288, #289, #290, #291, #292, #293, #294, #295, #296, #299, #300, #301, #302, #303, and #304 (API seams + controller split + userscript renderer/binder/helper extraction + Team Recommendation boundary extraction + desktop typed client parity + userscript build log automation + recommendation orchestration decomposition + Team Recommendation regression test expansion + userscript Phase 11/12/13 registry decomposition + registry parity test expansion + generic helper seam extraction + table-driven no-op hardening).
 - Existing unrelated dirty files remain intentionally untouched:
   - `~docs/oj-manual-prompts-log.txt`

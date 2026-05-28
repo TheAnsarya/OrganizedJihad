@@ -10,7 +10,11 @@ import {
 	registerUpgradeHandlers,
 } from '../src/modules/trackers/GameTrackerGameplayRegistry.js';
 import { registerPhase11MetadataHandlers } from '../src/modules/trackers/GameTrackerPhase11Registry.js';
-import { registerPhase12Handlers, registerPhase13Handlers } from '../src/modules/trackers/GameTrackerExtendedRegistry.js';
+import {
+	registerPhase12Handlers,
+	registerPhase13Handlers,
+	SYSTEM_NOOP_REGISTRATIONS,
+} from '../src/modules/trackers/GameTrackerExtendedRegistry.js';
 import { trackGenericEvent, trackGenericUpgrade } from '../src/modules/trackers/GameTrackerGenericTrackingHelpers.js';
 
 function createRegistrationHarness() {
@@ -185,6 +189,31 @@ describe('Tracker Registry Modules', () => {
 			const unexpected = overlap.filter((m) => !knownIntentionalOverlap.has(m));
 
 			expect(unexpected).toEqual([]);
+		});
+
+		test('phase13 system no-op method set matches descriptor list', () => {
+			const h = createRegistrationHarness();
+			registerPhase13Handlers(h.tracker);
+
+			const noOpMethods = new Set(SYSTEM_NOOP_REGISTRATIONS.map((r) => r.method));
+			const registeredNoOps = h.registrations.filter((r) => noOpMethods.has(r.method));
+			const registeredMethods = registeredNoOps.map((r) => r.method).sort();
+			const expectedMethods = [...noOpMethods].sort();
+
+			expect(registeredMethods).toEqual(expectedMethods);
+			expect(SYSTEM_NOOP_REGISTRATIONS).toHaveLength(10);
+		});
+
+		test('phase13 system no-op registrations preserve labels and category', () => {
+			const h = createRegistrationHarness();
+			registerPhase13Handlers(h.tracker);
+
+			for (const descriptor of SYSTEM_NOOP_REGISTRATIONS) {
+				const registration = h.registrations.find((r) => r.method === descriptor.method);
+				expect(registration).toBeDefined();
+				expect(registration.label).toBe(descriptor.label);
+				expect(registration.options.category).toBe('system');
+			}
 		});
 	});
 });

@@ -1193,6 +1193,48 @@
 ---
 
 ## Session
+- Date: 2026-05-28
+- Session Number: 45
+- Scope: Execute additional hardening wave to make Phase 13 system no-op registrations table-driven with drift-guard test coverage.
+
+## Summary
+- Created and completed batch issue #304.
+- Refactored system no-op registration in `GameTrackerExtendedRegistry` to use table-driven descriptors:
+	- Added `SYSTEM_NOOP_REGISTRATIONS`
+	- Added centralized `registerSystemNoOpHandlers(tracker)`
+	- Replaced repetitive inline no-op handler registrations with helper call
+- Expanded `trackerRegistryModules` tests with focused no-op drift guards:
+	- Method set equality with descriptor list
+	- Label stability assertions
+	- Category stability assertions (`system`)
+
+## Files Modified
+- userscript/src/modules/trackers/GameTrackerExtendedRegistry.js
+- userscript/tests/trackerRegistryModules.test.js
+- userscript/package.json
+- ~docs/plans/architecture-modernization-roadmap.md
+- ~docs/copilot-chats/2026-05-27-requirements-item-icon-enrichment.md
+- ~docs/copilot-chats/2026-05-28-userscript-build-auto.md
+
+## Issues Referenced
+- #206 Epic: Architecture modernization and module deepening across API/userscript
+- #209 PR tracking: architecture modernization wave updates
+- #304 Batch userscript hardening: table-driven system no-op registration and drift guards
+
+## Validation
+- `yarn test --runInBand`: passed (19 suites, 722 tests)
+- `yarn build`: passed
+
+## Key Decisions
+- Converted repetitive no-op registration blocks into a single descriptor-driven source of truth to reduce future omission/label-drift risk.
+- Added explicit no-op drift tests after previous patch-repair cycle to keep this high-churn surface guarded.
+
+## Known Follow-up
+- Continue extracting remaining high-churn helper surfaces and maintain drift-guard tests for any descriptor-driven registrations.
+
+---
+
+## Session
 - Date: 2026-05-27
 - Session Number: 37
 - Scope: Continue high-throughput architecture modernization using batch issues for API recommendation seams, desktop parity client consolidation, and userscript build automation.
