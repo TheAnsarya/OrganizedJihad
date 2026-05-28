@@ -39,7 +39,32 @@ See [Tracking Reference](~docs/plans/tracking-reference.md) for the complete dat
 - [Yarn](https://yarnpkg.com/) package manager
 - [TamperMonkey](https://www.tampermonkey.net/) browser extension
 
-### One-Command Windows Install / Upgrade
+### One-Click GUI Installer (Recommended For Live Testing)
+
+For release/live testing, use the Avalonia GUI installer executable and avoid command-line setup:
+
+1. Open the release bundle and run `OrganizedJihad.Installer.exe`.
+2. Pick your userscript browser target (Opera GX supported).
+3. Click `Install Ecosystem`.
+4. Wait for `Status: Install complete` in the installer window.
+
+The GUI installer orchestrates:
+
+- API install/startup setup
+- Desktop app install
+- userscript build/install artifact copy
+- browser bootstrap links for Tampermonkey + userscript import
+- first-run diagnostics and health checks
+
+If you are building the GUI installer from source:
+
+```powershell
+pwsh -ExecutionPolicy Bypass -File .\Publish-InstallerUI.ps1
+```
+
+This produces `installer-ui/publish/win-x64/OrganizedJihad.Installer.exe`.
+
+### One-Command Windows Install / Upgrade (CLI)
 
 Run this from the repository root:
 

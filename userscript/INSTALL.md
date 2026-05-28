@@ -1,6 +1,31 @@
 # OrganizedJihad Userscript — Installation & Quick Start Guide
 
-## Fastest Windows Setup (Installer + Upgrade)
+## Windows Setup Options
+
+## One-Click GUI Setup (No CLI)
+
+Preferred release flow for non-technical users:
+
+1. Run `OrganizedJihad.Installer.exe` from the release bundle.
+2. Select browser target (Opera GX included).
+3. Click `Install Ecosystem`.
+4. Wait for completion status in the installer window.
+
+The GUI installer uses the same hardened install pipeline and runs first-run checks automatically.
+
+If you are publishing this installer from source, generate the executable with:
+
+```powershell
+pwsh -ExecutionPolicy Bypass -File .\Publish-InstallerUI.ps1
+```
+
+Output executable:
+
+```text
+installer-ui\publish\win-x64\OrganizedJihad.Installer.exe
+```
+
+## Fastest Windows Setup (Installer + Upgrade, CLI)
 
 From the repository root, run:
 

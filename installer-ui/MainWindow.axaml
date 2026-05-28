@@ -1,0 +1,50 @@
+<Window xmlns="https://github.com/avaloniaui"
+	xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+	x:Class="OrganizedJihad.Installer.MainWindow"
+	Title="OrganizedJihad Installer"
+	Width="900"
+	Height="700"
+	MinWidth="760"
+	MinHeight="620">
+	<Grid RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto,*,Auto" Margin="18">
+		<TextBlock Grid.Row="0" Margin="0,0,0,10" Text="OrganizedJihad One-Click Installer" FontSize="24" FontWeight="SemiBold" />
+		<TextBlock Grid.Row="1" Margin="0,0,0,10" Text="Install API server, desktop app, and userscript with guided browser bootstrap." Opacity="0.85" />
+
+		<Grid Grid.Row="2" Margin="0,0,0,10" ColumnDefinitions="180,*">
+			<TextBlock Grid.Column="0" VerticalAlignment="Center" Text="Install root" />
+			<TextBox x:Name="InstallRootTextBox" Grid.Column="1" Margin="10,0,0,0" />
+		</Grid>
+
+		<Grid Grid.Row="3" Margin="0,0,0,10" ColumnDefinitions="180,*">
+			<TextBlock Grid.Column="0" VerticalAlignment="Center" Text="API URL" />
+			<TextBox x:Name="ApiUrlTextBox" Grid.Column="1" Margin="10,0,0,0" />
+		</Grid>
+
+		<Grid Grid.Row="4" Margin="0,0,0,10" ColumnDefinitions="180,*">
+			<TextBlock Grid.Column="0" VerticalAlignment="Center" Text="Userscript browser" />
+			<ComboBox x:Name="BrowserComboBox" Grid.Column="1" Margin="10,0,0,0" />
+		</Grid>
+
+		<StackPanel Grid.Row="5" Margin="0,0,0,10" Orientation="Horizontal" Spacing="20">
+			<CheckBox x:Name="InstallDesktopCheckBox" Content="Install desktop app" IsChecked="True" />
+			<CheckBox x:Name="FirstRunDiagnosticsCheckBox" Content="Run first-run diagnostics" IsChecked="True" />
+			<CheckBox x:Name="OpenDiagnosticsCheckBox" Content="Open diagnostics pages after install" IsChecked="True" />
+		</StackPanel>
+
+		<Border Grid.Row="6" Margin="0,0,0,10" BorderThickness="1" BorderBrush="#3A3A3A" CornerRadius="6" Padding="8">
+			<TextBox x:Name="LogTextBox"
+				IsReadOnly="True"
+				AcceptsReturn="True"
+				TextWrapping="Wrap"
+				ScrollViewer.VerticalScrollBarVisibility="Auto"
+				ScrollViewer.HorizontalScrollBarVisibility="Auto"
+				FontFamily="Consolas"
+				Text="Ready. Click Install to begin." />
+		</Border>
+
+		<Grid Grid.Row="7" ColumnDefinitions="*,Auto">
+			<TextBlock x:Name="StatusTextBlock" VerticalAlignment="Center" Text="Status: Idle" />
+			<Button x:Name="InstallButton" Grid.Column="1" Margin="10,0,0,0" Content="Install Ecosystem" Width="200" Height="36" Click="OnInstallClick" />
+		</Grid>
+	</Grid>
+</Window>

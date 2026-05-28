@@ -841,3 +841,64 @@
 ## Follow-up
 - Run installer as Administrator for startup-task registration at system logon/startup.
 - For Opera GX users, run installer without `-SkipTampermonkeyBootstrap` and include `-TampermonkeyBrowsers operaGX`.
+---
+
+## Session
+- Date: 2026-05-28
+- Session Number: 34
+- Scope: Automated userscript build session logging
+
+## Summary
+- Auto-generated entry from userscript build pipeline.
+- Captures a timestamp and a git working-tree snapshot for traceability.
+
+## Files Modified
+- userscript/package.json
+- ~docs/oj-manual-prompts-log.txt
+
+## Validation
+- yarn build
+
+## Generated
+- Timestamp UTC: 2026-05-28T19:33:27.525Z
+
+---
+
+## Session
+- Date: 2026-05-28
+- Session Number: 35
+- Scope: #322 one-click Avalonia installer UX completion
+
+## Summary
+- Completed the no-CLI installer UX path by finalizing and validating the Avalonia GUI installer project.
+- Added GUI/browser-picker installer documentation and a publish script for producing a release-ready executable.
+- Confirmed end-to-end build readiness for the new installer project and full solution.
+
+## Files Modified
+- OrganizedJihad.sln
+- installer-ui/OrganizedJihad.Installer.csproj
+- installer-ui/Program.cs
+- installer-ui/App.axaml
+- installer-ui/App.axaml.cs
+- installer-ui/MainWindow.axaml
+- installer-ui/MainWindow.axaml.cs
+- Publish-InstallerUI.ps1
+- README.md
+- userscript/INSTALL.md
+- userscript/README.md
+- ~docs/plans/architecture-modernization-roadmap.md
+- ~docs/copilot-chats/2026-05-28-userscript-build-auto.md
+
+## Issues
+- Created/implemented: #322
+- Referenced epic: #206
+- PR tracking: #209
+
+## Validation
+- dotnet build installer-ui/OrganizedJihad.Installer.csproj (pass)
+- pwsh -ExecutionPolicy Bypass -File .\Publish-InstallerUI.ps1 (pass; produced installer-ui/publish/win-x64/OrganizedJihad.Installer.exe)
+- dotnet build OrganizedJihad.sln (pass)
+
+## Follow-up
+- Address NU1903 dependency advisory warning for `Tmds.DBus.Protocol` transitive package in installer-ui restore path.
+- Release bundle should include `OrganizedJihad.Installer.exe` and companion files from `installer-ui/publish/win-x64/`.

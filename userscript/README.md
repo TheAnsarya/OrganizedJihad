@@ -14,6 +14,11 @@ A comprehensive TamperMonkey userscript for tracking and managing your Hero Wars
 
 ## Installation
 
+### One-Click Installer (Recommended)
+
+For release/live setup, run `OrganizedJihad.Installer.exe` and click `Install Ecosystem`.
+Use the browser picker to select Opera GX, Chrome, Edge, or Firefox for Tampermonkey bootstrap.
+
 ### Prerequisites
 
 1. Install [TamperMonkey](https://www.tampermonkey.net/) browser extension:
