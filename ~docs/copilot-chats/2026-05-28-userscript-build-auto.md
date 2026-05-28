@@ -482,3 +482,64 @@
 
 ## Follow-up
 - Continue next modernization slices after #318 using the same wrapper-preserving extraction pattern.
+---
+
+## Session
+- Date: 2026-05-28
+- Session Number: 21
+- Scope: Automated userscript build session logging
+
+## Summary
+- Auto-generated entry from userscript build pipeline.
+- Captures a timestamp and a git working-tree snapshot for traceability.
+
+## Files Modified
+- serscript/package.json
+- userscript/src/modules/gameTracker.js
+- ~docs/copilot-chats/2026-05-28-userscript-build-auto.md
+- ~docs/oj-manual-prompts-log.txt
+- userscript/src/modules/trackers/GameTrackerRewardEconomyHelpers.js
+- userscript/tests/gameTrackerRewardEconomyHelpers.test.js
+
+## Validation
+- yarn build
+
+## Generated
+- Timestamp UTC: 2026-05-28T19:14:28.719Z
+
+---
+
+## Session
+- Date: 2026-05-28
+- Session Number: 22
+- Scope: #319 reward normalization + economy/expedition seam extraction
+
+## Summary
+- Completed issue #319 by extracting reward normalization and economy/pve composition from `gameTracker` into a dedicated helper module while preserving wrapper behavior and side-effect ordering.
+- Delegated `_normalizeRewards` and `_extractDrops` recursion through helper seams and extracted shop/quest/expedition/mission/tower reward intent composition.
+- Kept wrapper signatures stable to preserve existing handler registry and call-site compatibility.
+
+## Files Modified
+- userscript/src/modules/gameTracker.js
+- userscript/src/modules/trackers/GameTrackerRewardEconomyHelpers.js
+- userscript/tests/gameTrackerRewardEconomyHelpers.test.js
+- userscript/package.json
+- ~docs/plans/architecture-modernization-roadmap.md
+- ~docs/copilot-chats/2026-05-28-userscript-build-auto.md
+
+## Issues
+- Created/implemented: #319
+- Referenced epic: #206
+- PR tracking: #209
+
+## Key Decisions
+- Preserved side-effect ordering in wrappers and only extracted pure composition/normalization logic to helper module.
+- Centralized reward payload resolution (`reward`/`rewards`) and resource intent builders to reduce duplication across quest/expedition/mission/tower flows.
+- Added focused helper tests for drop normalization recursion, record builders, and intent mapping parity.
+
+## Validation
+- yarn test --runInBand (pass)
+- yarn build (pass; existing webpack asset-size warnings only)
+
+## Follow-up
+- Continue additional high-throughput batch slices using the same wrapper-preserving extraction pattern.

@@ -84,6 +84,20 @@ import {
 	sourceTypeLabel,
 } from './trackers/GameTrackerConsumableOpeningHelpers.js';
 import {
+	buildExpeditionBattleRecord,
+	buildExpeditionResourceRewardIntents,
+	buildExpeditionStateMetadata,
+	buildMissionResourceRewardIntents,
+	buildQuestCompletionRecord,
+	buildQuestResourceRewardIntents,
+	buildShopPurchaseRecord,
+	buildShopResourceSpendIntents,
+	buildTowerResourceRewardIntents,
+	extractDropsIntoArray,
+	normalizeRewardsPayload,
+	resolveRewardPayload,
+} from './trackers/GameTrackerRewardEconomyHelpers.js';
+import {
 	appendBoundedHistory,
 	buildGuildWarDataResponse,
 	buildRaidBossDataResponse,
@@ -2435,25 +2449,7 @@ class GameTracker {
 	 * @private
 	 */
 	_normalizeRewards(data) {
-		if (!data || typeof data !== 'object') return [];
-
-		const drops = [];
-
-		// Determine where the rewards live in the response
-		const sources = [];
-		if (data.chestReward) sources.push(data.chestReward);
-		if (data.reward) sources.push(data.reward);
-		if (data.rewards) sources.push(data.rewards);
-		if (data.skullReward) sources.push(data.skullReward);
-
-		// If none of the known keys match, treat the whole response as rewards
-		if (sources.length === 0) sources.push(data);
-
-		for (const src of sources) {
-			this._extractDrops(src, drops);
-		}
-
-		return drops;
+		return normalizeRewardsPayload(data);
 	}
 
 	/**
@@ -2469,53 +2465,7 @@ class GameTracker {
 	 * @private
 	 */
 	_extractDrops(source, drops) {
-		if (!source || typeof source !== 'object') return;
-
-		// Array → extract each element
-		if (Array.isArray(source)) {
-			for (const item of source) {
-				this._extractDrops(item, drops);
-			}
-			return;
-		}
-
-		// Known scalar resource keys (value is the quantity directly)
-		const scalarKeys = new Set(['gold', 'starmoney', 'experience', 'stamina', 'titanExp']);
-
-		// Known category keys (value is { itemId: quantity, ... })
-		const categoryKeys = new Set([
-			'consumable', 'gear', 'coin', 'fragmentHero', 'fragmentTitan',
-			'petCard', 'titanCard', 'scroll', 'artifact', 'titanArtifact',
-			'skinStone', 'titanSkinStone', 'heroSoulStone', 'titanSoulStone',
-		]);
-
-		let hasKnownKey = false;
-
-		for (const [key, value] of Object.entries(source)) {
-			if (scalarKeys.has(key) && typeof value === 'number') {
-				drops.push({ itemType: key, itemId: key, quantity: value });
-				hasKnownKey = true;
-			} else if (categoryKeys.has(key) && typeof value === 'object' && value !== null) {
-				hasKnownKey = true;
-				for (const [itemId, qty] of Object.entries(value)) {
-					drops.push({
-						itemType: key,
-						itemId: String(itemId),
-						quantity: typeof qty === 'number' ? qty : 1,
-					});
-				}
-			}
-		}
-
-		// If no known keys matched, this might be a count-keyed wrapper like
-		// { 500: { consumable: {...} } } — recurse into numeric-keyed values.
-		if (!hasKnownKey) {
-			for (const [key, value] of Object.entries(source)) {
-				if (typeof value === 'object' && value !== null && /^\d+$/.test(key)) {
-					this._extractDrops(value, drops);
-				}
-			}
-		}
+		extractDropsIntoArray(source, drops);
 	}
 
 	/**
@@ -2553,16 +2503,7 @@ class GameTracker {
 		const playerId = (await this.storage.getMetadata('currentPlayerId')) || 'unknown';
 		const purchasedAt = new Date().toISOString();
 
-		const purchase = {
-			purchasedAt: purchasedAt,
-			shopType: args.shopType || args.shopId || 'unknown', // arena, guild, tower, merchant, etc.
-			itemId: args.itemId || 'unknown',
-			itemName: data.itemName || args.itemName || `Item_${args.itemId}`,
-			quantity: args.quantity || args.count || 1,
-			costType: args.costType || Object.keys(args.cost || {})[0] || 'unknown', // gold, emeralds, trophies, etc.
-			costAmount: args.costAmount || Object.values(args.cost || {})[0] || 0,
-			playerId: playerId,
-		};
+		const purchase = buildShopPurchaseRecord(args, data, playerId, purchasedAt);
 
 		await this.storage.add('shopPurchases', purchase);
 		console.log(`[OrganizedJihad] Shop purchase tracked: ${purchase.itemName} from ${purchase.shopType}`);
@@ -2573,35 +2514,8 @@ class GameTracker {
 		const cost = args.cost || {};
 		const shopName = `${purchase.shopType}_shop`;
 
-		if (cost.gold || (purchase.costType === 'gold' && purchase.costAmount > 0)) {
-			await this.trackResourceTransaction('gold', -(cost.gold || purchase.costAmount), 'shop', shopName);
-		}
-		if (cost.starmoney || (purchase.costType === 'emeralds' && purchase.costAmount > 0)) {
-			await this.trackResourceTransaction('emeralds', -(cost.starmoney || purchase.costAmount), 'shop', shopName);
-		}
-		if (cost.arenaToken || (purchase.costType === 'arena_coins' && purchase.costAmount > 0)) {
-			await this.trackResourceTransaction(
-				'arena_coins',
-				-(cost.arenaToken || purchase.costAmount),
-				'shop',
-				shopName
-			);
-		}
-		if (cost.guildWarToken || (purchase.costType === 'guild_war_coins' && purchase.costAmount > 0)) {
-			await this.trackResourceTransaction(
-				'guild_war_coins',
-				-(cost.guildWarToken || purchase.costAmount),
-				'shop',
-				shopName
-			);
-		}
-		if (cost.titanPotion || (purchase.costType === 'titan_potion' && purchase.costAmount > 0)) {
-			await this.trackResourceTransaction(
-				'titan_potion',
-				-(cost.titanPotion || purchase.costAmount),
-				'shop',
-				shopName
-			);
+		for (const intent of buildShopResourceSpendIntents(cost, purchase.costType, purchase.costAmount, shopName)) {
+			await this.trackResourceTransaction(intent.resourceType, intent.amount, intent.source, intent.sourceDetail);
 		}
 	}
 
@@ -2620,14 +2534,7 @@ class GameTracker {
 		const playerId = (await this.storage.getMetadata('currentPlayerId')) || 'unknown';
 		const completedAt = new Date().toISOString();
 
-		const quest = {
-			completedAt: completedAt,
-			questType: args.questType || 'daily', // daily, weekly, event
-			questId: args.questId || 'unknown',
-			questName: args.questName || data.questName || `Quest_${args.questId}`,
-			rewardData: JSON.stringify(data.reward || data.rewards || {}),
-			playerId: playerId,
-		};
+		const quest = buildQuestCompletionRecord(args, data, playerId, completedAt);
 
 		await this.storage.add('questCompletions', quest);
 		console.log(`[OrganizedJihad] Quest completed: ${quest.questName} (${quest.questType})`);
@@ -2635,21 +2542,9 @@ class GameTracker {
 		// Track resource rewards from quest completion
 		// Hero Wars quest rewards format: {gold: 1000, starmoney: 50, exp: 100, ...}
 		// See: https://community.hero-wars.com/discussion/quest-rewards-guide
-		const rewards = data.reward || data.rewards || {};
-		if (rewards.gold) {
-			await this.trackResourceTransaction('gold', rewards.gold, 'quest', quest.questName);
-		}
-		if (rewards.starmoney) {
-			await this.trackResourceTransaction('emeralds', rewards.starmoney, 'quest', quest.questName);
-		}
-		if (rewards.arenaToken) {
-			await this.trackResourceTransaction('arena_coins', rewards.arenaToken, 'quest', quest.questName);
-		}
-		if (rewards.guildWarToken) {
-			await this.trackResourceTransaction('guild_war_coins', rewards.guildWarToken, 'quest', quest.questName);
-		}
-		if (rewards.titanPotion) {
-			await this.trackResourceTransaction('titan_potion', rewards.titanPotion, 'quest', quest.questName);
+		const rewards = resolveRewardPayload(data);
+		for (const intent of buildQuestResourceRewardIntents(rewards, quest.questName)) {
+			await this.trackResourceTransaction(intent.resourceType, intent.amount, intent.source, intent.sourceDetail);
 		}
 	}
 
@@ -2660,12 +2555,7 @@ class GameTracker {
 	 * @private
 	 */
 	async trackExpeditionState(data) {
-		const expeditionData = {
-			currentNode: data.currentNode || 0,
-			progress: data.progress || 0,
-			rewards: data.rewards || [],
-			timestamp: Date.now(),
-		};
+		const expeditionData = buildExpeditionStateMetadata(data, Date.now());
 
 		await this.storage.setMetadata('expeditionState', expeditionData);
 	}
@@ -2686,17 +2576,7 @@ class GameTracker {
 		const playerId = (await this.storage.getMetadata('currentPlayerId')) || 'unknown';
 		const timestamp = new Date().toISOString();
 
-		const battle = {
-			timestamp: timestamp,
-			expeditionId: args.expeditionId || args.nodeId || 'unknown',
-			bossId: args.bossId || data.bossId || 'unknown',
-			bossName: data.bossName || `Boss_${args.bossId}`,
-			isWin: data.result?.win || data.win || false,
-			teamComposition: JSON.stringify(data.attackers || data.myTeam || {}),
-			damageDealt: data.damageDealt || data.damage || 0,
-			rewardData: JSON.stringify(data.reward || data.rewards || {}),
-			playerId: playerId,
-		};
+		const battle = buildExpeditionBattleRecord(args, data, playerId, timestamp);
 
 		await this.storage.add('expeditionBattles', battle);
 		console.log(
@@ -2705,17 +2585,9 @@ class GameTracker {
 
 		// Track resource rewards from expedition battles
 		// Expeditions reward gold, items, and sometimes emeralds
-		const rewards = data.reward || data.rewards || {};
-		if (rewards.gold) {
-			await this.trackResourceTransaction('gold', rewards.gold, 'battle', `expedition_${battle.expeditionId}`);
-		}
-		if (rewards.starmoney) {
-			await this.trackResourceTransaction(
-				'emeralds',
-				rewards.starmoney,
-				'battle',
-				`expedition_${battle.expeditionId}`
-			);
+		const rewards = resolveRewardPayload(data);
+		for (const intent of buildExpeditionResourceRewardIntents(rewards, battle.expeditionId)) {
+			await this.trackResourceTransaction(intent.resourceType, intent.amount, intent.source, intent.sourceDetail);
 		}
 	}
 
@@ -2763,17 +2635,9 @@ class GameTracker {
 		// Track resource rewards from mission completion
 		// Campaign missions reward gold, experience, and sometimes items
 		// See: https://community.hero-wars.com/discussion/campaign-rewards
-		const rewards = data.reward || data.rewards || {};
-		if (rewards.gold) {
-			await this.trackResourceTransaction('gold', rewards.gold, 'battle', `mission_${progress.missionName}`);
-		}
-		if (rewards.starmoney) {
-			await this.trackResourceTransaction(
-				'emeralds',
-				rewards.starmoney,
-				'battle',
-				`mission_${progress.missionName}`
-			);
+		const rewards = resolveRewardPayload(data);
+		for (const intent of buildMissionResourceRewardIntents(rewards, progress.missionName)) {
+			await this.trackResourceTransaction(intent.resourceType, intent.amount, intent.source, intent.sourceDetail);
 		}
 	}
 
@@ -2817,17 +2681,9 @@ class GameTracker {
 		// Track resource rewards from tower floor completion
 		// Tower rewards vary by floor: gold, items, sometimes emeralds
 		// See: https://community.hero-wars.com/discussion/tower-rewards
-		const rewards = data.reward || data.rewards || {};
-		if (rewards.gold) {
-			await this.trackResourceTransaction('gold', rewards.gold, 'battle', `${towerType}_tower_floor_${newFloor}`);
-		}
-		if (rewards.starmoney) {
-			await this.trackResourceTransaction(
-				'emeralds',
-				rewards.starmoney,
-				'battle',
-				`${towerType}_tower_floor_${newFloor}`
-			);
+		const rewards = resolveRewardPayload(data);
+		for (const intent of buildTowerResourceRewardIntents(rewards, towerType, newFloor)) {
+			await this.trackResourceTransaction(intent.resourceType, intent.amount, intent.source, intent.sourceDetail);
 		}
 	}
 
