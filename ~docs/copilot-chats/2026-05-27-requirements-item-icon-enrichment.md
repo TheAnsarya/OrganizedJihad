@@ -903,6 +903,49 @@
 ---
 
 ## Session
+- Date: 2026-05-28
+- Session Number: 53
+- Scope: Continue high-throughput userscript modernization with guild participation normalization seam extraction.
+
+## Summary
+- Created and completed issue #312.
+- Added `userscript/src/modules/trackers/GameTrackerGuildParticipationHelpers.js` with extracted normalization helpers for:
+	- Guild War participation row mapping
+	- Guild Raid participation row mapping and titanite transaction intent generation
+	- Guild Dungeon participation row mapping and titanite transaction intent generation
+- Rewired `userscript/src/modules/gameTracker.js` participation handlers to delegate normalization to helper seams while preserving wrapper guards, logging, and error handling.
+- Added focused helper tests in `userscript/tests/gameTrackerGuildParticipationHelpers.test.js`.
+
+## Files Modified
+- userscript/src/modules/gameTracker.js
+- userscript/package.json
+- ~docs/plans/architecture-modernization-roadmap.md
+- ~docs/copilot-chats/2026-05-27-requirements-item-icon-enrichment.md
+- ~docs/copilot-chats/2026-05-28-userscript-build-auto.md
+
+## Files Created
+- userscript/src/modules/trackers/GameTrackerGuildParticipationHelpers.js
+- userscript/tests/gameTrackerGuildParticipationHelpers.test.js
+
+## Issues Referenced
+- #206 Epic: Architecture modernization and module deepening across API/userscript
+- #209 PR tracking: architecture modernization wave updates
+- #312 Batch userscript modernization: guild participation normalization extraction (war/raid/dungeon)
+
+## Validation
+- `yarn test --runInBand`: passed (28 suites, 768 tests)
+- `yarn build`: passed
+
+## Key Decisions
+- Kept wrapper-level guard/try-catch/log semantics in `gameTracker` and extracted only normalization/mapping seams to minimize behavior drift risk.
+- Encoded raid/dungeon titanite side effects as helper-generated transaction intents so wrapper execution order remains explicit and testable.
+
+## Known Follow-up
+- Continue extraction of guild participation-adjacent trackers (war/raid/dungeon metadata and transaction normalization seams) with focused regression tests.
+
+---
+
+## Session
 - Date: 2026-05-27
 - Session Number: 38
 - Scope: Continue autonomous issue throughput with new batch slices, including a large API Team Recommendation orchestration decomposition wave.
