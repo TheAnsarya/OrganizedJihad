@@ -969,4 +969,4 @@
 - dotnet build OrganizedJihad.sln (pass)
 
 ## Follow-up
-- Publish GitHub Release `v0.2.1` using `~docs/releases/v0.2.1-release-notes.md` as canonical release body.
+- Publish GitHub Release `v0.2.1` using `~docs/plans/release-v0.2.1.md` as canonical release body.
