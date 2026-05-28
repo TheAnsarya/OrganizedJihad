@@ -1589,6 +1589,61 @@
 ---
 
 ## Session
+- Date: 2026-05-28
+- Session Number: 51
+- Scope: Complete another large modernization wave by extracting response lifecycle finalization and decomposing activity helper concerns into domain modules.
+
+## Summary
+- Implemented and completed issue #310.
+- Added `userscript/src/modules/trackers/GameTrackerResponseLifecycleHelpers.js` and delegated processAPIResponse lifecycle finalization in `gameTracker`:
+	- API-log finalization
+	- console summary emission
+	- post-dispatch snapshot trigger
+- Added domain-specific activity helper modules:
+	- `GameTrackerEconomyTrackingHelpers.js`
+	- `GameTrackerQuestTrackingHelpers.js`
+	- `GameTrackerInventoryTrackingHelpers.js`
+- Converted `GameTrackerActivityEconomyHelpers.js` to a compatibility re-export surface.
+- Refactored `gameTracker` imports to use decomposed domain modules directly.
+- Added focused tests:
+	- `userscript/tests/gameTrackerResponseLifecycleHelpers.test.js`
+	- `userscript/tests/gameTrackerActivityDomainModules.test.js`
+
+## Files Modified
+- userscript/src/modules/gameTracker.js
+- userscript/src/modules/trackers/GameTrackerActivityEconomyHelpers.js
+- userscript/package.json
+- ~docs/plans/architecture-modernization-roadmap.md
+- ~docs/copilot-chats/2026-05-27-requirements-item-icon-enrichment.md
+- ~docs/copilot-chats/2026-05-28-userscript-build-auto.md
+
+## Files Created
+- userscript/src/modules/trackers/GameTrackerResponseLifecycleHelpers.js
+- userscript/src/modules/trackers/GameTrackerEconomyTrackingHelpers.js
+- userscript/src/modules/trackers/GameTrackerQuestTrackingHelpers.js
+- userscript/src/modules/trackers/GameTrackerInventoryTrackingHelpers.js
+- userscript/tests/gameTrackerResponseLifecycleHelpers.test.js
+- userscript/tests/gameTrackerActivityDomainModules.test.js
+
+## Issues Referenced
+- #206 Epic: Architecture modernization and module deepening across API/userscript
+- #209 PR tracking: architecture modernization wave updates
+- #310 Batch userscript modernization: response lifecycle finalization extraction and activity helper domain decomposition
+
+## Validation
+- `yarn test --runInBand`: passed (25 suites, 760 tests)
+- `yarn build`: passed
+
+## Key Decisions
+- Kept compatibility exports in `GameTrackerActivityEconomyHelpers` to avoid import churn for any external/internal legacy consumers while still enforcing domain decomposition for new call sites.
+- Centralized processAPIResponse end-of-cycle behavior in lifecycle helper to reduce risk of future divergence between API log, console messages, and snapshot scheduling.
+
+## Known Follow-up
+- Continue decomposition by extracting cross-cutting gameTracker diagnostics/recovery paths used in XHR/fetch interception and pushd event handling into dedicated helper seams.
+
+---
+
+## Session
 - Date: 2026-05-27
 - Session Number: 31
 - Scope: Execute a high-volume `uiManager` decomposition wave across battles/titans/pets/inventory, completing issues #252-#269.

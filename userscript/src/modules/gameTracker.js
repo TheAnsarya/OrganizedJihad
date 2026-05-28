@@ -33,24 +33,29 @@ import {
 import { applyDefaultTrackerRegistrars } from './trackers/GameTrackerRegistryBootstrap.js';
 import {
 	buildApiPayload,
-	buildDispatchStatus,
 	buildSortedResults,
 	dispatchSortedResults,
 } from './trackers/GameTrackerResponseDispatchHelpers.js';
 import {
-	buildDispatchConsoleMessages,
 	buildUnexpectedFormatDiagnostics,
 } from './trackers/GameTrackerResponseDiagnosticsHelpers.js';
+import {
+	trackResourceTransactionHelper,
+	trackGuildActivityHelper,
+} from './trackers/GameTrackerEconomyTrackingHelpers.js';
 import {
 	trackBatchQuestFarmHelper,
 	trackDailyBonusInfoHelper,
 	trackDailyQuestFarmHelper,
-	trackGuildActivityHelper,
-	trackInventoryItemUsageHelper,
 	trackLoginRewardHelper,
 	trackQuestsDataHelper,
-	trackResourceTransactionHelper,
-} from './trackers/GameTrackerActivityEconomyHelpers.js';
+} from './trackers/GameTrackerQuestTrackingHelpers.js';
+import {
+	trackInventoryItemUsageHelper,
+} from './trackers/GameTrackerInventoryTrackingHelpers.js';
+import {
+	finalizeProcessApiResponseLifecycle,
+} from './trackers/GameTrackerResponseLifecycleHelpers.js';
 import { compressHeroBatch, compressTitanBatch } from './heroCompression.js';
 import { resolveHeroName, resolveTitanElement } from './heroNames.js';
 
@@ -1220,25 +1225,16 @@ class GameTracker {
 		// Push to API call log ring buffer
 		// Build per-call payload map for API Log viewer (#91)
 		const payload = buildApiPayload(this, sortedResults, callMap, callArgs);
-		const { status, detail } = buildDispatchStatus(dispatched, unhandled, errors);
-		this._pushApiLog(allCallNames, status, detail, errors.length > 0 ? errors.join('; ') : null, this._lastInterceptedUrl, payload);
-
-		// Diagnostic: console summary of dispatch results (#61)
-		const consoleMessages = buildDispatchConsoleMessages(dispatched, unhandled, errors, allCallNames);
-		if (consoleMessages.successMessage) {
-			console.log(consoleMessages.successMessage, 'color:#4CAF50;font-weight:bold', 'color:#8BC34A');
-		}
-		if (consoleMessages.noMatchMessage) {
-			console.log(consoleMessages.noMatchMessage, 'color:#FF9800;font-weight:bold', 'color:#FFB74D');
-		}
-		if (consoleMessages.errorMessage) {
-			console.warn(consoleMessages.errorMessage, 'color:#F44336;font-weight:bold', 'color:#EF9A9A');
-		}
-
-		// Trigger debounced data snapshot (#28)
-		// Uses a 5-second coalescing window so rapid API bursts produce
-		// only a single snapshot write instead of one per response.
-		this._debouncedSnapshot();
+		// Finalize dispatch lifecycle: api log + console summary + snapshot trigger.
+		finalizeProcessApiResponseLifecycle(
+			this,
+			allCallNames,
+			dispatched,
+			unhandled,
+			errors,
+			payload,
+			this._lastInterceptedUrl
+		);
 	}
 
 	// =====================================================================
