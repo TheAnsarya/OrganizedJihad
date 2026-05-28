@@ -56,6 +56,12 @@ The GUI installer orchestrates:
 - browser bootstrap links for Tampermonkey + userscript import
 - first-run diagnostics and health checks
 
+Installer UX hardening notes:
+
+- Preflight checks validate install path and API URL before execution.
+- Install logs are persisted under `%LOCALAPPDATA%\\OrganizedJihad\\installer-logs`.
+- Quick actions in the installer allow opening install and log folders after runs.
+
 If you are building the GUI installer from source:
 
 ```powershell

@@ -902,3 +902,36 @@
 ## Follow-up
 - Address NU1903 dependency advisory warning for `Tmds.DBus.Protocol` transitive package in installer-ui restore path.
 - Release bundle should include `OrganizedJihad.Installer.exe` and companion files from `installer-ui/publish/win-x64/`.
+
+---
+
+## Session
+- Date: 2026-05-28
+- Session Number: 36
+- Scope: #323 installer UX hardening wave
+
+## Summary
+- Implemented additional one-click installer hardening slices after #322.
+- Added preflight validation for install root/API URL, persisted timestamped installer logs, safer PowerShell executable resolution, and quick action buttons for opening install/log folders.
+- Updated release/install docs to reflect hardened behavior and log location.
+
+## Files Modified
+- installer-ui/MainWindow.axaml
+- installer-ui/MainWindow.axaml.cs
+- README.md
+- userscript/INSTALL.md
+- ~docs/plans/architecture-modernization-roadmap.md
+- ~docs/copilot-chats/2026-05-28-userscript-build-auto.md
+
+## Issues
+- Created/implemented: #323
+- Referenced epic: #206
+- PR tracking: #209
+
+## Validation
+- dotnet build installer-ui/OrganizedJihad.Installer.csproj (pass)
+- pwsh -ExecutionPolicy Bypass -File .\Publish-InstallerUI.ps1 (pass)
+- dotnet build OrganizedJihad.sln (pass)
+
+## Follow-up
+- Consider adding an optional in-app cancel/stop action for long-running installs in a future slice.

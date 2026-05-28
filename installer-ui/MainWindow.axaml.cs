@@ -6,6 +6,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
+using System.Text;
 using System.Threading.Tasks;
 
 namespace OrganizedJihad.Installer;
@@ -19,6 +20,7 @@ public partial class MainWindow : Window {
 	};
 
 	private bool _isInstalling;
+	private string? _currentLogFilePath;
 
 	public MainWindow() {
 		InitializeComponent();
@@ -28,6 +30,8 @@ public partial class MainWindow : Window {
 
 		BrowserComboBox.ItemsSource = _browserArgumentMap.Keys.ToList();
 		BrowserComboBox.SelectedIndex = 0;
+
+		UpdateQuickActionState();
 	}
 
 	private async void OnInstallClick(object? sender, RoutedEventArgs e) {
@@ -35,12 +39,9 @@ public partial class MainWindow : Window {
 			return;
 		}
 
-		if (string.IsNullOrWhiteSpace(InstallRootTextBox.Text)) {
-			SetStatus("Status: Install root is required.");
-			return;
-		}
-		if (string.IsNullOrWhiteSpace(ApiUrlTextBox.Text)) {
-			SetStatus("Status: API URL is required.");
+		if (!ValidatePreflight(out var installRoot, out var apiUrl, out var preflightMessage)) {
+			SetStatus($"Status: {preflightMessage}");
+			AppendLog($"[Installer UI] Preflight failed: {preflightMessage}");
 			return;
 		}
 
@@ -63,17 +64,17 @@ public partial class MainWindow : Window {
 			return;
 		}
 
-		var args = BuildInstallerArguments(scriptPath, browserArg);
+		var args = BuildInstallerArguments(scriptPath, installRoot, apiUrl, browserArg);
 		await RunInstallProcessAsync(shell, args);
 	}
 
-	private string BuildInstallerArguments(string scriptPath, string browserArg) {
+	private string BuildInstallerArguments(string scriptPath, string installRoot, string apiUrl, string browserArg) {
 		var args = new List<string> {
 			"-NoProfile",
 			"-ExecutionPolicy", "Bypass",
 			"-File", Quote(scriptPath),
-			"-InstallRoot", Quote(InstallRootTextBox.Text!.Trim()),
-			"-ApiUrl", Quote(ApiUrlTextBox.Text!.Trim()),
+			"-InstallRoot", Quote(installRoot),
+			"-ApiUrl", Quote(apiUrl),
 			"-RunInstallHealthCheck",
 			"-TampermonkeyBrowsers", browserArg,
 		};
@@ -95,7 +96,12 @@ public partial class MainWindow : Window {
 
 	private async Task RunInstallProcessAsync(string shell, string args) {
 		_isInstalling = true;
-		InstallButton.IsEnabled = false;
+		UpdateQuickActionState();
+
+		_currentLogFilePath = CreateInstallLogFilePath();
+		LogPathTextBlock.Text = $"Log: {_currentLogFilePath}";
+		PersistLogLine("[Installer UI] Log initialized.");
+
 		SetStatus("Status: Installing...");
 		AppendLog($"[Installer UI] Running: {shell} {args}");
 
@@ -144,8 +150,53 @@ public partial class MainWindow : Window {
 			AppendLog($"[Installer UI] Exception: {ex.Message}");
 		} finally {
 			_isInstalling = false;
-			InstallButton.IsEnabled = true;
+			UpdateQuickActionState();
 		}
+	}
+
+	private bool ValidatePreflight(out string installRoot, out string apiUrl, out string message) {
+		installRoot = InstallRootTextBox.Text?.Trim() ?? string.Empty;
+		apiUrl = ApiUrlTextBox.Text?.Trim() ?? string.Empty;
+
+		if (string.IsNullOrWhiteSpace(installRoot)) {
+			message = "Install root is required.";
+			return false;
+		}
+
+		if (installRoot.IndexOfAny(Path.GetInvalidPathChars()) >= 0) {
+			message = "Install root contains invalid characters.";
+			return false;
+		}
+
+		if (!Path.IsPathRooted(installRoot)) {
+			message = "Install root must be an absolute path.";
+			return false;
+		}
+
+		try {
+			Directory.CreateDirectory(installRoot);
+		} catch (Exception ex) {
+			message = $"Install root is not writable: {ex.Message}";
+			return false;
+		}
+
+		if (string.IsNullOrWhiteSpace(apiUrl)) {
+			message = "API URL is required.";
+			return false;
+		}
+
+		if (!Uri.TryCreate(apiUrl, UriKind.Absolute, out var uri)) {
+			message = "API URL must be a valid absolute URL.";
+			return false;
+		}
+
+		if (!string.Equals(uri.Scheme, Uri.UriSchemeHttp, StringComparison.OrdinalIgnoreCase) && !string.Equals(uri.Scheme, Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase)) {
+			message = "API URL must use http or https.";
+			return false;
+		}
+
+		message = "Preflight checks passed.";
+		return true;
 	}
 
 	private string? ResolveInstallerScriptPath() {
@@ -160,16 +211,45 @@ public partial class MainWindow : Window {
 	}
 
 	private static string? ResolvePowerShellExecutable() {
-		if (CommandExists("pwsh")) return "pwsh";
-		if (CommandExists("powershell")) return "powershell";
+		var candidatePaths = new List<string>();
+
+		candidatePaths.AddRange(ResolveExecutablesFromPath("pwsh"));
+		candidatePaths.AddRange(ResolveExecutablesFromPath("powershell"));
+
+		foreach (var path in candidatePaths.Distinct(StringComparer.OrdinalIgnoreCase)) {
+			if (CommandExists(path)) {
+				return path;
+			}
+		}
+
 		return null;
 	}
 
-	private static bool CommandExists(string command) {
+	private static IEnumerable<string> ResolveExecutablesFromPath(string commandName) {
+		var pathValue = Environment.GetEnvironmentVariable("PATH") ?? string.Empty;
+		var pathEntries = pathValue.Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+		var pathextRaw = Environment.GetEnvironmentVariable("PATHEXT") ?? ".EXE;.CMD;.BAT";
+		var extensions = pathextRaw.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+			.Select(ext => ext.StartsWith('.') ? ext : $".{ext}")
+			.ToArray();
+
+		foreach (var entry in pathEntries) {
+			foreach (var ext in extensions) {
+				var candidate = Path.Combine(entry, $"{commandName}{ext}");
+				if (File.Exists(candidate)) {
+					yield return candidate;
+				}
+			}
+		}
+	}
+
+	private static bool CommandExists(string commandPath) {
 		var info = new ProcessStartInfo {
-			FileName = command,
+			FileName = commandPath,
 			Arguments = "-NoProfile -Command \"$PSVersionTable.PSVersion\"",
 			UseShellExecute = false,
+			RedirectStandardOutput = true,
+			RedirectStandardError = true,
 			CreateNoWindow = true,
 		};
 
@@ -186,6 +266,8 @@ public partial class MainWindow : Window {
 	}
 
 	private void AppendLog(string line) {
+		PersistLogLine(line);
+
 		Dispatcher.UIThread.Post(() => {
 			LogTextBox.Text = string.Concat(LogTextBox.Text ?? string.Empty, Environment.NewLine, line);
 			LogTextBox.CaretIndex = (LogTextBox.Text ?? string.Empty).Length;
@@ -200,5 +282,59 @@ public partial class MainWindow : Window {
 
 	private static string Quote(string value) {
 		return $"\"{value.Replace("\"", "\\\"")}\"";
+	}
+
+	private string CreateInstallLogFilePath() {
+		var logRoot = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "OrganizedJihad", "installer-logs");
+		Directory.CreateDirectory(logRoot);
+		return Path.Combine(logRoot, $"installer-{DateTime.Now:yyyyMMdd-HHmmss}.log");
+	}
+
+	private void PersistLogLine(string line) {
+		if (string.IsNullOrWhiteSpace(_currentLogFilePath)) {
+			return;
+		}
+
+		var stampedLine = $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] {line}";
+		File.AppendAllText(_currentLogFilePath, stampedLine + Environment.NewLine, Encoding.UTF8);
+	}
+
+	private void OnOpenInstallRootClick(object? sender, RoutedEventArgs e) {
+		var installRoot = InstallRootTextBox.Text?.Trim();
+		if (string.IsNullOrWhiteSpace(installRoot) || !Directory.Exists(installRoot)) {
+			SetStatus("Status: Install root does not exist yet.");
+			return;
+		}
+
+		OpenFolder(installRoot);
+	}
+
+	private void OnOpenLogFolderClick(object? sender, RoutedEventArgs e) {
+		if (string.IsNullOrWhiteSpace(_currentLogFilePath)) {
+			SetStatus("Status: Run an install first to create a log file.");
+			return;
+		}
+
+		var folder = Path.GetDirectoryName(_currentLogFilePath);
+		if (string.IsNullOrWhiteSpace(folder) || !Directory.Exists(folder)) {
+			SetStatus("Status: Log folder does not exist.");
+			return;
+		}
+
+		OpenFolder(folder);
+	}
+
+	private static void OpenFolder(string folderPath) {
+		Process.Start(new ProcessStartInfo {
+			FileName = "explorer.exe",
+			Arguments = Quote(folderPath),
+			UseShellExecute = true,
+		});
+	}
+
+	private void UpdateQuickActionState() {
+		InstallButton.IsEnabled = !_isInstalling;
+		OpenInstallRootButton.IsEnabled = !_isInstalling;
+		OpenLogFolderButton.IsEnabled = !_isInstalling;
 	}
 }

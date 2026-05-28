@@ -13,6 +13,12 @@ Preferred release flow for non-technical users:
 
 The GUI installer uses the same hardened install pipeline and runs first-run checks automatically.
 
+Additional GUI hardening behavior:
+
+- Preflight validation blocks invalid install root/API URL inputs.
+- Each run writes a timestamped installer log to `%LOCALAPPDATA%\\OrganizedJihad\\installer-logs`.
+- The installer window includes buttons to open the install folder and log folder directly.
+
 If you are publishing this installer from source, generate the executable with:
 
 ```powershell
