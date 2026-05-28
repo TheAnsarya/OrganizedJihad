@@ -31,6 +31,12 @@ import {
 	topologicalSortHandlerMethods,
 } from './trackers/GameTrackerRegistryEngine.js';
 import { applyDefaultTrackerRegistrars } from './trackers/GameTrackerRegistryBootstrap.js';
+import {
+	buildApiPayload,
+	buildDispatchStatus,
+	buildSortedResults,
+	dispatchSortedResults,
+} from './trackers/GameTrackerResponseDispatchHelpers.js';
 import { compressHeroBatch, compressTitanBatch } from './heroCompression.js';
 import { resolveHeroName, resolveTitanElement } from './heroNames.js';
 
@@ -1200,136 +1206,24 @@ class GameTracker {
 		const { calls: extractedCalls, callMap, callArgs } = extracted;
 		const allCallNames = extractedCalls.map((c) => c.name);
 
-		// Track which calls were dispatched vs unhandled
-		const dispatched = [];
-		const unhandled = [];
-		const errors = [];
-
 		// Topologically sort results so dependencies process first (#47)
-		const resultsByIdent = new Map();
-		for (const result of response.results) {
-			resultsByIdent.set(result.ident, result);
-		}
-		const identOrder = response.results.map((r) => r.ident);
-		const methodOrder = identOrder.map((ident) => callMap[ident]).filter(Boolean);
-		const uniqueMethods = [...new Set(methodOrder)];
-		const sortedMethods = this._topologicalSortMethods(uniqueMethods);
+		const { sortedResults } = buildSortedResults(
+			response.results,
+			callMap,
+			(methodNames) => this._topologicalSortMethods(methodNames)
+		);
 
-		// Build sorted results list: dependency-ordered methods first,
-		// then any results without a mapped method name
-		const sortedResults = [];
-		for (const method of sortedMethods) {
-			// Find all results that map to this method (in original order)
-			for (const ident of identOrder) {
-				if (callMap[ident] === method && resultsByIdent.has(ident)) {
-					sortedResults.push(resultsByIdent.get(ident));
-					resultsByIdent.delete(ident);
-				}
-			}
-		}
-		// Append any unmapped results at the end
-		for (const ident of identOrder) {
-			if (resultsByIdent.has(ident)) {
-				sortedResults.push(resultsByIdent.get(ident));
-			}
-		}
-
-		// Process each result using the handler registry (#46)
-		for (const result of sortedResults) {
-			const callName = callMap[result.ident];
-			const args = callArgs[result.ident];
-			const responseData = result.result?.response;
-
-			if (!responseData) {
-				if (callName) unhandled.push(callName + '(no data)');
-				continue;
-			}
-
-			// Look up handlers in the registry
-			const handlers = this._handlerRegistry.get(callName);
-			if (!handlers || handlers.length === 0) {
-				if (callName) unhandled.push(callName);
-				continue;
-			}
-
-			// Execute all registered handlers for this API method
-			for (const entry of handlers) {
-				// Skip handlers whose tracking category is disabled (#27)
-				if (entry.category && !this._trackingPrefs[entry.category]) {
-					continue;
-				}
-				try {
-					await entry.handler.call(this, callName, args, responseData);
-					if (!dispatched.includes(callName)) {
-						dispatched.push(callName);
-					}
-				} catch (error) {
-					console.error(`[OrganizedJihad] Error in handler "${entry.label}" for ${callName}:`, error);
-					errors.push(`${callName}/${entry.label}: ${error?.message || String(error)}`);
-					await this._logError(`processAPIResponse:${callName}:${entry.label}`, error);
-				}
-			}
-		}
+		const { dispatched, unhandled, errors } = await dispatchSortedResults(
+			this,
+			sortedResults,
+			callMap,
+			callArgs
+		);
 
 		// Push to API call log ring buffer
 		// Build per-call payload map for API Log viewer (#91)
-		const payload = {};
-		for (const result of sortedResults) {
-			const callName = callMap[result.ident];
-			if (!callName) continue;
-			const args = callArgs[result.ident];
-			const responseData = result.result?.response;
-
-			// ── API Sample Collector: store one complete sample per method ──
-			// Only stores the FIRST sample seen for each method (to capture
-			// the "clean" initial response). Call clearApiSamples() to reset.
-			// Evicts the oldest entry when _apiSampleMaxMethods is exceeded (#137).
-			if (callName && responseData && !this._apiSamples.has(callName)) {
-				try {
-					const resStr = JSON.stringify(responseData);
-					const sampleEntry = resStr.length <= this._apiSampleMaxResponseSize
-						? {
-							args: JSON.parse(JSON.stringify(args || {})),
-							response: JSON.parse(resStr),
-							capturedAt: new Date().toISOString(),
-							responseSize: resStr.length,
-						}
-						: {
-							// Too large — store truncation marker with size info
-							args: JSON.parse(JSON.stringify(args || {})),
-							response: `[too large: ${resStr.length} bytes — increase _apiSampleMaxResponseSize to capture]`,
-							capturedAt: new Date().toISOString(),
-							responseSize: resStr.length,
-						};
-
-					this._apiSamples.set(callName, sampleEntry);
-
-					// LRU eviction: drop the oldest entry if we exceed the cap (#137)
-					if (this._apiSamples.size > this._apiSampleMaxMethods) {
-						// Map iteration order = insertion order; first key is oldest
-						const oldestKey = this._apiSamples.keys().next().value;
-						this._apiSamples.delete(oldestKey);
-					}
-				} catch { /* ignore unstringifiable responses */ }
-			}
-
-			// Truncate large payloads to prevent memory bloat
-			try {
-				const argsStr = JSON.stringify(args);
-				const resStr = JSON.stringify(responseData);
-				payload[callName] = {
-					args: argsStr.length > 2000 ? JSON.parse(argsStr.substring(0, 2000) + '..."') : args,
-					response: resStr.length > 5000 ? `[truncated: ${resStr.length} bytes]` : responseData,
-				};
-			} catch {
-				payload[callName] = { args, response: '[unstringifiable]' };
-			}
-		}
-
-		const status = errors.length > 0 ? 'error' : (dispatched.length > 0 ? 'ok' : 'no-match');
-		const detail = dispatched.length > 0
-			? `Dispatched: ${dispatched.join(', ')}` + (unhandled.length > 0 ? ` | Unhandled: ${unhandled.join(', ')}` : '')
-			: `Unhandled: ${unhandled.join(', ') || 'none'}`;
+		const payload = buildApiPayload(this, sortedResults, callMap, callArgs);
+		const { status, detail } = buildDispatchStatus(dispatched, unhandled, errors);
 		this._pushApiLog(allCallNames, status, detail, errors.length > 0 ? errors.join('; ') : null, this._lastInterceptedUrl, payload);
 
 		// Diagnostic: console summary of dispatch results (#61)
