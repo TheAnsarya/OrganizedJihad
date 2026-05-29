@@ -214,6 +214,43 @@ public class SyncControllerTests : IClassFixture<WebApplicationFactory<Program>>
 	}
 
 	/// <summary>
+	/// Verifies userscript handshake diagnostics endpoint returns status payload.
+	/// </summary>
+	[Fact]
+	public async Task Api_Ui_Userscript_Handshake_Should_Return_Payload() {
+		// Act
+		var response = await _client.GetAsync("/ui/userscript-handshake");
+		var json = await response.Content.ReadAsStringAsync();
+
+		// Assert
+		response.StatusCode.Should().Be(HttpStatusCode.OK);
+		using var document = JsonDocument.Parse(json);
+		var root = document.RootElement;
+		root.TryGetProperty("status", out _).Should().BeTrue();
+		root.TryGetProperty("hasRecentSync", out _).Should().BeTrue();
+		root.TryGetProperty("checkedUtc", out _).Should().BeTrue();
+	}
+
+	/// <summary>
+	/// Verifies UI settings endpoint rejects non-local API base URLs.
+	/// </summary>
+	[Fact]
+	public async Task Api_Ui_Settings_Should_Reject_NonLocal_ApiBaseUrl() {
+		// Act
+		var response = await _client.PostAsJsonAsync("/ui/settings", new {
+			autoOpenHealthOnLoad = true,
+			apiBaseUrl = "https://example.com",
+			preferredHeroWarsUrl = "https://www.hero-wars.com/",
+			notes = "test",
+		});
+
+		// Assert
+		response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+		var body = await response.Content.ReadAsStringAsync();
+		body.Should().Contain("localhost/loopback");
+	}
+
+	/// <summary>
 	/// Verifies recommendation endpoint returns ranked candidates including simulator fields.
 	/// </summary>
 	[Fact]

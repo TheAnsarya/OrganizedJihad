@@ -151,6 +151,11 @@ Optional flags:
 - `-AllowNonAdmin` to bypass the elevation prompt (reduced install capabilities; no full system-level startup registration)
 - `-InstallRoot "D:\Apps\OrganizedJihad"` to customize install location
 
+New reliability behaviors:
+
+- Installer now captures a pre-install rollback snapshot per component and restores it automatically if install fails mid-run.
+- Installer health diagnostics now include `/ui/userscript-handshake` checks to confirm userscript-to-API handshake freshness.
+
 ### Build & Run
 
 ```powershell
@@ -173,6 +178,19 @@ yarn build
 # Run the desktop app
 dotnet run --project desktop-app
 ```
+
+### Release Validation Automation
+
+```powershell
+# Validate migration path across cold start + repeat start using same DB
+pwsh -ExecutionPolicy Bypass -File .\Test-ApiMigrationPath.ps1
+
+# Smoke-test published API binary and key endpoints
+pwsh -ExecutionPolicy Bypass -File .\Test-ReleaseSmoke.ps1
+```
+
+`Publish-ReleaseArtifacts.ps1` now runs migration + smoke checks by default.
+Use `-SkipMigrationCheck` and/or `-SkipSmokeTest` only when intentionally bypassing validation.
 
 ### Running Tests
 

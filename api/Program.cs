@@ -23,6 +23,8 @@ using OrganizedJihad.Api.Services;
 using OrganizedJihad.Api.Services.TeamRecommendation;
 using OrganizedJihad.Api.Services.ToolCatalog;
 using OrganizedJihad.Data;
+using OrganizedJihad.Data.Models;
+using System.Net;
 using System.Text.Json;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -42,7 +44,7 @@ builder.Services.AddCors(options => options.AddDefaultPolicy(policy => policy.Al
 // Configure SQLite database with DbContextFactory pattern
 // DbContextFactory is recommended for better performance and thread safety
 // https://learn.microsoft.com/en-us/ef/core/dbcontext-configuration/#using-a-dbcontext-factory
-var dbPath = Path.Combine(AppContext.BaseDirectory, "herowars.db");
+var dbPath = ResolveApiDatabasePath();
 builder.Services.AddDbContextFactory<GameDatabaseContext>(options =>
 	options.UseSqlite($"Data Source={dbPath}"));
 
@@ -80,6 +82,14 @@ if (app.Environment.IsDevelopment()) {
 // https://learn.microsoft.com/en-us/aspnet/core/security/cors
 app.UseCors();
 
+app.Use(async (context, next) => {
+	if (context.Request.Path.StartsWithSegments("/ui", StringComparison.OrdinalIgnoreCase)) {
+		ApplyUiSecurityHeaders(context.Response);
+	}
+
+	await next();
+});
+
 // Map controller endpoints
 // https://learn.microsoft.com/en-us/aspnet/core/mvc/controllers/routing
 app.MapControllers();
@@ -92,31 +102,59 @@ var defaultUiSettings = new ApiUiSettings(
 	Notes: string.Empty,
 	UpdatedUtc: DateTime.UtcNow);
 
-app.MapGet("/ui/settings", () => {
+app.MapGet("/ui/settings", (HttpContext context) => {
+	if (!IsLocalUiAccessRequest(context)) {
+		return Results.StatusCode(StatusCodes.Status403Forbidden);
+	}
+
 	var settings = TryLoadApiUiSettings(uiSettingsPath) ?? defaultUiSettings;
+	app.Logger.LogInformation("UI settings fetched from {SettingsPath}", uiSettingsPath);
 	return Results.Ok(settings);
 });
 
 app.MapPost("/ui/settings", async (HttpContext context, ApiUiSettingsUpdateRequest request) => {
+	if (!IsLocalUiAccessRequest(context)) {
+		return Results.StatusCode(StatusCodes.Status403Forbidden);
+	}
+
 	var defaultApiBaseUrl = $"{context.Request.Scheme}://{context.Request.Host}";
+	if (!TryNormalizeLocalApiUrl(request.ApiBaseUrl, defaultApiBaseUrl, out var normalizedApiBaseUrl, out var apiBaseUrlError)) {
+		return Results.BadRequest(new { error = apiBaseUrlError });
+	}
+
+	if (!TryNormalizeHeroWarsUrl(request.PreferredHeroWarsUrl, out var normalizedHeroWarsUrl, out var heroWarsError)) {
+		return Results.BadRequest(new { error = heroWarsError });
+	}
+
+	var normalizedNotes = (request.Notes ?? string.Empty).Trim();
+	if (normalizedNotes.Length > 2048) {
+		return Results.BadRequest(new { error = "Notes must be 2048 characters or less." });
+	}
+
 	var normalized = new ApiUiSettings(
 		AutoOpenHealthOnLoad: request.AutoOpenHealthOnLoad,
-		ApiBaseUrl: string.IsNullOrWhiteSpace(request.ApiBaseUrl) ? defaultApiBaseUrl : request.ApiBaseUrl.Trim(),
-		PreferredHeroWarsUrl: string.IsNullOrWhiteSpace(request.PreferredHeroWarsUrl) ? "https://www.hero-wars.com/" : request.PreferredHeroWarsUrl.Trim(),
-		Notes: request.Notes?.Trim() ?? string.Empty,
+		ApiBaseUrl: normalizedApiBaseUrl,
+		PreferredHeroWarsUrl: normalizedHeroWarsUrl,
+		Notes: normalizedNotes,
 		UpdatedUtc: DateTime.UtcNow);
 
 	await SaveApiUiSettingsAsync(uiSettingsPath, normalized);
+	app.Logger.LogInformation("UI settings saved at {UpdatedUtc} from {RemoteIp}", normalized.UpdatedUtc, context.Connection.RemoteIpAddress);
 	return Results.Ok(normalized);
 });
 
-app.MapGet("/ui/repair-status", () => {
+app.MapGet("/ui/repair-status", async (HttpContext context, IDbContextFactory<GameDatabaseContext> contextFactory) => {
+	if (!IsLocalUiAccessRequest(context)) {
+		return Results.StatusCode(StatusCodes.Status403Forbidden);
+	}
+
 	var installRoot = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "OrganizedJihad");
 	var apiDatabasePath = Path.Combine(AppContext.BaseDirectory, "herowars.db");
 	var userscriptPath = Path.Combine(installRoot, "userscript", "organized-jihad.user.js");
 	var trayHostPath = Path.Combine(installRoot, "api-tray", "OrganizedJihad.Api.TrayHost.exe");
 	var apiServiceTaskStatus = GetScheduledTaskStatus("OrganizedJihad.Api.Service");
 	var apiTrayTaskStatus = GetScheduledTaskStatus("OrganizedJihad.Api.Tray");
+	var handshake = await GetUserscriptHandshakeStatusAsync(contextFactory);
 
 	var hasDatabase = File.Exists(apiDatabasePath);
 	var hasUserscript = File.Exists(userscriptPath);
@@ -132,6 +170,12 @@ app.MapGet("/ui/repair-status", () => {
 		recommendation += " Startup tasks are not fully registered; rerun installer as Administrator to restore service/tray startup automation.";
 	}
 
+	if (!handshake.HasRecentSync) {
+		recommendation += " Userscript handshake is stale or missing; verify Tampermonkey script enablement and run install-health-check diagnostics.";
+	}
+
+	app.Logger.LogInformation("Repair status requested. DB={HasDatabase}, Script={HasUserscript}, Tray={HasTrayHost}, Handshake={HandshakeStatus}", hasDatabase, hasUserscript, hasTrayHost, handshake.Status);
+
 	return Results.Ok(new {
 		installRoot,
 		hasDatabase,
@@ -139,7 +183,33 @@ app.MapGet("/ui/repair-status", () => {
 		hasTrayHost,
 		apiServiceTaskStatus = apiServiceTaskStatus.Status,
 		apiTrayTaskStatus = apiTrayTaskStatus.Status,
+		handshakeStatus = handshake.Status,
+		handshakeLastSyncUtc = handshake.LastSyncUtc,
+		handshakeAgeMinutes = handshake.AgeMinutes,
 		recommendation,
+		checkedUtc = DateTime.UtcNow,
+	});
+});
+
+app.MapGet("/ui/userscript-handshake", async (HttpContext context, IDbContextFactory<GameDatabaseContext> contextFactory) => {
+	if (!IsLocalUiAccessRequest(context)) {
+		return Results.StatusCode(StatusCodes.Status403Forbidden);
+	}
+
+	var handshake = await GetUserscriptHandshakeStatusAsync(contextFactory);
+	app.Logger.LogInformation("Userscript handshake diagnostics requested. Status={Status}, LastSyncUtc={LastSyncUtc}", handshake.Status, handshake.LastSyncUtc);
+
+	return Results.Ok(new {
+		status = handshake.Status,
+		lastSyncUtc = handshake.LastSyncUtc,
+		ageMinutes = handshake.AgeMinutes,
+		hasRecentSync = handshake.HasRecentSync,
+		recommendedChecks = new[] {
+			"Confirm Tampermonkey extension is installed and enabled in your active browser.",
+			"Confirm organized-jihad.user.js is installed and enabled in Tampermonkey.",
+			"Open Hero Wars, then verify /api/sync/health and /api/sync/last-sync endpoints.",
+			"Run userscript install check: yarn install:check --open failed"
+		},
 		checkedUtc = DateTime.UtcNow,
 	});
 });
@@ -148,6 +218,10 @@ app.MapGet("/ui/repair-status", () => {
 // This is intentionally lightweight and dependency-free so it is always available
 // when the API starts from tray/startup tasks.
 app.MapGet("/ui", (HttpContext context) => {
+	if (!IsLocalUiAccessRequest(context)) {
+		return Results.StatusCode(StatusCodes.Status403Forbidden);
+	}
+
 	var baseUrl = $"{context.Request.Scheme}://{context.Request.Host}";
 	var html = $$"""
 <!doctype html>
@@ -280,10 +354,12 @@ app.MapGet("/ui", (HttpContext context) => {
 				</p>
 				<div id="repairSummary" style="margin-top: 10px; color: var(--muted);">Checking runtime artifacts...</div>
 				<div id="taskSummary" style="margin-top: 6px; color: var(--muted);">Checking startup task status...</div>
+				<div id="handshakeSummary" style="margin-top: 6px; color: var(--muted);">Checking userscript handshake...</div>
 				<div class="actions">
 					<a class="button" href="/api/sync/health" target="_blank" rel="noreferrer">Open Health JSON</a>
 					<a class="button" href="/api/sync/last-sync" target="_blank" rel="noreferrer">Open Last Sync JSON</a>
 					<a class="button" href="/api/sync/stats" target="_blank" rel="noreferrer">Open Stats JSON</a>
+					<a class="button" href="/ui/userscript-handshake" target="_blank" rel="noreferrer">Open Handshake JSON</a>
 					<a class="button" id="openHeroWars" href="https://www.hero-wars.com/" target="_blank" rel="noreferrer">Open Hero Wars</a>
 				</div>
 			</section>
@@ -332,6 +408,7 @@ app.MapGet("/ui", (HttpContext context) => {
 			const lastSync = document.getElementById('lastSync');
 			const repairSummary = document.getElementById('repairSummary');
 			const taskSummary = document.getElementById('taskSummary');
+			const handshakeSummary = document.getElementById('handshakeSummary');
 
 			try {
 				const health = await fetchJson('/api/sync/health');
@@ -359,9 +436,11 @@ app.MapGet("/ui", (HttpContext context) => {
 				const repair = await fetchJson('/ui/repair-status');
 				repairSummary.textContent = repair.recommendation + ' (Checked: ' + new Date(repair.checkedUtc).toLocaleString() + ')';
 				taskSummary.textContent = 'Startup tasks -> Service: ' + repair.apiServiceTaskStatus + ' | Tray: ' + repair.apiTrayTaskStatus;
+				handshakeSummary.textContent = 'Handshake -> ' + repair.handshakeStatus + (repair.handshakeLastSyncUtc ? ' (Last sync: ' + new Date(repair.handshakeLastSyncUtc).toLocaleString() + ')' : ' (No sync recorded yet)');
 			} catch {
 				repairSummary.textContent = 'Could not retrieve runtime repair status.';
 				taskSummary.textContent = 'Startup task status unavailable.';
+				handshakeSummary.textContent = 'Userscript handshake status unavailable.';
 			}
 		}
 
@@ -420,9 +499,19 @@ app.MapGet("/ui", (HttpContext context) => {
 		}
 
 		document.getElementById('saveSettings').addEventListener('click', saveSettings);
-		loadSettings();
-		refresh();
-		setInterval(refresh, 15000);
+
+		(async function initialize() {
+			await loadSettings();
+			const autoHealth = document.getElementById('autoHealth');
+			if (autoHealth.checked) {
+				await refresh();
+				setInterval(refresh, 15000);
+			} else {
+				document.getElementById('healthState').textContent = 'Auto refresh disabled';
+				document.getElementById('healthState').className = 'stat warn';
+				document.getElementById('healthDetail').textContent = 'Enable "Auto-load health" in settings, then save and refresh this page.';
+			}
+		})();
 	</script>
 </body>
 </html>
@@ -444,6 +533,7 @@ app.MapGet("/", () => new {
 		"GET  /ui/settings - Get persisted API UI settings",
 		"POST /ui/settings - Save persisted API UI settings",
 		"GET  /ui/repair-status - Runtime setup/update repair hints",
+		"GET  /ui/userscript-handshake - Userscript handshake diagnostics",
 		"GET  /api/sync/health - Health check",
 		"POST /api/sync/import - Import data from browser",
 		"GET  /api/sync/last-sync - Get last sync timestamp",
@@ -463,6 +553,123 @@ static string ResolveApiUiSettingsPath() {
 	}
 
 	return Path.Combine(AppContext.BaseDirectory, "api-ui-settings.json");
+}
+
+static string ResolveApiDatabasePath() {
+	var overridePath = Environment.GetEnvironmentVariable("OJ_DB_PATH");
+	if (!string.IsNullOrWhiteSpace(overridePath)) {
+		return overridePath;
+	}
+
+	return Path.Combine(AppContext.BaseDirectory, "herowars.db");
+}
+
+static bool IsLocalUiAccessRequest(HttpContext context) {
+	var remoteAddress = context.Connection.RemoteIpAddress;
+	if (remoteAddress is null) {
+		return true;
+	}
+
+	if (IPAddress.IsLoopback(remoteAddress)) {
+		return true;
+	}
+
+	if (remoteAddress.AddressFamily == System.Net.Sockets.AddressFamily.InterNetworkV6
+		&& remoteAddress.IsIPv4MappedToIPv6
+		&& IPAddress.IsLoopback(remoteAddress.MapToIPv4())) {
+		return true;
+	}
+
+	return false;
+}
+
+static void ApplyUiSecurityHeaders(HttpResponse response) {
+	response.Headers["Cache-Control"] = "no-store, no-cache, must-revalidate";
+	response.Headers["Pragma"] = "no-cache";
+	response.Headers["X-Content-Type-Options"] = "nosniff";
+	response.Headers["X-Frame-Options"] = "DENY";
+	response.Headers["Referrer-Policy"] = "no-referrer";
+}
+
+static bool TryNormalizeLocalApiUrl(string? rawUrl, string fallbackUrl, out string normalizedUrl, out string? error) {
+	normalizedUrl = fallbackUrl;
+	error = null;
+
+	if (string.IsNullOrWhiteSpace(rawUrl)) {
+		return true;
+	}
+
+	var candidate = rawUrl.Trim();
+	if (!Uri.TryCreate(candidate, UriKind.Absolute, out var uri)) {
+		error = "API Base URL must be an absolute URL.";
+		return false;
+	}
+
+	if (!string.Equals(uri.Scheme, Uri.UriSchemeHttp, StringComparison.OrdinalIgnoreCase)
+		&& !string.Equals(uri.Scheme, Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase)) {
+		error = "API Base URL must use http or https.";
+		return false;
+	}
+
+	if (!string.Equals(uri.Host, "localhost", StringComparison.OrdinalIgnoreCase)
+		&& !string.Equals(uri.Host, "127.0.0.1", StringComparison.OrdinalIgnoreCase)
+		&& !string.Equals(uri.Host, "::1", StringComparison.OrdinalIgnoreCase)) {
+		error = "API Base URL must target localhost/loopback only.";
+		return false;
+	}
+
+	normalizedUrl = uri.GetLeftPart(UriPartial.Authority);
+	return true;
+}
+
+static bool TryNormalizeHeroWarsUrl(string? rawUrl, out string normalizedUrl, out string? error) {
+	normalizedUrl = "https://www.hero-wars.com/";
+	error = null;
+
+	if (string.IsNullOrWhiteSpace(rawUrl)) {
+		return true;
+	}
+
+	var candidate = rawUrl.Trim();
+	if (!Uri.TryCreate(candidate, UriKind.Absolute, out var uri)) {
+		error = "Preferred Hero Wars URL must be an absolute URL.";
+		return false;
+	}
+
+	if (!string.Equals(uri.Scheme, Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase)) {
+		error = "Preferred Hero Wars URL must use https.";
+		return false;
+	}
+
+	if (!uri.Host.Contains("hero-wars.com", StringComparison.OrdinalIgnoreCase)) {
+		error = "Preferred Hero Wars URL must target hero-wars.com.";
+		return false;
+	}
+
+	normalizedUrl = uri.ToString();
+	return true;
+}
+
+static async Task<(string Status, DateTime? LastSyncUtc, double? AgeMinutes, bool HasRecentSync)> GetUserscriptHandshakeStatusAsync(IDbContextFactory<GameDatabaseContext> contextFactory) {
+	try {
+		await using var context = await contextFactory.CreateDbContextAsync();
+		var metadata = await context.SyncMetadata.FirstOrDefaultAsync(m => m.Key == "last_sync_timestamp");
+		if (metadata is null || string.IsNullOrWhiteSpace(metadata.Value)) {
+			return ("missing", null, null, false);
+		}
+
+		if (!DateTime.TryParse(metadata.Value, out var parsed)) {
+			return ("invalid", null, null, false);
+		}
+
+		var lastSyncUtc = DateTime.SpecifyKind(parsed, DateTimeKind.Utc);
+		var ageMinutes = Math.Max(0d, (DateTime.UtcNow - lastSyncUtc).TotalMinutes);
+		var hasRecentSync = ageMinutes <= 30d;
+		var status = hasRecentSync ? "active" : "stale";
+		return (status, lastSyncUtc, Math.Round(ageMinutes, 2), hasRecentSync);
+	} catch {
+		return ("unknown", null, null, false);
+	}
 }
 
 static ApiUiSettings? TryLoadApiUiSettings(string settingsPath) {

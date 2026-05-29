@@ -543,3 +543,47 @@
 - dotnet build api/OrganizedJihad.Api.TrayHost/OrganizedJihad.Api.TrayHost.csproj (pass)
 - dotnet test tests/OrganizedJihad.Api.Tests/OrganizedJihad.Api.Tests.csproj --filter "Api_Ui_Route_Should_Return_Html|Api_Ui_Settings_Should_Return_Payload" (pass)
 - dotnet test tests/OrganizedJihad.Api.Tests/OrganizedJihad.Api.Tests.csproj --filter "Api_Ui_Settings_Should_Return_Payload" (pass)
+
+---
+
+## Session
+- Date: 2026-05-29
+- Session Number: 20
+- Scope: reliability/security tranche (rollback, handshake diagnostics, smoke/migration automation, tray tests)
+
+## Summary
+- Added installer transactional rollback snapshot/restore behavior for API, tray, desktop, and userscript install paths.
+- Added userscript handshake diagnostics endpoint (`/ui/userscript-handshake`) and surfaced handshake status in `/ui/repair-status` and UI page.
+- Hardened local API UI controls with local-only access guards, UI security headers, and stricter settings validation.
+- Added migration-path and release-smoke automation scripts and integrated both into release publishing flow by default.
+- Improved tray host observability with `tray-host.log` entries and extracted settings parser for targeted unit tests.
+- Added new API integration tests and tray host parser tests.
+
+## Files Modified
+- Install-OrganizedJihad.ps1
+- Publish-ReleaseArtifacts.ps1
+- Test-ApiMigrationPath.ps1
+- Test-ReleaseSmoke.ps1
+- README.md
+- api/Program.cs
+- api/OrganizedJihad.Api.TrayHost/Program.cs
+- tests/OrganizedJihad.Api.Tests/SyncControllerTests.cs
+- tests/OrganizedJihad.Api.TrayHost.Tests/OrganizedJihad.Api.TrayHost.Tests.csproj
+- tests/OrganizedJihad.Api.TrayHost.Tests/TrayRuntimeSettingsParserTests.cs
+- userscript/scripts/install-health-check.mjs
+- ~docs/plans/operational-recovery-playbook.md
+- ~docs/copilot-chats/2026-05-29-userscript-build-auto.md
+
+## Issues
+- Follow-up on: #330
+- PR tracking: #209
+
+## Validation
+- dotnet build api/OrganizedJihad.Api.csproj (pass)
+- dotnet build api/OrganizedJihad.Api.TrayHost/OrganizedJihad.Api.TrayHost.csproj (pass)
+- dotnet test tests/OrganizedJihad.Api.Tests/OrganizedJihad.Api.Tests.csproj --filter "Api_Ui_Settings_Should_Return_Payload|Api_Ui_Userscript_Handshake_Should_Return_Payload|Api_Ui_Settings_Should_Reject_NonLocal_ApiBaseUrl" (pass)
+- dotnet test tests/OrganizedJihad.Api.TrayHost.Tests/OrganizedJihad.Api.TrayHost.Tests.csproj (pass)
+- pwsh -ExecutionPolicy Bypass -File .\Test-ApiMigrationPath.ps1 -StartupTimeoutSeconds 90 (pass)
+- dotnet publish api/OrganizedJihad.Api.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true (pass)
+- pwsh -ExecutionPolicy Bypass -File .\Test-ReleaseSmoke.ps1 -StartupTimeoutSeconds 90 (pass)
+- PowerShell parser checks for installer/release/smoke/migration scripts (pass)

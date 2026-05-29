@@ -324,6 +324,55 @@ function Copy-BuildArtifactsExcludingFiles {
 	}
 }
 
+function New-InstallBackupRecord {
+	param(
+		[string]$TargetPath,
+		[string]$BackupRoot,
+		[string]$Label
+	)
+
+	$record = [PSCustomObject]@{
+		Label = $Label
+		TargetPath = $TargetPath
+		BackupPath = Join-Path $BackupRoot $Label
+		HadOriginal = Test-Path -Path $TargetPath
+	}
+
+	if ($record.HadOriginal) {
+		Copy-BuildArtifacts -Source $TargetPath -Destination $record.BackupPath -MaxRetries 15
+		Write-Step "Captured rollback backup for '$Label'."
+	}
+
+	return $record
+}
+
+function Restore-InstallBackupRecord {
+	param([object]$Record)
+
+	if (-not $Record) {
+		return
+	}
+
+	if ($Record.HadOriginal) {
+		if (Test-Path -Path $Record.TargetPath) {
+			Remove-Item -Path $Record.TargetPath -Recurse -Force -ErrorAction SilentlyContinue
+		}
+
+		Ensure-Directory -Path $Record.TargetPath
+		if (Test-Path -Path $Record.BackupPath) {
+			Copy-BuildArtifacts -Source $Record.BackupPath -Destination $Record.TargetPath -MaxRetries 15
+		}
+
+		Write-Step "Restored rollback backup for '$($Record.Label)'."
+		return
+	}
+
+	if (Test-Path -Path $Record.TargetPath) {
+		Remove-Item -Path $Record.TargetPath -Recurse -Force -ErrorAction SilentlyContinue
+		Write-Step "Removed newly-created path during rollback for '$($Record.Label)'."
+	}
+}
+
 function Stop-InstalledApiProcess {
 	param([string]$ExecutablePath)
 
@@ -664,6 +713,25 @@ function Wait-ApiHealth {
 	return $false
 }
 
+function Invoke-UserscriptHandshakeDiagnostics {
+	param(
+		[string]$ApiUrlValue,
+		[int]$TimeoutSeconds = 8
+	)
+
+	$handshakeUrl = "$ApiUrlValue/ui/userscript-handshake"
+	try {
+		$response = Invoke-RestMethod -Uri $handshakeUrl -Method Get -TimeoutSec $TimeoutSeconds
+		$status = if ($response.status) { [string]$response.status } else { 'unknown' }
+		$lastSyncUtc = if ($response.lastSyncUtc) { [string]$response.lastSyncUtc } else { 'none' }
+		Write-Step "Userscript handshake diagnostics: status=$status, lastSyncUtc=$lastSyncUtc"
+		return $response
+	} catch {
+		Write-Step "Userscript handshake diagnostics failed at $handshakeUrl ($($_.Exception.Message))."
+		return $null
+	}
+}
+
 $repoRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
 $apiProject = Join-Path $repoRoot 'api\OrganizedJihad.Api.csproj'
 $apiTrayProject = Join-Path $repoRoot 'api\OrganizedJihad.Api.TrayHost\OrganizedJihad.Api.TrayHost.csproj'
@@ -847,111 +915,153 @@ if ((Test-Path -Path $userscriptDir) -and (Test-Path -Path $apiProject)) {
 
 Write-Step "Installing artifacts into '$InstallRoot'"
 Ensure-Directory -Path $InstallRoot
-if (-not $SkipApiInstall) {
-	$suspendedAutostartTasks = @()
-	foreach ($autostartTaskName in @($apiServiceTaskName, $apiTrayTaskName)) {
-		if (Suspend-AutostartTask -TaskName $autostartTaskName) {
-			$suspendedAutostartTasks += $autostartTaskName
+$rollbackRoot = Join-Path $InstallRoot 'rollback'
+$rollbackSnapshotId = (Get-Date).ToString('yyyyMMdd-HHmmss')
+$rollbackSnapshotPath = Join-Path $rollbackRoot $rollbackSnapshotId
+$rollbackRecords = @()
+$installTransactionalSuccess = $false
+
+try {
+	if (-not $SkipApiInstall) {
+		$rollbackRecords += New-InstallBackupRecord -TargetPath $apiInstallDir -BackupRoot $rollbackSnapshotPath -Label 'api'
+	}
+	if (-not $SkipDesktopAppInstall) {
+		$rollbackRecords += New-InstallBackupRecord -TargetPath $desktopInstallDir -BackupRoot $rollbackSnapshotPath -Label 'desktop-app'
+	}
+	if ((-not $SkipApiInstall) -and $apiTrayPublishDir -and (Test-Path -Path $apiTrayPublishDir)) {
+		$rollbackRecords += New-InstallBackupRecord -TargetPath $apiTrayInstallDir -BackupRoot $rollbackSnapshotPath -Label 'api-tray'
+	}
+	if (-not $SkipUserscriptInstall) {
+		$rollbackRecords += New-InstallBackupRecord -TargetPath $userscriptInstallDir -BackupRoot $rollbackSnapshotPath -Label 'userscript'
+	}
+
+	if (-not $SkipApiInstall) {
+		$suspendedAutostartTasks = @()
+		foreach ($autostartTaskName in @($apiServiceTaskName, $apiTrayTaskName)) {
+			if (Suspend-AutostartTask -TaskName $autostartTaskName) {
+				$suspendedAutostartTasks += $autostartTaskName
+			}
+		}
+		try {
+			Stop-InstalledApiProcess -ExecutablePath $apiExecutablePath
+			$fileUnlocked = Wait-FileUnlocked -Path $apiExecutablePath -TimeoutSeconds 30
+			if (-not $fileUnlocked) {
+				Write-Step "API binary remained locked after wait window. Continuing with retrying copy operations."
+			}
+
+			try {
+				Copy-BuildArtifacts -Source $apiPublishDir -Destination $apiInstallDir -MaxRetries 60
+			} catch {
+				$copyError = $_.Exception.Message
+				if ($copyError -like '*OrganizedJihad.Api.exe*used by another process*') {
+					Write-Step 'Detected locked OrganizedJihad.Api.exe during copy. Falling back to side-by-side executable deployment.'
+
+					Copy-BuildArtifactsExcludingFiles -Source $apiPublishDir -Destination $apiInstallDir -ExcludedFileNames @('OrganizedJihad.Api.exe')
+
+					$sourceApiExecutable = Join-Path $apiPublishDir 'OrganizedJihad.Api.exe'
+					$sideBySideName = "OrganizedJihad.Api.$((Get-Date).ToString('yyyyMMddHHmmss')).exe"
+					$sideBySidePath = Join-Path $apiInstallDir $sideBySideName
+					Copy-Item -Path $sourceApiExecutable -Destination $sideBySidePath -Force
+					$apiExecutablePath = $sideBySidePath
+
+					Write-Step "Using side-by-side API executable: $apiExecutablePath"
+				} else {
+					throw
+				}
+			}
+		} finally {
+			foreach ($suspendedTaskName in $suspendedAutostartTasks) {
+				Resume-AutostartTask -TaskName $suspendedTaskName
+			}
 		}
 	}
-	try {
-		Stop-InstalledApiProcess -ExecutablePath $apiExecutablePath
-		$fileUnlocked = Wait-FileUnlocked -Path $apiExecutablePath -TimeoutSeconds 30
+
+	if (-not $SkipDesktopAppInstall) {
+		Copy-BuildArtifacts -Source $desktopPublishDir -Destination $desktopInstallDir
+	}
+
+	if ((-not $SkipApiInstall) -and $apiTrayPublishDir -and (Test-Path -Path $apiTrayPublishDir)) {
+		Stop-ProcessByExecutablePath -ExecutablePath $apiTrayExecutablePath -DisplayName 'running API tray host process'
+		$fileUnlocked = Wait-FileUnlocked -Path $apiTrayExecutablePath -TimeoutSeconds 10
 		if (-not $fileUnlocked) {
-			Write-Step "API binary remained locked after wait window. Continuing with retrying copy operations."
+			Write-Step 'Tray host executable remained locked after wait window. Continuing with retrying copy operations.'
 		}
 
 		try {
-			Copy-BuildArtifacts -Source $apiPublishDir -Destination $apiInstallDir -MaxRetries 60
+			Copy-BuildArtifacts -Source $apiTrayPublishDir -Destination $apiTrayInstallDir -MaxRetries 30
 		} catch {
 			$copyError = $_.Exception.Message
-			if ($copyError -like '*OrganizedJihad.Api.exe*used by another process*') {
-				Write-Step 'Detected locked OrganizedJihad.Api.exe during copy. Falling back to side-by-side executable deployment.'
+			if ($copyError -like '*OrganizedJihad.Api.TrayHost.exe*used by another process*') {
+				Write-Step 'Detected locked tray host executable during copy. Falling back to side-by-side tray-host deployment.'
 
-				Copy-BuildArtifactsExcludingFiles -Source $apiPublishDir -Destination $apiInstallDir -ExcludedFileNames @('OrganizedJihad.Api.exe')
+				Copy-BuildArtifactsExcludingFiles -Source $apiTrayPublishDir -Destination $apiTrayInstallDir -ExcludedFileNames @('OrganizedJihad.Api.TrayHost.exe')
 
-				$sourceApiExecutable = Join-Path $apiPublishDir 'OrganizedJihad.Api.exe'
-				$sideBySideName = "OrganizedJihad.Api.$((Get-Date).ToString('yyyyMMddHHmmss')).exe"
-				$sideBySidePath = Join-Path $apiInstallDir $sideBySideName
-				Copy-Item -Path $sourceApiExecutable -Destination $sideBySidePath -Force
-				$apiExecutablePath = $sideBySidePath
+				$sourceTrayExecutable = Join-Path $apiTrayPublishDir 'OrganizedJihad.Api.TrayHost.exe'
+				$traySideBySideName = "OrganizedJihad.Api.TrayHost.$((Get-Date).ToString('yyyyMMddHHmmss')).exe"
+				$traySideBySidePath = Join-Path $apiTrayInstallDir $traySideBySideName
+				Copy-Item -Path $sourceTrayExecutable -Destination $traySideBySidePath -Force
+				$apiTrayExecutablePath = $traySideBySidePath
 
-				Write-Step "Using side-by-side API executable: $apiExecutablePath"
+				Write-Step "Using side-by-side tray host executable: $apiTrayExecutablePath"
 			} else {
 				throw
 			}
 		}
-	} finally {
-		foreach ($suspendedTaskName in $suspendedAutostartTasks) {
-			Resume-AutostartTask -TaskName $suspendedTaskName
+	}
+
+	if (-not $SkipUserscriptInstall) {
+		Ensure-Directory -Path $userscriptInstallDir
+		Copy-Item -Path $userscriptArtifactPath -Destination (Join-Path $userscriptInstallDir 'organized-jihad.user.js') -Force
+
+		if ($userscriptGuidePath -and (Test-Path -Path $userscriptGuidePath)) {
+			Copy-Item -Path $userscriptGuidePath -Destination (Join-Path $userscriptInstallDir 'tampermonkey-setup.html') -Force
+		}
+
+		if ($userscriptGuideScreenshotsPath -and (Test-Path -Path $userscriptGuideScreenshotsPath)) {
+			$guideScreenshotInstallDir = Join-Path $userscriptInstallDir 'guide-screenshots'
+			Copy-BuildArtifacts -Source $userscriptGuideScreenshotsPath -Destination $guideScreenshotInstallDir
 		}
 	}
-}
 
-if (-not $SkipDesktopAppInstall) {
-	Copy-BuildArtifacts -Source $desktopPublishDir -Destination $desktopInstallDir
-}
-
-if ((-not $SkipApiInstall) -and $apiTrayPublishDir -and (Test-Path -Path $apiTrayPublishDir)) {
-	Stop-ProcessByExecutablePath -ExecutablePath $apiTrayExecutablePath -DisplayName 'running API tray host process'
-	$fileUnlocked = Wait-FileUnlocked -Path $apiTrayExecutablePath -TimeoutSeconds 10
-	if (-not $fileUnlocked) {
-		Write-Step 'Tray host executable remained locked after wait window. Continuing with retrying copy operations.'
+	if ((-not $SkipApiInstall) -and (-not (Test-Path -Path $apiExecutablePath))) {
+		throw "Expected API executable missing at '$apiExecutablePath'."
 	}
 
-	try {
-		Copy-BuildArtifacts -Source $apiTrayPublishDir -Destination $apiTrayInstallDir -MaxRetries 30
-	} catch {
-		$copyError = $_.Exception.Message
-		if ($copyError -like '*OrganizedJihad.Api.TrayHost.exe*used by another process*') {
-			Write-Step 'Detected locked tray host executable during copy. Falling back to side-by-side tray-host deployment.'
+	if ((-not $SkipDesktopAppInstall) -and (-not (Test-Path -Path $desktopExecutablePath))) {
+		throw "Expected desktop executable missing at '$desktopExecutablePath'."
+	}
 
-			Copy-BuildArtifactsExcludingFiles -Source $apiTrayPublishDir -Destination $apiTrayInstallDir -ExcludedFileNames @('OrganizedJihad.Api.TrayHost.exe')
+	if (-not $SkipApiInstall) {
+		Write-Step "Configuring API startup"
+		$useTrayHost = Test-Path -Path $apiTrayExecutablePath
+		if ($useTrayHost) {
+			Write-Step 'Tray host found. Installer will configure service-style API startup plus interactive tray icon startup.'
+		}
 
-			$sourceTrayExecutable = Join-Path $apiTrayPublishDir 'OrganizedJihad.Api.TrayHost.exe'
-			$traySideBySideName = "OrganizedJihad.Api.TrayHost.$((Get-Date).ToString('yyyyMMddHHmmss')).exe"
-			$traySideBySidePath = Join-Path $apiTrayInstallDir $traySideBySideName
-			Copy-Item -Path $sourceTrayExecutable -Destination $traySideBySidePath -Force
-			$apiTrayExecutablePath = $traySideBySidePath
+		Ensure-ApiAutostartTasks -ApiServiceTaskName $apiServiceTaskName -ApiTrayTaskName $apiTrayTaskName -ApiExecutablePath $apiExecutablePath -ApiWorkingDirectory $apiInstallDir -ApiTrayExecutablePath $apiTrayExecutablePath -ApiTrayWorkingDirectory $apiTrayInstallDir -ApiUrlValue $ApiUrl -UseTrayHost:$useTrayHost
+		$autostartVerification = Verify-ApiAutostartTasks -ApiServiceTaskName $apiServiceTaskName -ApiTrayTaskName $apiTrayTaskName -ExpectTrayTask:$useTrayHost
+	}
 
-			Write-Step "Using side-by-side tray host executable: $apiTrayExecutablePath"
-		} else {
-			throw
+	$installTransactionalSuccess = $true
+} catch {
+	$installError = $_.Exception.Message
+	Write-Step "Install step failed: $installError"
+	Write-Step 'Attempting rollback to pre-install snapshot...'
+
+	foreach ($record in ($rollbackRecords | Sort-Object -Property Label -Descending)) {
+		try {
+			Restore-InstallBackupRecord -Record $record
+		} catch {
+			Write-Step "Rollback failed for '$($record.Label)' ($($_.Exception.Message))."
 		}
 	}
-}
 
-if (-not $SkipUserscriptInstall) {
-	Ensure-Directory -Path $userscriptInstallDir
-	Copy-Item -Path $userscriptArtifactPath -Destination (Join-Path $userscriptInstallDir 'organized-jihad.user.js') -Force
-
-	if ($userscriptGuidePath -and (Test-Path -Path $userscriptGuidePath)) {
-		Copy-Item -Path $userscriptGuidePath -Destination (Join-Path $userscriptInstallDir 'tampermonkey-setup.html') -Force
+	throw "Installation failed and rollback was attempted. Original error: $installError"
+} finally {
+	if ($installTransactionalSuccess -and (Test-Path -Path $rollbackSnapshotPath)) {
+		Remove-Item -Path $rollbackSnapshotPath -Recurse -Force -ErrorAction SilentlyContinue
+		Write-Step 'Cleared temporary rollback snapshot.'
 	}
-
-	if ($userscriptGuideScreenshotsPath -and (Test-Path -Path $userscriptGuideScreenshotsPath)) {
-		$guideScreenshotInstallDir = Join-Path $userscriptInstallDir 'guide-screenshots'
-		Copy-BuildArtifacts -Source $userscriptGuideScreenshotsPath -Destination $guideScreenshotInstallDir
-	}
-}
-
-if ((-not $SkipApiInstall) -and (-not (Test-Path -Path $apiExecutablePath))) {
-	throw "Expected API executable missing at '$apiExecutablePath'."
-}
-
-if ((-not $SkipDesktopAppInstall) -and (-not (Test-Path -Path $desktopExecutablePath))) {
-	throw "Expected desktop executable missing at '$desktopExecutablePath'."
-}
-
-if (-not $SkipApiInstall) {
-	Write-Step "Configuring API startup"
-	$useTrayHost = Test-Path -Path $apiTrayExecutablePath
-	if ($useTrayHost) {
-		Write-Step 'Tray host found. Installer will configure service-style API startup plus interactive tray icon startup.'
-	}
-
-	Ensure-ApiAutostartTasks -ApiServiceTaskName $apiServiceTaskName -ApiTrayTaskName $apiTrayTaskName -ApiExecutablePath $apiExecutablePath -ApiWorkingDirectory $apiInstallDir -ApiTrayExecutablePath $apiTrayExecutablePath -ApiTrayWorkingDirectory $apiTrayInstallDir -ApiUrlValue $ApiUrl -UseTrayHost:$useTrayHost
-	$autostartVerification = Verify-ApiAutostartTasks -ApiServiceTaskName $apiServiceTaskName -ApiTrayTaskName $apiTrayTaskName -ExpectTrayTask:$useTrayHost
 }
 
 if ((-not $SkipUserscriptInstall) -and (-not $SkipTampermonkeyBootstrap)) {
@@ -963,6 +1073,7 @@ if ((-not $SkipUserscriptInstall) -and (-not $SkipTampermonkeyBootstrap)) {
 
 if ((-not $SkipApiInstall) -and $effectiveRunInstallHealthCheck) {
 	Wait-ApiHealth -ApiUrlValue $ApiUrl -TimeoutSeconds 30 | Out-Null
+	Invoke-UserscriptHandshakeDiagnostics -ApiUrlValue $ApiUrl | Out-Null
 
 	Write-Step 'Running userscript install health check.'
 	$healthCheckScript = Join-Path $userscriptDir 'scripts\install-health-check.mjs'
@@ -998,11 +1109,13 @@ if ((-not $SkipApiInstall) -and $effectiveOpenUserscriptDiagnostics) {
 	Write-Step 'Opening userscript diagnostics entry points.'
 	$apiHealthUrl = "$ApiUrl/api/sync/health"
 	$apiDocsUrl = "$ApiUrl/api/sync"
+	$apiHandshakeUrl = "$ApiUrl/ui/userscript-handshake"
 	$heroWarsUrl = 'https://www.hero-wars.com/'
 
 	Start-Process $heroWarsUrl | Out-Null
 	Start-Process $apiHealthUrl | Out-Null
 	Start-Process $apiDocsUrl | Out-Null
+	Start-Process $apiHandshakeUrl | Out-Null
 
 	Write-Step 'Opened Hero Wars + API health/docs URLs. In-game, press Ctrl+Shift+H to open overlay diagnostics panel.'
 }

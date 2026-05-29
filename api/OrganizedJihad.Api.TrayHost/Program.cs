@@ -2,8 +2,11 @@ using System.Diagnostics;
 using System.Drawing;
 using System.Net.Http;
 using System.Net.Sockets;
+using System.Runtime.CompilerServices;
 using System.Text.Json;
 using System.Windows.Forms;
+
+[assembly: InternalsVisibleTo("OrganizedJihad.Api.TrayHost.Tests")]
 
 namespace OrganizedJihad.Api.TrayHost;
 
@@ -53,6 +56,7 @@ internal sealed class TrayContext : ApplicationContext {
 	private readonly System.Windows.Forms.Timer _healthTimer;
 	private readonly HttpClient _httpClient;
 	private readonly string _settingsPath;
+	private readonly string _logPath;
 	private Process? _apiProcess;
 	private bool _apiManagedByTray;
 	private DateTime _lastSettingsWriteUtc = DateTime.MinValue;
@@ -70,6 +74,7 @@ internal sealed class TrayContext : ApplicationContext {
 
 		_notifyIcon.DoubleClick += (_, _) => OpenApiUi();
 		_settingsPath = Path.Combine(_options.WorkingDirectory, "api-ui-settings.json");
+		_logPath = Path.Combine(_options.WorkingDirectory, "tray-host.log");
 		_httpClient = new HttpClient {
 			Timeout = TimeSpan.FromSeconds(2),
 		};
@@ -85,6 +90,7 @@ internal sealed class TrayContext : ApplicationContext {
 		ReloadRuntimeSettingsIfChanged();
 		EnsureApiRunning();
 		UpdateTooltip();
+		AppendTrayLog("Tray host initialized.");
 	}
 
 	private ContextMenuStrip BuildMenu() {
@@ -108,6 +114,7 @@ internal sealed class TrayContext : ApplicationContext {
 
 	private void EnsureApiRunning() {
 		if (!File.Exists(_options.ApiExecutablePath)) {
+			AppendTrayLog($"API executable missing: {_options.ApiExecutablePath}");
 			_notifyIcon.BalloonTipTitle = "OJ API Tray";
 			_notifyIcon.BalloonTipText = $"API executable not found: {_options.ApiExecutablePath}";
 			_notifyIcon.ShowBalloonTip(4000);
@@ -127,6 +134,7 @@ internal sealed class TrayContext : ApplicationContext {
 			}
 
 			if (IsConfiguredPortInUse()) {
+				AppendTrayLog($"Configured API port is occupied but health probe is failing at {_options.ApiUrl}.");
 				ShowPortConflictNotice();
 				UpdateTooltip();
 				return;
@@ -140,6 +148,7 @@ internal sealed class TrayContext : ApplicationContext {
 				CreateNoWindow = true,
 			});
 			_apiManagedByTray = _apiProcess is not null;
+			AppendTrayLog($"API process start attempted. ManagedByTray={_apiManagedByTray}, Url={_options.ApiUrl}");
 
 			if (_apiProcess is not null) {
 				_apiProcess.EnableRaisingEvents = true;
@@ -152,6 +161,7 @@ internal sealed class TrayContext : ApplicationContext {
 			if (IsConfiguredPortInUse()) {
 				ShowPortConflictNotice();
 			}
+			AppendTrayLog($"API start failure: {ex.Message}");
 			_notifyIcon.BalloonTipTitle = "OJ API Tray";
 			_notifyIcon.BalloonTipText = $"Could not start API: {ex.Message}";
 			_notifyIcon.ShowBalloonTip(4000);
@@ -170,24 +180,23 @@ internal sealed class TrayContext : ApplicationContext {
 			}
 
 			var raw = File.ReadAllText(_settingsPath);
-			using var document = JsonDocument.Parse(raw);
-			if (document.RootElement.TryGetProperty("apiBaseUrl", out var apiBaseUrlProperty)) {
-				var configuredApiUrl = apiBaseUrlProperty.GetString()?.Trim();
-				if (!string.IsNullOrWhiteSpace(configuredApiUrl)
-					&& !string.Equals(_options.ApiUrl, configuredApiUrl, StringComparison.OrdinalIgnoreCase)) {
+			if (TrayRuntimeSettingsParser.TryReadApiBaseUrl(raw, out var configuredApiUrl)
+				&& !string.IsNullOrWhiteSpace(configuredApiUrl)
+				&& !string.Equals(_options.ApiUrl, configuredApiUrl, StringComparison.OrdinalIgnoreCase)) {
 					_options.ApiUrl = configuredApiUrl;
 					_notifyIcon.BalloonTipTitle = "OJ API Tray";
 					_notifyIcon.BalloonTipText = $"API base URL updated to {_options.ApiUrl}.";
 					_notifyIcon.ShowBalloonTip(2500);
+					AppendTrayLog($"Applied updated apiBaseUrl from settings: {_options.ApiUrl}");
 
 					if (_apiManagedByTray && _apiProcess is { HasExited: false }) {
 						RestartApi();
 					}
-				}
 			}
 
 			_lastSettingsWriteUtc = lastWriteUtc;
-		} catch {
+		} catch (Exception ex) {
+			AppendTrayLog($"Settings reload failed: {ex.Message}");
 			// Ignore transient parsing or file lock issues and retry later.
 		}
 	}
@@ -285,6 +294,7 @@ internal sealed class TrayContext : ApplicationContext {
 		}
 
 		_lastPortConflictNoticeUtc = now;
+		AppendTrayLog($"Port conflict notice triggered for {_options.ApiUrl}");
 		_notifyIcon.BalloonTipTitle = "OJ API Tray";
 		_notifyIcon.BalloonTipText = $"Configured API URL port appears in use but /api/sync/health is not responding at {_options.ApiUrl}. Check for a conflicting process.";
 		_notifyIcon.ShowBalloonTip(4500);
@@ -327,5 +337,31 @@ internal sealed class TrayContext : ApplicationContext {
 
 	private static string Quote(string value) {
 		return $"\"{value.Replace("\"", "\\\"")}\"";
+	}
+
+	private void AppendTrayLog(string message) {
+		try {
+			var line = $"[{DateTime.UtcNow:O}] {message}{Environment.NewLine}";
+			File.AppendAllText(_logPath, line);
+		} catch {
+			// Best effort logging only.
+		}
+	}
+}
+
+internal static class TrayRuntimeSettingsParser {
+	public static bool TryReadApiBaseUrl(string rawJson, out string? apiBaseUrl) {
+		apiBaseUrl = null;
+		if (string.IsNullOrWhiteSpace(rawJson)) {
+			return false;
+		}
+
+		using var document = JsonDocument.Parse(rawJson);
+		if (!document.RootElement.TryGetProperty("apiBaseUrl", out var apiBaseUrlProperty)) {
+			return false;
+		}
+
+		apiBaseUrl = apiBaseUrlProperty.GetString()?.Trim();
+		return !string.IsNullOrWhiteSpace(apiBaseUrl);
 	}
 }

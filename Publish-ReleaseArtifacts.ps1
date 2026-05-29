@@ -2,7 +2,9 @@ param(
 	[string]$Version = '0.2.2',
 	[string]$Configuration = 'Release',
 	[string]$Runtime = 'win-x64',
-	[string]$OutputRoot = '.\artifacts'
+	[string]$OutputRoot = '.\artifacts',
+	[switch]$SkipMigrationCheck,
+	[switch]$SkipSmokeTest
 )
 
 Set-StrictMode -Version Latest
@@ -13,6 +15,8 @@ $publishInstallerScript = Join-Path $repoRoot 'Publish-InstallerUI.ps1'
 $apiProject = Join-Path $repoRoot 'api\OrganizedJihad.Api.csproj'
 $apiTrayProject = Join-Path $repoRoot 'api\OrganizedJihad.Api.TrayHost\OrganizedJihad.Api.TrayHost.csproj'
 $desktopProject = Join-Path $repoRoot 'desktop-app\OrganizedJihad.Desktop.csproj'
+$migrationCheckScript = Join-Path $repoRoot 'Test-ApiMigrationPath.ps1'
+$releaseSmokeScript = Join-Path $repoRoot 'Test-ReleaseSmoke.ps1'
 $userscriptDir = Join-Path $repoRoot 'userscript'
 $userscriptDist = Join-Path $userscriptDir 'dist'
 $userscriptFile = Join-Path $userscriptDist 'organized-jihad.user.js'
@@ -41,6 +45,17 @@ if (-not (Test-Path -Path $userscriptGuideSource)) {
 }
 if (-not (Test-Path -Path $userscriptGuideScreenshotsSource)) {
 	throw "Required userscript setup screenshots folder not found: $userscriptGuideScreenshotsSource"
+}
+if (-not (Test-Path -Path $migrationCheckScript)) {
+	throw "Required migration check script not found: $migrationCheckScript"
+}
+if (-not (Test-Path -Path $releaseSmokeScript)) {
+	throw "Required release smoke script not found: $releaseSmokeScript"
+}
+
+if (-not $SkipMigrationCheck) {
+	Write-Host '[OJ Release] Running API migration path check...' -ForegroundColor Cyan
+	& $migrationCheckScript -ApiProjectPath $apiProject
 }
 
 Write-Host '[OJ Release] Building userscript bundle...' -ForegroundColor Cyan
@@ -88,6 +103,12 @@ foreach ($candidate in $desktopPublishCandidates) {
 }
 if (-not $desktopPublishDir) {
 	throw "Missing desktop publish output at expected paths: $($desktopPublishCandidates -join '; ')"
+}
+
+if (-not $SkipSmokeTest) {
+	Write-Host '[OJ Release] Running release smoke test against published API binary...' -ForegroundColor Cyan
+	$publishedApiExecutable = Join-Path $apiPublishDir 'OrganizedJihad.Api.exe'
+	& $releaseSmokeScript -ApiExecutablePath $publishedApiExecutable
 }
 
 $bundlePayloadDir = Join-Path $repoRoot 'installer-ui\bundle-payload'
