@@ -430,3 +430,29 @@
 - PowerShell parser check for `Install-OrganizedJihad.ps1` (pass)
 - dotnet build api/OrganizedJihad.Api.TrayHost/OrganizedJihad.Api.TrayHost.csproj (pass)
 - dotnet build installer-ui/OrganizedJihad.Installer.csproj (pass)
+
+---
+
+## Session
+- Date: 2026-05-29
+- Session Number: 16
+- Scope: add dedicated API web UI shell route and wire tray open action
+
+## Summary
+- Added a new API endpoint at `/ui` that serves a local control/status page for service-style runtime monitoring.
+- The new page includes API health status, last sync timestamp display, and direct links to health/last-sync/stats JSON endpoints.
+- Updated tray host `Open API UI` behavior to target `/ui` so notification-area actions open the control shell directly.
+- Root API info payload now advertises the `/ui` route.
+
+## Files Modified
+- api/Program.cs
+- api/OrganizedJihad.Api.TrayHost/Program.cs
+- ~docs/copilot-chats/2026-05-29-userscript-build-auto.md
+
+## Issues
+- Follow-up on: #330
+- PR tracking: #209
+
+## Validation
+- dotnet build api/OrganizedJihad.Api.csproj (pass)
+- dotnet build api/OrganizedJihad.Api.TrayHost/OrganizedJihad.Api.TrayHost.csproj (pass)

@@ -89,7 +89,7 @@ internal sealed class TrayContext : ApplicationContext {
 	}
 
 	private void OpenApiUi() {
-		var uiUrl = _options.ApiUrl.TrimEnd('/');
+		var uiUrl = _options.ApiUrl.TrimEnd('/') + "/ui";
 		Process.Start(new ProcessStartInfo {
 			FileName = uiUrl,
 			UseShellExecute = true,
