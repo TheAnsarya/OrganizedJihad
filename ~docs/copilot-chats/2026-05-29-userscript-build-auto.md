@@ -345,3 +345,34 @@
 ## Validation
 - Verified PNG screenshot assets exist in `~docs/installer-guide/screenshots`.
 - Verified setup guide image sources now reference `.png` paths.
+
+---
+
+## Session
+- Date: 2026-05-29
+- Session Number: 13
+- Scope: step-button installer workflow + Tampermonkey gating + expanded guide screenshots
+
+## Summary
+- Reworked installer UI from checkbox component toggles to explicit step buttons: install/verify Tampermonkey, install API, install desktop app, install userscript, and userscript bypass.
+- Added Tampermonkey detection per selected browser so normal userscript install is enabled only when detection succeeds.
+- Kept bypass path available so userscript install can still run even when Tampermonkey auto-detection misses.
+- Updated tray host to open API UI URL on double-click and added explicit `Open API UI` context-menu action for Plex-style tray behavior.
+- Expanded guide to show all userscript setup steps in every browser section using step-labeled screenshots and added fallback image paths for bundled installer payloads.
+
+## Files Modified
+- installer-ui/MainWindow.axaml
+- installer-ui/MainWindow.axaml.cs
+- api/OrganizedJihad.Api.TrayHost/Program.cs
+- ~docs/installer-guide/tampermonkey-setup.html
+- ~docs/installer-guide/screenshots/tampermonkey-import-utilities.png
+- ~docs/installer-guide/screenshots/tampermonkey-enabled-dashboard.png
+- ~docs/copilot-chats/2026-05-29-userscript-build-auto.md
+
+## Issues
+- Follow-up on: #330
+- PR tracking: #209
+
+## Validation
+- dotnet build installer-ui/OrganizedJihad.Installer.csproj (pass)
+- dotnet build api/OrganizedJihad.Api.TrayHost/OrganizedJihad.Api.TrayHost.csproj (pass)

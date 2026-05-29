@@ -31,6 +31,7 @@ public partial class MainWindow : Window {
 	}
 
 	private bool _isInstalling;
+	private bool _tampermonkeyInstalledForSelection;
 	private string? _currentLogFilePath;
 	private string? _userscriptGuidePath;
 	private readonly List<BrowserOption> _availableBrowsers;
@@ -48,8 +49,6 @@ public partial class MainWindow : Window {
 		var installedBrowsers = _availableBrowsers.Where(browser => browser.Installed).ToList();
 
 		if (installedBrowsers.Count == 0) {
-			OpenTampermonkeySetupCheckBox.IsChecked = false;
-			OpenTampermonkeySetupCheckBox.IsEnabled = false;
 			AppendLog("[Installer UI] No supported browser was auto-detected. Userscript file will still be installed so you can import it manually in Tampermonkey.");
 		}
 
@@ -58,16 +57,91 @@ public partial class MainWindow : Window {
 			AppendLog($"[Installer UI] Userscript setup guide detected: {_userscriptGuidePath}");
 		}
 
-		ApplySelectionGuidance();
+		RefreshTampermonkeyStatus(logResult: true);
 
 		UpdateQuickActionState();
 	}
 
-	private void OnInstallOptionChanged(object? sender, RoutedEventArgs e) {
-		ApplySelectionGuidance();
+	private void OnBrowserSelectionChanged(object? sender, SelectionChangedEventArgs e) {
+		RefreshTampermonkeyStatus(logResult: true);
 	}
 
 	private async void OnInstallClick(object? sender, RoutedEventArgs e) {
+		await RunInstallWorkflowAsync(
+			installApi: true,
+			installDesktop: true,
+			installUserscript: true,
+			openTampermonkeySetup: OpenTampermonkeySetupCheckBox.IsChecked == true,
+			allowUserscriptBypass: false,
+			stepLabel: "full install");
+	}
+
+	private async void OnInstallApiStepClick(object? sender, RoutedEventArgs e) {
+		await RunInstallWorkflowAsync(
+			installApi: true,
+			installDesktop: false,
+			installUserscript: false,
+			openTampermonkeySetup: false,
+			allowUserscriptBypass: false,
+			stepLabel: "API server step");
+	}
+
+	private async void OnInstallDesktopStepClick(object? sender, RoutedEventArgs e) {
+		await RunInstallWorkflowAsync(
+			installApi: false,
+			installDesktop: true,
+			installUserscript: false,
+			openTampermonkeySetup: false,
+			allowUserscriptBypass: false,
+			stepLabel: "desktop app step");
+	}
+
+	private async void OnInstallUserscriptStepClick(object? sender, RoutedEventArgs e) {
+		await RunInstallWorkflowAsync(
+			installApi: false,
+			installDesktop: false,
+			installUserscript: true,
+			openTampermonkeySetup: OpenTampermonkeySetupCheckBox.IsChecked == true,
+			allowUserscriptBypass: false,
+			stepLabel: "userscript step");
+	}
+
+	private async void OnInstallUserscriptBypassStepClick(object? sender, RoutedEventArgs e) {
+		await RunInstallWorkflowAsync(
+			installApi: false,
+			installDesktop: false,
+			installUserscript: true,
+			openTampermonkeySetup: OpenTampermonkeySetupCheckBox.IsChecked == true,
+			allowUserscriptBypass: true,
+			stepLabel: "userscript bypass step");
+	}
+
+	private void OnInstallTampermonkeyClick(object? sender, RoutedEventArgs e) {
+		if (_isInstalling) {
+			return;
+		}
+
+		if (BrowserComboBox.SelectedItem is not BrowserOption selectedBrowser) {
+			SetStatus("Status: Select a browser first.");
+			return;
+		}
+
+		var installed = DetectTampermonkeyInstalled(selectedBrowser.Argument);
+		if (installed) {
+			SetStatus("Status: Tampermonkey already installed.");
+			AppendLog($"[Installer UI] Tampermonkey already detected for {selectedBrowser.Label}. Continue with userscript step.");
+			OpenUserscriptGuideFromUi();
+		} else {
+			SetStatus("Status: Opening Tampermonkey store page.");
+			AppendLog($"[Installer UI] Tampermonkey not detected for {selectedBrowser.Label}. Opening browser install page.");
+			OpenTampermonkeyStore(selectedBrowser.Argument);
+			OpenUserscriptGuideFromUi();
+		}
+
+		RefreshTampermonkeyStatus(logResult: true);
+	}
+
+	private async Task RunInstallWorkflowAsync(bool installApi, bool installDesktop, bool installUserscript, bool openTampermonkeySetup, bool allowUserscriptBypass, string stepLabel) {
 		if (_isInstalling) {
 			return;
 		}
@@ -76,14 +150,11 @@ public partial class MainWindow : Window {
 			return;
 		}
 
-		var installApi = InstallApiCheckBox.IsChecked == true;
-		var installDesktop = InstallDesktopCheckBox.IsChecked == true;
-		var installUserscript = InstallUserscriptCheckBox.IsChecked == true;
-		var openTampermonkeySetup = OpenTampermonkeySetupCheckBox.IsChecked == true;
+		RefreshTampermonkeyStatus(logResult: false);
 
-		if (!installApi && !installDesktop && !installUserscript) {
-			SetStatus("Status: Select at least one component to install.");
-			AppendLog("[Installer UI] Please select at least one component (API, desktop, or userscript).");
+		if (installUserscript && !allowUserscriptBypass && !_tampermonkeyInstalledForSelection) {
+			SetStatus("Status: Tampermonkey required for userscript step.");
+			AppendLog("[Installer UI] Userscript step is locked until Tampermonkey is detected for the selected browser. Use Step 1 or run the bypass step.");
 			return;
 		}
 
@@ -91,30 +162,6 @@ public partial class MainWindow : Window {
 			SetStatus($"Status: {preflightMessage}");
 			AppendLog($"[Installer UI] Preflight failed: {preflightMessage}");
 			return;
-		}
-
-		var selectedComponents = new List<string>();
-		if (installApi) {
-			selectedComponents.Add("API server");
-		}
-		if (installDesktop) {
-			selectedComponents.Add("desktop app");
-		}
-		if (installUserscript) {
-			selectedComponents.Add("userscript");
-		}
-
-		AppendLog($"[Installer UI] Selected components: {string.Join(", ", selectedComponents)}");
-
-		string? browserArg = null;
-		if (installUserscript && openTampermonkeySetup) {
-			if (BrowserComboBox.SelectedItem is BrowserOption selectedBrowser) {
-				browserArg = selectedBrowser.Argument;
-			} else {
-				SetStatus("Status: No supported browser selected for Tampermonkey setup.");
-				AppendLog("[Installer UI] Install will continue without automatic Tampermonkey page opening.");
-				openTampermonkeySetup = false;
-			}
 		}
 
 		var scriptPath = ResolveInstallerScriptPath();
@@ -131,56 +178,43 @@ public partial class MainWindow : Window {
 			return;
 		}
 
+		var selectedComponents = new List<string>();
+		if (installApi) {
+			selectedComponents.Add("API server");
+		}
+		if (installDesktop) {
+			selectedComponents.Add("desktop app");
+		}
+		if (installUserscript) {
+			selectedComponents.Add("userscript");
+		}
+
+		AppendLog($"[Installer UI] Running {stepLabel}: {string.Join(", ", selectedComponents)}");
+
+		var browserArg = ResolveSelectedBrowserArgument();
+		if (installUserscript && openTampermonkeySetup && string.IsNullOrWhiteSpace(browserArg)) {
+			AppendLog("[Installer UI] No browser selected for bootstrap; proceeding without automatic setup page.");
+			openTampermonkeySetup = false;
+		}
+
 		var args = BuildInstallerArguments(scriptPath, installRoot, apiUrl, installApi, installDesktop, installUserscript, openTampermonkeySetup, browserArg);
 		await RunInstallProcessAsync(shell, args);
 
 		if (installUserscript) {
 			var userscriptPath = Path.Combine(installRoot, "userscript", "organized-jihad.user.js");
 			var guidePath = Path.Combine(installRoot, "userscript", "tampermonkey-setup.html");
-			AppendLog("[Installer UI] Next steps for userscript installation:");
-			if (openTampermonkeySetup && !string.IsNullOrWhiteSpace(browserArg)) {
-				AppendLog($"[Installer UI] 1) A Tampermonkey setup tab should open in your selected browser ({browserArg}).");
-			} else {
-				AppendLog("[Installer UI] 1) Open Tampermonkey dashboard in your browser.");
+			AppendLog("[Installer UI] Userscript next steps:");
+			AppendLog($"[Installer UI] - Import this file in Tampermonkey Utilities: {userscriptPath}");
+			AppendLog("[Installer UI] - Confirm script is Enabled, then refresh Hero Wars.");
+			if (allowUserscriptBypass) {
+				AppendLog("[Installer UI] - Bypass mode was used; if Tampermonkey is not installed yet, complete Step 1 now.");
 			}
-			AppendLog($"[Installer UI] 2) Use Import/Utilities and choose: {userscriptPath}");
-			AppendLog("[Installer UI] 3) Save/Enable the OrganizedJihad script and refresh Hero Wars.");
 			if (File.Exists(guidePath)) {
-				AppendLog($"[Installer UI] Detailed browser guide: {guidePath}");
+				AppendLog($"[Installer UI] - Detailed setup guide: {guidePath}");
 			}
 		}
-	}
 
-	private void ApplySelectionGuidance() {
-		var installApi = InstallApiCheckBox.IsChecked == true;
-		var installDesktop = InstallDesktopCheckBox.IsChecked == true;
-		var installUserscript = InstallUserscriptCheckBox.IsChecked == true;
-		var openTampermonkeySetup = OpenTampermonkeySetupCheckBox.IsChecked == true;
-
-		ApiUrlTextBox.IsEnabled = installApi;
-
-		if (!installUserscript) {
-			OpenTampermonkeySetupCheckBox.IsChecked = false;
-			OpenTampermonkeySetupCheckBox.IsEnabled = false;
-			BrowserComboBox.IsEnabled = false;
-			OpenDiagnosticsCheckBox.IsChecked = false;
-			OpenDiagnosticsCheckBox.IsEnabled = false;
-		} else {
-			if (_availableBrowsers.Any(browser => browser.Installed)) {
-				OpenTampermonkeySetupCheckBox.IsEnabled = true;
-				BrowserComboBox.IsEnabled = openTampermonkeySetup;
-			} else {
-				OpenTampermonkeySetupCheckBox.IsChecked = false;
-				OpenTampermonkeySetupCheckBox.IsEnabled = false;
-				BrowserComboBox.IsEnabled = false;
-			}
-
-			OpenDiagnosticsCheckBox.IsEnabled = true;
-		}
-
-		if (!installApi && !installDesktop && !installUserscript) {
-			SetStatus("Status: Select at least one component to install.");
-		}
+		RefreshTampermonkeyStatus(logResult: false);
 	}
 
 	private string BuildInstallerArguments(string scriptPath, string installRoot, string apiUrl, bool installApi, bool installDesktop, bool installUserscript, bool openTampermonkeySetup, string? browserArg) {
@@ -225,6 +259,130 @@ public partial class MainWindow : Window {
 		}
 
 		return string.Join(' ', args);
+	}
+
+	private string? ResolveSelectedBrowserArgument() {
+		return BrowserComboBox.SelectedItem is BrowserOption selectedBrowser ? selectedBrowser.Argument : null;
+	}
+
+	private void RefreshTampermonkeyStatus(bool logResult) {
+		var browserArg = ResolveSelectedBrowserArgument();
+		var browserLabel = BrowserComboBox.SelectedItem is BrowserOption selectedBrowser ? selectedBrowser.Label : "(none)";
+
+		if (string.IsNullOrWhiteSpace(browserArg)) {
+			_tampermonkeyInstalledForSelection = false;
+			TampermonkeyStatusTextBlock.Text = "Tampermonkey status: no browser selected";
+			UpdateQuickActionState();
+			return;
+		}
+
+		_tampermonkeyInstalledForSelection = DetectTampermonkeyInstalled(browserArg);
+		TampermonkeyStatusTextBlock.Text = _tampermonkeyInstalledForSelection
+			? $"Tampermonkey status ({browserLabel}): detected"
+			: $"Tampermonkey status ({browserLabel}): not detected";
+
+		if (logResult) {
+			AppendLog(_tampermonkeyInstalledForSelection
+				? $"[Installer UI] Tampermonkey detected for {browserLabel}."
+				: $"[Installer UI] Tampermonkey not detected for {browserLabel}. Use Step 1 to install/verify or Step 4b to bypass.");
+		}
+
+		UpdateQuickActionState();
+	}
+
+	private static bool DetectTampermonkeyInstalled(string browserArg) {
+		if (!OperatingSystem.IsWindows()) {
+			return false;
+		}
+
+		const string extensionId = "dhdgffkkebhmkfjojejmpbldmpobfkfo";
+
+		return browserArg switch {
+			"chrome" => ChromiumExtensionInstalled(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Google", "Chrome", "User Data"), extensionId),
+			"edge" => ChromiumExtensionInstalled(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Microsoft", "Edge", "User Data"), extensionId),
+			"opera" => ChromiumExtensionInstalled(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Opera Software", "Opera Stable"), extensionId),
+			"operaGX" => ChromiumExtensionInstalled(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Opera Software", "Opera GX Stable"), extensionId),
+			"firefox" => FirefoxTampermonkeyInstalled(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Mozilla", "Firefox", "Profiles")),
+			_ => false,
+		};
+	}
+
+	private static bool ChromiumExtensionInstalled(string browserRoot, string extensionId) {
+		if (string.IsNullOrWhiteSpace(browserRoot) || !Directory.Exists(browserRoot)) {
+			return false;
+		}
+
+		var profileCandidates = new List<string>();
+		profileCandidates.Add(browserRoot);
+
+		try {
+			profileCandidates.AddRange(Directory.GetDirectories(browserRoot)
+				.Where(path => {
+					var name = Path.GetFileName(path);
+					return string.Equals(name, "Default", StringComparison.OrdinalIgnoreCase)
+						|| name.StartsWith("Profile ", StringComparison.OrdinalIgnoreCase)
+						|| name.StartsWith("Guest Profile", StringComparison.OrdinalIgnoreCase);
+				}));
+		} catch {
+			// Ignore profile enumeration errors.
+		}
+
+		foreach (var profile in profileCandidates.Distinct(StringComparer.OrdinalIgnoreCase)) {
+			var extensionPath = Path.Combine(profile, "Extensions", extensionId);
+			if (Directory.Exists(extensionPath)) {
+				return true;
+			}
+
+			var localExtensionPath = Path.Combine(profile, "Local Extension Settings", extensionId);
+			if (Directory.Exists(localExtensionPath)) {
+				return true;
+			}
+		}
+
+		return false;
+	}
+
+	private static bool FirefoxTampermonkeyInstalled(string profilesRoot) {
+		if (string.IsNullOrWhiteSpace(profilesRoot) || !Directory.Exists(profilesRoot)) {
+			return false;
+		}
+
+		try {
+			foreach (var profile in Directory.GetDirectories(profilesRoot)) {
+				var extensionsDir = Path.Combine(profile, "extensions");
+				if (!Directory.Exists(extensionsDir)) {
+					continue;
+				}
+
+				var entries = Directory.GetFileSystemEntries(extensionsDir);
+				if (entries.Any(path => Path.GetFileName(path).Contains("tampermonkey", StringComparison.OrdinalIgnoreCase))) {
+					return true;
+				}
+			}
+		} catch {
+			return false;
+		}
+
+		return false;
+	}
+
+	private static void OpenTampermonkeyStore(string browserArg) {
+		var browserLinks = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) {
+			["chrome"] = "https://chromewebstore.google.com/detail/tampermonkey/dhdgffkkebhmkfjojejmpbldmpobfkfo",
+			["edge"] = "https://microsoftedge.microsoft.com/addons/detail/tampermonkey/iikmkjmpaadaobahmlepeloendndfphd",
+			["firefox"] = "https://addons.mozilla.org/en-US/firefox/addon/tampermonkey/",
+			["opera"] = "https://addons.opera.com/en/extensions/details/tampermonkey-beta/",
+			["operaGX"] = "https://addons.opera.com/en/extensions/details/tampermonkey-beta/",
+		};
+
+		if (!browserLinks.TryGetValue(browserArg, out var url)) {
+			return;
+		}
+
+		Process.Start(new ProcessStartInfo {
+			FileName = url,
+			UseShellExecute = true,
+		});
 	}
 
 	private static List<BrowserOption> DetectBrowsers() {
@@ -584,6 +742,10 @@ public partial class MainWindow : Window {
 	}
 
 	private void OnOpenSetupGuideClick(object? sender, RoutedEventArgs e) {
+		OpenUserscriptGuideFromUi();
+	}
+
+	private void OpenUserscriptGuideFromUi() {
 		var candidates = new List<string>();
 
 		if (!string.IsNullOrWhiteSpace(_userscriptGuidePath)) {
@@ -617,8 +779,19 @@ public partial class MainWindow : Window {
 
 	private void UpdateQuickActionState() {
 		InstallButton.IsEnabled = !_isInstalling;
+		InstallTampermonkeyButton.IsEnabled = !_isInstalling;
+		InstallApiStepButton.IsEnabled = !_isInstalling;
+		InstallDesktopStepButton.IsEnabled = !_isInstalling;
+		InstallUserscriptBypassButton.IsEnabled = !_isInstalling;
+		InstallUserscriptStepButton.IsEnabled = !_isInstalling && _tampermonkeyInstalledForSelection;
 		OpenInstallRootButton.IsEnabled = !_isInstalling;
 		OpenSetupGuideButton.IsEnabled = !_isInstalling;
 		OpenLogFolderButton.IsEnabled = !_isInstalling;
+		BrowserComboBox.IsEnabled = !_isInstalling;
+		ApiUrlTextBox.IsEnabled = !_isInstalling;
+		InstallRootTextBox.IsEnabled = !_isInstalling;
+		OpenTampermonkeySetupCheckBox.IsEnabled = !_isInstalling;
+		FirstRunDiagnosticsCheckBox.IsEnabled = !_isInstalling;
+		OpenDiagnosticsCheckBox.IsEnabled = !_isInstalling;
 	}
 }

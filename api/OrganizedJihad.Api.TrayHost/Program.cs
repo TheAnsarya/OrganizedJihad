@@ -53,25 +53,34 @@ internal sealed class TrayContext : ApplicationContext {
 		_options = options;
 
 		_notifyIcon = new NotifyIcon {
-			Icon = SystemIcons.Shield,
+			Icon = SystemIcons.Application,
 			Text = "OrganizedJihad API",
 			Visible = true,
 			ContextMenuStrip = BuildMenu(),
 		};
 
-		_notifyIcon.DoubleClick += (_, _) => OpenApiHealth();
+		_notifyIcon.DoubleClick += (_, _) => OpenApiUi();
 		EnsureApiRunning();
 		UpdateTooltip();
 	}
 
 	private ContextMenuStrip BuildMenu() {
 		var menu = new ContextMenuStrip();
+		menu.Items.Add("Open API UI", null, (_, _) => OpenApiUi());
 		menu.Items.Add("Open API Health", null, (_, _) => OpenApiHealth());
 		menu.Items.Add("Open API Folder", null, (_, _) => OpenApiFolder());
 		menu.Items.Add("Restart API", null, (_, _) => RestartApi());
 		menu.Items.Add("Stop API + Exit", null, (_, _) => StopApiAndExit());
 		menu.Items.Add("Exit Tray (Keep API Running)", null, (_, _) => ExitWithoutStoppingApi());
 		return menu;
+	}
+
+	private void OpenApiUi() {
+		var uiUrl = _options.ApiUrl.TrimEnd('/');
+		Process.Start(new ProcessStartInfo {
+			FileName = uiUrl,
+			UseShellExecute = true,
+		});
 	}
 
 	private void EnsureApiRunning() {
