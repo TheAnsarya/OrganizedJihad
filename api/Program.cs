@@ -23,6 +23,7 @@ using OrganizedJihad.Api.Services;
 using OrganizedJihad.Api.Services.TeamRecommendation;
 using OrganizedJihad.Api.Services.ToolCatalog;
 using OrganizedJihad.Data;
+using System.Text.Json;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -82,6 +83,53 @@ app.UseCors();
 // Map controller endpoints
 // https://learn.microsoft.com/en-us/aspnet/core/mvc/controllers/routing
 app.MapControllers();
+
+var uiSettingsPath = ResolveApiUiSettingsPath();
+var defaultUiSettings = new ApiUiSettings(
+	AutoOpenHealthOnLoad: true,
+	PreferredHeroWarsUrl: "https://www.hero-wars.com/",
+	Notes: string.Empty,
+	UpdatedUtc: DateTime.UtcNow);
+
+app.MapGet("/ui/settings", () => {
+	var settings = TryLoadApiUiSettings(uiSettingsPath) ?? defaultUiSettings;
+	return Results.Ok(settings);
+});
+
+app.MapPost("/ui/settings", async (ApiUiSettingsUpdateRequest request) => {
+	var normalized = new ApiUiSettings(
+		AutoOpenHealthOnLoad: request.AutoOpenHealthOnLoad,
+		PreferredHeroWarsUrl: string.IsNullOrWhiteSpace(request.PreferredHeroWarsUrl) ? "https://www.hero-wars.com/" : request.PreferredHeroWarsUrl.Trim(),
+		Notes: request.Notes?.Trim() ?? string.Empty,
+		UpdatedUtc: DateTime.UtcNow);
+
+	await SaveApiUiSettingsAsync(uiSettingsPath, normalized);
+	return Results.Ok(normalized);
+});
+
+app.MapGet("/ui/repair-status", () => {
+	var installRoot = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "OrganizedJihad");
+	var apiDatabasePath = Path.Combine(AppContext.BaseDirectory, "herowars.db");
+	var userscriptPath = Path.Combine(installRoot, "userscript", "organized-jihad.user.js");
+	var trayHostPath = Path.Combine(installRoot, "api-tray", "OrganizedJihad.Api.TrayHost.exe");
+
+	var hasDatabase = File.Exists(apiDatabasePath);
+	var hasUserscript = File.Exists(userscriptPath);
+	var hasTrayHost = File.Exists(trayHostPath);
+
+	var recommendation = hasDatabase && hasUserscript && hasTrayHost
+		? "Runtime artifacts look healthy."
+		: "One or more runtime artifacts are missing. Re-run Install-OrganizedJihad.ps1 from your install bundle to repair setup.";
+
+	return Results.Ok(new {
+		installRoot,
+		hasDatabase,
+		hasUserscript,
+		hasTrayHost,
+		recommendation,
+		checkedUtc = DateTime.UtcNow,
+	});
+});
 
 // Local web UI endpoint for service-style API configuration and status checks.
 // This is intentionally lightweight and dependency-free so it is always available
@@ -217,10 +265,35 @@ app.MapGet("/ui", (HttpContext context) => {
 				<p>
 					If userscript, API, or tray startup behavior needs repair, rerun installer script from your install bundle.
 				</p>
+				<div id="repairSummary" style="margin-top: 10px; color: var(--muted);">Checking runtime artifacts...</div>
 				<div class="actions">
 					<a class="button" href="/api/sync/health" target="_blank" rel="noreferrer">Open Health JSON</a>
 					<a class="button" href="/api/sync/last-sync" target="_blank" rel="noreferrer">Open Last Sync JSON</a>
 					<a class="button" href="/api/sync/stats" target="_blank" rel="noreferrer">Open Stats JSON</a>
+					<a class="button" id="openHeroWars" href="https://www.hero-wars.com/" target="_blank" rel="noreferrer">Open Hero Wars</a>
+				</div>
+			</section>
+
+			<section class="card">
+				<h2>UI Settings</h2>
+				<p style="margin-bottom: 10px;">Settings are persisted to <code>api-ui-settings.json</code> next to API binaries.</p>
+				<div style="display: grid; gap: 8px;">
+					<label style="display: flex; gap: 8px; align-items: center; color: var(--ink);">
+						<input id="autoHealth" type="checkbox" />
+						Auto-load health and sync data when page opens
+					</label>
+					<label style="display: grid; gap: 4px;">
+						<span style="color: var(--ink);">Preferred Hero Wars URL</span>
+						<input id="heroWarsUrl" type="text" style="padding: 8px; border-radius: 8px; border: 1px solid var(--line); background: #0f172a; color: var(--ink);" />
+					</label>
+					<label style="display: grid; gap: 4px;">
+						<span style="color: var(--ink);">Notes</span>
+						<textarea id="uiNotes" rows="3" style="padding: 8px; border-radius: 8px; border: 1px solid var(--line); background: #0f172a; color: var(--ink);"></textarea>
+					</label>
+					<div class="actions">
+						<button id="saveSettings" style="cursor: pointer; padding: 9px 12px; border-radius: 8px; border: 1px solid #0c4a6e; background: rgba(14, 116, 144, 0.24); color: var(--accent); font-weight: 600;">Save Settings</button>
+					</div>
+					<div id="settingsStatus" style="color: var(--muted);">Loading settings...</div>
 				</div>
 			</section>
 		</div>
@@ -239,6 +312,7 @@ app.MapGet("/ui", (HttpContext context) => {
 			const healthState = document.getElementById('healthState');
 			const healthDetail = document.getElementById('healthDetail');
 			const lastSync = document.getElementById('lastSync');
+			const repairSummary = document.getElementById('repairSummary');
 
 			try {
 				const health = await fetchJson('/api/sync/health');
@@ -261,8 +335,66 @@ app.MapGet("/ui", (HttpContext context) => {
 			} catch {
 				lastSync.textContent = 'Unknown';
 			}
+
+			try {
+				const repair = await fetchJson('/ui/repair-status');
+				repairSummary.textContent = repair.recommendation + ' (Checked: ' + new Date(repair.checkedUtc).toLocaleString() + ')';
+			} catch {
+				repairSummary.textContent = 'Could not retrieve runtime repair status.';
+			}
 		}
 
+		async function loadSettings() {
+			const autoHealth = document.getElementById('autoHealth');
+			const heroWarsUrl = document.getElementById('heroWarsUrl');
+			const uiNotes = document.getElementById('uiNotes');
+			const openHeroWars = document.getElementById('openHeroWars');
+			const settingsStatus = document.getElementById('settingsStatus');
+
+			try {
+				const settings = await fetchJson('/ui/settings');
+				autoHealth.checked = !!settings.autoOpenHealthOnLoad;
+				heroWarsUrl.value = settings.preferredHeroWarsUrl || 'https://www.hero-wars.com/';
+				uiNotes.value = settings.notes || '';
+				openHeroWars.href = heroWarsUrl.value;
+				settingsStatus.textContent = 'Settings loaded.';
+			} catch (error) {
+				settingsStatus.textContent = 'Settings load failed: ' + error.message;
+			}
+		}
+
+		async function saveSettings() {
+			const autoHealth = document.getElementById('autoHealth');
+			const heroWarsUrl = document.getElementById('heroWarsUrl');
+			const uiNotes = document.getElementById('uiNotes');
+			const openHeroWars = document.getElementById('openHeroWars');
+			const settingsStatus = document.getElementById('settingsStatus');
+
+			settingsStatus.textContent = 'Saving settings...';
+			try {
+				const response = await fetch('/ui/settings', {
+					method: 'POST',
+					headers: { 'Content-Type': 'application/json' },
+					body: JSON.stringify({
+						autoOpenHealthOnLoad: autoHealth.checked,
+						preferredHeroWarsUrl: heroWarsUrl.value,
+						notes: uiNotes.value
+					})
+				});
+				if (!response.ok) {
+					throw new Error('HTTP ' + response.status);
+				}
+				const saved = await response.json();
+				heroWarsUrl.value = saved.preferredHeroWarsUrl || heroWarsUrl.value;
+				openHeroWars.href = heroWarsUrl.value;
+				settingsStatus.textContent = 'Settings saved at ' + new Date(saved.updatedUtc).toLocaleString();
+			} catch (error) {
+				settingsStatus.textContent = 'Save failed: ' + error.message;
+			}
+		}
+
+		document.getElementById('saveSettings').addEventListener('click', saveSettings);
+		loadSettings();
 		refresh();
 		setInterval(refresh, 15000);
 	</script>
@@ -283,6 +415,9 @@ app.MapGet("/", () => new {
 	endpoints = new[]
 	{
 		"GET  /ui - Local web UI for API status/config shell",
+		"GET  /ui/settings - Get persisted API UI settings",
+		"POST /ui/settings - Save persisted API UI settings",
+		"GET  /ui/repair-status - Runtime setup/update repair hints",
 		"GET  /api/sync/health - Health check",
 		"POST /api/sync/import - Import data from browser",
 		"GET  /api/sync/last-sync - Get last sync timestamp",
@@ -294,6 +429,42 @@ app.MapGet("/", () => new {
 });
 
 app.Run();
+
+static string ResolveApiUiSettingsPath() {
+	var overridePath = Environment.GetEnvironmentVariable("OJ_API_UI_SETTINGS_PATH");
+	if (!string.IsNullOrWhiteSpace(overridePath)) {
+		return overridePath;
+	}
+
+	return Path.Combine(AppContext.BaseDirectory, "api-ui-settings.json");
+}
+
+static ApiUiSettings? TryLoadApiUiSettings(string settingsPath) {
+	if (!File.Exists(settingsPath)) {
+		return null;
+	}
+
+	try {
+		var raw = File.ReadAllText(settingsPath);
+		return JsonSerializer.Deserialize<ApiUiSettings>(raw);
+	} catch {
+		return null;
+	}
+}
+
+static async Task SaveApiUiSettingsAsync(string settingsPath, ApiUiSettings settings) {
+	var directory = Path.GetDirectoryName(settingsPath);
+	if (!string.IsNullOrWhiteSpace(directory)) {
+		Directory.CreateDirectory(directory);
+	}
+
+	var json = JsonSerializer.Serialize(settings, new JsonSerializerOptions { WriteIndented = true });
+	await File.WriteAllTextAsync(settingsPath, json);
+}
+
+internal sealed record ApiUiSettings(bool AutoOpenHealthOnLoad, string PreferredHeroWarsUrl, string Notes, DateTime UpdatedUtc);
+
+internal sealed record ApiUiSettingsUpdateRequest(bool AutoOpenHealthOnLoad, string PreferredHeroWarsUrl, string? Notes);
 
 // Make the implicit Program class public for integration testing
 // https://learn.microsoft.com/en-us/aspnet/core/test/integration-tests

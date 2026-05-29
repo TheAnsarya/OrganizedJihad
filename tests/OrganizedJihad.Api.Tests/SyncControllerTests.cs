@@ -9,6 +9,7 @@ using OrganizedJihad.Data;
 using OrganizedJihad.Data.Models;
 using System.Net;
 using System.Net.Http.Json;
+using System.Text.Json;
 
 namespace OrganizedJihad.Api.Tests;
 
@@ -174,6 +175,41 @@ public class SyncControllerTests : IClassFixture<WebApplicationFactory<Program>>
 
 		// Assert - Should return 200 OK
 		response.StatusCode.Should().Be(HttpStatusCode.OK);
+	}
+
+	/// <summary>
+	/// Verifies the API control UI route serves HTML content.
+	/// </summary>
+	[Fact]
+	public async Task Api_Ui_Route_Should_Return_Html() {
+		// Act
+		var response = await _client.GetAsync("/ui");
+		var body = await response.Content.ReadAsStringAsync();
+
+		// Assert
+		response.StatusCode.Should().Be(HttpStatusCode.OK);
+		response.Content.Headers.ContentType.Should().NotBeNull();
+		response.Content.Headers.ContentType!.MediaType.Should().Be("text/html");
+		body.Should().Contain("OrganizedJihad API Control");
+		body.Should().Contain("/ui/settings");
+	}
+
+	/// <summary>
+	/// Verifies API UI settings endpoint returns a settings payload.
+	/// </summary>
+	[Fact]
+	public async Task Api_Ui_Settings_Should_Return_Payload() {
+		// Act
+		var response = await _client.GetAsync("/ui/settings");
+		var json = await response.Content.ReadAsStringAsync();
+
+		// Assert
+		response.StatusCode.Should().Be(HttpStatusCode.OK);
+		using var document = JsonDocument.Parse(json);
+		var root = document.RootElement;
+		root.TryGetProperty("autoOpenHealthOnLoad", out _).Should().BeTrue();
+		root.TryGetProperty("preferredHeroWarsUrl", out _).Should().BeTrue();
+		root.TryGetProperty("updatedUtc", out _).Should().BeTrue();
 	}
 
 	/// <summary>

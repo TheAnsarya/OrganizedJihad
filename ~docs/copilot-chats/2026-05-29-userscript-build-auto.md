@@ -456,3 +456,32 @@
 ## Validation
 - dotnet build api/OrganizedJihad.Api.csproj (pass)
 - dotnet build api/OrganizedJihad.Api.TrayHost/OrganizedJihad.Api.TrayHost.csproj (pass)
+
+---
+
+## Session
+- Date: 2026-05-29
+- Session Number: 17
+- Scope: tranche continuation - API UI settings persistence, repair diagnostics, test coverage, NU1903 mitigation
+
+## Summary
+- Extended the API `/ui` control shell with persisted settings endpoints (`GET/POST /ui/settings`) and client-side save/load UX.
+- Added runtime setup diagnostics endpoint (`GET /ui/repair-status`) to help guide setup/update repair checks.
+- Added focused API integration tests for `/ui` HTML route and `/ui/settings` payload.
+- Mitigated installer dependency advisory NU1903 by explicitly upgrading `Tmds.DBus.Protocol` to `0.94.1` in installer project.
+
+## Files Modified
+- api/Program.cs
+- tests/OrganizedJihad.Api.Tests/SyncControllerTests.cs
+- installer-ui/OrganizedJihad.Installer.csproj
+- ~docs/copilot-chats/2026-05-29-userscript-build-auto.md
+
+## Issues
+- Follow-up on: #330
+- PR tracking: #209
+
+## Validation
+- dotnet build api/OrganizedJihad.Api.csproj (pass)
+- dotnet test tests/OrganizedJihad.Api.Tests/OrganizedJihad.Api.Tests.csproj --filter "Api_Ui_Route_Should_Return_Html|Api_Ui_Settings_Should_Return_Payload|Health_Check_Should_Return_Ok" (pass)
+- dotnet build installer-ui/OrganizedJihad.Installer.csproj (pass)
+- dotnet list installer-ui/OrganizedJihad.Installer.csproj package --include-transitive (Tmds.DBus.Protocol resolved to 0.94.1; NU1903 warning cleared)
