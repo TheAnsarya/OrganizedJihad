@@ -15,7 +15,8 @@ param(
 	[ValidateSet('chrome', 'edge', 'firefox', 'opera', 'operaGX')]
 	[string[]]$TampermonkeyBrowsers = @('edge'),
 	[ValidateSet('none', 'failed', 'required', 'all')]
-	[string]$InstallHealthCheckOpen = 'none'
+	[string]$InstallHealthCheckOpen = 'none',
+	[switch]$RunTaskModuleSelfTest
 )
 
 Set-StrictMode -Version Latest
@@ -189,6 +190,105 @@ function Remove-ScheduledTaskIfExists {
 	}
 }
 
+function Get-AutostartExecutionPlan {
+	param(
+		[bool]$IsElevated,
+		[bool]$UseTrayHost,
+		[bool]$TrayExecutableExists
+	)
+
+	$useTrayTask = $UseTrayHost -and $TrayExecutableExists
+	$serviceTrigger = if ($IsElevated) { 'Startup' } else { 'LogOn' }
+	$serviceRunLevel = if ($IsElevated) { 'Highest' } else { 'Limited' }
+	$trayRunLevel = if ($IsElevated) { 'Highest' } else { 'Limited' }
+
+	return [PSCustomObject]@{
+		UseTrayTask = $useTrayTask
+		ServiceTrigger = $serviceTrigger
+		ServiceRunLevel = $serviceRunLevel
+		TrayTrigger = 'LogOn'
+		TrayRunLevel = $trayRunLevel
+		RequiresElevationForSystemStartup = -not $IsElevated
+	}
+}
+
+function New-TaskTriggerFromPlan {
+	param([string]$TriggerType)
+
+	if ($TriggerType -eq 'Startup') {
+		return New-ScheduledTaskTrigger -AtStartup
+	}
+
+	return New-ScheduledTaskTrigger -AtLogOn
+}
+
+function Register-AutostartTaskFromDefinition {
+	param(
+		[string]$TaskName,
+		[object]$Action,
+		[string]$TriggerType,
+		[object]$Settings,
+		[string]$UserId,
+		[string]$LogonType,
+		[string]$RunLevel,
+		[string]$SuccessMessage,
+		[string]$FailureMessage
+	)
+
+	$trigger = New-TaskTriggerFromPlan -TriggerType $TriggerType
+	$principal = New-ScheduledTaskPrincipal -UserId $UserId -LogonType $LogonType -RunLevel $RunLevel
+
+	try {
+		Register-ScheduledTask -TaskName $TaskName -Action $Action -Trigger $trigger -Settings $Settings -Principal $principal -Force | Out-Null
+		Write-Step $SuccessMessage
+		return $true
+	} catch {
+		Write-Step "$FailureMessage ($($_.Exception.Message))."
+		return $false
+	}
+}
+
+function Start-AutostartTaskOrBackgroundFallback {
+	param(
+		[string]$TaskName,
+		[string]$ExecutablePath,
+		[string]$ExecutableArguments,
+		[string]$WorkingDirectory,
+		[string]$DisplayName
+	)
+
+	try {
+		Start-ScheduledTask -TaskName $TaskName
+		Write-Step "Started '$TaskName' immediately."
+		return
+	} catch {
+		Write-Step "Could not start '$TaskName' immediately. It will run on next startup."
+	}
+
+	Start-BackgroundProcess -ExecutablePath $ExecutablePath -ExecutableArguments $ExecutableArguments -WorkingDirectory $WorkingDirectory -DisplayName $DisplayName | Out-Null
+}
+
+function Invoke-AutostartTaskModuleSelfTest {
+	$cases = @(
+		@{ IsElevated = $true; UseTrayHost = $true; TrayExecutableExists = $true; ExpectTrayTask = $true; ExpectTrigger = 'Startup' },
+		@{ IsElevated = $true; UseTrayHost = $false; TrayExecutableExists = $true; ExpectTrayTask = $false; ExpectTrigger = 'Startup' },
+		@{ IsElevated = $false; UseTrayHost = $true; TrayExecutableExists = $true; ExpectTrayTask = $true; ExpectTrigger = 'LogOn' },
+		@{ IsElevated = $false; UseTrayHost = $true; TrayExecutableExists = $false; ExpectTrayTask = $false; ExpectTrigger = 'LogOn' }
+	)
+
+	foreach ($case in $cases) {
+		$plan = Get-AutostartExecutionPlan -IsElevated:$case.IsElevated -UseTrayHost:$case.UseTrayHost -TrayExecutableExists:$case.TrayExecutableExists
+		if ($plan.UseTrayTask -ne $case.ExpectTrayTask) {
+			throw "Self-test failed (UseTrayTask mismatch): $($case | ConvertTo-Json -Compress)"
+		}
+		if ($plan.ServiceTrigger -ne $case.ExpectTrigger) {
+			throw "Self-test failed (ServiceTrigger mismatch): $($case | ConvertTo-Json -Compress)"
+		}
+	}
+
+	Write-Step 'Autostart task module self-test passed.'
+}
+
 function Ensure-ApiAutostartTasks {
 	param(
 		[string]$ApiServiceTaskName,
@@ -207,73 +307,48 @@ function Ensure-ApiAutostartTasks {
 	$elevated = Test-IsAdministrator
 	$interactiveUser = "$env:USERDOMAIN\$env:USERNAME"
 	$serviceAction = New-ScheduledTaskAction -Execute $ApiExecutablePath -Argument $apiArguments -WorkingDirectory $ApiWorkingDirectory
-	$trayAction = $null
-
-	if ($UseTrayHost -and (Test-Path -Path $ApiTrayExecutablePath)) {
-		$trayAction = New-ScheduledTaskAction -Execute $ApiTrayExecutablePath -Argument $trayArguments -WorkingDirectory $ApiTrayWorkingDirectory
+	$trayExecutableExists = Test-Path -Path $ApiTrayExecutablePath
+	$trayAction = if ($UseTrayHost -and $trayExecutableExists) {
+		New-ScheduledTaskAction -Execute $ApiTrayExecutablePath -Argument $trayArguments -WorkingDirectory $ApiTrayWorkingDirectory
+	} else {
+		$null
 	}
+
+	$plan = Get-AutostartExecutionPlan -IsElevated:$elevated -UseTrayHost:$UseTrayHost -TrayExecutableExists:$trayExecutableExists
 
 	if ($elevated) {
-		$servicePrincipal = New-ScheduledTaskPrincipal -UserId 'SYSTEM' -LogonType ServiceAccount -RunLevel Highest
-		$serviceTrigger = New-ScheduledTaskTrigger -AtStartup
-
-		Register-ScheduledTask -TaskName $ApiServiceTaskName -Action $serviceAction -Trigger $serviceTrigger -Settings $settings -Principal $servicePrincipal -Force | Out-Null
-		Write-Step "Registered API background task '$ApiServiceTaskName' (system startup, no console window)."
-
-		if ($trayAction) {
-			$trayPrincipal = New-ScheduledTaskPrincipal -UserId $interactiveUser -LogonType Interactive -RunLevel Highest
-			$trayTrigger = New-ScheduledTaskTrigger -AtLogOn
-			Register-ScheduledTask -TaskName $ApiTrayTaskName -Action $trayAction -Trigger $trayTrigger -Settings $settings -Principal $trayPrincipal -Force | Out-Null
-			Write-Step "Registered tray task '$ApiTrayTaskName' (interactive logon notification icon mode)."
-		} else {
-			Remove-ScheduledTaskIfExists -TaskName $ApiTrayTaskName
-		}
-
-		try {
-			Start-ScheduledTask -TaskName $ApiServiceTaskName
-			Write-Step "Started '$ApiServiceTaskName' immediately."
-		} catch {
-			Write-Step "Could not start '$ApiServiceTaskName' immediately. It will run on next startup."
-			Start-BackgroundProcess -ExecutablePath $ApiExecutablePath -ExecutableArguments $apiArguments -WorkingDirectory $ApiWorkingDirectory -DisplayName 'API backend' | Out-Null
-		}
-
-		if ($trayAction) {
-			Start-BackgroundProcess -ExecutablePath $ApiTrayExecutablePath -ExecutableArguments $trayArguments -WorkingDirectory $ApiTrayWorkingDirectory -DisplayName 'API tray host' | Out-Null
-		}
-
-		return
-	}
-
-	# Non-admin fallback: logon-only interactive task, plus hidden process start now.
-	$runLevel = 'Limited'
-
-	if ($trayAction) {
-		$trayPrincipal = New-ScheduledTaskPrincipal -UserId $interactiveUser -LogonType Interactive -RunLevel $runLevel
-		$trayTrigger = New-ScheduledTaskTrigger -AtLogOn
-
-		try {
-			Register-ScheduledTask -TaskName $ApiTrayTaskName -Action $trayAction -Trigger $trayTrigger -Settings $settings -Principal $trayPrincipal -Force | Out-Null
-			Write-Step "Registered tray task '$ApiTrayTaskName' (logon fallback without elevation)."
-		} catch {
-			Write-Step "Could not register tray task without elevation ($($_.Exception.Message))."
-		}
-
-		Start-BackgroundProcess -ExecutablePath $ApiTrayExecutablePath -ExecutableArguments $trayArguments -WorkingDirectory $ApiTrayWorkingDirectory -DisplayName 'API tray host' | Out-Null
+		Register-AutostartTaskFromDefinition -TaskName $ApiServiceTaskName -Action $serviceAction -TriggerType $plan.ServiceTrigger -Settings $settings -UserId 'SYSTEM' -LogonType 'ServiceAccount' -RunLevel $plan.ServiceRunLevel -SuccessMessage "Registered API background task '$ApiServiceTaskName' (system startup, no console window)." -FailureMessage "Could not register API startup task '$ApiServiceTaskName'"
 	} else {
-		$apiPrincipal = New-ScheduledTaskPrincipal -UserId $interactiveUser -LogonType Interactive -RunLevel $runLevel
-		$apiTrigger = New-ScheduledTaskTrigger -AtLogOn
-
-		try {
-			Register-ScheduledTask -TaskName $ApiServiceTaskName -Action $serviceAction -Trigger $apiTrigger -Settings $settings -Principal $apiPrincipal -Force | Out-Null
-			Write-Step "Registered API task '$ApiServiceTaskName' (logon fallback without elevation)."
-		} catch {
-			Write-Step "Could not register API logon task without elevation ($($_.Exception.Message))."
-		}
-
-		Start-BackgroundProcess -ExecutablePath $ApiExecutablePath -ExecutableArguments $apiArguments -WorkingDirectory $ApiWorkingDirectory -DisplayName 'API backend' | Out-Null
+		Register-AutostartTaskFromDefinition -TaskName $ApiServiceTaskName -Action $serviceAction -TriggerType $plan.ServiceTrigger -Settings $settings -UserId $interactiveUser -LogonType 'Interactive' -RunLevel $plan.ServiceRunLevel -SuccessMessage "Registered API task '$ApiServiceTaskName' (logon fallback without elevation)." -FailureMessage "Could not register API logon task without elevation"
 	}
 
-	Write-Step 'Run installer as Administrator to enable system-start background API service mode.'
+	if ($plan.UseTrayTask -and $trayAction) {
+		$traySuccessMessage = if ($elevated) {
+			"Registered tray task '$ApiTrayTaskName' (interactive logon notification icon mode)."
+		} else {
+			"Registered tray task '$ApiTrayTaskName' (logon fallback without elevation)."
+		}
+
+		$trayFailureMessage = if ($elevated) {
+			"Could not register tray task '$ApiTrayTaskName'"
+		} else {
+			'Could not register tray task without elevation'
+		}
+
+		Register-AutostartTaskFromDefinition -TaskName $ApiTrayTaskName -Action $trayAction -TriggerType $plan.TrayTrigger -Settings $settings -UserId $interactiveUser -LogonType 'Interactive' -RunLevel $plan.TrayRunLevel -SuccessMessage $traySuccessMessage -FailureMessage $trayFailureMessage | Out-Null
+	} else {
+		Remove-ScheduledTaskIfExists -TaskName $ApiTrayTaskName
+	}
+
+	Start-AutostartTaskOrBackgroundFallback -TaskName $ApiServiceTaskName -ExecutablePath $ApiExecutablePath -ExecutableArguments $apiArguments -WorkingDirectory $ApiWorkingDirectory -DisplayName 'API backend'
+
+	if ($plan.UseTrayTask -and $trayAction) {
+		Start-BackgroundProcess -ExecutablePath $ApiTrayExecutablePath -ExecutableArguments $trayArguments -WorkingDirectory $ApiTrayWorkingDirectory -DisplayName 'API tray host' | Out-Null
+	}
+
+	if ($plan.RequiresElevationForSystemStartup) {
+		Write-Step 'Run installer as Administrator to enable system-start background API service mode.'
+	}
 }
 
 function Copy-BuildArtifacts {
@@ -730,6 +805,12 @@ function Invoke-UserscriptHandshakeDiagnostics {
 		Write-Step "Userscript handshake diagnostics failed at $handshakeUrl ($($_.Exception.Message))."
 		return $null
 	}
+}
+
+if ($RunTaskModuleSelfTest) {
+	Invoke-AutostartTaskModuleSelfTest
+	Write-Step 'Self-test mode requested. Exiting without running install workflow.'
+	return
 }
 
 $repoRoot = Split-Path -Parent $MyInvocation.MyCommand.Path

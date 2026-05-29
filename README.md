@@ -150,6 +150,7 @@ Optional flags:
 - `-SkipYarnInstall` to skip `yarn install` during repeat installs
 - `-AllowNonAdmin` to bypass the elevation prompt (reduced install capabilities; no full system-level startup registration)
 - `-InstallRoot "D:\Apps\OrganizedJihad"` to customize install location
+- `-RunTaskModuleSelfTest` to run installer startup-task planning self-tests and exit without performing install steps
 
 New reliability behaviors:
 

@@ -587,3 +587,33 @@
 - dotnet publish api/OrganizedJihad.Api.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true (pass)
 - pwsh -ExecutionPolicy Bypass -File .\Test-ReleaseSmoke.ps1 -StartupTimeoutSeconds 90 (pass)
 - PowerShell parser checks for installer/release/smoke/migration scripts (pass)
+
+---
+
+## Session
+- Date: 2026-05-29
+- Session Number: 21
+- Scope: installer startup-task module refactor and self-test hook
+
+## Summary
+- Refactored scheduled-task orchestration in installer into composable helpers:
+	- `Get-AutostartExecutionPlan`
+	- `New-TaskTriggerFromPlan`
+	- `Register-AutostartTaskFromDefinition`
+	- `Start-AutostartTaskOrBackgroundFallback`
+- Simplified `Ensure-ApiAutostartTasks` by using execution-plan driven registration/startup flow while preserving elevated and non-elevated behaviors.
+- Added opt-in self-test entrypoint `-RunTaskModuleSelfTest` that validates key plan combinations without performing install steps.
+- Updated README optional flags to document self-test mode.
+
+## Files Modified
+- Install-OrganizedJihad.ps1
+- README.md
+- ~docs/copilot-chats/2026-05-29-userscript-build-auto.md
+
+## Issues
+- Follow-up on: #330
+- PR tracking: #209
+
+## Validation
+- pwsh -ExecutionPolicy Bypass -File .\Install-OrganizedJihad.ps1 -RunTaskModuleSelfTest (pass)
+- PowerShell parser check for Install-OrganizedJihad.ps1 (pass)
