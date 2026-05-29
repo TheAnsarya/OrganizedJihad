@@ -76,7 +76,7 @@ Result: users can install the full stack with fewer failure points, better diagn
 
 Published assets:
 
-- `OrganizedJihad-v0.2.1-windows-installer.zip`
+- `OrganizedJihad.Installer.exe`
 - `SHA256SUMS.txt`
 
 ---
@@ -104,7 +104,7 @@ Published assets:
 
 Bundle note:
 
-- `OrganizedJihad-v0.2.1-windows-installer.zip` contains bundled API/Desktop/userscript payloads for standalone installation (no local source checkout required).
+- `OrganizedJihad.Installer.exe` contains bundled API/Desktop/userscript payloads for standalone installation (no local source checkout required).
 
 ### CLI Fallback
 

@@ -49,4 +49,75 @@
 - gh release upload v0.2.1 --clobber ... (pass)
 
 ## Follow-up
-- Ask users to re-download `OrganizedJihad-v0.2.1-windows-installer.zip` after hotfix asset replacement.
+- Ask users to re-download the latest release assets after hotfix replacement.
+---
+
+## Session
+- Date: 2026-05-29
+- Session Number: 3
+- Scope: Automated userscript build session logging
+
+## Summary
+- Auto-generated entry from userscript build pipeline.
+- Captures a timestamp and a git working-tree snapshot for traceability.
+
+## Files Modified
+- Install-OrganizedJihad.ps1
+- Publish-InstallerUI.ps1
+- Publish-ReleaseArtifacts.ps1
+- README.md
+- installer-ui/MainWindow.axaml
+- installer-ui/MainWindow.axaml.cs
+- installer-ui/OrganizedJihad.Installer.csproj
+- userscript/package.json
+- ~docs/copilot-chats/2026-05-29-userscript-build-auto.md
+- ~docs/oj-manual-prompts-log.txt
+- ~docs/plans/release-v0.2.1-github-body.md
+- ~docs/plans/release-v0.2.1.md
+
+## Validation
+- yarn build
+
+## Generated
+- Timestamp UTC: 2026-05-29T12:14:43.420Z
+
+---
+
+## Session
+- Date: 2026-05-29
+- Session Number: 4
+- Scope: #329 guided installer UX and single-EXE release publishing
+
+## Summary
+- Added component selection toggles (API/Desktop/userscript) in installer UI.
+- Added installed-browser detection and browser picker for Tampermonkey setup guidance.
+- Updated installer argument wiring to support component-conditional install flow.
+- Refactored release artifact pipeline to stage bundled payload into installer single-file publish.
+- Published updated v0.2.1 assets with one-file installer and refreshed release notes.
+
+## Files Modified
+- Install-OrganizedJihad.ps1
+- Publish-InstallerUI.ps1
+- Publish-ReleaseArtifacts.ps1
+- README.md
+- installer-ui/MainWindow.axaml
+- installer-ui/MainWindow.axaml.cs
+- installer-ui/OrganizedJihad.Installer.csproj
+- userscript/package.json
+- ~docs/copilot-chats/2026-05-29-userscript-build-auto.md
+- ~docs/plans/release-v0.2.1-github-body.md
+- ~docs/plans/release-v0.2.1.md
+
+## Issues
+- Created/implemented: #329
+- Referenced epic: #206
+- PR tracking: #209
+
+## Validation
+- dotnet build installer-ui/OrganizedJihad.Installer.csproj (pass)
+- pwsh -ExecutionPolicy Bypass -File .\Publish-ReleaseArtifacts.ps1 -Version 0.2.1 (pass)
+- dotnet build OrganizedJihad.sln (pass)
+- gh release upload v0.2.1 --clobber artifacts/v0.2.1/OrganizedJihad.Installer.exe (pass)
+- gh release upload v0.2.1 --clobber artifacts/v0.2.1/SHA256SUMS.txt (pass)
+- gh release delete-asset v0.2.1 OrganizedJihad-v0.2.1-windows-installer.zip --yes (pass)
+- gh release edit v0.2.1 --notes-file ~docs/plans/release-v0.2.1-github-body.md (pass)

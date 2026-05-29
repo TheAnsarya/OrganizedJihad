@@ -35,9 +35,9 @@ See [Tracking Reference](~docs/plans/tracking-reference.md) for the complete dat
 ### Stable Release Download (v0.2.1)
 
 - GitHub Release: https://github.com/TheAnsarya/OrganizedJihad/releases/tag/v0.2.1
-- Recommended asset: `OrganizedJihad-v0.2.1-windows-installer.zip`
+- Recommended asset: `OrganizedJihad.Installer.exe`
 - Verify integrity using bundled `SHA256SUMS.txt`
-- The zip is self-contained (API + desktop + userscript payloads included); source repository files are not required.
+- The EXE is self-contained (API + desktop + userscript payloads included); source repository files are not required.
 
 To build release artifacts locally:
 
@@ -60,6 +60,13 @@ For release/live testing, use the Avalonia GUI installer executable and avoid co
 2. Pick your userscript browser target (Opera GX supported).
 3. Click `Install Ecosystem`.
 4. Wait for `Status: Install complete` in the installer window.
+
+The installer UI lets you choose what to install:
+
+- API server
+- Desktop app
+- Userscript
+- Target browser for Tampermonkey setup (from detected installed browsers)
 
 GUI-first behavior guarantee:
 

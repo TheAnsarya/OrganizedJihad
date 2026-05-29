@@ -13,15 +13,25 @@ using System.Threading.Tasks;
 namespace OrganizedJihad.Installer;
 
 public partial class MainWindow : Window {
-	private readonly Dictionary<string, string> _browserArgumentMap = new() {
-		{ "Opera GX", "operaGX" },
-		{ "Chrome", "chrome" },
-		{ "Edge", "edge" },
-		{ "Firefox", "firefox" },
-	};
+	private sealed class BrowserOption {
+		public BrowserOption(string label, string argument, bool installed) {
+			Label = label;
+			Argument = argument;
+			Installed = installed;
+		}
+
+		public string Label { get; }
+		public string Argument { get; }
+		public bool Installed { get; }
+
+		public override string ToString() {
+			return Installed ? Label : $"{Label} (not detected)";
+		}
+	}
 
 	private bool _isInstalling;
 	private string? _currentLogFilePath;
+	private readonly List<BrowserOption> _availableBrowsers;
 
 	public MainWindow() {
 		InitializeComponent();
@@ -29,8 +39,16 @@ public partial class MainWindow : Window {
 		InstallRootTextBox.Text = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "OrganizedJihad");
 		ApiUrlTextBox.Text = "http://localhost:5124";
 
-		BrowserComboBox.ItemsSource = _browserArgumentMap.Keys.ToList();
-		BrowserComboBox.SelectedIndex = 0;
+		_availableBrowsers = DetectBrowsers();
+		var installedBrowsers = _availableBrowsers.Where(browser => browser.Installed).ToList();
+		BrowserComboBox.ItemsSource = installedBrowsers;
+		BrowserComboBox.SelectedItem = installedBrowsers.FirstOrDefault();
+
+		if (installedBrowsers.Count == 0) {
+			OpenTampermonkeySetupCheckBox.IsChecked = false;
+			OpenTampermonkeySetupCheckBox.IsEnabled = false;
+			AppendLog("[Installer UI] No supported browser was auto-detected. Userscript file will still be installed so you can import it manually in Tampermonkey.");
+		}
 
 		UpdateQuickActionState();
 	}
@@ -44,15 +62,32 @@ public partial class MainWindow : Window {
 			return;
 		}
 
-		if (!ValidatePreflight(out var installRoot, out var apiUrl, out var preflightMessage)) {
+		var installApi = InstallApiCheckBox.IsChecked == true;
+		var installDesktop = InstallDesktopCheckBox.IsChecked == true;
+		var installUserscript = InstallUserscriptCheckBox.IsChecked == true;
+		var openTampermonkeySetup = OpenTampermonkeySetupCheckBox.IsChecked == true;
+
+		if (!installApi && !installDesktop && !installUserscript) {
+			SetStatus("Status: Select at least one component to install.");
+			AppendLog("[Installer UI] Please select at least one component (API, desktop, or userscript).");
+			return;
+		}
+
+		if (!ValidatePreflight(installApi, out var installRoot, out var apiUrl, out var preflightMessage)) {
 			SetStatus($"Status: {preflightMessage}");
 			AppendLog($"[Installer UI] Preflight failed: {preflightMessage}");
 			return;
 		}
 
-		if (BrowserComboBox.SelectedItem is not string browserLabel || !_browserArgumentMap.TryGetValue(browserLabel, out var browserArg)) {
-			SetStatus("Status: Please select a browser.");
-			return;
+		string? browserArg = null;
+		if (installUserscript && openTampermonkeySetup) {
+			if (BrowserComboBox.SelectedItem is BrowserOption selectedBrowser) {
+				browserArg = selectedBrowser.Argument;
+			} else {
+				SetStatus("Status: No supported browser selected for Tampermonkey setup.");
+				AppendLog("[Installer UI] Install will continue without automatic Tampermonkey page opening.");
+				openTampermonkeySetup = false;
+			}
 		}
 
 		var scriptPath = ResolveInstallerScriptPath();
@@ -69,11 +104,19 @@ public partial class MainWindow : Window {
 			return;
 		}
 
-		var args = BuildInstallerArguments(scriptPath, installRoot, apiUrl, browserArg);
+		var args = BuildInstallerArguments(scriptPath, installRoot, apiUrl, installApi, installDesktop, installUserscript, openTampermonkeySetup, browserArg);
 		await RunInstallProcessAsync(shell, args);
+
+		if (installUserscript) {
+			var userscriptPath = Path.Combine(installRoot, "userscript", "organized-jihad.user.js");
+			AppendLog("[Installer UI] Next steps for userscript installation:");
+			AppendLog($"[Installer UI] 1) Open Tampermonkey dashboard in your browser.");
+			AppendLog($"[Installer UI] 2) Use Import/Utilities and choose: {userscriptPath}");
+			AppendLog("[Installer UI] 3) Save/Enable the OrganizedJihad script and refresh Hero Wars.");
+		}
 	}
 
-	private string BuildInstallerArguments(string scriptPath, string installRoot, string apiUrl, string browserArg) {
+	private string BuildInstallerArguments(string scriptPath, string installRoot, string apiUrl, bool installApi, bool installDesktop, bool installUserscript, bool openTampermonkeySetup, string? browserArg) {
 		var args = new List<string> {
 			"-NoProfile",
 			"-WindowStyle", "Hidden",
@@ -81,12 +124,29 @@ public partial class MainWindow : Window {
 			"-File", Quote(scriptPath),
 			"-InstallRoot", Quote(installRoot),
 			"-ApiUrl", Quote(apiUrl),
-			"-RunInstallHealthCheck",
-			"-TampermonkeyBrowsers", browserArg,
 		};
 
-		if (InstallDesktopCheckBox.IsChecked != true) {
+		if (!installApi) {
+			args.Add("-SkipApiInstall");
+		}
+
+		if (!installDesktop) {
 			args.Add("-SkipDesktopAppInstall");
+		}
+
+		if (!installUserscript) {
+			args.Add("-SkipUserscriptInstall");
+		}
+
+		if (!openTampermonkeySetup || !installUserscript || string.IsNullOrWhiteSpace(browserArg)) {
+			args.Add("-SkipTampermonkeyBootstrap");
+		} else {
+			args.Add("-TampermonkeyBrowsers");
+			args.Add(browserArg);
+		}
+
+		if (installApi) {
+			args.Add("-RunInstallHealthCheck");
 		}
 
 		if (FirstRunDiagnosticsCheckBox.IsChecked == true) {
@@ -98,6 +158,31 @@ public partial class MainWindow : Window {
 		}
 
 		return string.Join(' ', args);
+	}
+
+	private static List<BrowserOption> DetectBrowsers() {
+		var options = new List<BrowserOption> {
+			new("Chrome", "chrome", BrowserInstalled(
+				Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Google", "Chrome", "Application", "chrome.exe"),
+				Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "Google", "Chrome", "Application", "chrome.exe"),
+				Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86), "Google", "Chrome", "Application", "chrome.exe"))),
+			new("Edge", "edge", BrowserInstalled(
+				Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86), "Microsoft", "Edge", "Application", "msedge.exe"),
+				Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "Microsoft", "Edge", "Application", "msedge.exe"))),
+			new("Firefox", "firefox", BrowserInstalled(
+				Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "Mozilla Firefox", "firefox.exe"),
+				Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86), "Mozilla Firefox", "firefox.exe"))),
+			new("Opera GX", "operaGX", BrowserInstalled(
+				Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Programs", "Opera GX", "launcher.exe"),
+				Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "Opera GX", "launcher.exe"),
+				Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86), "Opera GX", "launcher.exe")))
+		};
+
+		return options;
+	}
+
+	private static bool BrowserInstalled(params string[] paths) {
+		return paths.Any(path => !string.IsNullOrWhiteSpace(path) && File.Exists(path));
 	}
 
 	private async Task RunInstallProcessAsync(string shell, string args) {
@@ -205,7 +290,7 @@ public partial class MainWindow : Window {
 		return principal.IsInRole(System.Security.Principal.WindowsBuiltInRole.Administrator);
 	}
 
-	private bool ValidatePreflight(out string installRoot, out string apiUrl, out string message) {
+	private bool ValidatePreflight(bool installApi, out string installRoot, out string apiUrl, out string message) {
 		installRoot = InstallRootTextBox.Text?.Trim() ?? string.Empty;
 		apiUrl = ApiUrlTextBox.Text?.Trim() ?? string.Empty;
 
@@ -231,19 +316,21 @@ public partial class MainWindow : Window {
 			return false;
 		}
 
-		if (string.IsNullOrWhiteSpace(apiUrl)) {
-			message = "API URL is required.";
-			return false;
-		}
+		if (installApi) {
+			if (string.IsNullOrWhiteSpace(apiUrl)) {
+				message = "API URL is required when API install is enabled.";
+				return false;
+			}
 
-		if (!Uri.TryCreate(apiUrl, UriKind.Absolute, out var uri)) {
-			message = "API URL must be a valid absolute URL.";
-			return false;
-		}
+			if (!Uri.TryCreate(apiUrl, UriKind.Absolute, out var uri)) {
+				message = "API URL must be a valid absolute URL.";
+				return false;
+			}
 
-		if (!string.Equals(uri.Scheme, Uri.UriSchemeHttp, StringComparison.OrdinalIgnoreCase) && !string.Equals(uri.Scheme, Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase)) {
-			message = "API URL must use http or https.";
-			return false;
+			if (!string.Equals(uri.Scheme, Uri.UriSchemeHttp, StringComparison.OrdinalIgnoreCase) && !string.Equals(uri.Scheme, Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase)) {
+				message = "API URL must use http or https.";
+				return false;
+			}
 		}
 
 		message = "Preflight checks passed.";

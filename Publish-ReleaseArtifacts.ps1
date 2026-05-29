@@ -25,8 +25,10 @@ if (-not (Test-Path -Path $publishInstallerScript)) {
 	throw "Required script not found: $publishInstallerScript"
 }
 
-Write-Host "[OJ Release] Building installer UI publish output for v$Version..." -ForegroundColor Cyan
-& $publishInstallerScript -Runtime $Runtime -Configuration $Configuration -OutputDir '.\installer-ui\publish\win-x64'
+$installerScriptSource = Join-Path $repoRoot 'Install-OrganizedJihad.ps1'
+if (-not (Test-Path -Path $installerScriptSource)) {
+	throw "Required installer script not found: $installerScriptSource"
+}
 
 Write-Host '[OJ Release] Building userscript bundle...' -ForegroundColor Cyan
 Push-Location $userscriptDir
@@ -61,62 +63,49 @@ if (-not $desktopPublishDir) {
 	throw "Missing desktop publish output at expected paths: $($desktopPublishCandidates -join '; ')"
 }
 
+$bundlePayloadDir = Join-Path $repoRoot 'installer-ui\bundle-payload'
+if (Test-Path -Path $bundlePayloadDir) {
+	Remove-Item -Path $bundlePayloadDir -Recurse -Force
+}
+
+$bundleApiDir = Join-Path $bundlePayloadDir 'bundled\api'
+$bundleDesktopDir = Join-Path $bundlePayloadDir 'bundled\desktop-app'
+New-Item -Path $bundleApiDir -ItemType Directory -Force | Out-Null
+New-Item -Path $bundleDesktopDir -ItemType Directory -Force | Out-Null
+
+Copy-Item -Path $installerScriptSource -Destination (Join-Path $bundlePayloadDir 'Install-OrganizedJihad.ps1') -Force
+Copy-Item -Path $userscriptFile -Destination (Join-Path $bundlePayloadDir 'organized-jihad.user.js') -Force
+Copy-Item -Path $healthCheckScript -Destination (Join-Path $bundlePayloadDir 'install-health-check.mjs') -Force
+Copy-Item -Path (Join-Path $apiPublishDir '*') -Destination $bundleApiDir -Recurse -Force
+Copy-Item -Path (Join-Path $desktopPublishDir '*') -Destination $bundleDesktopDir -Recurse -Force
+
+Write-Host "[OJ Release] Building installer UI publish output for v$Version..." -ForegroundColor Cyan
+& $publishInstallerScript -Runtime $Runtime -Configuration $Configuration -OutputDir '.\installer-ui\publish\win-x64'
+
 $publishDir = Join-Path $repoRoot 'installer-ui\publish\win-x64'
 $installerExe = Join-Path $publishDir 'OrganizedJihad.Installer.exe'
-$installerPs1 = Join-Path $publishDir 'Install-OrganizedJihad.ps1'
-$cliCmd = Join-Path $repoRoot 'Install-OrganizedJihad.cmd'
 $releaseBody = Join-Path $repoRoot '~docs\plans\release-v0.2.1-github-body.md'
 
 if (-not (Test-Path -Path $installerExe)) {
 	throw "Missing installer executable: $installerExe"
-}
-if (-not (Test-Path -Path $installerPs1)) {
-	throw "Missing bundled installer script: $installerPs1"
-}
-if (-not (Test-Path -Path $cliCmd)) {
-	throw "Missing CLI launcher script: $cliCmd"
 }
 if (-not (Test-Path -Path $releaseBody)) {
 	throw "Missing release body document: $releaseBody"
 }
 
 $artifactDir = Join-Path $repoRoot (Join-Path $OutputRoot "v$Version")
-$bundleDir = Join-Path $artifactDir 'bundle'
-$zipPath = Join-Path $artifactDir "OrganizedJihad-v$Version-windows-installer.zip"
+$exeAssetPath = Join-Path $artifactDir 'OrganizedJihad.Installer.exe'
 $checksumsPath = Join-Path $artifactDir 'SHA256SUMS.txt'
-$bundledDir = Join-Path $bundleDir 'bundled'
-$bundledApiDir = Join-Path $bundledDir 'api'
-$bundledDesktopDir = Join-Path $bundledDir 'desktop-app'
 
 if (Test-Path -Path $artifactDir) {
 	Remove-Item -Path $artifactDir -Recurse -Force
 }
-New-Item -Path $bundleDir -ItemType Directory -Force | Out-Null
-New-Item -Path $bundledApiDir -ItemType Directory -Force | Out-Null
-New-Item -Path $bundledDesktopDir -ItemType Directory -Force | Out-Null
-
-Copy-Item -Path $installerExe -Destination (Join-Path $bundleDir 'OrganizedJihad.Installer.exe') -Force
-Copy-Item -Path $installerPs1 -Destination (Join-Path $bundleDir 'Install-OrganizedJihad.ps1') -Force
-Copy-Item -Path $cliCmd -Destination (Join-Path $bundleDir 'Install-OrganizedJihad.cmd') -Force
-Copy-Item -Path $releaseBody -Destination (Join-Path $bundleDir 'RELEASE-NOTES.md') -Force
-Copy-Item -Path $userscriptFile -Destination (Join-Path $bundleDir 'organized-jihad.user.js') -Force
-Copy-Item -Path $healthCheckScript -Destination (Join-Path $bundleDir 'install-health-check.mjs') -Force
-Copy-Item -Path (Join-Path $apiPublishDir '*') -Destination $bundledApiDir -Recurse -Force
-Copy-Item -Path (Join-Path $desktopPublishDir '*') -Destination $bundledDesktopDir -Recurse -Force
-
-if (Test-Path -Path $zipPath) {
-	Remove-Item -Path $zipPath -Force
-}
-Compress-Archive -Path (Join-Path $bundleDir '*') -DestinationPath $zipPath -CompressionLevel Optimal
+New-Item -Path $artifactDir -ItemType Directory -Force | Out-Null
+Copy-Item -Path $installerExe -Destination $exeAssetPath -Force
 
 $checksumLines = @()
 $targets = @(
-	$zipPath,
-	(Join-Path $bundleDir 'OrganizedJihad.Installer.exe'),
-	(Join-Path $bundleDir 'Install-OrganizedJihad.ps1'),
-	(Join-Path $bundleDir 'Install-OrganizedJihad.cmd'),
-	(Join-Path $bundleDir 'organized-jihad.user.js'),
-	(Join-Path $bundleDir 'install-health-check.mjs')
+	$exeAssetPath
 )
 
 foreach ($target in $targets) {
@@ -128,5 +117,5 @@ foreach ($target in $targets) {
 Set-Content -Path $checksumsPath -Value $checksumLines -Encoding UTF8
 
 Write-Host "[OJ Release] Artifacts ready at: $artifactDir" -ForegroundColor Green
-Write-Host "[OJ Release] Bundle zip: $zipPath" -ForegroundColor Green
+Write-Host "[OJ Release] Single EXE asset: $exeAssetPath" -ForegroundColor Green
 Write-Host "[OJ Release] Checksums: $checksumsPath" -ForegroundColor Green

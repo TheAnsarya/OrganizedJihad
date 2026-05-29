@@ -15,7 +15,7 @@ if (-not $resolvedOutput) {
 }
 
 Write-Host '[OJ Installer UI] Publishing Avalonia installer executable...' -ForegroundColor Cyan
-dotnet publish $projectPath -c $Configuration -r $Runtime --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -o (Join-Path $repoRoot $OutputDir)
+dotnet publish $projectPath -c $Configuration -r $Runtime --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:IncludeAllContentForSelfExtract=true -o (Join-Path $repoRoot $OutputDir)
 
 $exePath = Join-Path $repoRoot "$OutputDir\OrganizedJihad.Installer.exe"
 if (-not (Test-Path -Path $exePath)) {

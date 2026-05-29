@@ -1,7 +1,9 @@
 param(
 	[string]$InstallRoot = "$env:LOCALAPPDATA\OrganizedJihad",
 	[string]$ApiUrl = 'http://localhost:5124',
+	[switch]$SkipApiInstall,
 	[switch]$SkipDesktopAppInstall,
+	[switch]$SkipUserscriptInstall,
 	[switch]$SkipTampermonkeyBootstrap,
 	[switch]$SkipYarnInstall,
 	[switch]$AllowNonAdmin,
@@ -251,13 +253,6 @@ function Get-OperaGxExecutable {
 	return $null
 }
 
-function Convert-ToFileUri {
-	param([string]$FilePath)
-	$resolved = Resolve-Path -Path $FilePath
-	$escaped = [Uri]::EscapeUriString($resolved.Path.Replace('\', '/'))
-	return "file:///$escaped"
-}
-
 function Open-TampermonkeyBootstrap {
 	param(
 		[string[]]$Browsers,
@@ -265,14 +260,10 @@ function Open-TampermonkeyBootstrap {
 	)
 
 	$browserLinks = @{
-		chrome = @('https://chromewebstore.google.com/detail/tampermonkey/dhdgffkkebhmkfjojejmpbldmpobfkfo')
-		edge = @('https://microsoftedge.microsoft.com/addons/detail/tampermonkey/iikmkjmpaadaobahmlepeloendndfphd')
-		firefox = @('https://addons.mozilla.org/en-US/firefox/addon/tampermonkey/')
-		operaGX = @(
-			'https://addons.opera.com/en/extensions/details/install-chrome-extensions/',
-			'https://chromewebstore.google.com/detail/tampermonkey/dhdgffkkebhmkfjojejmpbldmpobfkfo',
-			'https://addons.opera.com/en/extensions/details/tampermonkey-beta/'
-		)
+		chrome = 'https://chromewebstore.google.com/detail/tampermonkey/dhdgffkkebhmkfjojejmpbldmpobfkfo'
+		edge = 'https://microsoftedge.microsoft.com/addons/detail/tampermonkey/iikmkjmpaadaobahmlepeloendndfphd'
+		firefox = 'https://addons.mozilla.org/en-US/firefox/addon/tampermonkey/'
+		operaGX = 'https://addons.opera.com/en/extensions/details/tampermonkey-beta/'
 	}
 
 	foreach ($browser in $Browsers) {
@@ -283,30 +274,19 @@ function Open-TampermonkeyBootstrap {
 		if ($browser -eq 'operaGX') {
 			$operaExe = Get-OperaGxExecutable
 			if ($operaExe) {
-				foreach ($url in $browserLinks[$browser]) {
-					Start-Process -FilePath $operaExe -ArgumentList $url | Out-Null
-				}
-
-				if (Test-Path -Path $UserscriptPath) {
-					$scriptUri = Convert-ToFileUri -FilePath $UserscriptPath
-					Start-Process -FilePath $operaExe -ArgumentList $scriptUri | Out-Null
-				}
-
-				Write-Step 'Opened Opera GX Tampermonkey bootstrap pages + userscript import URL.'
+				Start-Process -FilePath $operaExe -ArgumentList $browserLinks[$browser] | Out-Null
+				Write-Step 'Opened Opera GX Tampermonkey setup page.'
 				continue
 			}
 
 			Write-Step 'Opera GX executable not found. Opening Opera-compatible Tampermonkey links in default browser.'
 		}
 
-		foreach ($url in $browserLinks[$browser]) {
-			Start-Process $url | Out-Null
-		}
+		Start-Process $browserLinks[$browser] | Out-Null
 	}
 
 	if (Test-Path -Path $UserscriptPath) {
-		Start-Process $UserscriptPath | Out-Null
-		Write-Step 'Opened userscript file for Tampermonkey import.'
+		Write-Step "Userscript file is ready for manual Tampermonkey import: $UserscriptPath"
 	}
 }
 
@@ -369,6 +349,10 @@ $apiPublishDir = $null
 $userscriptArtifactPath = $null
 $isBundledPayloadMode = (Test-Path -Path $bundledApiPublishDir) -or (Test-Path -Path $bundledUserscriptFile)
 
+if ($SkipApiInstall -and $SkipDesktopAppInstall -and $SkipUserscriptInstall) {
+	throw 'At least one install component must be enabled. Remove one of: -SkipApiInstall, -SkipDesktopAppInstall, -SkipUserscriptInstall.'
+}
+
 Ensure-InstallerElevation -BoundParameters $PSBoundParameters -ScriptPath $PSCommandPath
 
 if ($FirstRunDiagnostics) {
@@ -381,35 +365,49 @@ if ($FirstRunDiagnostics) {
 	}
 }
 
+if ($SkipApiInstall) {
+	$effectiveRunInstallHealthCheck = $false
+	$effectiveOpenUserscriptDiagnostics = $false
+}
+
 Write-Step "Validating prerequisites"
 if ((Test-Path -Path $userscriptDir) -and (Test-Path -Path $apiProject)) {
-	Assert-Command -Name 'dotnet' -HelpText 'Install .NET SDK 10 preview or later.'
-	Assert-Command -Name 'node' -HelpText 'Install Node.js 18+.'
-	Assert-Command -Name 'yarn' -HelpText 'Install Yarn (classic) and Node.js 18+.'
+	if ((-not $SkipApiInstall) -or (-not $SkipDesktopAppInstall)) {
+		Assert-Command -Name 'dotnet' -HelpText 'Install .NET SDK 10 preview or later.'
+	}
 
-	Write-Step 'Building userscript bundle from source repository.'
-	Push-Location $userscriptDir
-	try {
-		if (-not $SkipYarnInstall) {
-			yarn install --frozen-lockfile
+	if (-not $SkipUserscriptInstall) {
+		Assert-Command -Name 'node' -HelpText 'Install Node.js 18+.'
+		Assert-Command -Name 'yarn' -HelpText 'Install Yarn (classic) and Node.js 18+.'
+	}
+
+	if (-not $SkipUserscriptInstall) {
+		Write-Step 'Building userscript bundle from source repository.'
+		Push-Location $userscriptDir
+		try {
+			if (-not $SkipYarnInstall) {
+				yarn install --frozen-lockfile
+			}
+			yarn build
+		} finally {
+			Pop-Location
 		}
-		yarn build
-	} finally {
-		Pop-Location
+
+		if (-not (Test-Path -Path $userscriptFile)) {
+			throw "Userscript bundle not found at '$userscriptFile'."
+		}
+		$userscriptArtifactPath = $userscriptFile
 	}
 
-	if (-not (Test-Path -Path $userscriptFile)) {
-		throw "Userscript bundle not found at '$userscriptFile'."
-	}
-	$userscriptArtifactPath = $userscriptFile
+	if (-not $SkipApiInstall) {
+		Write-Step 'Publishing API backend from source repository.'
+		dotnet publish $apiProject -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true
 
-	Write-Step 'Publishing API backend from source repository.'
-	dotnet publish $apiProject -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true
-
-	if (-not (Test-Path -Path $publishDir)) {
-		throw "API publish output not found at '$publishDir'."
+		if (-not (Test-Path -Path $publishDir)) {
+			throw "API publish output not found at '$publishDir'."
+		}
+		$apiPublishDir = $publishDir
 	}
-	$apiPublishDir = $publishDir
 
 	if (-not $SkipDesktopAppInstall) {
 		Write-Step 'Publishing desktop app (Windows) from source repository.'
@@ -429,10 +427,12 @@ if ((Test-Path -Path $userscriptDir) -and (Test-Path -Path $apiProject)) {
 } elseif ($isBundledPayloadMode) {
 	Write-Step 'Source project structure not found. Using bundled release payloads.'
 
-	if (-not (Test-Path -Path $bundledApiPublishDir)) {
-		throw "Bundled API payload not found at '$bundledApiPublishDir'."
+	if (-not $SkipApiInstall) {
+		if (-not (Test-Path -Path $bundledApiPublishDir)) {
+			throw "Bundled API payload not found at '$bundledApiPublishDir'."
+		}
+		$apiPublishDir = $bundledApiPublishDir
 	}
-	$apiPublishDir = $bundledApiPublishDir
 
 	if (-not $SkipDesktopAppInstall) {
 		if (-not (Test-Path -Path $bundledDesktopPublishDir)) {
@@ -441,27 +441,33 @@ if ((Test-Path -Path $userscriptDir) -and (Test-Path -Path $apiProject)) {
 		$desktopPublishDir = $bundledDesktopPublishDir
 	}
 
-	if (-not (Test-Path -Path $bundledUserscriptFile)) {
-		throw "Bundled userscript artifact not found at '$bundledUserscriptFile'."
+	if (-not $SkipUserscriptInstall) {
+		if (-not (Test-Path -Path $bundledUserscriptFile)) {
+			throw "Bundled userscript artifact not found at '$bundledUserscriptFile'."
+		}
+		$userscriptArtifactPath = $bundledUserscriptFile
 	}
-	$userscriptArtifactPath = $bundledUserscriptFile
 } else {
 	throw 'Could not locate either source project structure or bundled release payloads.'
 }
 
 Write-Step "Installing artifacts into '$InstallRoot'"
 Ensure-Directory -Path $InstallRoot
-Stop-InstalledApiProcess -ExecutablePath $apiExecutablePath
-Copy-BuildArtifacts -Source $apiPublishDir -Destination $apiInstallDir
+if (-not $SkipApiInstall) {
+	Stop-InstalledApiProcess -ExecutablePath $apiExecutablePath
+	Copy-BuildArtifacts -Source $apiPublishDir -Destination $apiInstallDir
+}
 
 if (-not $SkipDesktopAppInstall) {
 	Copy-BuildArtifacts -Source $desktopPublishDir -Destination $desktopInstallDir
 }
 
-Ensure-Directory -Path $userscriptInstallDir
-Copy-Item -Path $userscriptArtifactPath -Destination (Join-Path $userscriptInstallDir 'organized-jihad.user.js') -Force
+if (-not $SkipUserscriptInstall) {
+	Ensure-Directory -Path $userscriptInstallDir
+	Copy-Item -Path $userscriptArtifactPath -Destination (Join-Path $userscriptInstallDir 'organized-jihad.user.js') -Force
+}
 
-if (-not (Test-Path -Path $apiExecutablePath)) {
+if ((-not $SkipApiInstall) -and (-not (Test-Path -Path $apiExecutablePath))) {
 	throw "Expected API executable missing at '$apiExecutablePath'."
 }
 
@@ -469,16 +475,18 @@ if ((-not $SkipDesktopAppInstall) -and (-not (Test-Path -Path $desktopExecutable
 	throw "Expected desktop executable missing at '$desktopExecutablePath'."
 }
 
-Write-Step "Configuring API startup"
-Ensure-AutostartTask -TaskName $taskName -ExecutablePath $apiExecutablePath -ApiUrlValue $ApiUrl -WorkingDirectory $apiInstallDir
+if (-not $SkipApiInstall) {
+	Write-Step "Configuring API startup"
+	Ensure-AutostartTask -TaskName $taskName -ExecutablePath $apiExecutablePath -ApiUrlValue $ApiUrl -WorkingDirectory $apiInstallDir
+}
 
-if (-not $SkipTampermonkeyBootstrap) {
+if ((-not $SkipUserscriptInstall) -and (-not $SkipTampermonkeyBootstrap)) {
 	Write-Step "Opening Tampermonkey bootstrap for: $($TampermonkeyBrowsers -join ', ')."
 	$installedScript = Join-Path $userscriptInstallDir 'organized-jihad.user.js'
 	Open-TampermonkeyBootstrap -Browsers $TampermonkeyBrowsers -UserscriptPath $installedScript
 }
 
-if ($effectiveRunInstallHealthCheck) {
+if ((-not $SkipApiInstall) -and $effectiveRunInstallHealthCheck) {
 	Wait-ApiHealth -ApiUrlValue $ApiUrl -TimeoutSeconds 30 | Out-Null
 
 	Write-Step 'Running userscript install health check.'
@@ -511,7 +519,7 @@ if ($effectiveRunInstallHealthCheck) {
 	}
 }
 
-if ($effectiveOpenUserscriptDiagnostics) {
+if ((-not $SkipApiInstall) -and $effectiveOpenUserscriptDiagnostics) {
 	Write-Step 'Opening userscript diagnostics entry points.'
 	$apiHealthUrl = "$ApiUrl/api/sync/health"
 	$apiDocsUrl = "$ApiUrl/api/sync"
@@ -527,18 +535,29 @@ if ($effectiveOpenUserscriptDiagnostics) {
 Write-Step 'Installation complete.'
 Write-Host ""
 Write-Host 'What was configured:' -ForegroundColor Green
-Write-Host "- API installed to: $apiInstallDir"
+if (-not $SkipApiInstall) {
+	Write-Host "- API installed to: $apiInstallDir"
+}
 if (-not $SkipDesktopAppInstall) {
 	Write-Host "- Desktop app installed to: $desktopInstallDir"
 }
-Write-Host "- Userscript installed to: $userscriptInstallDir"
-Write-Host "- Startup task: $taskName"
-Write-Host "- API URL: $ApiUrl"
+if (-not $SkipUserscriptInstall) {
+	Write-Host "- Userscript installed to: $userscriptInstallDir"
+	Write-Host "- Userscript import file: $(Join-Path $userscriptInstallDir 'organized-jihad.user.js')"
+}
+if (-not $SkipApiInstall) {
+	Write-Host "- Startup task: $taskName"
+	Write-Host "- API URL: $ApiUrl"
+}
 Write-Host ""
 Write-Host 'Recommended next checks:' -ForegroundColor Green
-Write-Host '- Open Hero Wars in your browser'
-Write-Host '- Confirm Tampermonkey has the OrganizedJihad script enabled'
-Write-Host '- Verify API health at http://localhost:5124/api/sync/health'
+if (-not $SkipUserscriptInstall) {
+	Write-Host '- Open Tampermonkey dashboard and import organized-jihad.user.js if not already prompted'
+	Write-Host '- Confirm Tampermonkey has the OrganizedJihad script enabled'
+}
+if (-not $SkipApiInstall) {
+	Write-Host "- Verify API health at $ApiUrl/api/sync/health"
+}
 if (-not $SkipDesktopAppInstall) {
 	Write-Host '- Launch OrganizedJihad.Desktop.exe and confirm data views load'
 }
