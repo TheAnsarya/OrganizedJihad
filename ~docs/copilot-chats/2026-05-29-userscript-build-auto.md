@@ -511,3 +511,35 @@
 ## Validation
 - dotnet build api/OrganizedJihad.Api.csproj (pass)
 - dotnet test tests/OrganizedJihad.Api.Tests/OrganizedJihad.Api.Tests.csproj --filter "Api_Ui_Route_Should_Return_Html|Api_Ui_Settings_Should_Return_Payload" (pass)
+
+---
+
+## Session
+- Date: 2026-05-29
+- Session Number: 19
+- Scope: tray config reload + port conflict diagnostics + installer startup verification
+
+## Summary
+- Extended persisted API UI settings model to include `apiBaseUrl` and surfaced it in `/ui` settings controls.
+- Added tray-host runtime settings reload from `api-ui-settings.json` so API URL updates can be applied without reinstalling.
+- Added tray-host API port conflict diagnostics (tooltip + throttled balloon notices when configured port is in use but health endpoint is unavailable).
+- Added installer startup-task verification logic to report service/tray task registration state immediately after startup configuration.
+- Strengthened API integration test assertions to include the new `apiBaseUrl` settings field.
+
+## Files Modified
+- api/Program.cs
+- api/OrganizedJihad.Api.TrayHost/Program.cs
+- Install-OrganizedJihad.ps1
+- tests/OrganizedJihad.Api.Tests/SyncControllerTests.cs
+- ~docs/copilot-chats/2026-05-29-userscript-build-auto.md
+
+## Issues
+- Follow-up on: #330
+- PR tracking: #209
+
+## Validation
+- PowerShell parser check for `Install-OrganizedJihad.ps1` (pass)
+- dotnet build api/OrganizedJihad.Api.csproj (pass)
+- dotnet build api/OrganizedJihad.Api.TrayHost/OrganizedJihad.Api.TrayHost.csproj (pass)
+- dotnet test tests/OrganizedJihad.Api.Tests/OrganizedJihad.Api.Tests.csproj --filter "Api_Ui_Route_Should_Return_Html|Api_Ui_Settings_Should_Return_Payload" (pass)
+- dotnet test tests/OrganizedJihad.Api.Tests/OrganizedJihad.Api.Tests.csproj --filter "Api_Ui_Settings_Should_Return_Payload" (pass)

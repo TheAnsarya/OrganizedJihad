@@ -1,6 +1,8 @@
 using System.Diagnostics;
 using System.Drawing;
 using System.Net.Http;
+using System.Net.Sockets;
+using System.Text.Json;
 using System.Windows.Forms;
 
 namespace OrganizedJihad.Api.TrayHost;
@@ -50,8 +52,11 @@ internal sealed class TrayContext : ApplicationContext {
 	private readonly NotifyIcon _notifyIcon;
 	private readonly System.Windows.Forms.Timer _healthTimer;
 	private readonly HttpClient _httpClient;
+	private readonly string _settingsPath;
 	private Process? _apiProcess;
 	private bool _apiManagedByTray;
+	private DateTime _lastSettingsWriteUtc = DateTime.MinValue;
+	private DateTime _lastPortConflictNoticeUtc = DateTime.MinValue;
 
 	public TrayContext(TrayHostOptions options) {
 		_options = options;
@@ -64,15 +69,20 @@ internal sealed class TrayContext : ApplicationContext {
 		};
 
 		_notifyIcon.DoubleClick += (_, _) => OpenApiUi();
+		_settingsPath = Path.Combine(_options.WorkingDirectory, "api-ui-settings.json");
 		_httpClient = new HttpClient {
 			Timeout = TimeSpan.FromSeconds(2),
 		};
 		_healthTimer = new System.Windows.Forms.Timer {
 			Interval = 15000,
 		};
-		_healthTimer.Tick += (_, _) => EnsureApiRunning();
+		_healthTimer.Tick += (_, _) => {
+			ReloadRuntimeSettingsIfChanged();
+			EnsureApiRunning();
+		};
 		_healthTimer.Start();
 
+		ReloadRuntimeSettingsIfChanged();
 		EnsureApiRunning();
 		UpdateTooltip();
 	}
@@ -116,6 +126,12 @@ internal sealed class TrayContext : ApplicationContext {
 				return;
 			}
 
+			if (IsConfiguredPortInUse()) {
+				ShowPortConflictNotice();
+				UpdateTooltip();
+				return;
+			}
+
 			_apiProcess = Process.Start(new ProcessStartInfo {
 				FileName = _options.ApiExecutablePath,
 				Arguments = $"--urls {_options.ApiUrl}",
@@ -133,9 +149,46 @@ internal sealed class TrayContext : ApplicationContext {
 				};
 			}
 		} catch (Exception ex) {
+			if (IsConfiguredPortInUse()) {
+				ShowPortConflictNotice();
+			}
 			_notifyIcon.BalloonTipTitle = "OJ API Tray";
 			_notifyIcon.BalloonTipText = $"Could not start API: {ex.Message}";
 			_notifyIcon.ShowBalloonTip(4000);
+		}
+	}
+
+	private void ReloadRuntimeSettingsIfChanged() {
+		try {
+			if (!File.Exists(_settingsPath)) {
+				return;
+			}
+
+			var lastWriteUtc = File.GetLastWriteTimeUtc(_settingsPath);
+			if (lastWriteUtc <= _lastSettingsWriteUtc) {
+				return;
+			}
+
+			var raw = File.ReadAllText(_settingsPath);
+			using var document = JsonDocument.Parse(raw);
+			if (document.RootElement.TryGetProperty("apiBaseUrl", out var apiBaseUrlProperty)) {
+				var configuredApiUrl = apiBaseUrlProperty.GetString()?.Trim();
+				if (!string.IsNullOrWhiteSpace(configuredApiUrl)
+					&& !string.Equals(_options.ApiUrl, configuredApiUrl, StringComparison.OrdinalIgnoreCase)) {
+					_options.ApiUrl = configuredApiUrl;
+					_notifyIcon.BalloonTipTitle = "OJ API Tray";
+					_notifyIcon.BalloonTipText = $"API base URL updated to {_options.ApiUrl}.";
+					_notifyIcon.ShowBalloonTip(2500);
+
+					if (_apiManagedByTray && _apiProcess is { HasExited: false }) {
+						RestartApi();
+					}
+				}
+			}
+
+			_lastSettingsWriteUtc = lastWriteUtc;
+		} catch {
+			// Ignore transient parsing or file lock issues and retry later.
 		}
 	}
 
@@ -193,7 +246,48 @@ internal sealed class TrayContext : ApplicationContext {
 
 	private void UpdateTooltip() {
 		var running = (_apiProcess is { HasExited: false }) || IsApiHealthy();
-		_notifyIcon.Text = running ? "OrganizedJihad API (running)" : "OrganizedJihad API (stopped)";
+		if (running) {
+			_notifyIcon.Text = "OrganizedJihad API (running)";
+			return;
+		}
+
+		if (IsConfiguredPortInUse()) {
+			_notifyIcon.Text = "OrganizedJihad API (port conflict)";
+			return;
+		}
+
+		_notifyIcon.Text = "OrganizedJihad API (stopped)";
+	}
+
+	private bool IsConfiguredPortInUse() {
+		if (!Uri.TryCreate(_options.ApiUrl, UriKind.Absolute, out var uri)) {
+			return false;
+		}
+
+		var port = uri.IsDefaultPort
+			? (string.Equals(uri.Scheme, Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase) ? 443 : 80)
+			: uri.Port;
+
+		try {
+			using var client = new TcpClient();
+			var connectTask = client.ConnectAsync(uri.Host, port);
+			var completed = connectTask.Wait(500);
+			return completed && client.Connected;
+		} catch {
+			return false;
+		}
+	}
+
+	private void ShowPortConflictNotice() {
+		var now = DateTime.UtcNow;
+		if ((now - _lastPortConflictNoticeUtc).TotalSeconds < 30) {
+			return;
+		}
+
+		_lastPortConflictNoticeUtc = now;
+		_notifyIcon.BalloonTipTitle = "OJ API Tray";
+		_notifyIcon.BalloonTipText = $"Configured API URL port appears in use but /api/sync/health is not responding at {_options.ApiUrl}. Check for a conflicting process.";
+		_notifyIcon.ShowBalloonTip(4500);
 	}
 
 	private bool IsApiHealthy() {

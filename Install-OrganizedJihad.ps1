@@ -448,6 +448,79 @@ function Resume-AutostartTask {
 	}
 }
 
+function Get-AutostartTaskStatus {
+	param([string]$TaskName)
+
+	if (-not (Get-Command -Name 'Get-ScheduledTask' -ErrorAction SilentlyContinue)) {
+		return [PSCustomObject]@{
+			TaskName = $TaskName
+			Exists = $false
+			Enabled = $false
+			State = 'Unavailable'
+			Note = 'Get-ScheduledTask command not available on this host.'
+		}
+	}
+
+	try {
+		$task = Get-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue
+		if (-not $task) {
+			return [PSCustomObject]@{
+				TaskName = $TaskName
+				Exists = $false
+				Enabled = $false
+				State = 'Missing'
+				Note = 'Task is not registered.'
+			}
+		}
+
+		return [PSCustomObject]@{
+			TaskName = $TaskName
+			Exists = $true
+			Enabled = [bool]$task.Settings.Enabled
+			State = [string]$task.State
+			Note = 'Task is registered.'
+		}
+	} catch {
+		return [PSCustomObject]@{
+			TaskName = $TaskName
+			Exists = $false
+			Enabled = $false
+			State = 'Unknown'
+			Note = $_.Exception.Message
+		}
+	}
+}
+
+function Verify-ApiAutostartTasks {
+	param(
+		[string]$ApiServiceTaskName,
+		[string]$ApiTrayTaskName,
+		[bool]$ExpectTrayTask
+	)
+
+	$serviceStatus = Get-AutostartTaskStatus -TaskName $ApiServiceTaskName
+	$trayStatus = Get-AutostartTaskStatus -TaskName $ApiTrayTaskName
+
+	if ($serviceStatus.Exists) {
+		Write-Step "Verified startup task '$ApiServiceTaskName' (Enabled=$($serviceStatus.Enabled), State=$($serviceStatus.State))."
+	} else {
+		Write-Step "Startup verification: '$ApiServiceTaskName' is not registered ($($serviceStatus.Note))."
+	}
+
+	if ($ExpectTrayTask) {
+		if ($trayStatus.Exists) {
+			Write-Step "Verified startup task '$ApiTrayTaskName' (Enabled=$($trayStatus.Enabled), State=$($trayStatus.State))."
+		} else {
+			Write-Step "Startup verification: '$ApiTrayTaskName' is not registered ($($trayStatus.Note))."
+		}
+	}
+
+	return [PSCustomObject]@{
+		Service = $serviceStatus
+		Tray = $trayStatus
+	}
+}
+
 function Wait-FileUnlocked {
 	param(
 		[string]$Path,
@@ -637,6 +710,7 @@ $apiTrayPublishDir = $null
 $userscriptArtifactPath = $null
 $userscriptGuidePath = $null
 $userscriptGuideScreenshotsPath = $null
+$autostartVerification = $null
 $isBundledPayloadMode = (Test-Path -Path $bundledApiPublishDir) -or (Test-Path -Path $bundledUserscriptFile) -or (Test-Path -Path $bundledApiTrayPublishDir)
 
 if ($SkipApiInstall -and $SkipDesktopAppInstall -and $SkipUserscriptInstall) {
@@ -877,6 +951,7 @@ if (-not $SkipApiInstall) {
 	}
 
 	Ensure-ApiAutostartTasks -ApiServiceTaskName $apiServiceTaskName -ApiTrayTaskName $apiTrayTaskName -ApiExecutablePath $apiExecutablePath -ApiWorkingDirectory $apiInstallDir -ApiTrayExecutablePath $apiTrayExecutablePath -ApiTrayWorkingDirectory $apiTrayInstallDir -ApiUrlValue $ApiUrl -UseTrayHost:$useTrayHost
+	$autostartVerification = Verify-ApiAutostartTasks -ApiServiceTaskName $apiServiceTaskName -ApiTrayTaskName $apiTrayTaskName -ExpectTrayTask:$useTrayHost
 }
 
 if ((-not $SkipUserscriptInstall) -and (-not $SkipTampermonkeyBootstrap)) {
@@ -953,6 +1028,12 @@ if (-not $SkipApiInstall) {
 	Write-Host "- API background task: $apiServiceTaskName"
 	if (Test-Path -Path $apiTrayExecutablePath) {
 		Write-Host "- API tray task: $apiTrayTaskName"
+	}
+	if ($autostartVerification) {
+		Write-Host "- Startup verification (service): $($autostartVerification.Service.State)"
+		if (Test-Path -Path $apiTrayExecutablePath) {
+			Write-Host "- Startup verification (tray): $($autostartVerification.Tray.State)"
+		}
 	}
 	Write-Host "- API URL: $ApiUrl"
 	if (Test-Path -Path $apiTrayExecutablePath) {

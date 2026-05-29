@@ -87,6 +87,7 @@ app.MapControllers();
 var uiSettingsPath = ResolveApiUiSettingsPath();
 var defaultUiSettings = new ApiUiSettings(
 	AutoOpenHealthOnLoad: true,
+	ApiBaseUrl: "http://localhost:5124",
 	PreferredHeroWarsUrl: "https://www.hero-wars.com/",
 	Notes: string.Empty,
 	UpdatedUtc: DateTime.UtcNow);
@@ -96,9 +97,11 @@ app.MapGet("/ui/settings", () => {
 	return Results.Ok(settings);
 });
 
-app.MapPost("/ui/settings", async (ApiUiSettingsUpdateRequest request) => {
+app.MapPost("/ui/settings", async (HttpContext context, ApiUiSettingsUpdateRequest request) => {
+	var defaultApiBaseUrl = $"{context.Request.Scheme}://{context.Request.Host}";
 	var normalized = new ApiUiSettings(
 		AutoOpenHealthOnLoad: request.AutoOpenHealthOnLoad,
+		ApiBaseUrl: string.IsNullOrWhiteSpace(request.ApiBaseUrl) ? defaultApiBaseUrl : request.ApiBaseUrl.Trim(),
 		PreferredHeroWarsUrl: string.IsNullOrWhiteSpace(request.PreferredHeroWarsUrl) ? "https://www.hero-wars.com/" : request.PreferredHeroWarsUrl.Trim(),
 		Notes: request.Notes?.Trim() ?? string.Empty,
 		UpdatedUtc: DateTime.UtcNow);
@@ -294,6 +297,10 @@ app.MapGet("/ui", (HttpContext context) => {
 						Auto-load health and sync data when page opens
 					</label>
 					<label style="display: grid; gap: 4px;">
+						<span style="color: var(--ink);">API Base URL</span>
+						<input id="apiBaseUrl" type="text" style="padding: 8px; border-radius: 8px; border: 1px solid var(--line); background: #0f172a; color: var(--ink);" />
+					</label>
+					<label style="display: grid; gap: 4px;">
 						<span style="color: var(--ink);">Preferred Hero Wars URL</span>
 						<input id="heroWarsUrl" type="text" style="padding: 8px; border-radius: 8px; border: 1px solid var(--line); background: #0f172a; color: var(--ink);" />
 					</label>
@@ -360,6 +367,7 @@ app.MapGet("/ui", (HttpContext context) => {
 
 		async function loadSettings() {
 			const autoHealth = document.getElementById('autoHealth');
+			const apiBaseUrl = document.getElementById('apiBaseUrl');
 			const heroWarsUrl = document.getElementById('heroWarsUrl');
 			const uiNotes = document.getElementById('uiNotes');
 			const openHeroWars = document.getElementById('openHeroWars');
@@ -368,6 +376,7 @@ app.MapGet("/ui", (HttpContext context) => {
 			try {
 				const settings = await fetchJson('/ui/settings');
 				autoHealth.checked = !!settings.autoOpenHealthOnLoad;
+				apiBaseUrl.value = settings.apiBaseUrl || window.location.origin;
 				heroWarsUrl.value = settings.preferredHeroWarsUrl || 'https://www.hero-wars.com/';
 				uiNotes.value = settings.notes || '';
 				openHeroWars.href = heroWarsUrl.value;
@@ -379,6 +388,7 @@ app.MapGet("/ui", (HttpContext context) => {
 
 		async function saveSettings() {
 			const autoHealth = document.getElementById('autoHealth');
+			const apiBaseUrl = document.getElementById('apiBaseUrl');
 			const heroWarsUrl = document.getElementById('heroWarsUrl');
 			const uiNotes = document.getElementById('uiNotes');
 			const openHeroWars = document.getElementById('openHeroWars');
@@ -391,6 +401,7 @@ app.MapGet("/ui", (HttpContext context) => {
 					headers: { 'Content-Type': 'application/json' },
 					body: JSON.stringify({
 						autoOpenHealthOnLoad: autoHealth.checked,
+						apiBaseUrl: apiBaseUrl.value,
 						preferredHeroWarsUrl: heroWarsUrl.value,
 						notes: uiNotes.value
 					})
@@ -399,6 +410,7 @@ app.MapGet("/ui", (HttpContext context) => {
 					throw new Error('HTTP ' + response.status);
 				}
 				const saved = await response.json();
+				apiBaseUrl.value = saved.apiBaseUrl || apiBaseUrl.value;
 				heroWarsUrl.value = saved.preferredHeroWarsUrl || heroWarsUrl.value;
 				openHeroWars.href = heroWarsUrl.value;
 				settingsStatus.textContent = 'Settings saved at ' + new Date(saved.updatedUtc).toLocaleString();
@@ -519,9 +531,9 @@ static (string Status, string Detail) GetScheduledTaskStatus(string taskName) {
 	}
 }
 
-internal sealed record ApiUiSettings(bool AutoOpenHealthOnLoad, string PreferredHeroWarsUrl, string Notes, DateTime UpdatedUtc);
+internal sealed record ApiUiSettings(bool AutoOpenHealthOnLoad, string ApiBaseUrl, string PreferredHeroWarsUrl, string Notes, DateTime UpdatedUtc);
 
-internal sealed record ApiUiSettingsUpdateRequest(bool AutoOpenHealthOnLoad, string PreferredHeroWarsUrl, string? Notes);
+internal sealed record ApiUiSettingsUpdateRequest(bool AutoOpenHealthOnLoad, string ApiBaseUrl, string PreferredHeroWarsUrl, string? Notes);
 
 // Make the implicit Program class public for integration testing
 // https://learn.microsoft.com/en-us/aspnet/core/test/integration-tests

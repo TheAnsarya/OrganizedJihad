@@ -208,6 +208,7 @@ public class SyncControllerTests : IClassFixture<WebApplicationFactory<Program>>
 		using var document = JsonDocument.Parse(json);
 		var root = document.RootElement;
 		root.TryGetProperty("autoOpenHealthOnLoad", out _).Should().BeTrue();
+		root.TryGetProperty("apiBaseUrl", out _).Should().BeTrue();
 		root.TryGetProperty("preferredHeroWarsUrl", out _).Should().BeTrue();
 		root.TryGetProperty("updatedUtc", out _).Should().BeTrue();
 	}
