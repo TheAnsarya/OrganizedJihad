@@ -67,6 +67,29 @@
 
 ## Validation
 - git status --short (artifacts and installer-ui/bundle-payload no longer listed)
+
+---
+
+## Session
+- Date: 2026-05-29
+- Session Number: 7
+- Scope: installer fix for locked API executable during copy
+
+## Summary
+- Added resilient API deployment handling when `OrganizedJihad.Api.exe` is locked by another process.
+- Installer now retries copy for lock contention and falls back to side-by-side API executable deployment if lock persists.
+- Added broader process-stop targeting by exact executable path and alternate executable name matching.
+
+## Files Modified
+- Install-OrganizedJihad.ps1
+- ~docs/copilot-chats/2026-05-29-userscript-build-auto.md
+
+## Issues
+- Follow-up maintenance for: #329
+- PR tracking: #209
+
+## Validation
+- pwsh -ExecutionPolicy Bypass -File .\Install-OrganizedJihad.ps1 -AllowNonAdmin -SkipDesktopAppInstall -SkipUserscriptInstall -SkipTampermonkeyBootstrap -SkipRunInstallHealthCheck -SkipOpenUserscriptDiagnostics (pass with side-by-side fallback)
 - pwsh -ExecutionPolicy Bypass -File .\Publish-ReleaseArtifacts.ps1 -Version 0.2.1 (pass)
 - gh release upload v0.2.1 --clobber ... (pass)
 

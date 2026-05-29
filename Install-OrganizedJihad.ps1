@@ -202,17 +202,81 @@ function Ensure-AutostartTask {
 function Copy-BuildArtifacts {
 	param(
 		[string]$Source,
-		[string]$Destination
+		[string]$Destination,
+		[int]$MaxRetries = 8
 	)
+
 	Ensure-Directory -Path $Destination
-	Copy-Item -Path (Join-Path $Source '*') -Destination $Destination -Recurse -Force
+
+	for ($attempt = 1; $attempt -le $MaxRetries; $attempt++) {
+		try {
+			Copy-Item -Path (Join-Path $Source '*') -Destination $Destination -Recurse -Force -ErrorAction Stop
+			return
+		} catch {
+			$canRetry = $attempt -lt $MaxRetries
+			if (-not $canRetry) {
+				throw
+			}
+
+			Write-Step "Copy attempt $attempt failed ($($_.Exception.Message)). Retrying..."
+			Start-Sleep -Milliseconds 750
+		}
+	}
+}
+
+function Copy-BuildArtifactsExcludingFiles {
+	param(
+		[string]$Source,
+		[string]$Destination,
+		[string[]]$ExcludedFileNames
+	)
+
+	Ensure-Directory -Path $Destination
+	$sourceRoot = (Resolve-Path -Path $Source).Path
+
+	Get-ChildItem -Path $sourceRoot -Recurse -File | ForEach-Object {
+		if ($ExcludedFileNames -contains $_.Name) {
+			return
+		}
+
+		$relativePath = $_.FullName.Substring($sourceRoot.Length).TrimStart('\', '/')
+		$targetPath = Join-Path $Destination $relativePath
+		$targetDir = Split-Path -Parent $targetPath
+		Ensure-Directory -Path $targetDir
+		Copy-Item -Path $_.FullName -Destination $targetPath -Force
+	}
 }
 
 function Stop-InstalledApiProcess {
 	param([string]$ExecutablePath)
 
 	try {
-		$running = Get-Process -Name 'OrganizedJihad.Api' -ErrorAction SilentlyContinue
+		$targetProcessName = [System.IO.Path]::GetFileNameWithoutExtension($ExecutablePath)
+		$processNameCandidates = @('OrganizedJihad.Api')
+		if (-not [string]::IsNullOrWhiteSpace($targetProcessName)) {
+			$processNameCandidates += $targetProcessName
+		}
+
+		$running = Get-Process -Name $processNameCandidates -ErrorAction SilentlyContinue
+		if (-not $running) {
+			$running = @()
+		}
+
+		if (Get-Command -Name 'Get-CimInstance' -ErrorAction SilentlyContinue) {
+			try {
+				$runningByPath = Get-CimInstance Win32_Process -ErrorAction SilentlyContinue | Where-Object { $_.ExecutablePath -eq $ExecutablePath }
+				foreach ($proc in $runningByPath) {
+					$processById = Get-Process -Id $proc.ProcessId -ErrorAction SilentlyContinue
+					if ($processById) {
+						$running += $processById
+					}
+				}
+			} catch {
+				# Ignore CIM access issues.
+			}
+		}
+
+		$running = $running | Sort-Object -Property Id -Unique
 		if (-not $running) {
 			return
 		}
@@ -227,7 +291,12 @@ function Stop-InstalledApiProcess {
 			}
 
 			if ($matchesPath) {
-				Stop-Process -Id $proc.Id -Force -ErrorAction SilentlyContinue
+				try {
+					Stop-Process -Id $proc.Id -Force -ErrorAction SilentlyContinue
+					Wait-Process -Id $proc.Id -Timeout 5 -ErrorAction SilentlyContinue
+				} catch {
+					# Ignore timeout/process state issues and continue trying remaining matches.
+				}
 			}
 		}
 
@@ -235,6 +304,72 @@ function Stop-InstalledApiProcess {
 	} catch {
 		Write-Step 'Could not stop existing API process automatically. If install copy fails, close OrganizedJihad.Api.exe and retry.'
 	}
+}
+
+function Suspend-AutostartTask {
+	param([string]$TaskName)
+
+	if (-not (Get-Command -Name 'Get-ScheduledTask' -ErrorAction SilentlyContinue)) {
+		return $false
+	}
+
+	try {
+		$task = Get-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue
+		if (-not $task) {
+			return $false
+		}
+
+		Stop-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue
+		Disable-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue | Out-Null
+		Write-Step "Temporarily suspended startup task '$TaskName' while refreshing API binaries."
+		return $true
+	} catch {
+		Write-Step "Could not suspend startup task '$TaskName' ($($_.Exception.Message)). Continuing install."
+		return $false
+	}
+}
+
+function Resume-AutostartTask {
+	param([string]$TaskName)
+
+	if (-not (Get-Command -Name 'Enable-ScheduledTask' -ErrorAction SilentlyContinue)) {
+		return
+	}
+
+	try {
+		$task = Get-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue
+		if ($task) {
+			Enable-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue | Out-Null
+			Write-Step "Re-enabled startup task '$TaskName'."
+		}
+	} catch {
+		Write-Step "Could not re-enable startup task '$TaskName' ($($_.Exception.Message))."
+	}
+}
+
+function Wait-FileUnlocked {
+	param(
+		[string]$Path,
+		[int]$TimeoutSeconds = 12
+	)
+
+	if (-not (Test-Path -Path $Path)) {
+		return $true
+	}
+
+	$deadline = (Get-Date).AddSeconds($TimeoutSeconds)
+	while ((Get-Date) -lt $deadline) {
+		try {
+			$stream = [System.IO.File]::Open($Path, [System.IO.FileMode]::Open, [System.IO.FileAccess]::ReadWrite, [System.IO.FileShare]::None)
+			$stream.Close()
+			$stream.Dispose()
+			return $true
+		} catch {
+			Start-Sleep -Milliseconds 500
+		}
+	}
+
+	return $false
 }
 
 function Get-OperaGxExecutable {
@@ -454,8 +589,39 @@ if ((Test-Path -Path $userscriptDir) -and (Test-Path -Path $apiProject)) {
 Write-Step "Installing artifacts into '$InstallRoot'"
 Ensure-Directory -Path $InstallRoot
 if (-not $SkipApiInstall) {
-	Stop-InstalledApiProcess -ExecutablePath $apiExecutablePath
-	Copy-BuildArtifacts -Source $apiPublishDir -Destination $apiInstallDir
+	$autostartTaskSuspended = Suspend-AutostartTask -TaskName $taskName
+	try {
+		Stop-InstalledApiProcess -ExecutablePath $apiExecutablePath
+		$fileUnlocked = Wait-FileUnlocked -Path $apiExecutablePath -TimeoutSeconds 30
+		if (-not $fileUnlocked) {
+			Write-Step "API binary remained locked after wait window. Continuing with retrying copy operations."
+		}
+
+		try {
+			Copy-BuildArtifacts -Source $apiPublishDir -Destination $apiInstallDir -MaxRetries 60
+		} catch {
+			$copyError = $_.Exception.Message
+			if ($copyError -like '*OrganizedJihad.Api.exe*used by another process*') {
+				Write-Step 'Detected locked OrganizedJihad.Api.exe during copy. Falling back to side-by-side executable deployment.'
+
+				Copy-BuildArtifactsExcludingFiles -Source $apiPublishDir -Destination $apiInstallDir -ExcludedFileNames @('OrganizedJihad.Api.exe')
+
+				$sourceApiExecutable = Join-Path $apiPublishDir 'OrganizedJihad.Api.exe'
+				$sideBySideName = "OrganizedJihad.Api.$((Get-Date).ToString('yyyyMMddHHmmss')).exe"
+				$sideBySidePath = Join-Path $apiInstallDir $sideBySideName
+				Copy-Item -Path $sourceApiExecutable -Destination $sideBySidePath -Force
+				$apiExecutablePath = $sideBySidePath
+
+				Write-Step "Using side-by-side API executable: $apiExecutablePath"
+			} else {
+				throw
+			}
+		}
+	} finally {
+		if ($autostartTaskSuspended) {
+			Resume-AutostartTask -TaskName $taskName
+		}
+	}
 }
 
 if (-not $SkipDesktopAppInstall) {
