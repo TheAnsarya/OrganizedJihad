@@ -121,3 +121,27 @@
 - gh release upload v0.2.1 --clobber artifacts/v0.2.1/SHA256SUMS.txt (pass)
 - gh release delete-asset v0.2.1 OrganizedJihad-v0.2.1-windows-installer.zip --yes (pass)
 - gh release edit v0.2.1 --notes-file ~docs/plans/release-v0.2.1-github-body.md (pass)
+
+---
+
+## Session
+- Date: 2026-05-29
+- Session Number: 5
+- Scope: #329 UX wording and guided option-state polish
+
+## Summary
+- Added a clear Quick Start panel in installer UI so first-time users see exact next steps before clicking install.
+- Added dynamic option-state behavior so API URL, browser target, and diagnostics toggles reflect selected components.
+- Added pre-install selected-component logging and clearer userscript post-install instructions.
+
+## Files Modified
+- installer-ui/MainWindow.axaml
+- installer-ui/MainWindow.axaml.cs
+- ~docs/copilot-chats/2026-05-29-userscript-build-auto.md
+
+## Issues
+- Implemented follow-up polish for: #329
+- PR tracking: #209
+
+## Validation
+- dotnet build installer-ui/OrganizedJihad.Installer.csproj (pass)

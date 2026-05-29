@@ -50,7 +50,13 @@ public partial class MainWindow : Window {
 			AppendLog("[Installer UI] No supported browser was auto-detected. Userscript file will still be installed so you can import it manually in Tampermonkey.");
 		}
 
+		ApplySelectionGuidance();
+
 		UpdateQuickActionState();
+	}
+
+	private void OnInstallOptionChanged(object? sender, RoutedEventArgs e) {
+		ApplySelectionGuidance();
 	}
 
 	private async void OnInstallClick(object? sender, RoutedEventArgs e) {
@@ -78,6 +84,19 @@ public partial class MainWindow : Window {
 			AppendLog($"[Installer UI] Preflight failed: {preflightMessage}");
 			return;
 		}
+
+		var selectedComponents = new List<string>();
+		if (installApi) {
+			selectedComponents.Add("API server");
+		}
+		if (installDesktop) {
+			selectedComponents.Add("desktop app");
+		}
+		if (installUserscript) {
+			selectedComponents.Add("userscript");
+		}
+
+		AppendLog($"[Installer UI] Selected components: {string.Join(", ", selectedComponents)}");
 
 		string? browserArg = null;
 		if (installUserscript && openTampermonkeySetup) {
@@ -110,9 +129,48 @@ public partial class MainWindow : Window {
 		if (installUserscript) {
 			var userscriptPath = Path.Combine(installRoot, "userscript", "organized-jihad.user.js");
 			AppendLog("[Installer UI] Next steps for userscript installation:");
-			AppendLog($"[Installer UI] 1) Open Tampermonkey dashboard in your browser.");
+			if (openTampermonkeySetup && !string.IsNullOrWhiteSpace(browserArg)) {
+				AppendLog($"[Installer UI] 1) A Tampermonkey setup tab should open in your selected browser ({browserArg}).");
+			} else {
+				AppendLog("[Installer UI] 1) Open Tampermonkey dashboard in your browser.");
+			}
 			AppendLog($"[Installer UI] 2) Use Import/Utilities and choose: {userscriptPath}");
 			AppendLog("[Installer UI] 3) Save/Enable the OrganizedJihad script and refresh Hero Wars.");
+		}
+	}
+
+	private void ApplySelectionGuidance() {
+		var installApi = InstallApiCheckBox.IsChecked == true;
+		var installDesktop = InstallDesktopCheckBox.IsChecked == true;
+		var installUserscript = InstallUserscriptCheckBox.IsChecked == true;
+		var openTampermonkeySetup = OpenTampermonkeySetupCheckBox.IsChecked == true;
+
+		ApiUrlTextBox.IsEnabled = installApi;
+
+		if (!installUserscript) {
+			OpenTampermonkeySetupCheckBox.IsChecked = false;
+			OpenTampermonkeySetupCheckBox.IsEnabled = false;
+			BrowserComboBox.IsEnabled = false;
+			OpenDiagnosticsCheckBox.IsChecked = false;
+			OpenDiagnosticsCheckBox.IsEnabled = false;
+		} else {
+			if (_availableBrowsers.Any(browser => browser.Installed)) {
+				OpenTampermonkeySetupCheckBox.IsEnabled = true;
+				BrowserComboBox.IsEnabled = openTampermonkeySetup;
+			} else {
+				OpenTampermonkeySetupCheckBox.IsChecked = false;
+				OpenTampermonkeySetupCheckBox.IsEnabled = false;
+				BrowserComboBox.IsEnabled = false;
+			}
+
+			OpenDiagnosticsCheckBox.IsEnabled = true;
+			if (OpenDiagnosticsCheckBox.IsChecked != true) {
+				OpenDiagnosticsCheckBox.IsChecked = true;
+			}
+		}
+
+		if (!installApi && !installDesktop && !installUserscript) {
+			SetStatus("Status: Select at least one component to install.");
 		}
 	}
 
