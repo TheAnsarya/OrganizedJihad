@@ -401,3 +401,32 @@
 
 ## Validation
 - Documentation wording verified against current installer button labels and behavior.
+
+---
+
+## Session
+- Date: 2026-05-29
+- Session Number: 15
+- Scope: Plex-style API startup model (no command prompt) with service+tray behavior
+
+## Summary
+- Reworked API startup registration in installer script to use split tasks:
+	- `OrganizedJihad.Api.Service` runs API in background at system startup (service-style, no visible command prompt)
+	- `OrganizedJihad.Api.Tray` runs tray host at user logon for notification-area controls
+- Added hidden background process fallback path for non-admin scenarios to avoid visible console windows.
+- Updated tray host to attach to existing API instance via health checks, self-heal by restarting API when down, and manage restart/stop for both tray-managed and externally started API processes.
+- Kept tray UX aligned with Plex-style expectation: notification icon remains control point and opens API UI directly.
+
+## Files Modified
+- Install-OrganizedJihad.ps1
+- api/OrganizedJihad.Api.TrayHost/Program.cs
+- ~docs/copilot-chats/2026-05-29-userscript-build-auto.md
+
+## Issues
+- Follow-up on: #330
+- PR tracking: #209
+
+## Validation
+- PowerShell parser check for `Install-OrganizedJihad.ps1` (pass)
+- dotnet build api/OrganizedJihad.Api.TrayHost/OrganizedJihad.Api.TrayHost.csproj (pass)
+- dotnet build installer-ui/OrganizedJihad.Installer.csproj (pass)

@@ -43,6 +43,33 @@ function Ensure-Directory {
 	}
 }
 
+function Start-BackgroundProcess {
+	param(
+		[string]$ExecutablePath,
+		[string]$ExecutableArguments,
+		[string]$WorkingDirectory,
+		[string]$DisplayName
+	)
+
+	try {
+		$startInfo = @{
+			FilePath = $ExecutablePath
+			WorkingDirectory = $WorkingDirectory
+		}
+
+		if (-not [string]::IsNullOrWhiteSpace($ExecutableArguments)) {
+			$startInfo['ArgumentList'] = $ExecutableArguments
+		}
+
+		Start-Process @startInfo -WindowStyle Hidden | Out-Null
+		Write-Step "Started $DisplayName in background mode (no visible console window)."
+		return $true
+	} catch {
+		Write-Step "Could not start $DisplayName in background mode ($($_.Exception.Message))."
+		return $false
+	}
+}
+
 function Test-IsAdministrator {
 	$currentIdentity = [Security.Principal.WindowsIdentity]::GetCurrent()
 	$principal = New-Object Security.Principal.WindowsPrincipal($currentIdentity)
@@ -145,68 +172,108 @@ function Ensure-InstallerElevation {
 	}
 }
 
-function Ensure-AutostartTask {
-	param(
-		[string]$TaskName,
-		[string]$ExecutablePath,
-		[string]$ExecutableArguments,
-		[string]$ApiUrlValue,
-		[string]$WorkingDirectory,
-		[switch]$PreferInteractiveUser
-	)
+function Remove-ScheduledTaskIfExists {
+	param([string]$TaskName)
 
-	$effectiveArguments = $ExecutableArguments
-	if ([string]::IsNullOrWhiteSpace($effectiveArguments)) {
-		$effectiveArguments = "--urls $ApiUrlValue"
-	}
-
-	$action = New-ScheduledTaskAction -Execute $ExecutablePath -Argument $effectiveArguments -WorkingDirectory $WorkingDirectory
-	$settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -StartWhenAvailable -MultipleInstances IgnoreNew
-	$elevated = Test-IsAdministrator
-	$interactiveUser = "$env:USERDOMAIN\$env:USERNAME"
-
-	if ($elevated -and (-not $PreferInteractiveUser)) {
-		$principal = New-ScheduledTaskPrincipal -UserId 'SYSTEM' -LogonType ServiceAccount -RunLevel Highest
-		$triggers = @(
-			(New-ScheduledTaskTrigger -AtStartup),
-			(New-ScheduledTaskTrigger -AtLogOn)
-		)
-
-		Register-ScheduledTask -TaskName $TaskName -Action $action -Trigger $triggers -Settings $settings -Principal $principal -Force | Out-Null
-		Write-Step "Registered startup task '$TaskName' (system startup + logon, running as SYSTEM)."
-	} else {
-		$runLevel = if ($elevated) { 'Highest' } else { 'Limited' }
-		$principal = New-ScheduledTaskPrincipal -UserId $interactiveUser -LogonType Interactive -RunLevel $runLevel
-		$trigger = New-ScheduledTaskTrigger -AtLogOn
-		$registrationMode = if ($PreferInteractiveUser) { 'interactive logon (tray icon mode)' } else { 'logon fallback; run installer as Administrator for system startup registration' }
-
-		try {
-			Register-ScheduledTask -TaskName $TaskName -Action $action -Trigger $trigger -Settings $settings -Principal $principal -Force | Out-Null
-			Write-Step "Registered startup task '$TaskName' ($registrationMode)."
-		} catch {
-			Write-Step "Could not register startup task without elevation ($($_.Exception.Message)). API binaries were installed; run installer as Administrator to configure autostart."
-			try {
-				Start-Process -FilePath $ExecutablePath -ArgumentList $effectiveArguments -WorkingDirectory $WorkingDirectory | Out-Null
-				Write-Step 'Started API process directly for this session (no autostart task configured).'
-			} catch {
-				Write-Step 'Could not start API process directly. Start it manually from the installed api folder.'
-			}
-			return
-		}
+	if (-not (Get-Command -Name 'Get-ScheduledTask' -ErrorAction SilentlyContinue)) {
+		return
 	}
 
 	try {
-		Start-ScheduledTask -TaskName $TaskName
-		Write-Step "Started '$TaskName' immediately."
-	} catch {
-		Write-Step "Could not start '$TaskName' immediately. It will run at next logon."
-		try {
-			Start-Process -FilePath $ExecutablePath -ArgumentList $effectiveArguments -WorkingDirectory $WorkingDirectory | Out-Null
-			Write-Step 'Started API process directly for this session.'
-		} catch {
-			Write-Step 'Could not start API process directly. Start it manually from the installed api folder.'
+		$existingTask = Get-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue
+		if ($existingTask) {
+			Unregister-ScheduledTask -TaskName $TaskName -Confirm:$false -ErrorAction SilentlyContinue
 		}
+	} catch {
+		Write-Step "Could not remove existing scheduled task '$TaskName' ($($_.Exception.Message))."
 	}
+}
+
+function Ensure-ApiAutostartTasks {
+	param(
+		[string]$ApiServiceTaskName,
+		[string]$ApiTrayTaskName,
+		[string]$ApiExecutablePath,
+		[string]$ApiWorkingDirectory,
+		[string]$ApiTrayExecutablePath,
+		[string]$ApiTrayWorkingDirectory,
+		[string]$ApiUrlValue,
+		[bool]$UseTrayHost
+	)
+
+	$apiArguments = "--urls $ApiUrlValue"
+	$trayArguments = "--api-executable `"$ApiExecutablePath`" --api-url `"$ApiUrlValue`" --working-directory `"$ApiWorkingDirectory`""
+	$settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -StartWhenAvailable -MultipleInstances IgnoreNew
+	$elevated = Test-IsAdministrator
+	$interactiveUser = "$env:USERDOMAIN\$env:USERNAME"
+	$serviceAction = New-ScheduledTaskAction -Execute $ApiExecutablePath -Argument $apiArguments -WorkingDirectory $ApiWorkingDirectory
+	$trayAction = $null
+
+	if ($UseTrayHost -and (Test-Path -Path $ApiTrayExecutablePath)) {
+		$trayAction = New-ScheduledTaskAction -Execute $ApiTrayExecutablePath -Argument $trayArguments -WorkingDirectory $ApiTrayWorkingDirectory
+	}
+
+	if ($elevated) {
+		$servicePrincipal = New-ScheduledTaskPrincipal -UserId 'SYSTEM' -LogonType ServiceAccount -RunLevel Highest
+		$serviceTrigger = New-ScheduledTaskTrigger -AtStartup
+
+		Register-ScheduledTask -TaskName $ApiServiceTaskName -Action $serviceAction -Trigger $serviceTrigger -Settings $settings -Principal $servicePrincipal -Force | Out-Null
+		Write-Step "Registered API background task '$ApiServiceTaskName' (system startup, no console window)."
+
+		if ($trayAction) {
+			$trayPrincipal = New-ScheduledTaskPrincipal -UserId $interactiveUser -LogonType Interactive -RunLevel Highest
+			$trayTrigger = New-ScheduledTaskTrigger -AtLogOn
+			Register-ScheduledTask -TaskName $ApiTrayTaskName -Action $trayAction -Trigger $trayTrigger -Settings $settings -Principal $trayPrincipal -Force | Out-Null
+			Write-Step "Registered tray task '$ApiTrayTaskName' (interactive logon notification icon mode)."
+		} else {
+			Remove-ScheduledTaskIfExists -TaskName $ApiTrayTaskName
+		}
+
+		try {
+			Start-ScheduledTask -TaskName $ApiServiceTaskName
+			Write-Step "Started '$ApiServiceTaskName' immediately."
+		} catch {
+			Write-Step "Could not start '$ApiServiceTaskName' immediately. It will run on next startup."
+			Start-BackgroundProcess -ExecutablePath $ApiExecutablePath -ExecutableArguments $apiArguments -WorkingDirectory $ApiWorkingDirectory -DisplayName 'API backend' | Out-Null
+		}
+
+		if ($trayAction) {
+			Start-BackgroundProcess -ExecutablePath $ApiTrayExecutablePath -ExecutableArguments $trayArguments -WorkingDirectory $ApiTrayWorkingDirectory -DisplayName 'API tray host' | Out-Null
+		}
+
+		return
+	}
+
+	# Non-admin fallback: logon-only interactive task, plus hidden process start now.
+	$runLevel = 'Limited'
+
+	if ($trayAction) {
+		$trayPrincipal = New-ScheduledTaskPrincipal -UserId $interactiveUser -LogonType Interactive -RunLevel $runLevel
+		$trayTrigger = New-ScheduledTaskTrigger -AtLogOn
+
+		try {
+			Register-ScheduledTask -TaskName $ApiTrayTaskName -Action $trayAction -Trigger $trayTrigger -Settings $settings -Principal $trayPrincipal -Force | Out-Null
+			Write-Step "Registered tray task '$ApiTrayTaskName' (logon fallback without elevation)."
+		} catch {
+			Write-Step "Could not register tray task without elevation ($($_.Exception.Message))."
+		}
+
+		Start-BackgroundProcess -ExecutablePath $ApiTrayExecutablePath -ExecutableArguments $trayArguments -WorkingDirectory $ApiTrayWorkingDirectory -DisplayName 'API tray host' | Out-Null
+	} else {
+		$apiPrincipal = New-ScheduledTaskPrincipal -UserId $interactiveUser -LogonType Interactive -RunLevel $runLevel
+		$apiTrigger = New-ScheduledTaskTrigger -AtLogOn
+
+		try {
+			Register-ScheduledTask -TaskName $ApiServiceTaskName -Action $serviceAction -Trigger $apiTrigger -Settings $settings -Principal $apiPrincipal -Force | Out-Null
+			Write-Step "Registered API task '$ApiServiceTaskName' (logon fallback without elevation)."
+		} catch {
+			Write-Step "Could not register API logon task without elevation ($($_.Exception.Message))."
+		}
+
+		Start-BackgroundProcess -ExecutablePath $ApiExecutablePath -ExecutableArguments $apiArguments -WorkingDirectory $ApiWorkingDirectory -DisplayName 'API backend' | Out-Null
+	}
+
+	Write-Step 'Run installer as Administrator to enable system-start background API service mode.'
 }
 
 function Copy-BuildArtifacts {
@@ -558,7 +625,8 @@ $userscriptInstallDir = Join-Path $InstallRoot 'userscript'
 $apiExecutablePath = Join-Path $apiInstallDir 'OrganizedJihad.Api.exe'
 $apiTrayExecutablePath = Join-Path $apiTrayInstallDir 'OrganizedJihad.Api.TrayHost.exe'
 $desktopExecutablePath = Join-Path $desktopInstallDir 'OrganizedJihad.Desktop.exe'
-$taskName = 'OrganizedJihad.Api.Autostart'
+$apiServiceTaskName = 'OrganizedJihad.Api.Service'
+$apiTrayTaskName = 'OrganizedJihad.Api.Tray'
 
 $effectiveRunInstallHealthCheck = $RunInstallHealthCheck
 $effectiveOpenUserscriptDiagnostics = $OpenUserscriptDiagnostics
@@ -569,10 +637,6 @@ $apiTrayPublishDir = $null
 $userscriptArtifactPath = $null
 $userscriptGuidePath = $null
 $userscriptGuideScreenshotsPath = $null
-$startupExecutablePath = $null
-$startupExecutableArguments = $null
-$startupWorkingDirectory = $null
-$useInteractiveTrayStartup = $false
 $isBundledPayloadMode = (Test-Path -Path $bundledApiPublishDir) -or (Test-Path -Path $bundledUserscriptFile) -or (Test-Path -Path $bundledApiTrayPublishDir)
 
 if ($SkipApiInstall -and $SkipDesktopAppInstall -and $SkipUserscriptInstall) {
@@ -710,7 +774,12 @@ if ((Test-Path -Path $userscriptDir) -and (Test-Path -Path $apiProject)) {
 Write-Step "Installing artifacts into '$InstallRoot'"
 Ensure-Directory -Path $InstallRoot
 if (-not $SkipApiInstall) {
-	$autostartTaskSuspended = Suspend-AutostartTask -TaskName $taskName
+	$suspendedAutostartTasks = @()
+	foreach ($autostartTaskName in @($apiServiceTaskName, $apiTrayTaskName)) {
+		if (Suspend-AutostartTask -TaskName $autostartTaskName) {
+			$suspendedAutostartTasks += $autostartTaskName
+		}
+	}
 	try {
 		Stop-InstalledApiProcess -ExecutablePath $apiExecutablePath
 		$fileUnlocked = Wait-FileUnlocked -Path $apiExecutablePath -TimeoutSeconds 30
@@ -739,8 +808,8 @@ if (-not $SkipApiInstall) {
 			}
 		}
 	} finally {
-		if ($autostartTaskSuspended) {
-			Resume-AutostartTask -TaskName $taskName
+		foreach ($suspendedTaskName in $suspendedAutostartTasks) {
+			Resume-AutostartTask -TaskName $suspendedTaskName
 		}
 	}
 }
@@ -802,21 +871,12 @@ if ((-not $SkipDesktopAppInstall) -and (-not (Test-Path -Path $desktopExecutable
 
 if (-not $SkipApiInstall) {
 	Write-Step "Configuring API startup"
-
-	$startupExecutablePath = $apiExecutablePath
-	$startupExecutableArguments = "--urls $ApiUrl"
-	$startupWorkingDirectory = $apiInstallDir
-	$useInteractiveTrayStartup = $false
-
-	if (Test-Path -Path $apiTrayExecutablePath) {
-		$startupExecutablePath = $apiTrayExecutablePath
-		$startupExecutableArguments = "--api-executable `"$apiExecutablePath`" --api-url `"$ApiUrl`" --working-directory `"$apiInstallDir`""
-		$startupWorkingDirectory = $apiTrayInstallDir
-		$useInteractiveTrayStartup = $true
-		Write-Step 'Tray host found. Startup task will run interactive tray icon mode.'
+	$useTrayHost = Test-Path -Path $apiTrayExecutablePath
+	if ($useTrayHost) {
+		Write-Step 'Tray host found. Installer will configure service-style API startup plus interactive tray icon startup.'
 	}
 
-	Ensure-AutostartTask -TaskName $taskName -ExecutablePath $startupExecutablePath -ExecutableArguments $startupExecutableArguments -ApiUrlValue $ApiUrl -WorkingDirectory $startupWorkingDirectory -PreferInteractiveUser:$useInteractiveTrayStartup
+	Ensure-ApiAutostartTasks -ApiServiceTaskName $apiServiceTaskName -ApiTrayTaskName $apiTrayTaskName -ApiExecutablePath $apiExecutablePath -ApiWorkingDirectory $apiInstallDir -ApiTrayExecutablePath $apiTrayExecutablePath -ApiTrayWorkingDirectory $apiTrayInstallDir -ApiUrlValue $ApiUrl -UseTrayHost:$useTrayHost
 }
 
 if ((-not $SkipUserscriptInstall) -and (-not $SkipTampermonkeyBootstrap)) {
@@ -890,7 +950,10 @@ if (-not $SkipUserscriptInstall) {
 	}
 }
 if (-not $SkipApiInstall) {
-	Write-Host "- Startup task: $taskName"
+	Write-Host "- API background task: $apiServiceTaskName"
+	if (Test-Path -Path $apiTrayExecutablePath) {
+		Write-Host "- API tray task: $apiTrayTaskName"
+	}
 	Write-Host "- API URL: $ApiUrl"
 	if (Test-Path -Path $apiTrayExecutablePath) {
 		Write-Host "- Tray host executable: $apiTrayExecutablePath"
@@ -906,7 +969,7 @@ if (-not $SkipUserscriptInstall) {
 if (-not $SkipApiInstall) {
 	Write-Host "- Verify API health at $ApiUrl/api/sync/health"
 	if (Test-Path -Path $apiTrayExecutablePath) {
-		Write-Host '- Verify the OrganizedJihad API tray icon appears in Windows notification area (background apps).'
+		Write-Host '- Verify the OrganizedJihad API tray icon appears in Windows notification area (background apps) and opens API UI on double-click.'
 	}
 }
 if (-not $SkipDesktopAppInstall) {
