@@ -6,6 +6,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
+using Microsoft.Win32;
 using System.Runtime.Versioning;
 using System.Text;
 using System.Threading.Tasks;
@@ -31,6 +32,7 @@ public partial class MainWindow : Window {
 
 	private bool _isInstalling;
 	private string? _currentLogFilePath;
+	private string? _userscriptGuidePath;
 	private readonly List<BrowserOption> _availableBrowsers;
 
 	public MainWindow() {
@@ -40,14 +42,20 @@ public partial class MainWindow : Window {
 		ApiUrlTextBox.Text = "http://localhost:5124";
 
 		_availableBrowsers = DetectBrowsers();
+		BrowserComboBox.ItemsSource = _availableBrowsers;
+		BrowserComboBox.SelectedItem = _availableBrowsers.FirstOrDefault(browser => browser.Installed) ?? _availableBrowsers.FirstOrDefault();
+
 		var installedBrowsers = _availableBrowsers.Where(browser => browser.Installed).ToList();
-		BrowserComboBox.ItemsSource = installedBrowsers;
-		BrowserComboBox.SelectedItem = installedBrowsers.FirstOrDefault();
 
 		if (installedBrowsers.Count == 0) {
 			OpenTampermonkeySetupCheckBox.IsChecked = false;
 			OpenTampermonkeySetupCheckBox.IsEnabled = false;
 			AppendLog("[Installer UI] No supported browser was auto-detected. Userscript file will still be installed so you can import it manually in Tampermonkey.");
+		}
+
+		_userscriptGuidePath = ResolveUserscriptGuidePath();
+		if (!string.IsNullOrWhiteSpace(_userscriptGuidePath)) {
+			AppendLog($"[Installer UI] Userscript setup guide detected: {_userscriptGuidePath}");
 		}
 
 		ApplySelectionGuidance();
@@ -128,6 +136,7 @@ public partial class MainWindow : Window {
 
 		if (installUserscript) {
 			var userscriptPath = Path.Combine(installRoot, "userscript", "organized-jihad.user.js");
+			var guidePath = Path.Combine(installRoot, "userscript", "tampermonkey-setup.html");
 			AppendLog("[Installer UI] Next steps for userscript installation:");
 			if (openTampermonkeySetup && !string.IsNullOrWhiteSpace(browserArg)) {
 				AppendLog($"[Installer UI] 1) A Tampermonkey setup tab should open in your selected browser ({browserArg}).");
@@ -136,6 +145,9 @@ public partial class MainWindow : Window {
 			}
 			AppendLog($"[Installer UI] 2) Use Import/Utilities and choose: {userscriptPath}");
 			AppendLog("[Installer UI] 3) Save/Enable the OrganizedJihad script and refresh Hero Wars.");
+			if (File.Exists(guidePath)) {
+				AppendLog($"[Installer UI] Detailed browser guide: {guidePath}");
+			}
 		}
 	}
 
@@ -164,9 +176,6 @@ public partial class MainWindow : Window {
 			}
 
 			OpenDiagnosticsCheckBox.IsEnabled = true;
-			if (OpenDiagnosticsCheckBox.IsChecked != true) {
-				OpenDiagnosticsCheckBox.IsChecked = true;
-			}
 		}
 
 		if (!installApi && !installDesktop && !installUserscript) {
@@ -220,27 +229,81 @@ public partial class MainWindow : Window {
 
 	private static List<BrowserOption> DetectBrowsers() {
 		var options = new List<BrowserOption> {
-			new("Chrome", "chrome", BrowserInstalled(
+			new("Chrome", "chrome", BrowserInstalled(new[] {
 				Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Google", "Chrome", "Application", "chrome.exe"),
 				Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "Google", "Chrome", "Application", "chrome.exe"),
-				Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86), "Google", "Chrome", "Application", "chrome.exe"))),
-			new("Edge", "edge", BrowserInstalled(
+				Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86), "Google", "Chrome", "Application", "chrome.exe")
+			}, "chrome.exe")),
+			new("Edge", "edge", BrowserInstalled(new[] {
 				Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86), "Microsoft", "Edge", "Application", "msedge.exe"),
-				Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "Microsoft", "Edge", "Application", "msedge.exe"))),
-			new("Firefox", "firefox", BrowserInstalled(
+				Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "Microsoft", "Edge", "Application", "msedge.exe")
+			}, "msedge.exe")),
+			new("Firefox", "firefox", BrowserInstalled(new[] {
 				Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "Mozilla Firefox", "firefox.exe"),
-				Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86), "Mozilla Firefox", "firefox.exe"))),
-			new("Opera GX", "operaGX", BrowserInstalled(
+				Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86), "Mozilla Firefox", "firefox.exe")
+			}, "firefox.exe")),
+			new("Opera", "opera", BrowserInstalled(new[] {
+				Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Programs", "Opera", "launcher.exe"),
+				Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "Opera", "launcher.exe"),
+				Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86), "Opera", "launcher.exe")
+			}, "opera.exe", "launcher.exe")),
+			new("Opera GX", "operaGX", BrowserInstalled(new[] {
 				Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Programs", "Opera GX", "launcher.exe"),
 				Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "Opera GX", "launcher.exe"),
-				Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86), "Opera GX", "launcher.exe")))
+				Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86), "Opera GX", "launcher.exe")
+			}, "opera.exe", "launcher.exe"))
 		};
 
 		return options;
 	}
 
-	private static bool BrowserInstalled(params string[] paths) {
-		return paths.Any(path => !string.IsNullOrWhiteSpace(path) && File.Exists(path));
+	private static bool BrowserInstalled(string[] paths, params string[] registryExecutables) {
+		if (paths.Any(path => !string.IsNullOrWhiteSpace(path) && File.Exists(path))) {
+			return true;
+		}
+
+		foreach (var executableName in registryExecutables.Where(value => !string.IsNullOrWhiteSpace(value))) {
+			if (TryGetExecutableFromAppPaths(executableName, out _)) {
+				return true;
+			}
+		}
+
+		return false;
+	}
+
+	private static bool TryGetExecutableFromAppPaths(string executableName, out string executablePath) {
+		executablePath = string.Empty;
+		if (!OperatingSystem.IsWindows()) {
+			return false;
+		}
+
+		var appPathKeys = new[] {
+			$"Software\\Microsoft\\Windows\\CurrentVersion\\App Paths\\{executableName}",
+		};
+
+		foreach (var hive in new[] { Registry.CurrentUser, Registry.LocalMachine }) {
+			foreach (var keyPath in appPathKeys) {
+				using var key = hive.OpenSubKey(keyPath);
+				var candidate = key?.GetValue(string.Empty) as string;
+				if (!string.IsNullOrWhiteSpace(candidate) && File.Exists(candidate)) {
+					executablePath = candidate;
+					return true;
+				}
+			}
+		}
+
+		return false;
+	}
+
+	private static string? ResolveUserscriptGuidePath() {
+		var baseDir = AppContext.BaseDirectory;
+		var candidates = new[] {
+			Path.Combine(baseDir, "tampermonkey-setup.html"),
+			Path.GetFullPath(Path.Combine(baseDir, "..", "..", "..", "~docs", "installer-guide", "tampermonkey-setup.html")),
+			Path.GetFullPath(Path.Combine(baseDir, "..", "..", "..", "..", "~docs", "installer-guide", "tampermonkey-setup.html")),
+		};
+
+		return candidates.FirstOrDefault(File.Exists);
 	}
 
 	private async Task RunInstallProcessAsync(string shell, string args) {
@@ -520,6 +583,30 @@ public partial class MainWindow : Window {
 		OpenFolder(folder);
 	}
 
+	private void OnOpenSetupGuideClick(object? sender, RoutedEventArgs e) {
+		var candidates = new List<string>();
+
+		if (!string.IsNullOrWhiteSpace(_userscriptGuidePath)) {
+			candidates.Add(_userscriptGuidePath);
+		}
+
+		var installRoot = InstallRootTextBox.Text?.Trim();
+		if (!string.IsNullOrWhiteSpace(installRoot)) {
+			candidates.Add(Path.Combine(installRoot, "userscript", "tampermonkey-setup.html"));
+		}
+
+		var guidePath = candidates.FirstOrDefault(path => !string.IsNullOrWhiteSpace(path) && File.Exists(path));
+		if (string.IsNullOrWhiteSpace(guidePath)) {
+			SetStatus("Status: Setup guide not found yet. Run install first.");
+			return;
+		}
+
+		Process.Start(new ProcessStartInfo {
+			FileName = guidePath,
+			UseShellExecute = true,
+		});
+	}
+
 	private static void OpenFolder(string folderPath) {
 		Process.Start(new ProcessStartInfo {
 			FileName = "explorer.exe",
@@ -531,6 +618,7 @@ public partial class MainWindow : Window {
 	private void UpdateQuickActionState() {
 		InstallButton.IsEnabled = !_isInstalling;
 		OpenInstallRootButton.IsEnabled = !_isInstalling;
+		OpenSetupGuideButton.IsEnabled = !_isInstalling;
 		OpenLogFolderButton.IsEnabled = !_isInstalling;
 	}
 }

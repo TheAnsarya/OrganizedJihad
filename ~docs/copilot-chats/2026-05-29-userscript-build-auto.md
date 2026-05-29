@@ -232,3 +232,82 @@
 ## Validation
 - pwsh -ExecutionPolicy Bypass -File .\Publish-ReleaseArtifacts.ps1 -Version 0.2.1 (pass)
 - gh release upload v0.2.1 --clobber artifacts/v0.2.1/OrganizedJihad.Installer.exe artifacts/v0.2.1/SHA256SUMS.txt (pass)
+---
+
+## Session
+- Date: 2026-05-29
+- Session Number: 10
+- Scope: Automated userscript build session logging
+
+## Summary
+- Auto-generated entry from userscript build pipeline.
+- Captures a timestamp and a git working-tree snapshot for traceability.
+
+## Files Modified
+- Install-OrganizedJihad.ps1
+- OrganizedJihad.sln
+- Publish-ReleaseArtifacts.ps1
+- README.md
+- api/OrganizedJihad.Api.csproj
+- installer-ui/MainWindow.axaml
+- installer-ui/MainWindow.axaml.cs
+- installer-ui/OrganizedJihad.Installer.csproj
+- userscript/package.json
+- ~docs/oj-manual-prompts-log.txt
+- api/OrganizedJihad.Api.TrayHost/
+- ~docs/installer-guide/
+- ~docs/plans/release-v0.2.2-github-body.md
+- ~docs/plans/release-v0.2.2.md
+
+## Validation
+- yarn build
+
+## Generated
+- Timestamp UTC: 2026-05-29T14:09:46.007Z
+
+---
+
+## Session
+- Date: 2026-05-29
+- Session Number: 11
+- Scope: #330 installer browser UX, setup guide, v0.2.2 docs, and API tray-host startup
+
+## Summary
+- Added Opera + Opera GX browser support improvements in installer UI and bootstrap script logic.
+- Reduced tab noise by defaulting diagnostics toggles off and opening bootstrap for only the selected browser target.
+- Added a local userscript setup guide HTML with per-browser screenshots and linked it into installer flow.
+- Added API tray-host project and integrated startup-task configuration so interactive startup can show tray icon mode.
+- Updated README and new v0.2.2 release docs to include EXE keep/unblock instructions and installer run guidance.
+
+## Files Modified
+- Install-OrganizedJihad.ps1
+- OrganizedJihad.sln
+- Publish-ReleaseArtifacts.ps1
+- README.md
+- api/OrganizedJihad.Api.csproj
+- installer-ui/MainWindow.axaml
+- installer-ui/MainWindow.axaml.cs
+- installer-ui/OrganizedJihad.Installer.csproj
+- userscript/package.json
+- ~docs/copilot-chats/2026-05-29-userscript-build-auto.md
+- api/OrganizedJihad.Api.TrayHost/OrganizedJihad.Api.TrayHost.csproj
+- api/OrganizedJihad.Api.TrayHost/Program.cs
+- ~docs/installer-guide/tampermonkey-setup.html
+- ~docs/installer-guide/screenshots/chrome-setup.svg
+- ~docs/installer-guide/screenshots/edge-setup.svg
+- ~docs/installer-guide/screenshots/firefox-setup.svg
+- ~docs/installer-guide/screenshots/opera-setup.svg
+- ~docs/installer-guide/screenshots/opera-gx-setup.svg
+- ~docs/plans/release-v0.2.2-github-body.md
+- ~docs/plans/release-v0.2.2.md
+
+## Issues
+- Created/implemented: #330
+- PR tracking: #209
+
+## Validation
+- dotnet build installer-ui/OrganizedJihad.Installer.csproj (pass)
+- dotnet build api/OrganizedJihad.Api.csproj (pass)
+- dotnet build api/OrganizedJihad.Api.TrayHost/OrganizedJihad.Api.TrayHost.csproj (pass)
+- pwsh -ExecutionPolicy Bypass -File .\Install-OrganizedJihad.ps1 -AllowNonAdmin -SkipDesktopAppInstall -SkipUserscriptInstall -SkipTampermonkeyBootstrap -SkipRunInstallHealthCheck -SkipOpenUserscriptDiagnostics (pass)
+- pwsh -ExecutionPolicy Bypass -File .\Publish-ReleaseArtifacts.ps1 -Version 0.2.2 (pass)

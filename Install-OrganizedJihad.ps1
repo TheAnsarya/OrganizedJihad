@@ -12,8 +12,8 @@ param(
 	[switch]$RunInstallHealthCheck,
 	[switch]$InstallHealthCheckJson,
 	[switch]$OpenUserscriptDiagnostics,
-	[ValidateSet('chrome', 'edge', 'firefox', 'operaGX')]
-	[string[]]$TampermonkeyBrowsers = @('chrome', 'edge', 'firefox', 'operaGX'),
+	[ValidateSet('chrome', 'edge', 'firefox', 'opera', 'operaGX')]
+	[string[]]$TampermonkeyBrowsers = @('edge'),
 	[ValidateSet('none', 'failed', 'required', 'all')]
 	[string]$InstallHealthCheckOpen = 'none'
 )
@@ -149,15 +149,23 @@ function Ensure-AutostartTask {
 	param(
 		[string]$TaskName,
 		[string]$ExecutablePath,
+		[string]$ExecutableArguments,
 		[string]$ApiUrlValue,
-		[string]$WorkingDirectory
+		[string]$WorkingDirectory,
+		[switch]$PreferInteractiveUser
 	)
 
-	$action = New-ScheduledTaskAction -Execute $ExecutablePath -Argument "--urls $ApiUrlValue" -WorkingDirectory $WorkingDirectory
+	$effectiveArguments = $ExecutableArguments
+	if ([string]::IsNullOrWhiteSpace($effectiveArguments)) {
+		$effectiveArguments = "--urls $ApiUrlValue"
+	}
+
+	$action = New-ScheduledTaskAction -Execute $ExecutablePath -Argument $effectiveArguments -WorkingDirectory $WorkingDirectory
 	$settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -StartWhenAvailable -MultipleInstances IgnoreNew
 	$elevated = Test-IsAdministrator
+	$interactiveUser = "$env:USERDOMAIN\$env:USERNAME"
 
-	if ($elevated) {
+	if ($elevated -and (-not $PreferInteractiveUser)) {
 		$principal = New-ScheduledTaskPrincipal -UserId 'SYSTEM' -LogonType ServiceAccount -RunLevel Highest
 		$triggers = @(
 			(New-ScheduledTaskTrigger -AtStartup),
@@ -167,16 +175,18 @@ function Ensure-AutostartTask {
 		Register-ScheduledTask -TaskName $TaskName -Action $action -Trigger $triggers -Settings $settings -Principal $principal -Force | Out-Null
 		Write-Step "Registered startup task '$TaskName' (system startup + logon, running as SYSTEM)."
 	} else {
-		$principal = New-ScheduledTaskPrincipal -UserId "$env:USERDOMAIN\$env:USERNAME" -LogonType Interactive -RunLevel Limited
+		$runLevel = if ($elevated) { 'Highest' } else { 'Limited' }
+		$principal = New-ScheduledTaskPrincipal -UserId $interactiveUser -LogonType Interactive -RunLevel $runLevel
 		$trigger = New-ScheduledTaskTrigger -AtLogOn
+		$registrationMode = if ($PreferInteractiveUser) { 'interactive logon (tray icon mode)' } else { 'logon fallback; run installer as Administrator for system startup registration' }
 
 		try {
 			Register-ScheduledTask -TaskName $TaskName -Action $action -Trigger $trigger -Settings $settings -Principal $principal -Force | Out-Null
-			Write-Step "Registered startup task '$TaskName' (logon fallback; run installer as Administrator for system startup registration)."
+			Write-Step "Registered startup task '$TaskName' ($registrationMode)."
 		} catch {
 			Write-Step "Could not register startup task without elevation ($($_.Exception.Message)). API binaries were installed; run installer as Administrator to configure autostart."
 			try {
-				Start-Process -FilePath $ExecutablePath -ArgumentList "--urls $ApiUrlValue" -WorkingDirectory $WorkingDirectory | Out-Null
+				Start-Process -FilePath $ExecutablePath -ArgumentList $effectiveArguments -WorkingDirectory $WorkingDirectory | Out-Null
 				Write-Step 'Started API process directly for this session (no autostart task configured).'
 			} catch {
 				Write-Step 'Could not start API process directly. Start it manually from the installed api folder.'
@@ -191,7 +201,7 @@ function Ensure-AutostartTask {
 	} catch {
 		Write-Step "Could not start '$TaskName' immediately. It will run at next logon."
 		try {
-			Start-Process -FilePath $ExecutablePath -ArgumentList "--urls $ApiUrlValue" -WorkingDirectory $WorkingDirectory | Out-Null
+			Start-Process -FilePath $ExecutablePath -ArgumentList $effectiveArguments -WorkingDirectory $WorkingDirectory | Out-Null
 			Write-Step 'Started API process directly for this session.'
 		} catch {
 			Write-Step 'Could not start API process directly. Start it manually from the installed api folder.'
@@ -306,6 +316,30 @@ function Stop-InstalledApiProcess {
 	}
 }
 
+function Stop-ProcessByExecutablePath {
+	param(
+		[string]$ExecutablePath,
+		[string]$DisplayName
+	)
+
+	if (-not (Test-Path -Path $ExecutablePath)) {
+		return
+	}
+
+	try {
+		if (Get-Command -Name 'Get-CimInstance' -ErrorAction SilentlyContinue) {
+			$matched = Get-CimInstance Win32_Process -ErrorAction SilentlyContinue | Where-Object { $_.ExecutablePath -eq $ExecutablePath }
+			foreach ($proc in $matched) {
+				Stop-Process -Id $proc.ProcessId -Force -ErrorAction SilentlyContinue
+				Wait-Process -Id $proc.ProcessId -Timeout 5 -ErrorAction SilentlyContinue
+			}
+		}
+		Write-Step "Stopped $DisplayName."
+	} catch {
+		Write-Step "Could not stop $DisplayName ($($_.Exception.Message))."
+	}
+}
+
 function Suspend-AutostartTask {
 	param([string]$TaskName)
 
@@ -388,36 +422,74 @@ function Get-OperaGxExecutable {
 	return $null
 }
 
+function Get-OperaExecutable {
+	$candidates = @(
+		(Join-Path $env:LOCALAPPDATA 'Programs\Opera\launcher.exe'),
+		(Join-Path ${env:ProgramFiles} 'Opera\launcher.exe'),
+		(Join-Path ${env:ProgramFiles(x86)} 'Opera\launcher.exe')
+	)
+
+	foreach ($candidate in $candidates) {
+		if ($candidate -and (Test-Path -Path $candidate)) {
+			return $candidate
+		}
+	}
+
+	return $null
+}
+
 function Open-TampermonkeyBootstrap {
 	param(
 		[string[]]$Browsers,
-		[string]$UserscriptPath
+		[string]$UserscriptPath,
+		[string]$GuidePath
 	)
 
 	$browserLinks = @{
 		chrome = 'https://chromewebstore.google.com/detail/tampermonkey/dhdgffkkebhmkfjojejmpbldmpobfkfo'
 		edge = 'https://microsoftedge.microsoft.com/addons/detail/tampermonkey/iikmkjmpaadaobahmlepeloendndfphd'
 		firefox = 'https://addons.mozilla.org/en-US/firefox/addon/tampermonkey/'
+		opera = 'https://addons.opera.com/en/extensions/details/tampermonkey-beta/'
 		operaGX = 'https://addons.opera.com/en/extensions/details/tampermonkey-beta/'
 	}
 
-	foreach ($browser in $Browsers) {
-		if (-not $browserLinks.ContainsKey($browser)) {
-			continue
+	$targetBrowser = if ($Browsers -and $Browsers.Count -gt 0) { $Browsers[0] } else { $null }
+	if (-not $targetBrowser) {
+		Write-Step 'No browser target was provided for Tampermonkey bootstrap. Skipping automatic browser launch.'
+		return
+	}
+
+	if (-not $browserLinks.ContainsKey($targetBrowser)) {
+		Write-Step "Unsupported browser target '$targetBrowser' for Tampermonkey bootstrap."
+		return
+	}
+
+	if ($targetBrowser -eq 'operaGX') {
+		$operaExe = Get-OperaGxExecutable
+		if ($operaExe) {
+			Start-Process -FilePath $operaExe -ArgumentList $browserLinks[$targetBrowser] | Out-Null
+			Write-Step 'Opened Opera GX Tampermonkey setup page.'
+		} else {
+			Write-Step 'Opera GX executable not found. Opening Opera-compatible Tampermonkey link in default browser.'
+			Start-Process $browserLinks[$targetBrowser] | Out-Null
 		}
-
-		if ($browser -eq 'operaGX') {
-			$operaExe = Get-OperaGxExecutable
-			if ($operaExe) {
-				Start-Process -FilePath $operaExe -ArgumentList $browserLinks[$browser] | Out-Null
-				Write-Step 'Opened Opera GX Tampermonkey setup page.'
-				continue
-			}
-
-			Write-Step 'Opera GX executable not found. Opening Opera-compatible Tampermonkey links in default browser.'
+	} elseif ($targetBrowser -eq 'opera') {
+		$operaExe = Get-OperaExecutable
+		if ($operaExe) {
+			Start-Process -FilePath $operaExe -ArgumentList $browserLinks[$targetBrowser] | Out-Null
+			Write-Step 'Opened Opera Tampermonkey setup page.'
+		} else {
+			Write-Step 'Opera executable not found. Opening Opera-compatible Tampermonkey link in default browser.'
+			Start-Process $browserLinks[$targetBrowser] | Out-Null
 		}
+	} else {
+		Start-Process $browserLinks[$targetBrowser] | Out-Null
+		Write-Step "Opened $targetBrowser Tampermonkey setup page."
+	}
 
-		Start-Process $browserLinks[$browser] | Out-Null
+	if (Test-Path -Path $GuidePath) {
+		Start-Process -FilePath $GuidePath | Out-Null
+		Write-Step "Opened local setup guide: $GuidePath"
 	}
 
 	if (Test-Path -Path $UserscriptPath) {
@@ -454,25 +526,37 @@ function Wait-ApiHealth {
 
 $repoRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
 $apiProject = Join-Path $repoRoot 'api\OrganizedJihad.Api.csproj'
+$apiTrayProject = Join-Path $repoRoot 'api\OrganizedJihad.Api.TrayHost\OrganizedJihad.Api.TrayHost.csproj'
 $desktopProject = Join-Path $repoRoot 'desktop-app\OrganizedJihad.Desktop.csproj'
 $userscriptDir = Join-Path $repoRoot 'userscript'
 $userscriptDist = Join-Path $userscriptDir 'dist'
 $userscriptFile = Join-Path $userscriptDist 'organized-jihad.user.js'
+$userscriptGuideSource = Join-Path $repoRoot '~docs\installer-guide\tampermonkey-setup.html'
+$userscriptGuideScreenshotsSource = Join-Path $repoRoot '~docs\installer-guide\screenshots'
 $bundledRoot = Join-Path $repoRoot 'bundled'
 $bundledApiPublishDir = Join-Path $bundledRoot 'api'
+$bundledApiTrayPublishDir = Join-Path $bundledRoot 'api-tray'
 $bundledDesktopPublishDir = Join-Path $bundledRoot 'desktop-app'
 $bundledUserscriptFile = Join-Path $repoRoot 'organized-jihad.user.js'
+$bundledUserscriptGuide = Join-Path $repoRoot 'tampermonkey-setup.html'
+$bundledUserscriptGuideScreenshots = Join-Path $repoRoot 'guide-screenshots'
 $bundledHealthCheckScript = Join-Path $repoRoot 'install-health-check.mjs'
 $publishDir = Join-Path $repoRoot 'api\bin\Release\net10.0\win-x64\publish'
+$apiTrayPublishCandidates = @(
+	(Join-Path $repoRoot 'api\OrganizedJihad.Api.TrayHost\bin\Release\net10.0-windows10.0.19041.0\win-x64\publish'),
+	(Join-Path $repoRoot 'api\OrganizedJihad.Api.TrayHost\bin\Release\net10.0-windows10.0.19041.0\publish')
+)
 $desktopPublishCandidates = @(
 	(Join-Path $repoRoot 'desktop-app\bin\Release\net10.0-windows10.0.19041.0\win-x64\publish'),
 	(Join-Path $repoRoot 'desktop-app\bin\Release\net10.0-windows10.0.19041.0\publish')
 )
 
 $apiInstallDir = Join-Path $InstallRoot 'api'
+$apiTrayInstallDir = Join-Path $InstallRoot 'api-tray'
 $desktopInstallDir = Join-Path $InstallRoot 'desktop-app'
 $userscriptInstallDir = Join-Path $InstallRoot 'userscript'
 $apiExecutablePath = Join-Path $apiInstallDir 'OrganizedJihad.Api.exe'
+$apiTrayExecutablePath = Join-Path $apiTrayInstallDir 'OrganizedJihad.Api.TrayHost.exe'
 $desktopExecutablePath = Join-Path $desktopInstallDir 'OrganizedJihad.Desktop.exe'
 $taskName = 'OrganizedJihad.Api.Autostart'
 
@@ -481,8 +565,15 @@ $effectiveOpenUserscriptDiagnostics = $OpenUserscriptDiagnostics
 $effectiveInstallHealthCheckOpen = $InstallHealthCheckOpen
 $desktopPublishDir = $null
 $apiPublishDir = $null
+$apiTrayPublishDir = $null
 $userscriptArtifactPath = $null
-$isBundledPayloadMode = (Test-Path -Path $bundledApiPublishDir) -or (Test-Path -Path $bundledUserscriptFile)
+$userscriptGuidePath = $null
+$userscriptGuideScreenshotsPath = $null
+$startupExecutablePath = $null
+$startupExecutableArguments = $null
+$startupWorkingDirectory = $null
+$useInteractiveTrayStartup = $false
+$isBundledPayloadMode = (Test-Path -Path $bundledApiPublishDir) -or (Test-Path -Path $bundledUserscriptFile) -or (Test-Path -Path $bundledApiTrayPublishDir)
 
 if ($SkipApiInstall -and $SkipDesktopAppInstall -and $SkipUserscriptInstall) {
 	throw 'At least one install component must be enabled. Remove one of: -SkipApiInstall, -SkipDesktopAppInstall, -SkipUserscriptInstall.'
@@ -532,6 +623,13 @@ if ((Test-Path -Path $userscriptDir) -and (Test-Path -Path $apiProject)) {
 			throw "Userscript bundle not found at '$userscriptFile'."
 		}
 		$userscriptArtifactPath = $userscriptFile
+
+		if (Test-Path -Path $userscriptGuideSource) {
+			$userscriptGuidePath = $userscriptGuideSource
+		}
+		if (Test-Path -Path $userscriptGuideScreenshotsSource) {
+			$userscriptGuideScreenshotsPath = $userscriptGuideScreenshotsSource
+		}
 	}
 
 	if (-not $SkipApiInstall) {
@@ -542,6 +640,18 @@ if ((Test-Path -Path $userscriptDir) -and (Test-Path -Path $apiProject)) {
 			throw "API publish output not found at '$publishDir'."
 		}
 		$apiPublishDir = $publishDir
+
+		if (Test-Path -Path $apiTrayProject) {
+			Write-Step 'Publishing API tray host (Windows notification icon).'
+			dotnet publish $apiTrayProject -f net10.0-windows10.0.19041.0 -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true
+
+			foreach ($candidate in $apiTrayPublishCandidates) {
+				if (Test-Path -Path $candidate) {
+					$apiTrayPublishDir = $candidate
+					break
+				}
+			}
+		}
 	}
 
 	if (-not $SkipDesktopAppInstall) {
@@ -567,6 +677,10 @@ if ((Test-Path -Path $userscriptDir) -and (Test-Path -Path $apiProject)) {
 			throw "Bundled API payload not found at '$bundledApiPublishDir'."
 		}
 		$apiPublishDir = $bundledApiPublishDir
+
+		if (Test-Path -Path $bundledApiTrayPublishDir) {
+			$apiTrayPublishDir = $bundledApiTrayPublishDir
+		}
 	}
 
 	if (-not $SkipDesktopAppInstall) {
@@ -581,6 +695,13 @@ if ((Test-Path -Path $userscriptDir) -and (Test-Path -Path $apiProject)) {
 			throw "Bundled userscript artifact not found at '$bundledUserscriptFile'."
 		}
 		$userscriptArtifactPath = $bundledUserscriptFile
+
+		if (Test-Path -Path $bundledUserscriptGuide) {
+			$userscriptGuidePath = $bundledUserscriptGuide
+		}
+		if (Test-Path -Path $bundledUserscriptGuideScreenshots) {
+			$userscriptGuideScreenshotsPath = $bundledUserscriptGuideScreenshots
+		}
 	}
 } else {
 	throw 'Could not locate either source project structure or bundled release payloads.'
@@ -628,9 +749,47 @@ if (-not $SkipDesktopAppInstall) {
 	Copy-BuildArtifacts -Source $desktopPublishDir -Destination $desktopInstallDir
 }
 
+if ((-not $SkipApiInstall) -and $apiTrayPublishDir -and (Test-Path -Path $apiTrayPublishDir)) {
+	Stop-ProcessByExecutablePath -ExecutablePath $apiTrayExecutablePath -DisplayName 'running API tray host process'
+	$fileUnlocked = Wait-FileUnlocked -Path $apiTrayExecutablePath -TimeoutSeconds 10
+	if (-not $fileUnlocked) {
+		Write-Step 'Tray host executable remained locked after wait window. Continuing with retrying copy operations.'
+	}
+
+	try {
+		Copy-BuildArtifacts -Source $apiTrayPublishDir -Destination $apiTrayInstallDir -MaxRetries 30
+	} catch {
+		$copyError = $_.Exception.Message
+		if ($copyError -like '*OrganizedJihad.Api.TrayHost.exe*used by another process*') {
+			Write-Step 'Detected locked tray host executable during copy. Falling back to side-by-side tray-host deployment.'
+
+			Copy-BuildArtifactsExcludingFiles -Source $apiTrayPublishDir -Destination $apiTrayInstallDir -ExcludedFileNames @('OrganizedJihad.Api.TrayHost.exe')
+
+			$sourceTrayExecutable = Join-Path $apiTrayPublishDir 'OrganizedJihad.Api.TrayHost.exe'
+			$traySideBySideName = "OrganizedJihad.Api.TrayHost.$((Get-Date).ToString('yyyyMMddHHmmss')).exe"
+			$traySideBySidePath = Join-Path $apiTrayInstallDir $traySideBySideName
+			Copy-Item -Path $sourceTrayExecutable -Destination $traySideBySidePath -Force
+			$apiTrayExecutablePath = $traySideBySidePath
+
+			Write-Step "Using side-by-side tray host executable: $apiTrayExecutablePath"
+		} else {
+			throw
+		}
+	}
+}
+
 if (-not $SkipUserscriptInstall) {
 	Ensure-Directory -Path $userscriptInstallDir
 	Copy-Item -Path $userscriptArtifactPath -Destination (Join-Path $userscriptInstallDir 'organized-jihad.user.js') -Force
+
+	if ($userscriptGuidePath -and (Test-Path -Path $userscriptGuidePath)) {
+		Copy-Item -Path $userscriptGuidePath -Destination (Join-Path $userscriptInstallDir 'tampermonkey-setup.html') -Force
+	}
+
+	if ($userscriptGuideScreenshotsPath -and (Test-Path -Path $userscriptGuideScreenshotsPath)) {
+		$guideScreenshotInstallDir = Join-Path $userscriptInstallDir 'guide-screenshots'
+		Copy-BuildArtifacts -Source $userscriptGuideScreenshotsPath -Destination $guideScreenshotInstallDir
+	}
 }
 
 if ((-not $SkipApiInstall) -and (-not (Test-Path -Path $apiExecutablePath))) {
@@ -643,13 +802,28 @@ if ((-not $SkipDesktopAppInstall) -and (-not (Test-Path -Path $desktopExecutable
 
 if (-not $SkipApiInstall) {
 	Write-Step "Configuring API startup"
-	Ensure-AutostartTask -TaskName $taskName -ExecutablePath $apiExecutablePath -ApiUrlValue $ApiUrl -WorkingDirectory $apiInstallDir
+
+	$startupExecutablePath = $apiExecutablePath
+	$startupExecutableArguments = "--urls $ApiUrl"
+	$startupWorkingDirectory = $apiInstallDir
+	$useInteractiveTrayStartup = $false
+
+	if (Test-Path -Path $apiTrayExecutablePath) {
+		$startupExecutablePath = $apiTrayExecutablePath
+		$startupExecutableArguments = "--api-executable `"$apiExecutablePath`" --api-url `"$ApiUrl`" --working-directory `"$apiInstallDir`""
+		$startupWorkingDirectory = $apiTrayInstallDir
+		$useInteractiveTrayStartup = $true
+		Write-Step 'Tray host found. Startup task will run interactive tray icon mode.'
+	}
+
+	Ensure-AutostartTask -TaskName $taskName -ExecutablePath $startupExecutablePath -ExecutableArguments $startupExecutableArguments -ApiUrlValue $ApiUrl -WorkingDirectory $startupWorkingDirectory -PreferInteractiveUser:$useInteractiveTrayStartup
 }
 
 if ((-not $SkipUserscriptInstall) -and (-not $SkipTampermonkeyBootstrap)) {
 	Write-Step "Opening Tampermonkey bootstrap for: $($TampermonkeyBrowsers -join ', ')."
 	$installedScript = Join-Path $userscriptInstallDir 'organized-jihad.user.js'
-	Open-TampermonkeyBootstrap -Browsers $TampermonkeyBrowsers -UserscriptPath $installedScript
+	$installedGuide = Join-Path $userscriptInstallDir 'tampermonkey-setup.html'
+	Open-TampermonkeyBootstrap -Browsers $TampermonkeyBrowsers -UserscriptPath $installedScript -GuidePath $installedGuide
 }
 
 if ((-not $SkipApiInstall) -and $effectiveRunInstallHealthCheck) {
@@ -710,19 +884,30 @@ if (-not $SkipDesktopAppInstall) {
 if (-not $SkipUserscriptInstall) {
 	Write-Host "- Userscript installed to: $userscriptInstallDir"
 	Write-Host "- Userscript import file: $(Join-Path $userscriptInstallDir 'organized-jihad.user.js')"
+	$installedGuidePath = Join-Path $userscriptInstallDir 'tampermonkey-setup.html'
+	if (Test-Path -Path $installedGuidePath) {
+		Write-Host "- Userscript setup guide: $installedGuidePath"
+	}
 }
 if (-not $SkipApiInstall) {
 	Write-Host "- Startup task: $taskName"
 	Write-Host "- API URL: $ApiUrl"
+	if (Test-Path -Path $apiTrayExecutablePath) {
+		Write-Host "- Tray host executable: $apiTrayExecutablePath"
+	}
 }
 Write-Host ""
 Write-Host 'Recommended next checks:' -ForegroundColor Green
 if (-not $SkipUserscriptInstall) {
+	Write-Host '- Open tampermonkey-setup.html for browser-specific steps and screenshots'
 	Write-Host '- Open Tampermonkey dashboard and import organized-jihad.user.js if not already prompted'
 	Write-Host '- Confirm Tampermonkey has the OrganizedJihad script enabled'
 }
 if (-not $SkipApiInstall) {
 	Write-Host "- Verify API health at $ApiUrl/api/sync/health"
+	if (Test-Path -Path $apiTrayExecutablePath) {
+		Write-Host '- Verify the OrganizedJihad API tray icon appears in Windows notification area (background apps).'
+	}
 }
 if (-not $SkipDesktopAppInstall) {
 	Write-Host '- Launch OrganizedJihad.Desktop.exe and confirm data views load'

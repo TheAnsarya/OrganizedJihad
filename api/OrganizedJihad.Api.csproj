@@ -19,4 +19,10 @@
     <ProjectReference Include="..\data\OrganizedJihad.Data.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Compile Remove="OrganizedJihad.Api.TrayHost\**\*.cs" />
+    <EmbeddedResource Remove="OrganizedJihad.Api.TrayHost\**\*" />
+    <None Remove="OrganizedJihad.Api.TrayHost\**\*" />
+  </ItemGroup>
+
 </Project>

@@ -28,5 +28,13 @@
 			<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
 			<ExcludeFromSingleFile>false</ExcludeFromSingleFile>
 		</Content>
+		<Content Include="..\~docs\installer-guide\tampermonkey-setup.html" Link="tampermonkey-setup.html">
+			<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+			<ExcludeFromSingleFile>false</ExcludeFromSingleFile>
+		</Content>
+		<Content Include="..\~docs\installer-guide\screenshots\**\*" Link="guide-screenshots\%(RecursiveDir)%(Filename)%(Extension)">
+			<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+			<ExcludeFromSingleFile>false</ExcludeFromSingleFile>
+		</Content>
 	</ItemGroup>
 </Project>

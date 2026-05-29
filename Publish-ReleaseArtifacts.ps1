@@ -1,5 +1,5 @@
 param(
-	[string]$Version = '0.2.1',
+	[string]$Version = '0.2.2',
 	[string]$Configuration = 'Release',
 	[string]$Runtime = 'win-x64',
 	[string]$OutputRoot = '.\artifacts'
@@ -11,12 +11,19 @@ $ErrorActionPreference = 'Stop'
 $repoRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
 $publishInstallerScript = Join-Path $repoRoot 'Publish-InstallerUI.ps1'
 $apiProject = Join-Path $repoRoot 'api\OrganizedJihad.Api.csproj'
+$apiTrayProject = Join-Path $repoRoot 'api\OrganizedJihad.Api.TrayHost\OrganizedJihad.Api.TrayHost.csproj'
 $desktopProject = Join-Path $repoRoot 'desktop-app\OrganizedJihad.Desktop.csproj'
 $userscriptDir = Join-Path $repoRoot 'userscript'
 $userscriptDist = Join-Path $userscriptDir 'dist'
 $userscriptFile = Join-Path $userscriptDist 'organized-jihad.user.js'
 $healthCheckScript = Join-Path $userscriptDir 'scripts\install-health-check.mjs'
+$userscriptGuideSource = Join-Path $repoRoot '~docs\installer-guide\tampermonkey-setup.html'
+$userscriptGuideScreenshotsSource = Join-Path $repoRoot '~docs\installer-guide\screenshots'
 $apiPublishDir = Join-Path $repoRoot 'api\bin\Release\net10.0\win-x64\publish'
+$apiTrayPublishCandidates = @(
+	(Join-Path $repoRoot 'api\OrganizedJihad.Api.TrayHost\bin\Release\net10.0-windows10.0.19041.0\win-x64\publish'),
+	(Join-Path $repoRoot 'api\OrganizedJihad.Api.TrayHost\bin\Release\net10.0-windows10.0.19041.0\publish')
+)
 $desktopPublishCandidates = @(
 	(Join-Path $repoRoot 'desktop-app\bin\Release\net10.0-windows10.0.19041.0\win-x64\publish'),
 	(Join-Path $repoRoot 'desktop-app\bin\Release\net10.0-windows10.0.19041.0\publish')
@@ -28,6 +35,12 @@ if (-not (Test-Path -Path $publishInstallerScript)) {
 $installerScriptSource = Join-Path $repoRoot 'Install-OrganizedJihad.ps1'
 if (-not (Test-Path -Path $installerScriptSource)) {
 	throw "Required installer script not found: $installerScriptSource"
+}
+if (-not (Test-Path -Path $userscriptGuideSource)) {
+	throw "Required userscript setup guide not found: $userscriptGuideSource"
+}
+if (-not (Test-Path -Path $userscriptGuideScreenshotsSource)) {
+	throw "Required userscript setup screenshots folder not found: $userscriptGuideScreenshotsSource"
 }
 
 Write-Host '[OJ Release] Building userscript bundle...' -ForegroundColor Cyan
@@ -47,6 +60,20 @@ Write-Host '[OJ Release] Publishing API backend payload...' -ForegroundColor Cya
 dotnet publish $apiProject -c $Configuration -r $Runtime --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true
 if (-not (Test-Path -Path $apiPublishDir)) {
 	throw "Missing API publish directory: $apiPublishDir"
+}
+
+Write-Host '[OJ Release] Publishing API tray host payload...' -ForegroundColor Cyan
+dotnet publish $apiTrayProject -f net10.0-windows10.0.19041.0 -c $Configuration -r $Runtime --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true
+
+$apiTrayPublishDir = $null
+foreach ($candidate in $apiTrayPublishCandidates) {
+	if (Test-Path -Path $candidate) {
+		$apiTrayPublishDir = $candidate
+		break
+	}
+}
+if (-not $apiTrayPublishDir) {
+	throw "Missing API tray host publish output at expected paths: $($apiTrayPublishCandidates -join '; ')"
 }
 
 Write-Host '[OJ Release] Publishing desktop payload...' -ForegroundColor Cyan
@@ -69,14 +96,19 @@ if (Test-Path -Path $bundlePayloadDir) {
 }
 
 $bundleApiDir = Join-Path $bundlePayloadDir 'bundled\api'
+$bundleApiTrayDir = Join-Path $bundlePayloadDir 'bundled\api-tray'
 $bundleDesktopDir = Join-Path $bundlePayloadDir 'bundled\desktop-app'
 New-Item -Path $bundleApiDir -ItemType Directory -Force | Out-Null
+New-Item -Path $bundleApiTrayDir -ItemType Directory -Force | Out-Null
 New-Item -Path $bundleDesktopDir -ItemType Directory -Force | Out-Null
 
 Copy-Item -Path $installerScriptSource -Destination (Join-Path $bundlePayloadDir 'Install-OrganizedJihad.ps1') -Force
 Copy-Item -Path $userscriptFile -Destination (Join-Path $bundlePayloadDir 'organized-jihad.user.js') -Force
 Copy-Item -Path $healthCheckScript -Destination (Join-Path $bundlePayloadDir 'install-health-check.mjs') -Force
+Copy-Item -Path $userscriptGuideSource -Destination (Join-Path $bundlePayloadDir 'tampermonkey-setup.html') -Force
+Copy-Item -Path $userscriptGuideScreenshotsSource -Destination (Join-Path $bundlePayloadDir 'guide-screenshots') -Recurse -Force
 Copy-Item -Path (Join-Path $apiPublishDir '*') -Destination $bundleApiDir -Recurse -Force
+Copy-Item -Path (Join-Path $apiTrayPublishDir '*') -Destination $bundleApiTrayDir -Recurse -Force
 Copy-Item -Path (Join-Path $desktopPublishDir '*') -Destination $bundleDesktopDir -Recurse -Force
 
 Write-Host "[OJ Release] Building installer UI publish output for v$Version..." -ForegroundColor Cyan
@@ -84,7 +116,7 @@ Write-Host "[OJ Release] Building installer UI publish output for v$Version..." 
 
 $publishDir = Join-Path $repoRoot 'installer-ui\publish\win-x64'
 $installerExe = Join-Path $publishDir 'OrganizedJihad.Installer.exe'
-$releaseBody = Join-Path $repoRoot '~docs\plans\release-v0.2.1-github-body.md'
+$releaseBody = Join-Path $repoRoot '~docs\plans\release-v0.2.2-github-body.md'
 
 if (-not (Test-Path -Path $installerExe)) {
 	throw "Missing installer executable: $installerExe"

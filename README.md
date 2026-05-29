@@ -32,17 +32,24 @@ See [Tracking Reference](~docs/plans/tracking-reference.md) for the complete dat
 
 ## Quick Start
 
-### Stable Release Download (v0.2.1)
+### Stable Release Download (v0.2.2)
 
-- GitHub Release: https://github.com/TheAnsarya/OrganizedJihad/releases/tag/v0.2.1
+- GitHub Release: https://github.com/TheAnsarya/OrganizedJihad/releases/tag/v0.2.2
 - Recommended asset: `OrganizedJihad.Installer.exe`
 - Verify integrity using bundled `SHA256SUMS.txt`
 - The EXE is self-contained (API + desktop + userscript payloads included); source repository files are not required.
 
+Windows download safety prompt guidance:
+
+1. If your browser flags the EXE as uncommon, click `Keep` -> `Keep anyway`.
+2. Right-click `OrganizedJihad.Installer.exe` -> `Properties`.
+3. In the General tab, check `Unblock` if present.
+4. Click `Apply`, then `OK`, then run the installer.
+
 To build release artifacts locally:
 
 ```powershell
-pwsh -ExecutionPolicy Bypass -File .\Publish-ReleaseArtifacts.ps1 -Version 0.2.1
+pwsh -ExecutionPolicy Bypass -File .\Publish-ReleaseArtifacts.ps1 -Version 0.2.2
 ```
 
 ### Prerequisites
@@ -61,12 +68,18 @@ For release/live testing, use the Avalonia GUI installer executable and avoid co
 3. Click `Install Ecosystem`.
 4. Wait for `Status: Install complete` in the installer window.
 
+For manual userscript setup, open this guide after install:
+
+- `%LOCALAPPDATA%\OrganizedJihad\userscript\tampermonkey-setup.html`
+
 The installer UI lets you choose what to install:
 
 - API server
 - Desktop app
 - Userscript
 - Target browser for Tampermonkey setup (from detected installed browsers)
+
+When API install is enabled, the installer now deploys an API tray host so startup can run with a Windows notification area icon (background apps menu).
 
 GUI-first behavior guarantee:
 

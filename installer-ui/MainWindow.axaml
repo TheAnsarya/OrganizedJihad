@@ -42,8 +42,8 @@
 
 		<StackPanel Grid.Row="7" Margin="0,0,0,10" Orientation="Horizontal" Spacing="20">
 			<CheckBox x:Name="OpenTampermonkeySetupCheckBox" Content="Open Tampermonkey setup page" IsChecked="True" Checked="OnInstallOptionChanged" Unchecked="OnInstallOptionChanged" />
-			<CheckBox x:Name="FirstRunDiagnosticsCheckBox" Content="Run first-run diagnostics" IsChecked="True" />
-			<CheckBox x:Name="OpenDiagnosticsCheckBox" Content="Open diagnostics pages after install" IsChecked="True" />
+			<CheckBox x:Name="FirstRunDiagnosticsCheckBox" Content="Run first-run diagnostics" IsChecked="False" />
+			<CheckBox x:Name="OpenDiagnosticsCheckBox" Content="Open diagnostics pages after install" IsChecked="False" />
 		</StackPanel>
 
 		<Border Grid.Row="8" Margin="0,0,0,10" BorderThickness="1" BorderBrush="#3A3A3A" CornerRadius="6" Padding="8">
@@ -63,9 +63,10 @@
 			<Button x:Name="OpenInstallRootButton" Grid.Column="2" Margin="10,0,0,0" Content="Open Install Folder" Width="170" Height="36" Click="OnOpenInstallRootClick" />
 		</Grid>
 
-		<Grid Grid.Row="10" ColumnDefinitions="*,Auto">
+		<Grid Grid.Row="10" ColumnDefinitions="*,Auto,Auto">
 			<TextBlock x:Name="LogPathTextBlock" VerticalAlignment="Center" Opacity="0.85" Text="Log: pending" />
-			<Button x:Name="OpenLogFolderButton" Grid.Column="1" Margin="10,0,0,0" Content="Open Log Folder" Width="170" Height="32" Click="OnOpenLogFolderClick" />
+			<Button x:Name="OpenSetupGuideButton" Grid.Column="1" Margin="10,0,0,0" Content="Open Setup Guide" Width="150" Height="32" Click="OnOpenSetupGuideClick" />
+			<Button x:Name="OpenLogFolderButton" Grid.Column="2" Margin="10,0,0,0" Content="Open Log Folder" Width="170" Height="32" Click="OnOpenLogFolderClick" />
 		</Grid>
 	</Grid>
 </Window>
