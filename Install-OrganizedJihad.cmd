@@ -13,7 +13,9 @@ net session >nul 2>&1
 if %errorlevel% neq 0 (
 	echo [OJ Installer] Please give us admin privileges so we can install fully.
 	echo [OJ Installer] Requesting elevation via Windows UAC...
-	powershell -NoProfile -ExecutionPolicy Bypass -Command "Start-Process -FilePath 'cmd.exe' -ArgumentList '/c','""%~f0" %*"' -Verb RunAs"
+	set "OJ_ELEVATION_ARGS=%*"
+	powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "$installer='%~f0'; $args=$env:OJ_ELEVATION_ARGS; if ([string]::IsNullOrWhiteSpace($args)) { Start-Process -FilePath $installer -Verb RunAs } else { Start-Process -FilePath $installer -ArgumentList $args -Verb RunAs }"
+	set "OJ_ELEVATION_ARGS="
 	if %errorlevel% neq 0 (
 		echo [OJ Installer] Elevation request failed or was cancelled.
 		exit /b %errorlevel%
@@ -21,7 +23,12 @@ if %errorlevel% neq 0 (
 	exit /b 0
 )
 
-pwsh -NoProfile -ExecutionPolicy Bypass -File "%SCRIPT_PATH%" %*
+where pwsh >nul 2>&1
+if %errorlevel% equ 0 (
+	pwsh -NoProfile -ExecutionPolicy Bypass -File "%SCRIPT_PATH%" %*
+) else (
+	powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%SCRIPT_PATH%" %*
+)
 set EXIT_CODE=%ERRORLEVEL%
 
 if not "%EXIT_CODE%"=="0" (
