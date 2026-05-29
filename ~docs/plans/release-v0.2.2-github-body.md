@@ -20,6 +20,8 @@
 | Diagnostics | Per-run installer logs under `%LOCALAPPDATA%\\OrganizedJihad\\installer-logs` |
 | Browser bootstrap | Guided Tampermonkey bootstrap with Opera + Opera GX support |
 | First-run readiness | Health-check + diagnostics options integrated |
+| Step gating | Userscript step is enabled only when Tampermonkey is detected (bypass step available) |
+| API tray UX | Hidden-icons tray host with direct API UI open action |
 
 ## 🛠️ Installation
 
@@ -30,8 +32,12 @@
 1. Run `OrganizedJihad.Installer.exe`.
 2. Approve UAC when asked.
 3. Choose browser target.
-4. Click `Install Ecosystem`.
-5. Wait for `Status: Install complete`.
+4. Click `Step 1: Install / Verify Tampermonkey`.
+5. Click `Step 2: Install API Server`.
+6. Click `Step 3: Install Desktop App`.
+7. Click `Step 4: Install Userscript`.
+8. If Step 4 is unavailable because Tampermonkey is not detected, run `Step 4b: Install Userscript (Bypass)`.
+9. Wait for `Status: Install complete`.
 
 Windows download trust flow:
 

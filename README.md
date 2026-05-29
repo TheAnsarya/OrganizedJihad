@@ -65,21 +65,27 @@ For release/live testing, use the Avalonia GUI installer executable and avoid co
 
 1. Open the release bundle and run `OrganizedJihad.Installer.exe`.
 2. Pick your userscript browser target (Opera GX supported).
-3. Click `Install Ecosystem`.
-4. Wait for `Status: Install complete` in the installer window.
+3. Click `Step 1: Install / Verify Tampermonkey`.
+4. Click `Step 2: Install API Server` (starts with tray-host in hidden icons, Plex-style, and opens API UI from the tray icon).
+5. Click `Step 3: Install Desktop App`.
+6. Click `Step 4: Install Userscript`.
+7. If Step 4 is locked because Tampermonkey is not detected, use `Step 4b: Install Userscript (Bypass)`.
+8. Wait for `Status: Install complete` in the installer window.
 
 For manual userscript setup, open this guide after install:
 
 - `%LOCALAPPDATA%\OrganizedJihad\userscript\tampermonkey-setup.html`
 
-The installer UI lets you choose what to install:
+The installer UI provides explicit buttons for each install step:
 
-- API server
-- Desktop app
-- Userscript
-- Target browser for Tampermonkey setup (from detected installed browsers)
+- Step 1: Install / Verify Tampermonkey
+- Step 2: Install API Server
+- Step 3: Install Desktop App
+- Step 4: Install Userscript (enabled only when Tampermonkey is detected)
+- Step 4b: Install Userscript (Bypass)
+- Run Full Install (runs API + desktop + userscript in sequence)
 
-When API install is enabled, the installer now deploys an API tray host so startup can run with a Windows notification area icon (background apps menu).
+When API install is enabled, the installer deploys an API tray host so startup runs with a Windows notification area icon (background apps menu). Double-clicking the tray icon opens the API UI URL.
 
 GUI-first behavior guarantee:
 

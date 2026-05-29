@@ -376,3 +376,28 @@
 ## Validation
 - dotnet build installer-ui/OrganizedJihad.Installer.csproj (pass)
 - dotnet build api/OrganizedJihad.Api.TrayHost/OrganizedJihad.Api.TrayHost.csproj (pass)
+
+---
+
+## Session
+- Date: 2026-05-29
+- Session Number: 14
+- Scope: doc sync for new step-button installer UX
+
+## Summary
+- Updated README install walkthrough to match the new button-based GUI flow (Step 1/2/3/4/4b + full install).
+- Documented Tampermonkey detection gating and explicit bypass path in end-user instructions.
+- Updated v0.2.2 release-body docs to reflect step-by-step button flow and API tray-host UI behavior.
+
+## Files Modified
+- README.md
+- ~docs/plans/release-v0.2.2-github-body.md
+- ~docs/plans/release-v0.2.2.md
+- ~docs/copilot-chats/2026-05-29-userscript-build-auto.md
+
+## Issues
+- Follow-up on: #330
+- PR tracking: #209
+
+## Validation
+- Documentation wording verified against current installer button labels and behavior.

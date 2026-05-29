@@ -47,6 +47,7 @@ Result: users can install the full stack with fewer failure points, better diagn
 | Capability | Behavior |
 |---|---|
 | Browser target selection | Opera, Opera GX, Chrome, Edge, Firefox |
+| Step-button workflow | Guided step buttons for Tampermonkey, API, desktop, userscript, and bypass |
 | Preflight validation | Validates install root and API URL before execution |
 | Actionable UX | Status + live log stream in installer window |
 | Quick actions | Open install folder + open log folder directly from GUI |
@@ -57,7 +58,7 @@ Result: users can install the full stack with fewer failure points, better diagn
 | Area | Hardening |
 |---|---|
 | API process refresh | Stops prior installed API process before artifact copy |
-| API startup UX | Optional interactive tray-host startup icon in Windows notification area |
+| API startup UX | Optional interactive tray-host startup icon in Windows notification area; tray double-click opens API UI |
 | API readiness | Waits for `/api/sync/health` before health checks |
 | Desktop install | Reliable publish output discovery and install copy |
 | Browser bootstrap | Tampermonkey links include Opera + Opera GX-compatible flow |
@@ -100,8 +101,12 @@ Published assets:
 1. Run `OrganizedJihad.Installer.exe`.
 2. Approve UAC when prompted.
 3. Select browser target for userscript bootstrap.
-4. Click `Install Ecosystem`.
-5. Wait for completion and review logs if needed.
+4. Click `Step 1: Install / Verify Tampermonkey`.
+5. Click `Step 2: Install API Server`.
+6. Click `Step 3: Install Desktop App`.
+7. Click `Step 4: Install Userscript`.
+8. If Step 4 is locked because Tampermonkey is not detected, use `Step 4b: Install Userscript (Bypass)`.
+9. Wait for completion and review logs if needed.
 
 Windows download trust flow:
 
