@@ -45,6 +45,28 @@
 
 ## Validation
 - dotnet build installer-ui/OrganizedJihad.Installer.csproj (pass)
+
+---
+
+## Session
+- Date: 2026-05-29
+- Session Number: 6
+- Scope: ignore generated release payload folders
+
+## Summary
+- Added explicit ignore rules for release-generated payload folders to reduce working tree noise.
+- Prevented accidental tracking of large generated payload content from publish/smoke-test flows.
+
+## Files Modified
+- .gitignore
+- ~docs/copilot-chats/2026-05-29-userscript-build-auto.md
+
+## Issues
+- Follow-up maintenance for: #329
+- PR tracking: #209
+
+## Validation
+- git status --short (artifacts and installer-ui/bundle-payload no longer listed)
 - pwsh -ExecutionPolicy Bypass -File .\Publish-ReleaseArtifacts.ps1 -Version 0.2.1 (pass)
 - gh release upload v0.2.1 --clobber ... (pass)
 

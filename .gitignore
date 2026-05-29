@@ -191,6 +191,10 @@ build-err*.txt
 test-*.log
 terminal-*.txt
 
+# Release packaging output (generated)
+artifacts/
+installer-ui/bundle-payload/
+
 # Windows detritus
 Thumbs.db
 ehthumbs.db
