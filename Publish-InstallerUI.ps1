@@ -17,9 +17,10 @@ if (-not $resolvedOutput) {
 Write-Host '[OJ Installer UI] Publishing Avalonia installer executable...' -ForegroundColor Cyan
 dotnet publish $projectPath -c $Configuration -r $Runtime --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:IncludeAllContentForSelfExtract=true -o (Join-Path $repoRoot $OutputDir)
 
-$exePath = Join-Path $repoRoot "$OutputDir\OrganizedJihad.Installer.exe"
-if (-not (Test-Path -Path $exePath)) {
-	throw "Publish did not produce expected executable at '$exePath'."
+$binaryName = if ($Runtime -like 'win-*') { 'OrganizedJihad.Installer.exe' } else { 'OrganizedJihad.Installer' }
+$binaryPath = Join-Path $repoRoot (Join-Path $OutputDir $binaryName)
+if (-not (Test-Path -Path $binaryPath)) {
+	throw "Publish did not produce expected installer binary at '$binaryPath'."
 }
 
-Write-Host "[OJ Installer UI] Ready: $exePath" -ForegroundColor Green
+Write-Host "[OJ Installer UI] Ready: $binaryPath" -ForegroundColor Green

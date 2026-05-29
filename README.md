@@ -52,6 +52,12 @@ To build release artifacts locally:
 pwsh -ExecutionPolicy Bypass -File .\Publish-ReleaseArtifacts.ps1 -Version 0.2.2
 ```
 
+For cross-platform 0.2.3 matrix artifacts (Windows/macOS/Linux):
+
+```powershell
+pwsh -ExecutionPolicy Bypass -File .\Publish-ReleaseArtifacts-0.2.3.ps1
+```
+
 ### Prerequisites
 
 - [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0)
@@ -102,6 +108,12 @@ The GUI installer orchestrates:
 - first-run diagnostics and health checks
 
 At the beginning of install, OJ requests administrator privileges so the full setup can complete (system startup task registration and full install permissions).
+
+Cross-platform note (v0.2.3):
+
+- Installer UI is Avalonia and now supports Windows/macOS/Linux runtime execution.
+- Windows keeps UAC/elevation flow for startup task integration.
+- macOS/Linux run managed installer workflow without Windows task scheduler dependencies.
 
 Installer UX hardening notes:
 

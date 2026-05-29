@@ -33,6 +33,10 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "OrganizedJihad.Api.TrayHost
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "OrganizedJihad.Api.TrayHost.Tests", "tests\OrganizedJihad.Api.TrayHost.Tests\OrganizedJihad.Api.TrayHost.Tests.csproj", "{2DDE26CF-1647-476A-AB6B-CEF3633B0F26}"
 EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "installer-core", "installer-core", "{4090B201-121E-4443-CEDE-35A33991F2A3}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "OrganizedJihad.Installer.Cli", "installer-core\OrganizedJihad.Installer.Cli\OrganizedJihad.Installer.Cli.csproj", "{F3EBB270-90C4-4555-BB9F-E0083C36C046}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -151,6 +155,18 @@ Global
 		{2DDE26CF-1647-476A-AB6B-CEF3633B0F26}.Release|x64.Build.0 = Release|Any CPU
 		{2DDE26CF-1647-476A-AB6B-CEF3633B0F26}.Release|x86.ActiveCfg = Release|Any CPU
 		{2DDE26CF-1647-476A-AB6B-CEF3633B0F26}.Release|x86.Build.0 = Release|Any CPU
+		{F3EBB270-90C4-4555-BB9F-E0083C36C046}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{F3EBB270-90C4-4555-BB9F-E0083C36C046}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{F3EBB270-90C4-4555-BB9F-E0083C36C046}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{F3EBB270-90C4-4555-BB9F-E0083C36C046}.Debug|x64.Build.0 = Debug|Any CPU
+		{F3EBB270-90C4-4555-BB9F-E0083C36C046}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{F3EBB270-90C4-4555-BB9F-E0083C36C046}.Debug|x86.Build.0 = Debug|Any CPU
+		{F3EBB270-90C4-4555-BB9F-E0083C36C046}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{F3EBB270-90C4-4555-BB9F-E0083C36C046}.Release|Any CPU.Build.0 = Release|Any CPU
+		{F3EBB270-90C4-4555-BB9F-E0083C36C046}.Release|x64.ActiveCfg = Release|Any CPU
+		{F3EBB270-90C4-4555-BB9F-E0083C36C046}.Release|x64.Build.0 = Release|Any CPU
+		{F3EBB270-90C4-4555-BB9F-E0083C36C046}.Release|x86.ActiveCfg = Release|Any CPU
+		{F3EBB270-90C4-4555-BB9F-E0083C36C046}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -164,6 +180,7 @@ Global
 		{54FFF476-3D3D-4799-8582-A98DAA1E55B1} = {1B9B1E0A-B933-F108-D69E-664DA5B800D6}
 		{CE85CE5B-4969-4EE4-AC10-4B91D60B6E44} = {D82C56D6-B2CD-F611-9E31-04638F7EC30E}
 		{2DDE26CF-1647-476A-AB6B-CEF3633B0F26} = {0AB3BF05-4346-4AA6-1389-037BE0695223}
+		{F3EBB270-90C4-4555-BB9F-E0083C36C046} = {4090B201-121E-4443-CEDE-35A33991F2A3}
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		SolutionGuid = {8B2D328B-7648-45E9-8F24-08A348394161}

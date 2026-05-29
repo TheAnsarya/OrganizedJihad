@@ -617,3 +617,455 @@
 ## Validation
 - pwsh -ExecutionPolicy Bypass -File .\Install-OrganizedJihad.ps1 -RunTaskModuleSelfTest (pass)
 - PowerShell parser check for Install-OrganizedJihad.ps1 (pass)
+---
+
+## Session
+- Date: 2026-05-29
+- Session Number: 22
+- Scope: Automated userscript build session logging
+
+## Summary
+- Auto-generated entry from userscript build pipeline.
+- Captures a timestamp and a git working-tree snapshot for traceability.
+
+## Files Modified
+- rganizedJihad.sln
+- Publish-InstallerUI.ps1
+- README.md
+- api/OrganizedJihad.Api.TrayHost/OrganizedJihad.Api.TrayHost.csproj
+- api/OrganizedJihad.Api.TrayHost/Program.cs
+- installer-ui/MainWindow.axaml.cs
+- userscript/package.json
+- ~docs/oj-manual-prompts-log.txt
+- Publish-ReleaseArtifacts-0.2.3.ps1
+- installer-core/
+- ~docs/plans/release-v0.2.3-github-body.md
+- ~docs/plans/release-v0.2.3.md
+
+## Validation
+- yarn build
+
+## Generated
+- Timestamp UTC: 2026-05-29T17:26:03.301Z
+---
+
+## Session
+- Date: 2026-05-29
+- Session Number: 23
+- Scope: Automated userscript build session logging
+
+## Summary
+- Auto-generated entry from userscript build pipeline.
+- Captures a timestamp and a git working-tree snapshot for traceability.
+
+## Files Modified
+- rganizedJihad.sln
+- Publish-InstallerUI.ps1
+- README.md
+- api/OrganizedJihad.Api.TrayHost/OrganizedJihad.Api.TrayHost.csproj
+- api/OrganizedJihad.Api.TrayHost/Program.cs
+- installer-ui/MainWindow.axaml.cs
+- userscript/package.json
+- ~docs/copilot-chats/2026-05-29-userscript-build-auto.md
+- ~docs/oj-manual-prompts-log.txt
+- Publish-ReleaseArtifacts-0.2.3.ps1
+- installer-core/
+- ~docs/plans/release-v0.2.3-github-body.md
+- ~docs/plans/release-v0.2.3.md
+
+## Validation
+- yarn build
+
+## Generated
+- Timestamp UTC: 2026-05-29T17:29:05.880Z
+---
+
+## Session
+- Date: 2026-05-29
+- Session Number: 24
+- Scope: Automated userscript build session logging
+
+## Summary
+- Auto-generated entry from userscript build pipeline.
+- Captures a timestamp and a git working-tree snapshot for traceability.
+
+## Files Modified
+- rganizedJihad.sln
+- Publish-InstallerUI.ps1
+- README.md
+- api/OrganizedJihad.Api.TrayHost/OrganizedJihad.Api.TrayHost.csproj
+- api/OrganizedJihad.Api.TrayHost/Program.cs
+- installer-ui/MainWindow.axaml.cs
+- userscript/package.json
+- ~docs/copilot-chats/2026-05-29-userscript-build-auto.md
+- ~docs/oj-manual-prompts-log.txt
+- Publish-ReleaseArtifacts-0.2.3.ps1
+- installer-core/
+- ~docs/plans/release-v0.2.3-github-body.md
+- ~docs/plans/release-v0.2.3.md
+
+## Validation
+- yarn build
+
+## Generated
+- Timestamp UTC: 2026-05-29T17:29:37.304Z
+---
+
+## Session
+- Date: 2026-05-29
+- Session Number: 25
+- Scope: Automated userscript build session logging
+
+## Summary
+- Auto-generated entry from userscript build pipeline.
+- Captures a timestamp and a git working-tree snapshot for traceability.
+
+## Files Modified
+- rganizedJihad.sln
+- Publish-InstallerUI.ps1
+- README.md
+- api/OrganizedJihad.Api.TrayHost/OrganizedJihad.Api.TrayHost.csproj
+- api/OrganizedJihad.Api.TrayHost/Program.cs
+- installer-ui/MainWindow.axaml.cs
+- userscript/package.json
+- ~docs/copilot-chats/2026-05-29-userscript-build-auto.md
+- ~docs/oj-manual-prompts-log.txt
+- Publish-ReleaseArtifacts-0.2.3.ps1
+- installer-core/
+- ~docs/plans/release-v0.2.3-github-body.md
+- ~docs/plans/release-v0.2.3.md
+
+## Validation
+- yarn build
+
+## Generated
+- Timestamp UTC: 2026-05-29T17:30:45.099Z
+---
+
+## Session
+- Date: 2026-05-29
+- Session Number: 26
+- Scope: Automated userscript build session logging
+
+## Summary
+- Auto-generated entry from userscript build pipeline.
+- Captures a timestamp and a git working-tree snapshot for traceability.
+
+## Files Modified
+- rganizedJihad.sln
+- Publish-InstallerUI.ps1
+- README.md
+- api/OrganizedJihad.Api.TrayHost/OrganizedJihad.Api.TrayHost.csproj
+- api/OrganizedJihad.Api.TrayHost/Program.cs
+- installer-ui/MainWindow.axaml.cs
+- userscript/package.json
+- ~docs/copilot-chats/2026-05-29-userscript-build-auto.md
+- ~docs/oj-manual-prompts-log.txt
+- Publish-ReleaseArtifacts-0.2.3.ps1
+- installer-core/
+- ~docs/plans/release-v0.2.3-github-body.md
+- ~docs/plans/release-v0.2.3.md
+
+## Validation
+- yarn build
+
+## Generated
+- Timestamp UTC: 2026-05-29T17:31:58.680Z
+---
+
+## Session
+- Date: 2026-05-29
+- Session Number: 27
+- Scope: Automated userscript build session logging
+
+## Summary
+- Auto-generated entry from userscript build pipeline.
+- Captures a timestamp and a git working-tree snapshot for traceability.
+
+## Files Modified
+- rganizedJihad.sln
+- Publish-InstallerUI.ps1
+- README.md
+- api/OrganizedJihad.Api.TrayHost/OrganizedJihad.Api.TrayHost.csproj
+- api/OrganizedJihad.Api.TrayHost/Program.cs
+- installer-ui/MainWindow.axaml.cs
+- userscript/package.json
+- ~docs/copilot-chats/2026-05-29-userscript-build-auto.md
+- ~docs/oj-manual-prompts-log.txt
+- Publish-ReleaseArtifacts-0.2.3.ps1
+- installer-core/
+- ~docs/plans/release-v0.2.3-github-body.md
+- ~docs/plans/release-v0.2.3.md
+
+## Validation
+- yarn build
+
+## Generated
+- Timestamp UTC: 2026-05-29T17:35:12.249Z
+---
+
+## Session
+- Date: 2026-05-29
+- Session Number: 28
+- Scope: Automated userscript build session logging
+
+## Summary
+- Auto-generated entry from userscript build pipeline.
+- Captures a timestamp and a git working-tree snapshot for traceability.
+
+## Files Modified
+- rganizedJihad.sln
+- Publish-InstallerUI.ps1
+- README.md
+- api/OrganizedJihad.Api.TrayHost/OrganizedJihad.Api.TrayHost.csproj
+- api/OrganizedJihad.Api.TrayHost/Program.cs
+- installer-ui/MainWindow.axaml.cs
+- userscript/package.json
+- ~docs/copilot-chats/2026-05-29-userscript-build-auto.md
+- ~docs/oj-manual-prompts-log.txt
+- Publish-ReleaseArtifacts-0.2.3.ps1
+- artifacts-osx-x64/
+- installer-core/
+- ~docs/plans/release-v0.2.3-github-body.md
+- ~docs/plans/release-v0.2.3.md
+
+## Validation
+- yarn build
+
+## Generated
+- Timestamp UTC: 2026-05-29T17:36:08.397Z
+
+---
+
+## Session
+- Date: 2026-05-29
+- Session Number: 29
+- Scope: #333 cross-platform installer/runtime pipeline for v0.2.3 (Windows, Linux, macOS)
+
+## Summary
+- Added a managed cross-platform installer engine in `installer-core/OrganizedJihad.Installer.Cli` and switched installer UI orchestration to CLI-first execution with script fallback.
+- Multi-targeted runtime host (`net10.0-windows10.0.19041.0;net10.0`) and added non-Windows headless supervision path for API process lifecycle and settings reload.
+- Added runtime-aware publish/release script for v0.2.3 matrix packaging and checksum output across `win-x64`, `linux-x64`, `osx-x64`, and `osx-arm64`.
+- Authored v0.2.3 release docs and GitHub release body with install instructions, screenshot links, and artifact references.
+
+## Files Modified
+- OrganizedJihad.sln
+- Publish-InstallerUI.ps1
+- Publish-ReleaseArtifacts-0.2.3.ps1
+- README.md
+- api/OrganizedJihad.Api.TrayHost/OrganizedJihad.Api.TrayHost.csproj
+- api/OrganizedJihad.Api.TrayHost/Program.cs
+- installer-ui/MainWindow.axaml.cs
+- installer-core/OrganizedJihad.Installer.Cli/OrganizedJihad.Installer.Cli.csproj
+- installer-core/OrganizedJihad.Installer.Cli/Program.cs
+- ~docs/plans/release-v0.2.3.md
+- ~docs/plans/release-v0.2.3-github-body.md
+- ~docs/copilot-chats/2026-05-29-userscript-build-auto.md
+
+## Issues
+- Epic: #333
+- Implementation slices: #334, #331, #335, #332
+- PR tracking: #209
+
+## Validation
+- dotnet build api/OrganizedJihad.Api.TrayHost/OrganizedJihad.Api.TrayHost.csproj (pass)
+- dotnet build installer-ui/OrganizedJihad.Installer.csproj (pass)
+- dotnet build installer-core/OrganizedJihad.Installer.Cli/OrganizedJihad.Installer.Cli.csproj (pass)
+- pwsh -ExecutionPolicy Bypass -File .\Publish-ReleaseArtifacts-0.2.3.ps1 -Version 0.2.3 -Runtimes win-x64,linux-x64 -SkipMigrationCheck -SkipSmokeTest (pass)
+- pwsh -ExecutionPolicy Bypass -File .\Publish-ReleaseArtifacts-0.2.3.ps1 -Version 0.2.3 -Runtimes osx-x64 -OutputRoot .\artifacts-osx-x64 -SkipMigrationCheck -SkipSmokeTest (pass)
+- pwsh -ExecutionPolicy Bypass -File .\Publish-ReleaseArtifacts-0.2.3.ps1 -Version 0.2.3 -Runtimes osx-arm64 -OutputRoot .\artifacts-osx-arm64 -SkipMigrationCheck -SkipSmokeTest (pass)
+---
+
+## Session
+- Date: 2026-05-29
+- Session Number: 30
+- Scope: Automated userscript build session logging
+
+## Summary
+- Auto-generated entry from userscript build pipeline.
+- Captures a timestamp and a git working-tree snapshot for traceability.
+
+## Files Modified
+- rganizedJihad.sln
+- Publish-InstallerUI.ps1
+- README.md
+- api/OrganizedJihad.Api.TrayHost/OrganizedJihad.Api.TrayHost.csproj
+- api/OrganizedJihad.Api.TrayHost/Program.cs
+- installer-ui/MainWindow.axaml.cs
+- userscript/package.json
+- ~docs/copilot-chats/2026-05-29-userscript-build-auto.md
+- ~docs/oj-manual-prompts-log.txt
+- Publish-ReleaseArtifacts-0.2.3.ps1
+- installer-core/
+- ~docs/plans/release-v0.2.3-github-body.md
+- ~docs/plans/release-v0.2.3.md
+
+## Validation
+- yarn build
+
+## Generated
+- Timestamp UTC: 2026-05-29T17:38:24.416Z
+---
+
+## Session
+- Date: 2026-05-29
+- Session Number: 31
+- Scope: Automated userscript build session logging
+
+## Summary
+- Auto-generated entry from userscript build pipeline.
+- Captures a timestamp and a git working-tree snapshot for traceability.
+
+## Files Modified
+- rganizedJihad.sln
+- Publish-InstallerUI.ps1
+- README.md
+- api/OrganizedJihad.Api.TrayHost/OrganizedJihad.Api.TrayHost.csproj
+- api/OrganizedJihad.Api.TrayHost/Program.cs
+- installer-ui/MainWindow.axaml.cs
+- userscript/package.json
+- ~docs/copilot-chats/2026-05-29-userscript-build-auto.md
+- ~docs/oj-manual-prompts-log.txt
+- Publish-ReleaseArtifacts-0.2.3.ps1
+- installer-core/
+- ~docs/plans/release-v0.2.3-github-body.md
+- ~docs/plans/release-v0.2.3.md
+
+## Validation
+- yarn build
+
+## Generated
+- Timestamp UTC: 2026-05-29T17:38:46.717Z
+---
+
+## Session
+- Date: 2026-05-29
+- Session Number: 32
+- Scope: Automated userscript build session logging
+
+## Summary
+- Auto-generated entry from userscript build pipeline.
+- Captures a timestamp and a git working-tree snapshot for traceability.
+
+## Files Modified
+- rganizedJihad.sln
+- Publish-InstallerUI.ps1
+- README.md
+- api/OrganizedJihad.Api.TrayHost/OrganizedJihad.Api.TrayHost.csproj
+- api/OrganizedJihad.Api.TrayHost/Program.cs
+- installer-ui/MainWindow.axaml.cs
+- userscript/package.json
+- ~docs/copilot-chats/2026-05-29-userscript-build-auto.md
+- ~docs/oj-manual-prompts-log.txt
+- Publish-ReleaseArtifacts-0.2.3.ps1
+- artifacts-gen-win-x64/
+- installer-core/
+- ~docs/plans/release-v0.2.3-github-body.md
+- ~docs/plans/release-v0.2.3.md
+
+## Validation
+- yarn build
+
+## Generated
+- Timestamp UTC: 2026-05-29T17:39:52.226Z
+---
+
+## Session
+- Date: 2026-05-29
+- Session Number: 33
+- Scope: Automated userscript build session logging
+
+## Summary
+- Auto-generated entry from userscript build pipeline.
+- Captures a timestamp and a git working-tree snapshot for traceability.
+
+## Files Modified
+- rganizedJihad.sln
+- Publish-InstallerUI.ps1
+- README.md
+- api/OrganizedJihad.Api.TrayHost/OrganizedJihad.Api.TrayHost.csproj
+- api/OrganizedJihad.Api.TrayHost/Program.cs
+- installer-ui/MainWindow.axaml.cs
+- userscript/package.json
+- ~docs/copilot-chats/2026-05-29-userscript-build-auto.md
+- ~docs/oj-manual-prompts-log.txt
+- Publish-ReleaseArtifacts-0.2.3.ps1
+- artifacts-gen-linux-x64/
+- artifacts-gen-win-x64/
+- installer-core/
+- ~docs/plans/release-v0.2.3-github-body.md
+- ~docs/plans/release-v0.2.3.md
+
+## Validation
+- yarn build
+
+## Generated
+- Timestamp UTC: 2026-05-29T17:40:30.224Z
+---
+
+## Session
+- Date: 2026-05-29
+- Session Number: 34
+- Scope: Automated userscript build session logging
+
+## Summary
+- Auto-generated entry from userscript build pipeline.
+- Captures a timestamp and a git working-tree snapshot for traceability.
+
+## Files Modified
+- rganizedJihad.sln
+- Publish-InstallerUI.ps1
+- README.md
+- api/OrganizedJihad.Api.TrayHost/OrganizedJihad.Api.TrayHost.csproj
+- api/OrganizedJihad.Api.TrayHost/Program.cs
+- installer-ui/MainWindow.axaml.cs
+- userscript/package.json
+- ~docs/copilot-chats/2026-05-29-userscript-build-auto.md
+- ~docs/oj-manual-prompts-log.txt
+- Publish-ReleaseArtifacts-0.2.3.ps1
+- artifacts-gen-linux-x64/
+- artifacts-gen-osx-x64/
+- artifacts-gen-win-x64/
+- installer-core/
+- ~docs/plans/release-v0.2.3-github-body.md
+- ~docs/plans/release-v0.2.3.md
+
+## Validation
+- yarn build
+
+## Generated
+- Timestamp UTC: 2026-05-29T17:41:10.724Z
+---
+
+## Session
+- Date: 2026-05-29
+- Session Number: 35
+- Scope: Automated userscript build session logging
+
+## Summary
+- Auto-generated entry from userscript build pipeline.
+- Captures a timestamp and a git working-tree snapshot for traceability.
+
+## Files Modified
+- rganizedJihad.sln
+- Publish-InstallerUI.ps1
+- README.md
+- api/OrganizedJihad.Api.TrayHost/OrganizedJihad.Api.TrayHost.csproj
+- api/OrganizedJihad.Api.TrayHost/Program.cs
+- installer-ui/MainWindow.axaml.cs
+- userscript/package.json
+- ~docs/copilot-chats/2026-05-29-userscript-build-auto.md
+- ~docs/oj-manual-prompts-log.txt
+- Publish-ReleaseArtifacts-0.2.3.ps1
+- artifacts-gen-linux-x64/
+- artifacts-gen-osx-x64/
+- artifacts-gen-win-x64/
+- installer-core/
+- ~docs/plans/release-v0.2.3-github-body.md
+- ~docs/plans/release-v0.2.3.md
+
+## Validation
+- yarn build
+
+## Generated
+- Timestamp UTC: 2026-05-29T17:42:01.376Z

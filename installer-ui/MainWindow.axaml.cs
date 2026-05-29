@@ -152,7 +152,7 @@ public partial class MainWindow : Window {
 
 		RefreshTampermonkeyStatus(logResult: false);
 
-		if (installUserscript && !allowUserscriptBypass && !_tampermonkeyInstalledForSelection) {
+		if (installUserscript && !allowUserscriptBypass && !_tampermonkeyInstalledForSelection && OperatingSystem.IsWindows()) {
 			SetStatus("Status: Tampermonkey required for userscript step.");
 			AppendLog("[Installer UI] Userscript step is locked until Tampermonkey is detected for the selected browser. Use Step 1 or run the bypass step.");
 			return;
@@ -164,19 +164,8 @@ public partial class MainWindow : Window {
 			return;
 		}
 
+		var installerCliPath = ResolveInstallerCliPath();
 		var scriptPath = ResolveInstallerScriptPath();
-		if (scriptPath is null) {
-			SetStatus("Status: Could not locate Install-OrganizedJihad.ps1.");
-			AppendLog("[Installer UI] Unable to find Install-OrganizedJihad.ps1 near executable or repository root.");
-			return;
-		}
-
-		var shell = ResolvePowerShellExecutable();
-		if (shell is null) {
-			SetStatus("Status: PowerShell was not found.");
-			AppendLog("[Installer UI] Neither pwsh nor powershell is available in PATH.");
-			return;
-		}
 
 		var selectedComponents = new List<string>();
 		if (installApi) {
@@ -197,8 +186,28 @@ public partial class MainWindow : Window {
 			openTampermonkeySetup = false;
 		}
 
-		var args = BuildInstallerArguments(scriptPath, installRoot, apiUrl, installApi, installDesktop, installUserscript, openTampermonkeySetup, browserArg);
-		await RunInstallProcessAsync(shell, args);
+		if (!string.IsNullOrWhiteSpace(installerCliPath)) {
+			AppendLog($"[Installer UI] Using managed installer CLI: {installerCliPath}");
+			var cliArgs = BuildInstallerCliArguments(installRoot, apiUrl, installApi, installDesktop, installUserscript, openTampermonkeySetup, browserArg);
+			await RunInstallProcessAsync(installerCliPath, cliArgs);
+		} else {
+			if (scriptPath is null) {
+				SetStatus("Status: Could not locate installer engine.");
+				AppendLog("[Installer UI] Managed installer CLI and Install-OrganizedJihad.ps1 were both unavailable.");
+				return;
+			}
+
+			var shell = ResolvePowerShellExecutable();
+			if (shell is null) {
+				SetStatus("Status: PowerShell was not found.");
+				AppendLog("[Installer UI] Neither pwsh nor powershell is available in PATH for legacy fallback.");
+				return;
+			}
+
+			AppendLog("[Installer UI] Using legacy PowerShell installer fallback.");
+			var psArgs = BuildInstallerArguments(scriptPath, installRoot, apiUrl, installApi, installDesktop, installUserscript, openTampermonkeySetup, browserArg);
+			await RunInstallProcessAsync(shell, psArgs);
+		}
 
 		if (installUserscript) {
 			var userscriptPath = Path.Combine(installRoot, "userscript", "organized-jihad.user.js");
@@ -261,11 +270,53 @@ public partial class MainWindow : Window {
 		return string.Join(' ', args);
 	}
 
+	private static string BuildInstallerCliArguments(string installRoot, string apiUrl, bool installApi, bool installDesktop, bool installUserscript, bool openTampermonkeySetup, string? browserArg) {
+		var args = new List<string> {
+			"--install-root", Quote(installRoot),
+			"--api-url", Quote(apiUrl),
+		};
+
+		if (!installApi) {
+			args.Add("--skip-api-install");
+		}
+
+		if (!installDesktop) {
+			args.Add("--skip-desktop-app-install");
+		}
+
+		if (!installUserscript) {
+			args.Add("--skip-userscript-install");
+		}
+
+		if (!openTampermonkeySetup || !installUserscript || string.IsNullOrWhiteSpace(browserArg)) {
+			args.Add("--skip-tampermonkey-bootstrap");
+		} else {
+			args.Add("--tampermonkey-browsers");
+			args.Add(browserArg);
+		}
+
+		if (installApi) {
+			args.Add("--run-install-health-check");
+		}
+
+		return string.Join(' ', args);
+	}
+
 	private string? ResolveSelectedBrowserArgument() {
 		return BrowserComboBox.SelectedItem is BrowserOption selectedBrowser ? selectedBrowser.Argument : null;
 	}
 
 	private void RefreshTampermonkeyStatus(bool logResult) {
+		if (!OperatingSystem.IsWindows()) {
+			_tampermonkeyInstalledForSelection = true;
+			TampermonkeyStatusTextBlock.Text = "Tampermonkey status: non-Windows mode (step allowed, manual browser verification recommended)";
+			if (logResult) {
+				AppendLog("[Installer UI] Non-Windows mode: userscript step enabled without Windows extension registry checks.");
+			}
+			UpdateQuickActionState();
+			return;
+		}
+
 		var browserArg = ResolveSelectedBrowserArgument();
 		var browserLabel = BrowserComboBox.SelectedItem is BrowserOption selectedBrowser ? selectedBrowser.Label : "(none)";
 
@@ -386,6 +437,14 @@ public partial class MainWindow : Window {
 	}
 
 	private static List<BrowserOption> DetectBrowsers() {
+		if (!OperatingSystem.IsWindows()) {
+			return new List<BrowserOption> {
+				new("Chrome", "chrome", IsExecutableOnPath("google-chrome") || IsExecutableOnPath("chrome") || IsExecutableOnPath("chromium")),
+				new("Firefox", "firefox", IsExecutableOnPath("firefox")),
+				new("Opera", "opera", IsExecutableOnPath("opera")),
+			};
+		}
+
 		var options = new List<BrowserOption> {
 			new("Chrome", "chrome", BrowserInstalled(new[] {
 				Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Google", "Chrome", "Application", "chrome.exe"),
@@ -473,7 +532,7 @@ public partial class MainWindow : Window {
 		PersistLogLine("[Installer UI] Log initialized.");
 
 		SetStatus("Status: Installing...");
-		AppendLog("[Installer UI] Running install pipeline in hidden shell mode (GUI-only experience).");
+		AppendLog("[Installer UI] Running installer engine in hidden-process mode (GUI-only experience).");
 
 		var startInfo = new ProcessStartInfo {
 			FileName = shell,
@@ -770,11 +829,58 @@ public partial class MainWindow : Window {
 	}
 
 	private static void OpenFolder(string folderPath) {
+		if (OperatingSystem.IsWindows()) {
+			Process.Start(new ProcessStartInfo {
+				FileName = "explorer.exe",
+				Arguments = Quote(folderPath),
+				UseShellExecute = true,
+			});
+			return;
+		}
+
+		if (OperatingSystem.IsMacOS()) {
+			Process.Start(new ProcessStartInfo {
+				FileName = "open",
+				Arguments = Quote(folderPath),
+				UseShellExecute = false,
+				CreateNoWindow = true,
+			});
+			return;
+		}
+
 		Process.Start(new ProcessStartInfo {
-			FileName = "explorer.exe",
+			FileName = "xdg-open",
 			Arguments = Quote(folderPath),
-			UseShellExecute = true,
+			UseShellExecute = false,
+			CreateNoWindow = true,
 		});
+	}
+
+	private static bool IsExecutableOnPath(string executableName) {
+		var pathValue = Environment.GetEnvironmentVariable("PATH") ?? string.Empty;
+		var pathEntries = pathValue.Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+
+		foreach (var entry in pathEntries) {
+			var candidate = Path.Combine(entry, executableName);
+			if (File.Exists(candidate)) {
+				return true;
+			}
+		}
+
+		return false;
+	}
+
+	private static string? ResolveInstallerCliPath() {
+		var baseDir = AppContext.BaseDirectory;
+		var cliName = OperatingSystem.IsWindows() ? "OrganizedJihad.Installer.Cli.exe" : "OrganizedJihad.Installer.Cli";
+		var candidates = new[] {
+			Path.Combine(baseDir, cliName),
+			Path.Combine(baseDir, "installer-cli", cliName),
+			Path.GetFullPath(Path.Combine(baseDir, "..", "..", "..", "installer-core", "OrganizedJihad.Installer.Cli", "bin", "Debug", "net10.0", cliName)),
+			Path.GetFullPath(Path.Combine(baseDir, "..", "..", "..", "..", "installer-core", "OrganizedJihad.Installer.Cli", "bin", "Debug", "net10.0", cliName)),
+		};
+
+		return candidates.FirstOrDefault(File.Exists);
 	}
 
 	private void UpdateQuickActionState() {

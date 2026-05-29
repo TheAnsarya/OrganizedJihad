@@ -1,3 +1,4 @@
+#if WINDOWS
 using System.Diagnostics;
 using System.Drawing;
 using System.Net.Http;
@@ -365,3 +366,194 @@ internal static class TrayRuntimeSettingsParser {
 		return !string.IsNullOrWhiteSpace(apiBaseUrl);
 	}
 }
+#else
+using System.Diagnostics;
+using System.Net.Http;
+using System.Runtime.CompilerServices;
+using System.Text.Json;
+
+[assembly: InternalsVisibleTo("OrganizedJihad.Api.TrayHost.Tests")]
+
+namespace OrganizedJihad.Api.TrayHost;
+
+internal static class Program {
+	private static void Main(string[] args) {
+		var options = TrayHostOptions.Parse(args);
+		using var runtime = new HeadlessRuntimeHost(options);
+		runtime.Run();
+	}
+}
+
+internal sealed class TrayHostOptions {
+	public string ApiExecutablePath { get; set; } = string.Empty;
+	public string ApiUrl { get; set; } = "http://localhost:5124";
+	public string WorkingDirectory { get; set; } = AppContext.BaseDirectory;
+
+	public static TrayHostOptions Parse(string[] args) {
+		var parsed = new TrayHostOptions();
+
+		for (var i = 0; i < args.Length; i++) {
+			var current = args[i];
+			if (string.Equals(current, "--api-executable", StringComparison.OrdinalIgnoreCase) && i + 1 < args.Length) {
+				parsed.ApiExecutablePath = args[++i];
+				continue;
+			}
+			if (string.Equals(current, "--api-url", StringComparison.OrdinalIgnoreCase) && i + 1 < args.Length) {
+				parsed.ApiUrl = args[++i];
+				continue;
+			}
+			if (string.Equals(current, "--working-directory", StringComparison.OrdinalIgnoreCase) && i + 1 < args.Length) {
+				parsed.WorkingDirectory = args[++i];
+			}
+		}
+
+		if (string.IsNullOrWhiteSpace(parsed.ApiExecutablePath)) {
+			parsed.ApiExecutablePath = Path.Combine(parsed.WorkingDirectory, "OrganizedJihad.Api");
+			if (!File.Exists(parsed.ApiExecutablePath)) {
+				parsed.ApiExecutablePath = Path.Combine(parsed.WorkingDirectory, "OrganizedJihad.Api.exe");
+			}
+		}
+
+		return parsed;
+	}
+}
+
+internal sealed class HeadlessRuntimeHost : IDisposable {
+	private readonly TrayHostOptions _options;
+	private readonly HttpClient _httpClient;
+	private readonly string _settingsPath;
+	private readonly string _logPath;
+	private Process? _apiProcess;
+	private bool _disposed;
+	private DateTime _lastSettingsWriteUtc = DateTime.MinValue;
+
+	public HeadlessRuntimeHost(TrayHostOptions options) {
+		_options = options;
+		_settingsPath = Path.Combine(_options.WorkingDirectory, "api-ui-settings.json");
+		_logPath = Path.Combine(_options.WorkingDirectory, "runtime-host.log");
+		_httpClient = new HttpClient {
+			Timeout = TimeSpan.FromSeconds(2),
+		};
+	}
+
+	public void Run() {
+		AppendLog("Headless runtime host started.");
+		EnsureApiRunning();
+
+		while (true) {
+			ReloadRuntimeSettingsIfChanged();
+			EnsureApiRunning();
+			Thread.Sleep(TimeSpan.FromSeconds(15));
+		}
+	}
+
+	private void EnsureApiRunning() {
+		if (_apiProcess is { HasExited: false }) {
+			return;
+		}
+
+		if (IsApiHealthy()) {
+			_apiProcess = null;
+			return;
+		}
+
+		if (!File.Exists(_options.ApiExecutablePath)) {
+			AppendLog($"API executable not found: {_options.ApiExecutablePath}");
+			return;
+		}
+
+		_apiProcess = Process.Start(new ProcessStartInfo {
+			FileName = _options.ApiExecutablePath,
+			Arguments = $"--urls {_options.ApiUrl}",
+			WorkingDirectory = _options.WorkingDirectory,
+			UseShellExecute = false,
+			CreateNoWindow = true,
+		});
+
+		AppendLog($"API process start attempted for {_options.ApiUrl}.");
+	}
+
+	private void ReloadRuntimeSettingsIfChanged() {
+		try {
+			if (!File.Exists(_settingsPath)) {
+				return;
+			}
+
+			var lastWriteUtc = File.GetLastWriteTimeUtc(_settingsPath);
+			if (lastWriteUtc <= _lastSettingsWriteUtc) {
+				return;
+			}
+
+			var raw = File.ReadAllText(_settingsPath);
+			if (TrayRuntimeSettingsParser.TryReadApiBaseUrl(raw, out var configuredApiUrl)
+				&& !string.IsNullOrWhiteSpace(configuredApiUrl)
+				&& !string.Equals(_options.ApiUrl, configuredApiUrl, StringComparison.OrdinalIgnoreCase)) {
+				_options.ApiUrl = configuredApiUrl;
+				AppendLog($"Applied updated apiBaseUrl from settings: {_options.ApiUrl}");
+
+				if (_apiProcess is { HasExited: false }) {
+					try {
+						_apiProcess.Kill(true);
+					} catch {
+						// Best effort.
+					}
+					_apiProcess = null;
+				}
+			}
+
+			_lastSettingsWriteUtc = lastWriteUtc;
+		} catch (Exception ex) {
+			AppendLog($"Settings reload failed: {ex.Message}");
+		}
+	}
+
+	private bool IsApiHealthy() {
+		try {
+			var healthUrl = _options.ApiUrl.TrimEnd('/') + "/api/sync/health";
+			var response = _httpClient.GetAsync(healthUrl).GetAwaiter().GetResult();
+			return response.IsSuccessStatusCode;
+		} catch {
+			return false;
+		}
+	}
+
+	private void AppendTrayLog(string message) {
+		AppendLog(message);
+	}
+
+	private void AppendLog(string message) {
+		try {
+			var line = $"[{DateTime.UtcNow:O}] {message}{Environment.NewLine}";
+			File.AppendAllText(_logPath, line);
+		} catch {
+			// Best effort logging only.
+		}
+	}
+
+	public void Dispose() {
+		if (_disposed) {
+			return;
+		}
+
+		_disposed = true;
+		_httpClient.Dispose();
+	}
+}
+
+internal static class TrayRuntimeSettingsParser {
+	public static bool TryReadApiBaseUrl(string rawJson, out string? apiBaseUrl) {
+		apiBaseUrl = null;
+		if (string.IsNullOrWhiteSpace(rawJson)) {
+			return false;
+		}
+
+		using var document = JsonDocument.Parse(rawJson);
+		if (!document.RootElement.TryGetProperty("apiBaseUrl", out var apiBaseUrlProperty)) {
+			return false;
+		}
+
+		apiBaseUrl = apiBaseUrlProperty.GetString()?.Trim();
+		return !string.IsNullOrWhiteSpace(apiBaseUrl);
+	}
+}
+#endif
