@@ -54,8 +54,8 @@ pwsh -ExecutionPolicy Bypass -File .\Publish-ReleaseArtifacts.ps1 -Version 0.2.2
 
 For cross-platform 0.2.3 matrix artifacts (Windows/macOS/Linux):
 
-```powershell
-pwsh -ExecutionPolicy Bypass -File .\Publish-ReleaseArtifacts-0.2.3.ps1
+```bash
+dotnet run --project installer-core/OrganizedJihad.Release.Cli -- --version 0.2.3
 ```
 
 ### Prerequisites
@@ -123,51 +123,44 @@ Installer UX hardening notes:
 
 If you are building the GUI installer from source:
 
-```powershell
-pwsh -ExecutionPolicy Bypass -File .\Publish-InstallerUI.ps1
+```bash
+dotnet publish installer-ui/OrganizedJihad.Installer.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:IncludeAllContentForSelfExtract=true -o installer-ui/publish/win-x64
 ```
 
-This produces `installer-ui/publish/win-x64/OrganizedJihad.Installer.exe`.
+This produces `installer-ui/publish/win-x64/OrganizedJihad.Installer.exe` on Windows and runtime-specific binaries for macOS/Linux when `-r` is changed.
 
-### One-Command Windows Install / Upgrade (CLI)
+### One-Command Install / Upgrade (CLI)
 
 Run this from the repository root:
 
-```powershell
-pwsh -ExecutionPolicy Bypass -File .\Install-OrganizedJihad.ps1
-```
-
-Or double-click:
-
-```text
-Install-OrganizedJihad.cmd
+```bash
+dotnet run --project installer-core/OrganizedJihad.Installer.Cli -- --run-install-health-check
 ```
 
 What it does:
 
-- Builds the latest TamperMonkey userscript bundle
-- Publishes the API backend as a self-contained Windows executable
-- Publishes and installs the Desktop app for Windows (`OrganizedJihad.Desktop.exe`)
-- Installs/updates artifacts in `%LOCALAPPDATA%\OrganizedJihad`
-- Registers `OrganizedJihad.Api.Autostart` scheduled task (runs on logon)
-- Registers `OrganizedJihad.Api.Autostart` for system startup + logon when installer is run as Administrator
-- Falls back to logon startup when not elevated
-- Opens Tampermonkey install pages and userscript import flow (including Opera GX support)
+- Installs bundled API/runtime-host payloads to the configured install root
+- Installs userscript + setup guide assets
+- Starts runtime host or API directly depending on available binaries
+- Runs optional health checks and diagnostics links
+- Opens Tampermonkey install pages for selected browser bootstrap
 
 Optional flags:
 
-- `-SkipTampermonkeyBootstrap` to skip opening extension/script pages
-- `-TampermonkeyBrowsers chrome,operaGX` to target specific browser bootstrap pages
-- `-SkipDesktopAppInstall` to skip desktop publish/install when only backend/userscript is needed
-- `-SkipYarnInstall` to skip `yarn install` during repeat installs
-- `-AllowNonAdmin` to bypass the elevation prompt (reduced install capabilities; no full system-level startup registration)
-- `-InstallRoot "D:\Apps\OrganizedJihad"` to customize install location
-- `-RunTaskModuleSelfTest` to run installer startup-task planning self-tests and exit without performing install steps
+- `--skip-tampermonkey-bootstrap` to skip opening extension/script pages
+- `--tampermonkey-browsers chrome,operaGX` to target specific browser bootstrap pages
+- `--skip-desktop-app-install` to skip desktop payload install
+- `--skip-userscript-install` to skip userscript payload install
+- `--install-root "D:\Apps\OrganizedJihad"` to customize install location
+- `--api-url "http://localhost:5124"` to customize runtime API URL
 
 New reliability behaviors:
 
-- Installer now captures a pre-install rollback snapshot per component and restores it automatically if install fails mid-run.
-- Installer health diagnostics now include `/ui/userscript-handshake` checks to confirm userscript-to-API handshake freshness.
+- Installer health diagnostics include `/ui/userscript-handshake` checks to confirm userscript-to-API handshake freshness.
+
+Legacy note:
+
+- `Install-OrganizedJihad.ps1` and `Install-OrganizedJihad.cmd` remain in the repository for compatibility, but v0.2.3 primary install flow is managed `.NET` CLI/UI.
 
 ### Build & Run
 

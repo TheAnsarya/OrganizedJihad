@@ -14,11 +14,11 @@ Each runtime folder includes `SHA256SUMS.txt`.
 ### What Changed
 
 - New managed installer CLI (`OrganizedJihad.Installer.Cli`) for cross-platform install orchestration.
-- Avalonia installer UI now prefers managed installer CLI (PS1 fallback retained for compatibility).
+- Avalonia installer UI now runs managed installer CLI only (PowerShell fallback removed).
 - Runtime host is now multi-targeted:
   - Windows tray mode retained.
   - macOS/Linux headless supervisor fallback enabled.
-- New multi-runtime release script: `Publish-ReleaseArtifacts-0.2.3.ps1`.
+- New multi-runtime managed release CLI: `OrganizedJihad.Release.Cli`.
 
 ### Install
 

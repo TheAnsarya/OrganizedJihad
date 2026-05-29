@@ -7,12 +7,12 @@ v0.2.3 is the first cross-platform installer/runtime milestone: one installer fl
 ## Highlights
 
 - Cross-platform managed installer engine (`OrganizedJihad.Installer.Cli`) now available for GUI orchestration.
-- Avalonia installer UI now prefers managed installer CLI and falls back to PowerShell only when CLI is unavailable.
+- Avalonia installer UI now requires the managed installer CLI (PowerShell fallback removed).
 - Runtime host (`OrganizedJihad.Api.TrayHost`) now multi-targets Windows + non-Windows:
   - Windows: tray mode (existing behavior)
   - macOS/Linux: headless supervision fallback with `runtime-host.log`
-- New release matrix script for 0.2.3:
-  - `Publish-ReleaseArtifacts-0.2.3.ps1`
+- New managed release pipeline for 0.2.3:
+  - `OrganizedJihad.Release.Cli`
   - Target runtimes: `win-x64`, `linux-x64`, `osx-x64`, `osx-arm64`
 
 ## Installation Instructions
@@ -59,14 +59,14 @@ chmod +x OrganizedJihad.Installer
 
 ## Build + Artifact Commands
 
-```powershell
-pwsh -ExecutionPolicy Bypass -File .\Publish-ReleaseArtifacts-0.2.3.ps1
+```bash
+dotnet run --project installer-core/OrganizedJihad.Release.Cli -- --version 0.2.3
 ```
 
 Optional runtime selection:
 
-```powershell
-pwsh -ExecutionPolicy Bypass -File .\Publish-ReleaseArtifacts-0.2.3.ps1 -Runtimes win-x64,linux-x64,osx-arm64
+```bash
+dotnet run --project installer-core/OrganizedJihad.Release.Cli -- --version 0.2.3 --runtimes win-x64,linux-x64,osx-arm64
 ```
 
 ## Known Notes

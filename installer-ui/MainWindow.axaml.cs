@@ -165,7 +165,6 @@ public partial class MainWindow : Window {
 		}
 
 		var installerCliPath = ResolveInstallerCliPath();
-		var scriptPath = ResolveInstallerScriptPath();
 
 		var selectedComponents = new List<string>();
 		if (installApi) {
@@ -186,28 +185,24 @@ public partial class MainWindow : Window {
 			openTampermonkeySetup = false;
 		}
 
-		if (!string.IsNullOrWhiteSpace(installerCliPath)) {
-			AppendLog($"[Installer UI] Using managed installer CLI: {installerCliPath}");
-			var cliArgs = BuildInstallerCliArguments(installRoot, apiUrl, installApi, installDesktop, installUserscript, openTampermonkeySetup, browserArg);
-			await RunInstallProcessAsync(installerCliPath, cliArgs);
-		} else {
-			if (scriptPath is null) {
-				SetStatus("Status: Could not locate installer engine.");
-				AppendLog("[Installer UI] Managed installer CLI and Install-OrganizedJihad.ps1 were both unavailable.");
-				return;
-			}
-
-			var shell = ResolvePowerShellExecutable();
-			if (shell is null) {
-				SetStatus("Status: PowerShell was not found.");
-				AppendLog("[Installer UI] Neither pwsh nor powershell is available in PATH for legacy fallback.");
-				return;
-			}
-
-			AppendLog("[Installer UI] Using legacy PowerShell installer fallback.");
-			var psArgs = BuildInstallerArguments(scriptPath, installRoot, apiUrl, installApi, installDesktop, installUserscript, openTampermonkeySetup, browserArg);
-			await RunInstallProcessAsync(shell, psArgs);
+		if (string.IsNullOrWhiteSpace(installerCliPath)) {
+			SetStatus("Status: Could not locate managed installer engine.");
+			AppendLog("[Installer UI] OrganizedJihad.Installer.Cli is required but was not found.");
+			return;
 		}
+
+		AppendLog($"[Installer UI] Using managed installer CLI: {installerCliPath}");
+		var cliArgs = BuildInstallerCliArguments(
+			installRoot,
+			apiUrl,
+			installApi,
+			installDesktop,
+			installUserscript,
+			openTampermonkeySetup,
+			browserArg,
+			FirstRunDiagnosticsCheckBox.IsChecked == true,
+			OpenDiagnosticsCheckBox.IsChecked == true);
+		await RunInstallProcessAsync(installerCliPath, cliArgs);
 
 		if (installUserscript) {
 			var userscriptPath = Path.Combine(installRoot, "userscript", "organized-jihad.user.js");
@@ -226,51 +221,7 @@ public partial class MainWindow : Window {
 		RefreshTampermonkeyStatus(logResult: false);
 	}
 
-	private string BuildInstallerArguments(string scriptPath, string installRoot, string apiUrl, bool installApi, bool installDesktop, bool installUserscript, bool openTampermonkeySetup, string? browserArg) {
-		var args = new List<string> {
-			"-NoProfile",
-			"-WindowStyle", "Hidden",
-			"-ExecutionPolicy", "Bypass",
-			"-File", Quote(scriptPath),
-			"-InstallRoot", Quote(installRoot),
-			"-ApiUrl", Quote(apiUrl),
-		};
-
-		if (!installApi) {
-			args.Add("-SkipApiInstall");
-		}
-
-		if (!installDesktop) {
-			args.Add("-SkipDesktopAppInstall");
-		}
-
-		if (!installUserscript) {
-			args.Add("-SkipUserscriptInstall");
-		}
-
-		if (!openTampermonkeySetup || !installUserscript || string.IsNullOrWhiteSpace(browserArg)) {
-			args.Add("-SkipTampermonkeyBootstrap");
-		} else {
-			args.Add("-TampermonkeyBrowsers");
-			args.Add(browserArg);
-		}
-
-		if (installApi) {
-			args.Add("-RunInstallHealthCheck");
-		}
-
-		if (FirstRunDiagnosticsCheckBox.IsChecked == true) {
-			args.Add("-FirstRunDiagnostics");
-		}
-
-		if (OpenDiagnosticsCheckBox.IsChecked == true) {
-			args.Add("-OpenUserscriptDiagnostics");
-		}
-
-		return string.Join(' ', args);
-	}
-
-	private static string BuildInstallerCliArguments(string installRoot, string apiUrl, bool installApi, bool installDesktop, bool installUserscript, bool openTampermonkeySetup, string? browserArg) {
+	private static string BuildInstallerCliArguments(string installRoot, string apiUrl, bool installApi, bool installDesktop, bool installUserscript, bool openTampermonkeySetup, string? browserArg, bool firstRunDiagnostics, bool openUserscriptDiagnostics) {
 		var args = new List<string> {
 			"--install-root", Quote(installRoot),
 			"--api-url", Quote(apiUrl),
@@ -297,6 +248,14 @@ public partial class MainWindow : Window {
 
 		if (installApi) {
 			args.Add("--run-install-health-check");
+		}
+
+		if (firstRunDiagnostics) {
+			args.Add("--first-run-diagnostics");
+		}
+
+		if (openUserscriptDiagnostics) {
+			args.Add("--open-userscript-diagnostics");
 		}
 
 		return string.Join(' ', args);
@@ -673,72 +632,6 @@ public partial class MainWindow : Window {
 
 		message = "Preflight checks passed.";
 		return true;
-	}
-
-	private string? ResolveInstallerScriptPath() {
-		var baseDir = AppContext.BaseDirectory;
-		var candidates = new[] {
-			Path.Combine(baseDir, "Install-OrganizedJihad.ps1"),
-			Path.GetFullPath(Path.Combine(baseDir, "..", "..", "..", "Install-OrganizedJihad.ps1")),
-			Path.GetFullPath(Path.Combine(baseDir, "..", "..", "..", "..", "Install-OrganizedJihad.ps1")),
-		};
-
-		return candidates.FirstOrDefault(File.Exists);
-	}
-
-	private static string? ResolvePowerShellExecutable() {
-		var candidatePaths = new List<string>();
-
-		candidatePaths.AddRange(ResolveExecutablesFromPath("pwsh"));
-		candidatePaths.AddRange(ResolveExecutablesFromPath("powershell"));
-
-		foreach (var path in candidatePaths.Distinct(StringComparer.OrdinalIgnoreCase)) {
-			if (CommandExists(path)) {
-				return path;
-			}
-		}
-
-		return null;
-	}
-
-	private static IEnumerable<string> ResolveExecutablesFromPath(string commandName) {
-		var pathValue = Environment.GetEnvironmentVariable("PATH") ?? string.Empty;
-		var pathEntries = pathValue.Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-		var pathextRaw = Environment.GetEnvironmentVariable("PATHEXT") ?? ".EXE;.CMD;.BAT";
-		var extensions = pathextRaw.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-			.Select(ext => ext.StartsWith('.') ? ext : $".{ext}")
-			.ToArray();
-
-		foreach (var entry in pathEntries) {
-			foreach (var ext in extensions) {
-				var candidate = Path.Combine(entry, $"{commandName}{ext}");
-				if (File.Exists(candidate)) {
-					yield return candidate;
-				}
-			}
-		}
-	}
-
-	private static bool CommandExists(string commandPath) {
-		var info = new ProcessStartInfo {
-			FileName = commandPath,
-			Arguments = "-NoProfile -Command \"$PSVersionTable.PSVersion\"",
-			UseShellExecute = false,
-			RedirectStandardOutput = true,
-			RedirectStandardError = true,
-			CreateNoWindow = true,
-		};
-
-		try {
-			using var process = Process.Start(info);
-			if (process is null) {
-				return false;
-			}
-			process.WaitForExit(2000);
-			return process.ExitCode == 0;
-		} catch {
-			return false;
-		}
 	}
 
 	private void AppendLog(string line) {

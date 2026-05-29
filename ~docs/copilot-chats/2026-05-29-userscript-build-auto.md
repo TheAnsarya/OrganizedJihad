@@ -1069,3 +1069,64 @@
 
 ## Generated
 - Timestamp UTC: 2026-05-29T17:42:01.376Z
+---
+
+## Session
+- Date: 2026-05-29
+- Session Number: 36
+- Scope: Automated userscript build session logging
+
+## Summary
+- Auto-generated entry from userscript build pipeline.
+- Captures a timestamp and a git working-tree snapshot for traceability.
+
+## Files Modified
+- rganizedJihad.sln
+- README.md
+- installer-ui/MainWindow.axaml.cs
+- userscript/package.json
+- ~docs/copilot-chats/2026-05-29-userscript-build-auto.md
+- ~docs/oj-manual-prompts-log.txt
+- ~docs/plans/release-v0.2.3-github-body.md
+- ~docs/plans/release-v0.2.3.md
+- installer-core/OrganizedJihad.Release.Cli/
+
+## Validation
+- yarn build
+
+## Generated
+- Timestamp UTC: 2026-05-29T18:01:18.808Z
+
+---
+
+## Session
+- Date: 2026-05-29
+- Session Number: 37
+- Scope: #334/#335 managed installer-first migration (remove UI PS1 fallback + add managed release CLI)
+
+## Summary
+- Removed PowerShell fallback path from Avalonia installer UI; install flow now requires managed `OrganizedJihad.Installer.Cli`.
+- Added managed release pipeline project `OrganizedJihad.Release.Cli` to produce cross-platform installer artifacts without `Publish-ReleaseArtifacts-0.2.3.ps1`.
+- Added Windows PATH command-resolution hardening in release CLI so `yarn.cmd` is resolved correctly from non-shell process execution.
+- Updated README and v0.2.3 release docs to use managed `.NET` CLI commands as the primary install/release workflow.
+
+## Files Modified
+- installer-ui/MainWindow.axaml.cs
+- installer-core/OrganizedJihad.Release.Cli/OrganizedJihad.Release.Cli.csproj
+- installer-core/OrganizedJihad.Release.Cli/Program.cs
+- README.md
+- ~docs/plans/release-v0.2.3.md
+- ~docs/plans/release-v0.2.3-github-body.md
+- ~docs/copilot-chats/2026-05-29-userscript-build-auto.md
+
+## Issues
+- Epic: #333
+- Installer core migration: #334
+- Release pipeline migration: #335
+- PR tracking: #209
+
+## Validation
+- dotnet build installer-ui/OrganizedJihad.Installer.csproj -c Release (pass)
+- dotnet build installer-core/OrganizedJihad.Installer.Cli/OrganizedJihad.Installer.Cli.csproj -c Release (pass)
+- dotnet build installer-core/OrganizedJihad.Release.Cli/OrganizedJihad.Release.Cli.csproj -c Release (pass)
+- dotnet run --project installer-core/OrganizedJihad.Release.Cli -- --version 0.2.3 --runtimes linux-x64 --output-root artifacts-managed-test --skip-yarn-install (pass)
