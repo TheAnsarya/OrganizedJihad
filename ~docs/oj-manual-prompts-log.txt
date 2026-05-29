@@ -304,7 +304,71 @@ continue doing both next steps; do several medium risk slices;
 
 [OJ] continue doing all the next steps and a ton of other work, going through issues; work through at least 12 medium risk slices and 6 high risk slices; take your time fixing everything and continue longer than you think you can; continue;
 
-[OJ] continue doing all the next steps and a ton of other work, going through issues; work through at least 12 medium risk slices and 6 high risk slices; take your time fixing everything and continue longer than you think you can; continue; don't make an issue for every little thing, make batch issues that cover several smaller efforts into one big effort; continue;
+[OJ] continue doing all the next steps and a ton of other work, going through issues; work through at least 12 medium risk slices and 6 high risk slices; take your time fixing everything and continue longer than you think you can; continue; don't make an issue for every little thing, make batch issues that cover several smaller efforts into one big effort/issue; continue;
+--run 4x
+
+continue; work several slices;
+
+[OJ] continue doing all the next steps and a ton of other work, going through issues; work through at least 12 medium risk slices and 6 high risk slices; take your time fixing everything and continue longer than you think you can; continue; don't make an issue for every little thing, make batch issues that cover several smaller efforts into one big effort/issue; continue;
+[OJ] continue doing all the next steps and a ton of other work, going through issues; work through at least 12 medium risk slices and 6 high risk slices; take your time fixing everything and continue longer than you think you can; continue; don't make an issue for every little thing, make batch issues that cover several smaller efforts into one big effort/issue; continue;
+
+[OJ] architecture modernization; take a look at the architecture of OrganizedJihad and modernize it and simplify it and refactor apis, class, structure, objects/classes/etc, make some issues; don't make an issue for every little thing, make batch issues that cover several smaller efforts into one big effort/issue; continue doing all the next steps and a ton of other work, going through issues; work through at least 12 medium risk slices and 6 high risk slices; continue;
+
+3
+
+[OJ] continue doing all the next steps and a ton of other work, going through issues; work through at least 12 medium risk slices and 6 high risk slices; take your time fixing everything and continue longer than you think you can; continue; don't make an issue for every little thing, make batch issues that cover several smaller efforts into one big effort/issue; continue;
+
+1
+
+[OJ] continue doing all the next steps and a ton of other work, going through issues; work through at least 12 medium risk slices and 6 high risk slices; take your time fixing everything and continue longer than you think you can; continue; don't make an issue for every little thing, make batch issues that cover several smaller efforts into one big effort/issue; continue;
+--run 4x
+
+[OJ] Prepare for a release, make sure everything works and the installer is a single run to install all the the parts of our project including the browser userscript (we use Opera GX! make sure that is included as an option for userscripts and tamper monkey installation) make our ecosystem work and prepare for release, so I can install everything and test it in a live environment; continue;
+
+[OJ] Prepare for a release, make sure everything works and the installer is a single run to install all the the parts of our project including the browser userscript into browsers; we shouldn't need to run any commandline instructions, but rather have a streamlined "double click the installer exe -> install server, desktop, and userscript in browsers (pick a browser?) -> use the ecosystem to populate the database from the userscript and make the tools usable -> use the tools; continue; Use Avalonia for the install process if you need UI since it is cross-platform; No advanced configuration should be needed, or commandline stuff, just run the installer and have everything ready to go; continue;
+
+continue; work several slices;
+
+[OJ] Make the installer ask for admin privileges at the begining or after a message like "please give us admin privileges so we can install fully"; continue; make the single-run install process work; prepare for a release, create an accurate release header and a very detailed release desciption with emojis and tables and whatnot, work to create release version 0.2.1; continue;
+
+yes, do that, and clean everything up; [OJ] Installation should not be experienced in the command-line unless you're running install from there; Make sure we have a single run exe installer that only uses UI and doesn't make us use command-prompt; make everything super simple and easy to use, simplify the program; let's go; continue;
+
+[OJ] Create a stable release and installer, once that is done update docs and Create a 0.2.1 release and build artifacts and then move them to the github release once they're built; continue;
+
+&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&
+Run the exe install: Ready. Click Install to begin.
+[Installer UI] Elevated UI session confirmed.
+[Installer UI] Running install pipeline in hidden shell mode (GUI-only experience).
+[OJ Installer] Non-admin mode explicitly requested via -AllowNonAdmin. Some startup task capabilities may be limited.
+[OJ Installer] Validating prerequisites
+[OJ Installer] Building userscript bundle
+[stderr] [31;1mPush-Location: [0mC:\Users\me\Downloads\OrganizedJihad-v0.2.1-windows-installer\Install-OrganizedJihad.ps1:382[0m
+[stderr] [31;1m[0m[36;1mLine |[0m
+[stderr] [31;1m[0m[36;1m[36;1m 382 | [0m [36;1mPush-Location $userscriptDir[0m
+[stderr] [31;1m[0m[36;1m[36;1m[0m[36;1m[0m[36;1m     | [31;1m ~~~~~~~~~~~~~~~~~~~~~~~~~~~~[0m
+[stderr] [31;1m[0m[36;1m[36;1m[0m[36;1m[0m[36;1m[31;1m[31;1m[36;1m     | [31;1mCannot find path 'C:\Users\me\Downloads\OrganizedJihad-v0.2.1-windows-installer\userscript' because it does not[0m
+[stderr] [31;1m[0m[36;1m[36;1m[0m[36;1m[0m[36;1m[31;1m[31;1m[36;1m[31;1m[36;1m     | [31;1mexist.[0m
+[Installer UI] Installation failed with exit code 1.
+[Installer UI] Elevated UI session confirmed.
+[Installer UI] Running install pipeline in hidden shell mode (GUI-only experience).
+[OJ Installer] Non-admin mode explicitly requested via -AllowNonAdmin. Some startup task capabilities may be limited.
+[OJ Installer] Validating prerequisites
+[OJ Installer] Building userscript bundle
+[stderr] [31;1mPush-Location: [0mC:\Users\me\Downloads\OrganizedJihad-v0.2.1-windows-installer\Install-OrganizedJihad.ps1:382[0m
+[stderr] [31;1m[0m[36;1mLine |[0m
+[stderr] [31;1m[0m[36;1m[36;1m 382 | [0m [36;1mPush-Location $userscriptDir[0m
+[stderr] [31;1m[0m[36;1m[36;1m[0m[36;1m[0m[36;1m     | [31;1m ~~~~~~~~~~~~~~~~~~~~~~~~~~~~[0m
+[stderr] [31;1m[0m[36;1m[36;1m[0m[36;1m[0m[36;1m[31;1m[31;1m[36;1m     | [31;1mCannot find path 'C:\Users\me\Downloads\OrganizedJihad-v0.2.1-windows-installer\userscript' because it does not[0m
+[stderr] [31;1m[0m[36;1m[36;1m[0m[36;1m[0m[36;1m[31;1m[31;1m[36;1m[31;1m[36;1m     | [31;1mexist.[0m
+[Installer UI] Installation failed with exit code 1.
+&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&
+
+"[OJ Installer] Requesting elevation via Windows UAC..." "[OJ Installer] Elevation request failed or was cancelled."
+
+The installer tried to run the userscript instead of install it with tamper monkey, also it opened 5 or 6 tabs for tamper monkey and I recieved no instructions on what to do next. Also, I don't want to have to unzip an archive then pick one of the many files named "install", instead I want just a single exe that does everything; also, is the server part installing? And give me an avalonia window with ui so I can pick which parts I want to install, and which browser to install to based on which browsers are installed. Install should be a guided UI experience and easy to use and understand; continue;
+
+yeah do that
+yeah do that
 
 
 
@@ -321,30 +385,7 @@ continue doing both next steps; do several medium risk slices;
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+[OJ] Search repository for security issues and outdated or comprimised libraries/packages and ensure modern (security and code) practices and standards and fix and harden the repository; update everything and fix security problems, make sure no HW credentials are stored in our system;
 
 
 
