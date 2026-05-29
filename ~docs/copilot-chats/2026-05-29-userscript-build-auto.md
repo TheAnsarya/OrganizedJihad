@@ -190,3 +190,45 @@
 
 ## Validation
 - dotnet build installer-ui/OrganizedJihad.Installer.csproj (pass)
+---
+
+## Session
+- Date: 2026-05-29
+- Session Number: 8
+- Scope: Automated userscript build session logging
+
+## Summary
+- Auto-generated entry from userscript build pipeline.
+- Captures a timestamp and a git working-tree snapshot for traceability.
+
+## Files Modified
+- userscript/package.json
+
+## Validation
+- yarn build
+
+## Generated
+- Timestamp UTC: 2026-05-29T13:33:07.320Z
+
+---
+
+## Session
+- Date: 2026-05-29
+- Session Number: 9
+- Scope: publish patched release asset for locked API executable fix
+
+## Summary
+- Rebuilt release artifacts for v0.2.1 after locked-API installer fix.
+- Uploaded refreshed `OrganizedJihad.Installer.exe` and `SHA256SUMS.txt` to GitHub release v0.2.1 with `--clobber`.
+
+## Files Modified
+- userscript/package.json
+- ~docs/copilot-chats/2026-05-29-userscript-build-auto.md
+
+## Issues
+- Follow-up maintenance for: #329
+- PR tracking: #209
+
+## Validation
+- pwsh -ExecutionPolicy Bypass -File .\Publish-ReleaseArtifacts.ps1 -Version 0.2.1 (pass)
+- gh release upload v0.2.1 --clobber artifacts/v0.2.1/OrganizedJihad.Installer.exe artifacts/v0.2.1/SHA256SUMS.txt (pass)
