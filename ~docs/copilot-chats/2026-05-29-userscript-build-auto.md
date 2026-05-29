@@ -311,3 +311,37 @@
 - dotnet build api/OrganizedJihad.Api.TrayHost/OrganizedJihad.Api.TrayHost.csproj (pass)
 - pwsh -ExecutionPolicy Bypass -File .\Install-OrganizedJihad.ps1 -AllowNonAdmin -SkipDesktopAppInstall -SkipUserscriptInstall -SkipTampermonkeyBootstrap -SkipRunInstallHealthCheck -SkipOpenUserscriptDiagnostics (pass)
 - pwsh -ExecutionPolicy Bypass -File .\Publish-ReleaseArtifacts.ps1 -Version 0.2.2 (pass)
+
+---
+
+## Session
+- Date: 2026-05-29
+- Session Number: 12
+- Scope: replace setup-guide placeholder SVGs with captured PNG screenshots
+
+## Summary
+- Replaced all userscript setup-guide screenshot placeholders with real captured PNG screenshots from live Tampermonkey store pages.
+- Updated the setup guide HTML image references from `.svg` to `.png`.
+- Removed obsolete SVG placeholder assets from the screenshot folder.
+
+## Files Modified
+- ~docs/installer-guide/tampermonkey-setup.html
+- ~docs/installer-guide/screenshots/chrome-setup.png
+- ~docs/installer-guide/screenshots/edge-setup.png
+- ~docs/installer-guide/screenshots/firefox-setup.png
+- ~docs/installer-guide/screenshots/opera-setup.png
+- ~docs/installer-guide/screenshots/opera-gx-setup.png
+- ~docs/installer-guide/screenshots/chrome-setup.svg (removed)
+- ~docs/installer-guide/screenshots/edge-setup.svg (removed)
+- ~docs/installer-guide/screenshots/firefox-setup.svg (removed)
+- ~docs/installer-guide/screenshots/opera-setup.svg (removed)
+- ~docs/installer-guide/screenshots/opera-gx-setup.svg (removed)
+- ~docs/copilot-chats/2026-05-29-userscript-build-auto.md
+
+## Issues
+- Follow-up on: #330
+- PR tracking: #209
+
+## Validation
+- Verified PNG screenshot assets exist in `~docs/installer-guide/screenshots`.
+- Verified setup guide image sources now reference `.png` paths.
