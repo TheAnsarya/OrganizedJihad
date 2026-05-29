@@ -485,3 +485,29 @@
 - dotnet test tests/OrganizedJihad.Api.Tests/OrganizedJihad.Api.Tests.csproj --filter "Api_Ui_Route_Should_Return_Html|Api_Ui_Settings_Should_Return_Payload|Health_Check_Should_Return_Ok" (pass)
 - dotnet build installer-ui/OrganizedJihad.Installer.csproj (pass)
 - dotnet list installer-ui/OrganizedJihad.Installer.csproj package --include-transitive (Tmds.DBus.Protocol resolved to 0.94.1; NU1903 warning cleared)
+
+---
+
+## Session
+- Date: 2026-05-29
+- Session Number: 18
+- Scope: startup task diagnostics surfaced in API UI repair panel
+
+## Summary
+- Extended `/ui/repair-status` to include Windows scheduled-task diagnostics for:
+	- `OrganizedJihad.Api.Service`
+	- `OrganizedJihad.Api.Tray`
+- Added task status display in the API control page so operators can see if startup automation is registered/running.
+- Enhanced repair recommendation messaging when startup tasks are missing.
+
+## Files Modified
+- api/Program.cs
+- ~docs/copilot-chats/2026-05-29-userscript-build-auto.md
+
+## Issues
+- Follow-up on: #330
+- PR tracking: #209
+
+## Validation
+- dotnet build api/OrganizedJihad.Api.csproj (pass)
+- dotnet test tests/OrganizedJihad.Api.Tests/OrganizedJihad.Api.Tests.csproj --filter "Api_Ui_Route_Should_Return_Html|Api_Ui_Settings_Should_Return_Payload" (pass)

@@ -112,6 +112,8 @@ app.MapGet("/ui/repair-status", () => {
 	var apiDatabasePath = Path.Combine(AppContext.BaseDirectory, "herowars.db");
 	var userscriptPath = Path.Combine(installRoot, "userscript", "organized-jihad.user.js");
 	var trayHostPath = Path.Combine(installRoot, "api-tray", "OrganizedJihad.Api.TrayHost.exe");
+	var apiServiceTaskStatus = GetScheduledTaskStatus("OrganizedJihad.Api.Service");
+	var apiTrayTaskStatus = GetScheduledTaskStatus("OrganizedJihad.Api.Tray");
 
 	var hasDatabase = File.Exists(apiDatabasePath);
 	var hasUserscript = File.Exists(userscriptPath);
@@ -121,11 +123,19 @@ app.MapGet("/ui/repair-status", () => {
 		? "Runtime artifacts look healthy."
 		: "One or more runtime artifacts are missing. Re-run Install-OrganizedJihad.ps1 from your install bundle to repair setup.";
 
+	if (OperatingSystem.IsWindows() &&
+		(apiServiceTaskStatus.Status.StartsWith("missing", StringComparison.OrdinalIgnoreCase)
+		|| apiTrayTaskStatus.Status.StartsWith("missing", StringComparison.OrdinalIgnoreCase))) {
+		recommendation += " Startup tasks are not fully registered; rerun installer as Administrator to restore service/tray startup automation.";
+	}
+
 	return Results.Ok(new {
 		installRoot,
 		hasDatabase,
 		hasUserscript,
 		hasTrayHost,
+		apiServiceTaskStatus = apiServiceTaskStatus.Status,
+		apiTrayTaskStatus = apiTrayTaskStatus.Status,
 		recommendation,
 		checkedUtc = DateTime.UtcNow,
 	});
@@ -266,6 +276,7 @@ app.MapGet("/ui", (HttpContext context) => {
 					If userscript, API, or tray startup behavior needs repair, rerun installer script from your install bundle.
 				</p>
 				<div id="repairSummary" style="margin-top: 10px; color: var(--muted);">Checking runtime artifacts...</div>
+				<div id="taskSummary" style="margin-top: 6px; color: var(--muted);">Checking startup task status...</div>
 				<div class="actions">
 					<a class="button" href="/api/sync/health" target="_blank" rel="noreferrer">Open Health JSON</a>
 					<a class="button" href="/api/sync/last-sync" target="_blank" rel="noreferrer">Open Last Sync JSON</a>
@@ -313,6 +324,7 @@ app.MapGet("/ui", (HttpContext context) => {
 			const healthDetail = document.getElementById('healthDetail');
 			const lastSync = document.getElementById('lastSync');
 			const repairSummary = document.getElementById('repairSummary');
+			const taskSummary = document.getElementById('taskSummary');
 
 			try {
 				const health = await fetchJson('/api/sync/health');
@@ -339,8 +351,10 @@ app.MapGet("/ui", (HttpContext context) => {
 			try {
 				const repair = await fetchJson('/ui/repair-status');
 				repairSummary.textContent = repair.recommendation + ' (Checked: ' + new Date(repair.checkedUtc).toLocaleString() + ')';
+				taskSummary.textContent = 'Startup tasks -> Service: ' + repair.apiServiceTaskStatus + ' | Tray: ' + repair.apiTrayTaskStatus;
 			} catch {
 				repairSummary.textContent = 'Could not retrieve runtime repair status.';
+				taskSummary.textContent = 'Startup task status unavailable.';
 			}
 		}
 
@@ -460,6 +474,49 @@ static async Task SaveApiUiSettingsAsync(string settingsPath, ApiUiSettings sett
 
 	var json = JsonSerializer.Serialize(settings, new JsonSerializerOptions { WriteIndented = true });
 	await File.WriteAllTextAsync(settingsPath, json);
+}
+
+static (string Status, string Detail) GetScheduledTaskStatus(string taskName) {
+	if (!OperatingSystem.IsWindows()) {
+		return ("n/a", "Scheduled tasks are only available on Windows.");
+	}
+
+	try {
+		var startInfo = new System.Diagnostics.ProcessStartInfo {
+			FileName = "schtasks.exe",
+			Arguments = $"/Query /TN \"{taskName}\" /FO LIST /V",
+			UseShellExecute = false,
+			RedirectStandardOutput = true,
+			RedirectStandardError = true,
+			CreateNoWindow = true,
+		};
+
+		using var process = System.Diagnostics.Process.Start(startInfo);
+		if (process is null) {
+			return ("unknown", "Could not start schtasks query process.");
+		}
+
+		var output = process.StandardOutput.ReadToEnd();
+		var errors = process.StandardError.ReadToEnd();
+		process.WaitForExit(5000);
+
+		if (process.ExitCode != 0) {
+			var message = string.IsNullOrWhiteSpace(errors) ? "Task missing or inaccessible." : errors.Trim();
+			return ("missing", message);
+		}
+
+		var statusLine = output.Split(Environment.NewLine)
+			.Select(line => line.Trim())
+			.FirstOrDefault(line => line.StartsWith("Status:", StringComparison.OrdinalIgnoreCase));
+
+		if (!string.IsNullOrWhiteSpace(statusLine)) {
+			return (statusLine.Replace("Status:", string.Empty, StringComparison.OrdinalIgnoreCase).Trim(), statusLine);
+		}
+
+		return ("registered", "Task exists.");
+	} catch (Exception ex) {
+		return ("unknown", ex.Message);
+	}
 }
 
 internal sealed record ApiUiSettings(bool AutoOpenHealthOnLoad, string PreferredHeroWarsUrl, string Notes, DateTime UpdatedUtc);
