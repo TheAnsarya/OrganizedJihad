@@ -29,6 +29,7 @@ internal sealed class ReleaseOptions {
 	public bool SkipUserscriptBuild { get; init; }
 	public bool SkipMigrationCheck { get; init; }
 	public bool SkipSmokeTest { get; init; }
+	public bool DryRun { get; init; }
 	public string SmokeRuntime { get; init; } = "auto";
 	public string ReleaseNotesPath { get; init; } = "~docs/plans/release-v0.2.3-github-body.md";
 	public string MigrationFirstRunUrl { get; init; } = "http://localhost:5334";
@@ -56,6 +57,7 @@ internal sealed class ReleaseOptions {
 			"skip-userscript-build",
 			"skip-migration-check",
 			"skip-smoke-test",
+			"dry-run",
 		};
 
 		for (var i = 0; i < args.Length; i++) {
@@ -115,6 +117,8 @@ internal sealed class ReleaseOptions {
 			: "auto";
 		smokeRuntime = ValidateSmokeRuntime(smokeRuntime);
 
+		var startupTimeoutSeconds = ParseStartupTimeoutSeconds(map);
+
 		return new ReleaseOptions {
 			Version = map.TryGetValue("version", out var version) && !string.IsNullOrWhiteSpace(version)
 				? version
@@ -130,6 +134,7 @@ internal sealed class ReleaseOptions {
 			SkipUserscriptBuild = flags.Contains("skip-userscript-build"),
 			SkipMigrationCheck = flags.Contains("skip-migration-check"),
 			SkipSmokeTest = flags.Contains("skip-smoke-test"),
+			DryRun = flags.Contains("dry-run"),
 			SmokeRuntime = smokeRuntime,
 			ReleaseNotesPath = map.TryGetValue("release-notes-path", out var releaseNotesPath) && !string.IsNullOrWhiteSpace(releaseNotesPath)
 				? releaseNotesPath
@@ -137,10 +142,24 @@ internal sealed class ReleaseOptions {
 			MigrationFirstRunUrl = migrationFirstRunUrl,
 			MigrationSecondRunUrl = migrationSecondRunUrl,
 			SmokeApiUrl = smokeApiUrl,
-			StartupTimeoutSeconds = map.TryGetValue("startup-timeout-seconds", out var timeoutRaw) && int.TryParse(timeoutRaw, out var timeout)
-				? Math.Max(10, timeout)
-				: 60,
+			StartupTimeoutSeconds = startupTimeoutSeconds,
 		};
+	}
+
+	private static int ParseStartupTimeoutSeconds(Dictionary<string, string?> map) {
+		if (!map.TryGetValue("startup-timeout-seconds", out var timeoutRaw) || string.IsNullOrWhiteSpace(timeoutRaw)) {
+			return 60;
+		}
+
+		if (!int.TryParse(timeoutRaw, out var timeoutSeconds)) {
+			throw new ArgumentException($"Invalid integer value for --startup-timeout-seconds: '{timeoutRaw}'.");
+		}
+
+		if (timeoutSeconds < 10 || timeoutSeconds > 600) {
+			throw new ArgumentException($"--startup-timeout-seconds must be between 10 and 600. Actual: {timeoutSeconds}.");
+		}
+
+		return timeoutSeconds;
 	}
 
 	private static string ValidateAbsoluteUrl(string candidate, string optionName) {
@@ -194,6 +213,13 @@ internal sealed class ReleasePipeline {
 
 	public void Run() {
 		WriteStep("Starting managed cross-platform release pipeline.");
+
+		if (_options.DryRun) {
+			WriteExecutionPlan();
+			WriteStep("Dry-run complete. No build/publish/check processes executed.");
+			return;
+		}
+
 		if (!_options.SkipMigrationCheck) {
 			RunMigrationPathCheck();
 		}
@@ -219,6 +245,26 @@ internal sealed class ReleasePipeline {
 		CopyReleaseNotesDraft();
 		WriteManifest(manifestEntries);
 		WriteStep($"Artifacts ready at: {_artifactRoot}");
+	}
+
+	private void WriteExecutionPlan() {
+		var smokeSummary = _options.SkipSmokeTest
+			? "disabled (--skip-smoke-test)"
+			: string.IsNullOrWhiteSpace(_smokeRuntime)
+				? "not scheduled (no host-compatible runtime in matrix)"
+				: $"enabled for '{_smokeRuntime}'";
+
+		WriteStep("Dry-run execution plan:");
+		WriteStep($"  version: {_options.Version}");
+		WriteStep($"  configuration: {_options.Configuration}");
+		WriteStep($"  output root: {_artifactRoot}");
+		WriteStep($"  host runtime: {GetHostRuntimeIdentifier() ?? "unknown"}");
+		WriteStep($"  runtimes: {string.Join(",", _options.Runtimes)}");
+		WriteStep($"  migration check: {(!_options.SkipMigrationCheck ? "enabled" : "disabled")}");
+		WriteStep($"  smoke test: {smokeSummary}");
+		WriteStep($"  userscript install: {(!_options.SkipYarnInstall ? "enabled" : "disabled")}");
+		WriteStep($"  userscript build: {(!_options.SkipUserscriptBuild ? "enabled" : "disabled")}");
+		WriteStep($"  startup timeout seconds: {_options.StartupTimeoutSeconds}");
 	}
 
 	private void BuildUserscriptBundle() {

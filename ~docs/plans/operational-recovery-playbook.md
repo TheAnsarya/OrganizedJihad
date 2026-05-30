@@ -58,4 +58,10 @@ Run these checks before packaging or publishing:
 dotnet run --project installer-core/OrganizedJihad.Release.Cli -- --version 0.2.3 --runtimes win-x64
 ```
 
+For non-destructive preflight planning (no build/publish/check execution):
+
+```bash
+dotnet run --project installer-core/OrganizedJihad.Release.Cli -- --version 0.2.3 --runtimes win-x64,linux-x64 --dry-run
+```
+
 `OrganizedJihad.Release.Cli` runs migration-path + smoke validation by default unless explicitly skipped.

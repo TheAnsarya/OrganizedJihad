@@ -23,6 +23,8 @@ Each runtime folder includes `SHA256SUMS.txt`.
   - migration-path validation (cold start + repeat start)
   - host-compatible published API smoke probes for `/api/sync/health`, `/ui/settings`, `/ui/repair-status`, and `/ui/userscript-handshake`
   - configurable smoke runtime selection via `--smoke-runtime auto|none|<runtime>`
+  - configurable API readiness bounds via `--startup-timeout-seconds <10..600>`
+  - non-destructive plan mode via `--dry-run`
 
 ### Install
 

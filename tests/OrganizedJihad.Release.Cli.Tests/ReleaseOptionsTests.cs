@@ -31,12 +31,42 @@ public class ReleaseOptionsTests {
 		var options = ReleaseOptions.Parse([
 			"--skip-userscript-build",
 			"--skip-migration-check",
-			"--skip-smoke-test"
+			"--skip-smoke-test",
+			"--dry-run"
 		]);
 
 		options.SkipUserscriptBuild.Should().BeTrue();
 		options.SkipMigrationCheck.Should().BeTrue();
 		options.SkipSmokeTest.Should().BeTrue();
+		options.DryRun.Should().BeTrue();
+	}
+
+	[Fact]
+	public void Parse_Should_Set_StartupTimeoutSeconds_When_Valid() {
+		var options = ReleaseOptions.Parse(["--startup-timeout-seconds", "120"]);
+
+		options.StartupTimeoutSeconds.Should().Be(120);
+	}
+
+	[Fact]
+	public void Parse_Should_Throw_For_NonInteger_StartupTimeoutSeconds() {
+		var action = () => ReleaseOptions.Parse(["--startup-timeout-seconds", "abc"]);
+
+		action.Should().Throw<ArgumentException>().WithMessage("*--startup-timeout-seconds*");
+	}
+
+	[Fact]
+	public void Parse_Should_Throw_For_StartupTimeoutSeconds_Below_Minimum() {
+		var action = () => ReleaseOptions.Parse(["--startup-timeout-seconds", "9"]);
+
+		action.Should().Throw<ArgumentException>().WithMessage("*between 10 and 600*");
+	}
+
+	[Fact]
+	public void Parse_Should_Throw_For_StartupTimeoutSeconds_Above_Maximum() {
+		var action = () => ReleaseOptions.Parse(["--startup-timeout-seconds", "601"]);
+
+		action.Should().Throw<ArgumentException>().WithMessage("*between 10 and 600*");
 	}
 
 	[Fact]

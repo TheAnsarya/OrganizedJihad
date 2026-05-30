@@ -131,6 +131,40 @@
 
 ## Validation
 - dotnet test tests/OrganizedJihad.Release.Cli.Tests/OrganizedJihad.Release.Cli.Tests.csproj -c Release (pass)
+
+---
+
+## Session
+- Date: 2026-05-30
+- Session Number: 7
+- Scope: managed release dry-run preflight mode + timeout guardrails
+
+## Summary
+- Added managed `--dry-run` mode to `OrganizedJihad.Release.Cli` that prints execution planning details and exits without running migration/build/publish/smoke workflows.
+- Added strict `--startup-timeout-seconds` validation with enforced `10..600` bounds and explicit parse failures for non-integer values.
+- Added wrapper passthrough support (`Publish-ReleaseArtifacts*.ps1`) for `--dry-run` and `--startup-timeout-seconds` so legacy commands retain managed parity.
+- Updated active release docs (`README`, v0.2.3 release plan/body, operational playbook) to include preflight planning and timeout controls.
+
+## Files Modified
+- installer-core/OrganizedJihad.Release.Cli/Program.cs
+- tests/OrganizedJihad.Release.Cli.Tests/ReleaseOptionsTests.cs
+- Publish-ReleaseArtifacts.ps1
+- Publish-ReleaseArtifacts-0.2.3.ps1
+- README.md
+- ~docs/plans/release-v0.2.3.md
+- ~docs/plans/release-v0.2.3-github-body.md
+- ~docs/plans/operational-recovery-playbook.md
+- ~docs/copilot-chats/2026-05-30-userscript-build-auto.md
+
+## Issues
+- Epic: #333
+- Release pipeline migration: #335
+- Notes/docs refresh: #332
+- PR tracking: #209
+
+## Validation
+- dotnet test tests/OrganizedJihad.Release.Cli.Tests/OrganizedJihad.Release.Cli.Tests.csproj -c Release (pass)
+- dotnet run --project installer-core/OrganizedJihad.Release.Cli -- --version 0.2.3 --runtimes win-x64,linux-x64 --dry-run (pass)
 - dotnet build OrganizedJihad.sln -c Release (pass)
 
 ---

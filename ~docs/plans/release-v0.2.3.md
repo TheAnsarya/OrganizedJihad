@@ -16,7 +16,7 @@ v0.2.3 is the first cross-platform installer/runtime milestone: one installer fl
   - Target runtimes: `win-x64`, `linux-x64`, `osx-x64`, `osx-arm64`
   - Built-in reliability checks:
     - migration cold-start + repeat-start validation
-    - win-x64 published API smoke probes (`/api/sync/health`, `/ui/settings`, `/ui/repair-status`, `/ui/userscript-handshake`)
+    - host-compatible published API smoke probes (`/api/sync/health`, `/ui/settings`, `/ui/repair-status`, `/ui/userscript-handshake`)
 
 ## Installation Instructions
 
@@ -36,7 +36,7 @@ chmod +x OrganizedJihad.Installer
 ./OrganizedJihad.Installer
 ```
 
-3. Follow installer workflow and userscript guide.
+1. Follow installer workflow and userscript guide.
 
 ### Linux
 
@@ -48,7 +48,7 @@ chmod +x OrganizedJihad.Installer
 ./OrganizedJihad.Installer
 ```
 
-3. Follow installer workflow and userscript guide.
+1. Follow installer workflow and userscript guide.
 
 ## Setup Guide + Screenshots
 
@@ -78,6 +78,12 @@ Fast rerun (reuse existing userscript dist bundle):
 dotnet run --project installer-core/OrganizedJihad.Release.Cli -- --version 0.2.3 --runtimes linux-x64 --skip-userscript-build
 ```
 
+Plan-only preflight (no publish/build/check execution):
+
+```bash
+dotnet run --project installer-core/OrganizedJihad.Release.Cli -- --version 0.2.3 --runtimes win-x64,linux-x64 --dry-run
+```
+
 Managed artifact output now also copies release-body draft into artifact root as `RELEASE-NOTES.md`.
 
 Managed validation controls:
@@ -85,6 +91,8 @@ Managed validation controls:
 - `--skip-migration-check` to bypass migration validation
 - `--skip-smoke-test` to bypass published API smoke checks
 - `--smoke-runtime auto|none|<runtime>` to select which published runtime executes smoke probes
+- `--startup-timeout-seconds <10..600>` to configure API readiness timeout for migration/smoke checks
+- `--dry-run` to print execution planning details without running build/publish/check commands
 
 Compatibility entrypoint note:
 

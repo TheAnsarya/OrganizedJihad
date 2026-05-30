@@ -7,6 +7,8 @@ param(
 	[switch]$SkipSmokeTest,
 	[switch]$SkipYarnInstall,
 	[switch]$SkipUserscriptBuild,
+	[switch]$DryRun,
+	[int]$StartupTimeoutSeconds,
 	[string]$SmokeRuntime = 'auto'
 )
 
@@ -45,6 +47,12 @@ if ($SkipYarnInstall) {
 }
 if ($SkipUserscriptBuild) {
 	$releaseCliArgs += '--skip-userscript-build'
+}
+if ($DryRun) {
+	$releaseCliArgs += '--dry-run'
+}
+if ($PSBoundParameters.ContainsKey('StartupTimeoutSeconds')) {
+	$releaseCliArgs += @('--startup-timeout-seconds', $StartupTimeoutSeconds)
 }
 
 & dotnet $releaseCliArgs
