@@ -58,6 +58,12 @@ For cross-platform 0.2.3 matrix artifacts (Windows/macOS/Linux):
 dotnet run --project installer-core/OrganizedJihad.Release.Cli -- --version 0.2.3
 ```
 
+Useful release CLI options:
+
+- `--runtimes win-x64,linux-x64,osx-x64,osx-arm64` to choose target runtime matrix
+- `--skip-userscript-build` to reuse existing userscript bundle for faster reruns
+- `--release-notes-path ~docs/plans/release-v0.2.3-github-body.md` to control copied release notes draft
+
 ### Prerequisites
 
 - [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0)

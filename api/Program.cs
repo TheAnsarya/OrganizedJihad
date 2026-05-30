@@ -151,18 +151,19 @@ app.MapGet("/ui/repair-status", async (HttpContext context, IDbContextFactory<Ga
 	var installRoot = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "OrganizedJihad");
 	var apiDatabasePath = Path.Combine(AppContext.BaseDirectory, "herowars.db");
 	var userscriptPath = Path.Combine(installRoot, "userscript", "organized-jihad.user.js");
-	var trayHostPath = Path.Combine(installRoot, "api-tray", "OrganizedJihad.Api.TrayHost.exe");
+	var runtimeHostPath = Path.Combine(installRoot, "runtime-host", "OrganizedJihad.Api.TrayHost.exe");
+	var legacyTrayHostPath = Path.Combine(installRoot, "api-tray", "OrganizedJihad.Api.TrayHost.exe");
 	var apiServiceTaskStatus = GetScheduledTaskStatus("OrganizedJihad.Api.Service");
 	var apiTrayTaskStatus = GetScheduledTaskStatus("OrganizedJihad.Api.Tray");
 	var handshake = await GetUserscriptHandshakeStatusAsync(contextFactory);
 
 	var hasDatabase = File.Exists(apiDatabasePath);
 	var hasUserscript = File.Exists(userscriptPath);
-	var hasTrayHost = File.Exists(trayHostPath);
+	var hasTrayHost = File.Exists(runtimeHostPath) || File.Exists(legacyTrayHostPath);
 
 	var recommendation = hasDatabase && hasUserscript && hasTrayHost
 		? "Runtime artifacts look healthy."
-		: "One or more runtime artifacts are missing. Re-run Install-OrganizedJihad.ps1 from your install bundle to repair setup.";
+		: "One or more runtime artifacts are missing. Re-run installer with managed CLI (dotnet run --project installer-core/OrganizedJihad.Installer.Cli -- --run-install-health-check) from your install bundle/repo to repair setup.";
 
 	if (OperatingSystem.IsWindows() &&
 		(apiServiceTaskStatus.Status.StartsWith("missing", StringComparison.OrdinalIgnoreCase)

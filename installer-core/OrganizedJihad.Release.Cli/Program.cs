@@ -24,6 +24,8 @@ internal sealed class ReleaseOptions {
 	public string OutputRoot { get; init; } = "artifacts";
 	public string[] Runtimes { get; init; } = ["win-x64", "linux-x64", "osx-x64", "osx-arm64"];
 	public bool SkipYarnInstall { get; init; }
+	public bool SkipUserscriptBuild { get; init; }
+	public string ReleaseNotesPath { get; init; } = "~docs/plans/release-v0.2.3-github-body.md";
 
 	public static ReleaseOptions Parse(string[] args) {
 		var map = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
@@ -65,6 +67,10 @@ internal sealed class ReleaseOptions {
 				: "artifacts",
 			Runtimes = runtimes,
 			SkipYarnInstall = flags.Contains("skip-yarn-install"),
+			SkipUserscriptBuild = flags.Contains("skip-userscript-build"),
+			ReleaseNotesPath = map.TryGetValue("release-notes-path", out var releaseNotesPath) && !string.IsNullOrWhiteSpace(releaseNotesPath)
+				? releaseNotesPath
+				: "~docs/plans/release-v0.2.3-github-body.md",
 		};
 	}
 }
@@ -94,26 +100,46 @@ internal sealed class ReleasePipeline {
 			PublishRuntime(runtime, desktopPublishDir, manifestEntries);
 		}
 
+		CopyReleaseNotesDraft();
 		WriteManifest(manifestEntries);
 		WriteStep($"Artifacts ready at: {_artifactRoot}");
 	}
 
 	private void BuildUserscriptBundle() {
 		var userscriptDir = Path.Combine(_repoRoot, "userscript");
-		if (_options.SkipYarnInstall) {
+		if (_options.SkipUserscriptBuild) {
+			WriteStep("Skipping userscript build (--skip-userscript-build).");
+		} else if (_options.SkipYarnInstall) {
 			WriteStep("Skipping yarn install (--skip-yarn-install).");
 		} else {
 			WriteStep("Running yarn install in userscript workspace.");
 			RunProcess("yarn", "install --frozen-lockfile", userscriptDir);
 		}
 
-		WriteStep("Building userscript bundle.");
-		RunProcess("yarn", "build", userscriptDir);
+		if (!_options.SkipUserscriptBuild) {
+			WriteStep("Building userscript bundle.");
+			RunProcess("yarn", "build", userscriptDir);
+		}
 
 		var userscriptAsset = Path.Combine(userscriptDir, "dist", "organized-jihad.user.js");
 		if (!File.Exists(userscriptAsset)) {
 			throw new FileNotFoundException($"Userscript bundle missing: {userscriptAsset}");
 		}
+	}
+
+	private void CopyReleaseNotesDraft() {
+		var source = Path.IsPathRooted(_options.ReleaseNotesPath)
+			? _options.ReleaseNotesPath
+			: Path.Combine(_repoRoot, _options.ReleaseNotesPath.Replace('/', Path.DirectorySeparatorChar));
+
+		if (!File.Exists(source)) {
+			WriteStep($"Release notes draft not found, skipping copy: {source}");
+			return;
+		}
+
+		var destination = Path.Combine(_artifactRoot, "RELEASE-NOTES.md");
+		File.Copy(source, destination, overwrite: true);
+		WriteStep($"Copied release notes draft: {destination}");
 	}
 
 	private void PrepareArtifactRoot() {

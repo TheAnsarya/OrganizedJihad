@@ -69,6 +69,14 @@ Optional runtime selection:
 dotnet run --project installer-core/OrganizedJihad.Release.Cli -- --version 0.2.3 --runtimes win-x64,linux-x64,osx-arm64
 ```
 
+Fast rerun (reuse existing userscript dist bundle):
+
+```bash
+dotnet run --project installer-core/OrganizedJihad.Release.Cli -- --version 0.2.3 --runtimes linux-x64 --skip-userscript-build
+```
+
+Managed artifact output now also copies release-body draft into artifact root as `RELEASE-NOTES.md`.
+
 ## Known Notes
 
 - Windows keeps native tray icon UX.

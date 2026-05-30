@@ -21,7 +21,7 @@ This playbook covers common local-runtime failures for OrganizedJihad installs a
 - Re-run installer as Administrator:
 
 ```powershell
-pwsh -ExecutionPolicy Bypass -File .\Install-OrganizedJihad.ps1 -FirstRunDiagnostics
+dotnet run --project installer-core/OrganizedJihad.Installer.Cli -- --first-run-diagnostics --run-install-health-check
 ```
 
 ### Userscript Not Syncing
