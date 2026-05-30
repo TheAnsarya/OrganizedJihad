@@ -125,6 +125,35 @@
 
 ## Session
 - Date: 2026-05-30
+- Session Number: 26
+- Scope: continue tray-host refactor by extracting shared API process runtime operations
+
+## Summary
+- Added `ApiProcessRuntime` helper to centralize API process start/stop operations.
+- Rewired Windows tray runtime supervision and menu stop action to use shared process helper methods.
+- Rewired headless runtime host start/stop paths to the same shared process helper methods.
+- Preserved existing process lifecycle behavior while reducing duplicated runtime code.
+
+## Files Modified
+- api/OrganizedJihad.Api.TrayHost/ApiProcessRuntime.cs
+- api/OrganizedJihad.Api.TrayHost/TrayContext.Windows.Runtime.cs
+- api/OrganizedJihad.Api.TrayHost/TrayContext.Windows.MenuActions.cs
+- api/OrganizedJihad.Api.TrayHost/HeadlessRuntimeHost.cs
+- ~docs/copilot-chats/2026-05-30-userscript-build-auto.md
+
+## Issues
+- Epic: #333
+- Installer/runtime migration: #334
+- PR tracking: #209
+
+## Validation
+- dotnet build api/OrganizedJihad.Api.TrayHost/OrganizedJihad.Api.TrayHost.csproj -c Release (pass)
+- dotnet build api/OrganizedJihad.Api.csproj -c Release (pass)
+
+---
+
+## Session
+- Date: 2026-05-30
 - Session Number: 24
 - Scope: continue tray host refactor by extracting shared runtime utilities
 

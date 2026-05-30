@@ -43,9 +43,9 @@ internal sealed partial class TrayContext {
 	private void StopApiAndExit() {
 		try {
 			if (_apiManagedByTray && _apiProcess is { HasExited: false }) {
-				_apiProcess.Kill(true);
+				ApiProcessRuntime.StopManagedProcess(_apiProcess);
 			} else {
-				StopApiProcessesByName();
+				ApiProcessRuntime.StopProcessesByName(_options.ApiExecutablePath);
 			}
 		} catch {
 			// Ignore cleanup errors while exiting.

@@ -48,13 +48,7 @@ internal sealed class HeadlessRuntimeHost : IDisposable {
 			return;
 		}
 
-		_apiProcess = Process.Start(new ProcessStartInfo {
-			FileName = _options.ApiExecutablePath,
-			Arguments = $"--urls {_options.ApiUrl}",
-			WorkingDirectory = _options.WorkingDirectory,
-			UseShellExecute = false,
-			CreateNoWindow = true,
-		});
+		ApiProcessRuntime.TryStartProcess(_options, out _apiProcess);
 
 		AppendLog($"API process start attempted for {_options.ApiUrl}.");
 	}
@@ -68,7 +62,7 @@ internal sealed class HeadlessRuntimeHost : IDisposable {
 
 				if (_apiProcess is { HasExited: false }) {
 					try {
-						_apiProcess.Kill(true);
+						ApiProcessRuntime.StopManagedProcess(_apiProcess);
 					} catch {
 						// Best effort.
 					}

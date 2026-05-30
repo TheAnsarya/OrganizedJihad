@@ -34,13 +34,7 @@ internal sealed partial class TrayContext {
 				return;
 			}
 
-			_apiProcess = Process.Start(new ProcessStartInfo {
-				FileName = _options.ApiExecutablePath,
-				Arguments = $"--urls {_options.ApiUrl}",
-				WorkingDirectory = _options.WorkingDirectory,
-				UseShellExecute = false,
-				CreateNoWindow = true,
-			});
+			ApiProcessRuntime.TryStartProcess(_options, out _apiProcess);
 			_apiManagedByTray = _apiProcess is not null;
 			AppendTrayLog($"API process start attempted. ManagedByTray={_apiManagedByTray}, Url={_options.ApiUrl}");
 
@@ -85,10 +79,9 @@ internal sealed partial class TrayContext {
 	private void RestartApi() {
 		try {
 			if (_apiManagedByTray && _apiProcess is { HasExited: false }) {
-				_apiProcess.Kill(true);
-				_apiProcess.WaitForExit(3000);
+				ApiProcessRuntime.StopManagedProcess(_apiProcess);
 			} else {
-				StopApiProcessesByName();
+				ApiProcessRuntime.StopProcessesByName(_options.ApiExecutablePath);
 			}
 		} catch {
 			// Ignore kill/wait failures and continue with restart attempt.
@@ -149,22 +142,6 @@ internal sealed partial class TrayContext {
 
 	private bool IsApiHealthy() {
 		return TrayHostRuntimeUtilities.IsApiHealthy(_httpClient, _options.ApiUrl);
-	}
-
-	private void StopApiProcessesByName() {
-		var processName = Path.GetFileNameWithoutExtension(_options.ApiExecutablePath);
-		if (string.IsNullOrWhiteSpace(processName)) {
-			processName = "OrganizedJihad.Api";
-		}
-
-		foreach (var process in Process.GetProcessesByName(processName)) {
-			try {
-				process.Kill(true);
-				process.WaitForExit(3000);
-			} catch {
-				// Best effort shutdown; continue with remaining instances.
-			}
-		}
 	}
 
 	private Icon? TryLoadTrayIcon() {
