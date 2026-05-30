@@ -64,6 +64,7 @@ Useful release CLI options:
 - `--smoke-runtime auto|none|<runtime>` to control which published runtime gets smoke validation
 - `--dry-run` to print the execution plan without running build/publish/check commands
 - `--dry-run-format text|json` to choose human-readable or machine-readable plan output
+- `--dry-run-output-path <path>` to persist dry-run plan output to a file
 - `--startup-timeout-seconds <10..600>` to tune migration/smoke API readiness wait bounds
 - `--runtimes` now validates token safety (max 16 entries; no path separators)
 - `--output-root` is safety-checked to ensure artifact cleanup stays inside repository boundaries
@@ -212,6 +213,9 @@ dotnet run --project installer-core/OrganizedJihad.Release.Cli -- --version 0.2.
 
 # Emit plan as JSON for CI preflight checks
 dotnet run --project installer-core/OrganizedJihad.Release.Cli -- --version 0.2.3 --runtimes win-x64,linux-x64 --dry-run --dry-run-format json
+
+# Emit and persist plan JSON for CI artifacts
+dotnet run --project installer-core/OrganizedJihad.Release.Cli -- --version 0.2.3 --runtimes win-x64,linux-x64 --dry-run --dry-run-format json --dry-run-output-path artifacts/dryrun/plan.json
 
 # Print built-in command help
 dotnet run --project installer-core/OrganizedJihad.Release.Cli -- --help

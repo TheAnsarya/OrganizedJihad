@@ -57,6 +57,13 @@ public class ReleaseOptionsTests {
 	}
 
 	[Fact]
+	public void Parse_Should_Set_DryRunOutputPath_When_Provided() {
+		var options = ReleaseOptions.Parse(["--dry-run-output-path", "artifacts/dryrun/plan.json"]);
+
+		options.DryRunOutputPath.Should().Be("artifacts/dryrun/plan.json");
+	}
+
+	[Fact]
 	public void Parse_Should_Throw_For_Invalid_DryRunFormat() {
 		var action = () => ReleaseOptions.Parse(["--dry-run-format", "yaml"]);
 

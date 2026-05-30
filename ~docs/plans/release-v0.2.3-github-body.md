@@ -26,6 +26,7 @@ Each runtime folder includes `SHA256SUMS.txt`.
   - configurable API readiness bounds via `--startup-timeout-seconds <10..600>`
   - non-destructive plan mode via `--dry-run`
   - optional machine-readable plan output via `--dry-run-format json`
+  - optional dry-run artifact export via `--dry-run-output-path`
   - built-in option help via `--help`
 
 ### Install

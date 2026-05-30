@@ -100,6 +100,7 @@ Managed validation controls:
 - `--startup-timeout-seconds <10..600>` to configure API readiness timeout for migration/smoke checks
 - `--dry-run` to print execution planning details without running build/publish/check commands
 - `--dry-run-format text|json` to control dry-run plan output shape
+- `--dry-run-output-path <path>` to write dry-run plan output to a file for CI artifacts
 
 Compatibility entrypoint note:
 

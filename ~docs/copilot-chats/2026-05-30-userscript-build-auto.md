@@ -227,6 +227,40 @@
 - dotnet test tests/OrganizedJihad.Release.Cli.Tests/OrganizedJihad.Release.Cli.Tests.csproj -c Release (pass)
 - dotnet run --project installer-core/OrganizedJihad.Release.Cli -- --version 0.2.3 --runtimes win-x64,linux-x64 --dry-run --dry-run-format json (pass)
 - dotnet run --project installer-core/OrganizedJihad.Release.Cli -- --help (pass)
+
+---
+
+## Session
+- Date: 2026-05-30
+- Session Number: 10
+- Scope: CI-friendly dry-run export path for release planning artifacts
+
+## Summary
+- Added `--dry-run-output-path` to `OrganizedJihad.Release.Cli` so dry-run plan output can be persisted as a file artifact.
+- Updated dry-run implementation to build plan payloads (`text` or `json`), optionally write them to a configured output path, and still emit to stdout.
+- Updated wrapper scripts to forward `-DryRunOutputPath` and kept dry-run format guardrails via `ValidateSet('text','json')`.
+- Updated active release docs with dry-run file export option for CI automation.
+
+## Files Modified
+- installer-core/OrganizedJihad.Release.Cli/Program.cs
+- tests/OrganizedJihad.Release.Cli.Tests/ReleaseOptionsTests.cs
+- Publish-ReleaseArtifacts.ps1
+- Publish-ReleaseArtifacts-0.2.3.ps1
+- README.md
+- ~docs/plans/release-v0.2.3.md
+- ~docs/plans/release-v0.2.3-github-body.md
+- ~docs/copilot-chats/2026-05-30-userscript-build-auto.md
+
+## Issues
+- Epic: #333
+- Release pipeline migration: #335
+- Notes/docs refresh: #332
+- PR tracking: #209
+
+## Validation
+- dotnet test tests/OrganizedJihad.Release.Cli.Tests/OrganizedJihad.Release.Cli.Tests.csproj -c Release (pass)
+- dotnet run --project installer-core/OrganizedJihad.Release.Cli -- --version 0.2.3 --runtimes win-x64,linux-x64 --dry-run --dry-run-format json --dry-run-output-path artifacts/dryrun/plan.json (pass)
+- Get-Content artifacts/dryrun/plan.json -TotalCount 40 (verified file output)
 - dotnet build OrganizedJihad.sln -c Release (pass)
 
 ---

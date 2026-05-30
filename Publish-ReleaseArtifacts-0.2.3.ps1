@@ -11,6 +11,7 @@ param(
 	[int]$StartupTimeoutSeconds,
 	[ValidateSet('text', 'json')]
 	[string]$DryRunFormat = 'text',
+	[string]$DryRunOutputPath,
 	[string]$SmokeRuntime = 'auto'
 )
 
@@ -60,6 +61,9 @@ if ($DryRun) {
 }
 if ($PSBoundParameters.ContainsKey('StartupTimeoutSeconds')) {
 	$releaseCliArgs += @('--startup-timeout-seconds', $StartupTimeoutSeconds)
+}
+if ($PSBoundParameters.ContainsKey('DryRunOutputPath') -and -not [string]::IsNullOrWhiteSpace($DryRunOutputPath)) {
+	$releaseCliArgs += @('--dry-run-output-path', $DryRunOutputPath)
 }
 
 & dotnet $releaseCliArgs
