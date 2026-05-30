@@ -145,4 +145,40 @@ public class ReleaseOptionsTests {
 
 		action.Should().Throw<ArgumentException>().WithMessage("*Unknown flag*--not-a-real-flag*");
 	}
+
+	[Fact]
+	public void Parse_Should_Throw_For_Runtime_With_Path_Separator() {
+		var action = () => ReleaseOptions.Parse(["--runtimes", "win-x64,linux/x64"]);
+
+		action.Should().Throw<ArgumentException>().WithMessage("*Path separators are not allowed*");
+	}
+
+	[Fact]
+	public void Parse_Should_Throw_When_Runtime_List_Exceeds_Limit() {
+		var runtimes = string.Join(',', Enumerable.Range(1, 17).Select(index => $"r{index}"));
+		var action = () => ReleaseOptions.Parse(["--runtimes", runtimes]);
+
+		action.Should().Throw<ArgumentException>().WithMessage("*Maximum is 16*");
+	}
+
+	[Fact]
+	public void IsSafeArtifactRoot_Should_Return_True_For_Subdirectory_Under_Repo() {
+		var safe = ReleasePipeline.IsSafeArtifactRoot("C:\\repo\\OrganizedJihad", "C:\\repo\\OrganizedJihad\\artifacts\\v0.2.3");
+
+		safe.Should().BeTrue();
+	}
+
+	[Fact]
+	public void IsSafeArtifactRoot_Should_Return_False_For_Repo_Root() {
+		var safe = ReleasePipeline.IsSafeArtifactRoot("C:\\repo\\OrganizedJihad", "C:\\repo\\OrganizedJihad");
+
+		safe.Should().BeFalse();
+	}
+
+	[Fact]
+	public void IsSafeArtifactRoot_Should_Return_False_For_Path_Outside_Repo() {
+		var safe = ReleasePipeline.IsSafeArtifactRoot("C:\\repo\\OrganizedJihad", "C:\\repo\\artifacts");
+
+		safe.Should().BeFalse();
+	}
 }

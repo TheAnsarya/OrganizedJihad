@@ -165,6 +165,34 @@
 ## Validation
 - dotnet test tests/OrganizedJihad.Release.Cli.Tests/OrganizedJihad.Release.Cli.Tests.csproj -c Release (pass)
 - dotnet run --project installer-core/OrganizedJihad.Release.Cli -- --version 0.2.3 --runtimes win-x64,linux-x64 --dry-run (pass)
+
+---
+
+## Session
+- Date: 2026-05-30
+- Session Number: 8
+- Scope: release pipeline safety guardrails (runtime tokens + artifact path boundaries)
+
+## Summary
+- Added `--runtimes` input safety validation (max 16 entries, no path separators, token character restrictions, bounded token length).
+- Added artifact output-root safety guardrails to prevent accidental cleanup outside repository boundaries.
+- Added helper coverage for artifact-root safety checks and runtime validation failure paths.
+- Updated README release options with new safety behavior notes.
+
+## Files Modified
+- installer-core/OrganizedJihad.Release.Cli/Program.cs
+- tests/OrganizedJihad.Release.Cli.Tests/ReleaseOptionsTests.cs
+- README.md
+- ~docs/copilot-chats/2026-05-30-userscript-build-auto.md
+
+## Issues
+- Epic: #333
+- Release pipeline migration: #335
+- PR tracking: #209
+
+## Validation
+- dotnet test tests/OrganizedJihad.Release.Cli.Tests/OrganizedJihad.Release.Cli.Tests.csproj -c Release (pass)
+- dotnet run --project installer-core/OrganizedJihad.Release.Cli -- --version 0.2.3 --runtimes win-x64,linux-x64 --dry-run --startup-timeout-seconds 120 (pass)
 - dotnet build OrganizedJihad.sln -c Release (pass)
 
 ---

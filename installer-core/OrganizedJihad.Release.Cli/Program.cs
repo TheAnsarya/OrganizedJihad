@@ -96,6 +96,7 @@ internal sealed class ReleaseOptions {
 			runtimes = ["win-x64", "linux-x64", "osx-x64", "osx-arm64"];
 		}
 		runtimes = runtimes.Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
+		ValidateRuntimes(runtimes);
 
 		var migrationFirstRunUrl = map.TryGetValue("migration-first-run-url", out var firstRunUrl) && !string.IsNullOrWhiteSpace(firstRunUrl)
 			? firstRunUrl
@@ -194,6 +195,27 @@ internal sealed class ReleaseOptions {
 
 		return normalized;
 	}
+
+	private static void ValidateRuntimes(string[] runtimes) {
+		if (runtimes.Length > 16) {
+			throw new ArgumentException($"Too many runtimes in --runtimes ({runtimes.Length}). Maximum is 16.");
+		}
+
+		foreach (var runtime in runtimes) {
+			if (string.IsNullOrWhiteSpace(runtime)) {
+				throw new ArgumentException("Runtime list contains empty value.");
+			}
+			if (runtime.Length > 64) {
+				throw new ArgumentException($"Runtime value too long in --runtimes: '{runtime}'.");
+			}
+			if (runtime.Contains('/') || runtime.Contains('\\')) {
+				throw new ArgumentException($"Invalid runtime value in --runtimes: '{runtime}'. Path separators are not allowed.");
+			}
+			if (runtime.Any(ch => !(char.IsLetterOrDigit(ch) || ch is '-' or '.' or '_'))) {
+				throw new ArgumentException($"Invalid runtime value in --runtimes: '{runtime}'. Use alphanumeric, '-', '_' or '.'.");
+			}
+		}
+	}
 }
 
 internal sealed class ReleasePipeline {
@@ -208,6 +230,7 @@ internal sealed class ReleasePipeline {
 		_repoRoot = ResolveRepoRoot();
 		_artifactRoot = Path.Combine(_repoRoot, _options.OutputRoot, $"v{_options.Version}");
 		_bundlePayloadDir = Path.Combine(_repoRoot, "installer-ui", "bundle-payload");
+		EnsureSafeArtifactRoot(_repoRoot, _artifactRoot);
 		_smokeRuntime = ResolveSmokeRuntimeForExecution(_options.Runtimes, _options.SkipSmokeTest, _options.SmokeRuntime, GetHostRuntimeIdentifier());
 	}
 
@@ -754,6 +777,29 @@ internal sealed class ReleasePipeline {
 		}
 
 		return null;
+	}
+
+	internal static bool IsSafeArtifactRoot(string repoRoot, string artifactRoot) {
+		if (string.IsNullOrWhiteSpace(repoRoot) || string.IsNullOrWhiteSpace(artifactRoot)) {
+			return false;
+		}
+
+		var repoFull = Path.GetFullPath(repoRoot).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+		var artifactFull = Path.GetFullPath(artifactRoot).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+
+		var comparison = OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
+		if (string.Equals(repoFull, artifactFull, comparison)) {
+			return false;
+		}
+
+		var repoPrefix = repoFull + Path.DirectorySeparatorChar;
+		return artifactFull.StartsWith(repoPrefix, comparison);
+	}
+
+	private static void EnsureSafeArtifactRoot(string repoRoot, string artifactRoot) {
+		if (!IsSafeArtifactRoot(repoRoot, artifactRoot)) {
+			throw new InvalidOperationException($"Unsafe artifact output path resolved: {artifactRoot}. Choose an output root inside the repository.");
+		}
 	}
 
 	private static bool WaitHealthy(string baseUrl, int timeoutSeconds) {

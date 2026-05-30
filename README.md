@@ -64,6 +64,8 @@ Useful release CLI options:
 - `--smoke-runtime auto|none|<runtime>` to control which published runtime gets smoke validation
 - `--dry-run` to print the execution plan without running build/publish/check commands
 - `--startup-timeout-seconds <10..600>` to tune migration/smoke API readiness wait bounds
+- `--runtimes` now validates token safety (max 16 entries; no path separators)
+- `--output-root` is safety-checked to ensure artifact cleanup stays inside repository boundaries
 - `--skip-userscript-build` to reuse existing userscript bundle for faster reruns
 - `--release-notes-path ~docs/plans/release-v0.2.3-github-body.md` to control copied release notes draft
 
