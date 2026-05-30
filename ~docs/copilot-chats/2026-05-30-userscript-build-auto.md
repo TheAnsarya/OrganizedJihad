@@ -413,3 +413,28 @@
 ## Validation
 - dotnet build installer-ui/OrganizedJihad.Installer.csproj -c Release (pass)
 - dotnet build installer-core/OrganizedJihad.Installer.Cli/OrganizedJihad.Installer.Cli.csproj -c Release (pass)
+
+---
+
+## Session
+- Date: 2026-05-30
+- Session Number: 14
+- Scope: installer userscript step regression fixes (Opera GX detection + stale CLI path + unwanted elevation relaunch)
+
+## Summary
+- Fixed userscript-only installer steps to run without forced UAC relaunch, preventing browser selection reset and unexpected bootstrap opens in a different browser.
+- Expanded Chromium Tampermonkey detection logic to support additional IDs and manifest-name fallback scanning so Opera GX installs from non-standard extension IDs are detected.
+- Updated installer CLI resolution in UI to prefer Release CLI outputs before Debug outputs to avoid running stale installer logic from old local debug artifacts.
+
+## Files Modified
+- installer-ui/MainWindow.axaml.cs
+- ~docs/copilot-chats/2026-05-30-userscript-build-auto.md
+
+## Issues
+- Epic: #333
+- Installer/runtime migration: #334
+- PR tracking: #209
+
+## Validation
+- dotnet build installer-ui/OrganizedJihad.Installer.csproj -c Release (pass)
+- dotnet build installer-core/OrganizedJihad.Installer.Cli/OrganizedJihad.Installer.Cli.csproj -c Release (pass)

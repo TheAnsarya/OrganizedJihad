@@ -148,7 +148,8 @@ public partial class MainWindow : Window {
 			return;
 		}
 
-		if (!EnsureElevatedUiContext()) {
+		var elevationRequired = installApi || installDesktop;
+		if (!EnsureElevatedUiContext(elevationRequired)) {
 			return;
 		}
 
@@ -307,23 +308,48 @@ public partial class MainWindow : Window {
 			return false;
 		}
 
-		const string extensionId = "dhdgffkkebhmkfjojejmpbldmpobfkfo";
+		var tampermonkeyExtensionIds = new[] {
+			"dhdgffkkebhmkfjojejmpbldmpobfkfo", // Chrome Web Store
+			"iikmkjmpaadaobahmlepeloendndfphd", // Edge Add-ons
+		};
 
 		return browserArg switch {
-			"chrome" => ChromiumExtensionInstalled(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Google", "Chrome", "User Data"), extensionId),
-			"edge" => ChromiumExtensionInstalled(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Microsoft", "Edge", "User Data"), extensionId),
-			"opera" => ChromiumExtensionInstalled(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Opera Software", "Opera Stable"), extensionId),
-			"operaGX" => ChromiumExtensionInstalled(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Opera Software", "Opera GX Stable"), extensionId),
+			"chrome" => ChromiumTampermonkeyInstalled(new[] {
+				Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Google", "Chrome", "User Data"),
+			}, tampermonkeyExtensionIds),
+			"edge" => ChromiumTampermonkeyInstalled(new[] {
+				Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Microsoft", "Edge", "User Data"),
+			}, tampermonkeyExtensionIds),
+			"opera" => ChromiumTampermonkeyInstalled(new[] {
+				Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Opera Software", "Opera Stable"),
+				Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Opera Software", "Opera Stable"),
+			}, tampermonkeyExtensionIds),
+			"operaGX" => ChromiumTampermonkeyInstalled(new[] {
+				Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Opera Software", "Opera GX Stable"),
+				Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Opera Software", "Opera GX Stable"),
+			}, tampermonkeyExtensionIds),
 			"firefox" => FirefoxTampermonkeyInstalled(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Mozilla", "Firefox", "Profiles")),
 			_ => false,
 		};
 	}
 
-	private static bool ChromiumExtensionInstalled(string browserRoot, string extensionId) {
-		if (string.IsNullOrWhiteSpace(browserRoot) || !Directory.Exists(browserRoot)) {
-			return false;
+	private static bool ChromiumTampermonkeyInstalled(IEnumerable<string> browserRoots, IEnumerable<string> extensionIds) {
+		var idSet = new HashSet<string>(extensionIds.Where(id => !string.IsNullOrWhiteSpace(id)), StringComparer.OrdinalIgnoreCase);
+
+		foreach (var browserRoot in browserRoots.Where(path => !string.IsNullOrWhiteSpace(path)).Distinct(StringComparer.OrdinalIgnoreCase)) {
+			if (!Directory.Exists(browserRoot)) {
+				continue;
+			}
+
+			if (ChromiumTampermonkeyInstalledInRoot(browserRoot, idSet)) {
+				return true;
+			}
 		}
 
+		return false;
+	}
+
+	private static bool ChromiumTampermonkeyInstalledInRoot(string browserRoot, ISet<string> extensionIds) {
 		var profileCandidates = new List<string>();
 		profileCandidates.Add(browserRoot);
 
@@ -340,15 +366,48 @@ public partial class MainWindow : Window {
 		}
 
 		foreach (var profile in profileCandidates.Distinct(StringComparer.OrdinalIgnoreCase)) {
-			var extensionPath = Path.Combine(profile, "Extensions", extensionId);
-			if (Directory.Exists(extensionPath)) {
-				return true;
+			foreach (var extensionId in extensionIds) {
+				var extensionPath = Path.Combine(profile, "Extensions", extensionId);
+				if (Directory.Exists(extensionPath)) {
+					return true;
+				}
+
+				var localExtensionPath = Path.Combine(profile, "Local Extension Settings", extensionId);
+				if (Directory.Exists(localExtensionPath)) {
+					return true;
+				}
 			}
 
-			var localExtensionPath = Path.Combine(profile, "Local Extension Settings", extensionId);
-			if (Directory.Exists(localExtensionPath)) {
+			if (ContainsTampermonkeyManifest(profile)) {
 				return true;
 			}
+		}
+
+		return false;
+	}
+
+	private static bool ContainsTampermonkeyManifest(string profilePath) {
+		try {
+			var extensionsDir = Path.Combine(profilePath, "Extensions");
+			if (!Directory.Exists(extensionsDir)) {
+				return false;
+			}
+
+			foreach (var extensionFolder in Directory.GetDirectories(extensionsDir)) {
+				foreach (var versionFolder in Directory.GetDirectories(extensionFolder)) {
+					var manifestPath = Path.Combine(versionFolder, "manifest.json");
+					if (!File.Exists(manifestPath)) {
+						continue;
+					}
+
+					var manifest = File.ReadAllText(manifestPath);
+					if (manifest.Contains("tampermonkey", StringComparison.OrdinalIgnoreCase)) {
+						return true;
+					}
+				}
+			}
+		} catch {
+			// Ignore extension manifest parsing errors.
 		}
 
 		return false;
@@ -570,7 +629,12 @@ public partial class MainWindow : Window {
 		}
 	}
 
-	private bool EnsureElevatedUiContext() {
+	private bool EnsureElevatedUiContext(bool elevationRequired) {
+		if (!elevationRequired) {
+			AppendLog("[Installer UI] Userscript-only step does not require elevation; continuing in current session.");
+			return true;
+		}
+
 		if (!OperatingSystem.IsWindows()) {
 			AppendLog("[Installer UI] Non-Windows runtime detected; skipping Windows UAC elevation flow.");
 			return true;
@@ -883,6 +947,8 @@ public partial class MainWindow : Window {
 		var candidates = new[] {
 			Path.Combine(baseDir, cliName),
 			Path.Combine(baseDir, "installer-cli", cliName),
+			Path.GetFullPath(Path.Combine(baseDir, "..", "..", "..", "installer-core", "OrganizedJihad.Installer.Cli", "bin", "Release", "net10.0", cliName)),
+			Path.GetFullPath(Path.Combine(baseDir, "..", "..", "..", "..", "installer-core", "OrganizedJihad.Installer.Cli", "bin", "Release", "net10.0", cliName)),
 			Path.GetFullPath(Path.Combine(baseDir, "..", "..", "..", "installer-core", "OrganizedJihad.Installer.Cli", "bin", "Debug", "net10.0", cliName)),
 			Path.GetFullPath(Path.Combine(baseDir, "..", "..", "..", "..", "installer-core", "OrganizedJihad.Installer.Cli", "bin", "Debug", "net10.0", cliName)),
 		};
