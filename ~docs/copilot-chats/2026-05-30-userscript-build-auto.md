@@ -385,3 +385,31 @@
 - dotnet run --project installer-core/OrganizedJihad.Release.Cli -- --version 0.2.3 --runtimes osx-arm64 --dry-run --dry-run-format json --dry-run-fail-on-warnings (expected fail; warning policy gate confirmed)
 - dotnet run --project installer-core/OrganizedJihad.Release.Cli -- --version 0.2.3 --runtimes win-x64 --dry-run --dry-run-format json --dry-run-fail-on-warnings (pass)
 - dotnet run --project installer-core/OrganizedJihad.Release.Cli -- --version 0.2.3 --runtimes win-x64,linux-x64,osx-x64,osx-arm64 --output-root artifacts (pass)
+
+---
+
+## Session
+- Date: 2026-05-30
+- Session Number: 13
+- Scope: installer browser targeting + Opera/OperaGX detection + installer UI reflow
+
+## Summary
+- Updated installer UI external-link behavior to launch Tampermonkey store/setup guide in the selected browser executable when available, instead of always using the system default browser.
+- Expanded browser executable discovery for Opera and Opera GX (additional install path candidates, registry App Paths lookups, and PATH resolution fallback).
+- Updated installer CLI bootstrap/diagnostics link opening to honor selected browser arguments (`chrome`, `edge`, `firefox`, `opera`, `operaGX`) via explicit executable launch.
+- Reworked installer UI layout with a root `ScrollViewer` (`VerticalScrollBarVisibility=Auto`), larger minimum window sizing, wrapped checkbox row, and stable content stacking to prevent overlap at smaller sizes.
+
+## Files Modified
+- installer-ui/MainWindow.axaml
+- installer-ui/MainWindow.axaml.cs
+- installer-core/OrganizedJihad.Installer.Cli/Program.cs
+- ~docs/copilot-chats/2026-05-30-userscript-build-auto.md
+
+## Issues
+- Epic: #333
+- Installer/runtime migration: #334
+- PR tracking: #209
+
+## Validation
+- dotnet build installer-ui/OrganizedJihad.Installer.csproj -c Release (pass)
+- dotnet build installer-core/OrganizedJihad.Installer.Cli/OrganizedJihad.Installer.Cli.csproj -c Release (pass)

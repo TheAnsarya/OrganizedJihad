@@ -15,15 +15,17 @@ namespace OrganizedJihad.Installer;
 
 public partial class MainWindow : Window {
 	private sealed class BrowserOption {
-		public BrowserOption(string label, string argument, bool installed) {
+		public BrowserOption(string label, string argument, bool installed, string? executablePath) {
 			Label = label;
 			Argument = argument;
 			Installed = installed;
+			ExecutablePath = executablePath;
 		}
 
 		public string Label { get; }
 		public string Argument { get; }
 		public bool Installed { get; }
+		public string? ExecutablePath { get; }
 
 		public override string ToString() {
 			return Installed ? Label : $"{Label} (not detected)";
@@ -389,62 +391,88 @@ public partial class MainWindow : Window {
 			return;
 		}
 
-		Process.Start(new ProcessStartInfo {
-			FileName = url,
-			UseShellExecute = true,
-		});
+		OpenUrlInPreferredBrowser(url, browserArg);
 	}
 
 	private static List<BrowserOption> DetectBrowsers() {
 		if (!OperatingSystem.IsWindows()) {
 			return new List<BrowserOption> {
-				new("Chrome", "chrome", IsExecutableOnPath("google-chrome") || IsExecutableOnPath("chrome") || IsExecutableOnPath("chromium")),
-				new("Firefox", "firefox", IsExecutableOnPath("firefox")),
-				new("Opera", "opera", IsExecutableOnPath("opera")),
+				new("Chrome", "chrome", IsExecutableOnPath("google-chrome") || IsExecutableOnPath("chrome") || IsExecutableOnPath("chromium"), null),
+				new("Firefox", "firefox", IsExecutableOnPath("firefox"), null),
+				new("Opera", "opera", IsExecutableOnPath("opera"), null),
 			};
 		}
 
+		var chromePath = ResolveWindowsExecutable(new[] {
+			Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Google", "Chrome", "Application", "chrome.exe"),
+			Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "Google", "Chrome", "Application", "chrome.exe"),
+			Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86), "Google", "Chrome", "Application", "chrome.exe")
+		}, new[] { "chrome.exe" }, new[] { "chrome.exe" });
+
+		var edgePath = ResolveWindowsExecutable(new[] {
+			Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86), "Microsoft", "Edge", "Application", "msedge.exe"),
+			Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "Microsoft", "Edge", "Application", "msedge.exe")
+		}, new[] { "msedge.exe" }, new[] { "msedge.exe" });
+
+		var firefoxPath = ResolveWindowsExecutable(new[] {
+			Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "Mozilla Firefox", "firefox.exe"),
+			Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86), "Mozilla Firefox", "firefox.exe")
+		}, new[] { "firefox.exe" }, new[] { "firefox.exe" });
+
+		var operaPath = ResolveWindowsExecutable(new[] {
+			Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Programs", "Opera", "opera.exe"),
+			Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Programs", "Opera", "launcher.exe"),
+			Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "Opera", "opera.exe"),
+			Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "Opera", "launcher.exe"),
+			Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86), "Opera", "opera.exe"),
+			Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86), "Opera", "launcher.exe")
+		}, new[] { "opera.exe", "launcher.exe" }, new[] { "opera.exe", "launcher.exe" });
+
+		var operaGxPath = ResolveWindowsExecutable(new[] {
+			Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Programs", "Opera GX", "opera.exe"),
+			Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Programs", "Opera GX", "launcher.exe"),
+			Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Programs", "Opera GX Stable", "opera.exe"),
+			Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Programs", "Opera GX Stable", "launcher.exe"),
+			Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "Opera GX", "opera.exe"),
+			Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "Opera GX", "launcher.exe"),
+			Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86), "Opera GX", "opera.exe"),
+			Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86), "Opera GX", "launcher.exe")
+		}, new[] { "opera_gx.exe", "opera.exe", "launcher.exe" }, new[] { "opera.exe", "launcher.exe" });
+
 		var options = new List<BrowserOption> {
-			new("Chrome", "chrome", BrowserInstalled(new[] {
-				Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Google", "Chrome", "Application", "chrome.exe"),
-				Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "Google", "Chrome", "Application", "chrome.exe"),
-				Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86), "Google", "Chrome", "Application", "chrome.exe")
-			}, "chrome.exe")),
-			new("Edge", "edge", BrowserInstalled(new[] {
-				Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86), "Microsoft", "Edge", "Application", "msedge.exe"),
-				Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "Microsoft", "Edge", "Application", "msedge.exe")
-			}, "msedge.exe")),
-			new("Firefox", "firefox", BrowserInstalled(new[] {
-				Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "Mozilla Firefox", "firefox.exe"),
-				Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86), "Mozilla Firefox", "firefox.exe")
-			}, "firefox.exe")),
-			new("Opera", "opera", BrowserInstalled(new[] {
-				Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Programs", "Opera", "launcher.exe"),
-				Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "Opera", "launcher.exe"),
-				Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86), "Opera", "launcher.exe")
-			}, "opera.exe", "launcher.exe")),
-			new("Opera GX", "operaGX", BrowserInstalled(new[] {
-				Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Programs", "Opera GX", "launcher.exe"),
-				Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "Opera GX", "launcher.exe"),
-				Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86), "Opera GX", "launcher.exe")
-			}, "opera.exe", "launcher.exe"))
+			new("Chrome", "chrome", !string.IsNullOrWhiteSpace(chromePath), chromePath),
+			new("Edge", "edge", !string.IsNullOrWhiteSpace(edgePath), edgePath),
+			new("Firefox", "firefox", !string.IsNullOrWhiteSpace(firefoxPath), firefoxPath),
+			new("Opera", "opera", !string.IsNullOrWhiteSpace(operaPath), operaPath),
+			new("Opera GX", "operaGX", !string.IsNullOrWhiteSpace(operaGxPath), operaGxPath)
 		};
 
 		return options;
 	}
 
-	private static bool BrowserInstalled(string[] paths, params string[] registryExecutables) {
-		if (paths.Any(path => !string.IsNullOrWhiteSpace(path) && File.Exists(path))) {
-			return true;
+	private static string? ResolveWindowsExecutable(IEnumerable<string> paths, IEnumerable<string> registryExecutables, IEnumerable<string> pathExecutables) {
+		foreach (var path in paths) {
+			if (!string.IsNullOrWhiteSpace(path) && File.Exists(path)) {
+				return path;
+			}
 		}
 
 		foreach (var executableName in registryExecutables.Where(value => !string.IsNullOrWhiteSpace(value))) {
 			if (TryGetExecutableFromAppPaths(executableName, out _)) {
-				return true;
+				if (TryGetExecutableFromAppPaths(executableName, out var registryPath) && File.Exists(registryPath)) {
+					return registryPath;
+				}
 			}
 		}
 
-		return false;
+		foreach (var executableName in pathExecutables.Where(value => !string.IsNullOrWhiteSpace(value))) {
+			var pathHit = TryResolveExecutableOnPath(executableName);
+			if (!string.IsNullOrWhiteSpace(pathHit)) {
+				return pathHit;
+			}
+		}
+
+		return null;
 	}
 
 	private static bool TryGetExecutableFromAppPaths(string executableName, out string executablePath) {
@@ -715,10 +743,7 @@ public partial class MainWindow : Window {
 			return;
 		}
 
-		Process.Start(new ProcessStartInfo {
-			FileName = guidePath,
-			UseShellExecute = true,
-		});
+		OpenPathInPreferredBrowser(guidePath, ResolveSelectedBrowserArgument());
 	}
 
 	private static void OpenFolder(string folderPath) {
@@ -750,17 +775,106 @@ public partial class MainWindow : Window {
 	}
 
 	private static bool IsExecutableOnPath(string executableName) {
+		return !string.IsNullOrWhiteSpace(TryResolveExecutableOnPath(executableName));
+	}
+
+	private static string? TryResolveExecutableOnPath(string executableName) {
 		var pathValue = Environment.GetEnvironmentVariable("PATH") ?? string.Empty;
 		var pathEntries = pathValue.Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
 
 		foreach (var entry in pathEntries) {
 			var candidate = Path.Combine(entry, executableName);
 			if (File.Exists(candidate)) {
-				return true;
+				return candidate;
 			}
 		}
 
-		return false;
+		return null;
+	}
+
+	private static void OpenUrlInPreferredBrowser(string url, string browserArg) {
+		var browserPath = ResolveBrowserExecutablePath(browserArg);
+		if (!string.IsNullOrWhiteSpace(browserPath) && File.Exists(browserPath)) {
+			Process.Start(new ProcessStartInfo {
+				FileName = browserPath,
+				Arguments = Quote(url),
+				UseShellExecute = false,
+				CreateNoWindow = true,
+			});
+			return;
+		}
+
+		Process.Start(new ProcessStartInfo {
+			FileName = url,
+			UseShellExecute = true,
+		});
+	}
+
+	private static void OpenPathInPreferredBrowser(string filePath, string? browserArg) {
+		if (string.IsNullOrWhiteSpace(browserArg)) {
+			Process.Start(new ProcessStartInfo {
+				FileName = filePath,
+				UseShellExecute = true,
+			});
+			return;
+		}
+
+		var browserPath = ResolveBrowserExecutablePath(browserArg);
+		if (!string.IsNullOrWhiteSpace(browserPath) && File.Exists(browserPath)) {
+			Process.Start(new ProcessStartInfo {
+				FileName = browserPath,
+				Arguments = Quote(filePath),
+				UseShellExecute = false,
+				CreateNoWindow = true,
+			});
+			return;
+		}
+
+		Process.Start(new ProcessStartInfo {
+			FileName = filePath,
+			UseShellExecute = true,
+		});
+	}
+
+	private static string? ResolveBrowserExecutablePath(string browserArg) {
+		if (!OperatingSystem.IsWindows()) {
+			return null;
+		}
+
+		return browserArg switch {
+			"chrome" => ResolveWindowsExecutable(new[] {
+				Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Google", "Chrome", "Application", "chrome.exe"),
+				Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "Google", "Chrome", "Application", "chrome.exe"),
+				Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86), "Google", "Chrome", "Application", "chrome.exe"),
+			}, new[] { "chrome.exe" }, new[] { "chrome.exe" }),
+			"edge" => ResolveWindowsExecutable(new[] {
+				Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86), "Microsoft", "Edge", "Application", "msedge.exe"),
+				Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "Microsoft", "Edge", "Application", "msedge.exe"),
+			}, new[] { "msedge.exe" }, new[] { "msedge.exe" }),
+			"firefox" => ResolveWindowsExecutable(new[] {
+				Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "Mozilla Firefox", "firefox.exe"),
+				Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86), "Mozilla Firefox", "firefox.exe"),
+			}, new[] { "firefox.exe" }, new[] { "firefox.exe" }),
+			"opera" => ResolveWindowsExecutable(new[] {
+				Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Programs", "Opera", "opera.exe"),
+				Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Programs", "Opera", "launcher.exe"),
+				Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "Opera", "opera.exe"),
+				Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "Opera", "launcher.exe"),
+				Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86), "Opera", "opera.exe"),
+				Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86), "Opera", "launcher.exe"),
+			}, new[] { "opera.exe", "launcher.exe" }, new[] { "opera.exe", "launcher.exe" }),
+			"operaGX" => ResolveWindowsExecutable(new[] {
+				Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Programs", "Opera GX", "opera.exe"),
+				Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Programs", "Opera GX", "launcher.exe"),
+				Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Programs", "Opera GX Stable", "opera.exe"),
+				Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Programs", "Opera GX Stable", "launcher.exe"),
+				Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "Opera GX", "opera.exe"),
+				Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "Opera GX", "launcher.exe"),
+				Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86), "Opera GX", "opera.exe"),
+				Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86), "Opera GX", "launcher.exe"),
+			}, new[] { "opera_gx.exe", "opera.exe", "launcher.exe" }, new[] { "opera.exe", "launcher.exe" }),
+			_ => null,
+		};
 	}
 
 	private static string? ResolveInstallerCliPath() {
