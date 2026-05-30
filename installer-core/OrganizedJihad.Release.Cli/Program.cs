@@ -61,6 +61,22 @@ internal sealed class ReleaseOptions {
 		if (runtimes.Length == 0) {
 			runtimes = ["win-x64", "linux-x64", "osx-x64", "osx-arm64"];
 		}
+		runtimes = runtimes.Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
+
+		var migrationFirstRunUrl = map.TryGetValue("migration-first-run-url", out var firstRunUrl) && !string.IsNullOrWhiteSpace(firstRunUrl)
+			? firstRunUrl
+			: "http://localhost:5334";
+		migrationFirstRunUrl = ValidateAbsoluteUrl(migrationFirstRunUrl, "migration-first-run-url");
+
+		var migrationSecondRunUrl = map.TryGetValue("migration-second-run-url", out var secondRunUrl) && !string.IsNullOrWhiteSpace(secondRunUrl)
+			? secondRunUrl
+			: "http://localhost:5335";
+		migrationSecondRunUrl = ValidateAbsoluteUrl(migrationSecondRunUrl, "migration-second-run-url");
+
+		var smokeApiUrl = map.TryGetValue("smoke-api-url", out var smokeApiUrlRaw) && !string.IsNullOrWhiteSpace(smokeApiUrlRaw)
+			? smokeApiUrlRaw
+			: "http://localhost:5234";
+		smokeApiUrl = ValidateAbsoluteUrl(smokeApiUrl, "smoke-api-url");
 
 		return new ReleaseOptions {
 			Version = map.TryGetValue("version", out var version) && !string.IsNullOrWhiteSpace(version)
@@ -80,19 +96,26 @@ internal sealed class ReleaseOptions {
 			ReleaseNotesPath = map.TryGetValue("release-notes-path", out var releaseNotesPath) && !string.IsNullOrWhiteSpace(releaseNotesPath)
 				? releaseNotesPath
 				: "~docs/plans/release-v0.2.3-github-body.md",
-			MigrationFirstRunUrl = map.TryGetValue("migration-first-run-url", out var firstRunUrl) && !string.IsNullOrWhiteSpace(firstRunUrl)
-				? firstRunUrl
-				: "http://localhost:5334",
-			MigrationSecondRunUrl = map.TryGetValue("migration-second-run-url", out var secondRunUrl) && !string.IsNullOrWhiteSpace(secondRunUrl)
-				? secondRunUrl
-				: "http://localhost:5335",
-			SmokeApiUrl = map.TryGetValue("smoke-api-url", out var smokeApiUrl) && !string.IsNullOrWhiteSpace(smokeApiUrl)
-				? smokeApiUrl
-				: "http://localhost:5234",
+			MigrationFirstRunUrl = migrationFirstRunUrl,
+			MigrationSecondRunUrl = migrationSecondRunUrl,
+			SmokeApiUrl = smokeApiUrl,
 			StartupTimeoutSeconds = map.TryGetValue("startup-timeout-seconds", out var timeoutRaw) && int.TryParse(timeoutRaw, out var timeout)
 				? Math.Max(10, timeout)
 				: 60,
 		};
+	}
+
+	private static string ValidateAbsoluteUrl(string candidate, string optionName) {
+		if (!Uri.TryCreate(candidate, UriKind.Absolute, out var uri)) {
+			throw new ArgumentException($"Invalid URL for --{optionName}: '{candidate}'");
+		}
+
+		if (!string.Equals(uri.Scheme, Uri.UriSchemeHttp, StringComparison.OrdinalIgnoreCase)
+			&& !string.Equals(uri.Scheme, Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase)) {
+			throw new ArgumentException($"Unsupported URL scheme for --{optionName}: '{candidate}'. Use http or https.");
+		}
+
+		return uri.GetLeftPart(UriPartial.Authority) + uri.AbsolutePath.TrimEnd('/');
 	}
 }
 

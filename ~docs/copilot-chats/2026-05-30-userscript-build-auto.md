@@ -102,3 +102,33 @@
 - dotnet build installer-core/OrganizedJihad.Release.Cli/OrganizedJihad.Release.Cli.csproj -c Release (pass)
 - dotnet run --project installer-core/OrganizedJihad.Release.Cli -- --version 0.2.3 --runtimes win-x64 --output-root artifacts-managed-validate --skip-userscript-build (pass; includes built-in migration + smoke checks)
 - dotnet run --project installer-core/OrganizedJihad.Release.Cli -- --version 0.2.3 --runtimes linux-x64 --output-root artifacts-managed-fast --skip-userscript-build --skip-migration-check --skip-smoke-test (pass)
+
+---
+
+## Session
+- Date: 2026-05-30
+- Session Number: 4
+- Scope: release CLI parser hardening + automated tests
+
+## Summary
+- Hardened `ReleaseOptions.Parse` with runtime deduplication and strict HTTP/HTTPS absolute URL validation for migration/smoke endpoint options.
+- Added `InternalsVisibleTo` bridge for test access to internal release CLI parser types.
+- Added new test project `tests/OrganizedJihad.Release.Cli.Tests` with focused unit coverage for defaults, skip-flag parsing, runtime dedupe, and invalid URL rejection.
+- Verified test project and full solution release build are green with the new coverage.
+
+## Files Modified
+- OrganizedJihad.sln
+- installer-core/OrganizedJihad.Release.Cli/Program.cs
+- installer-core/OrganizedJihad.Release.Cli/AssemblyInfo.cs
+- tests/OrganizedJihad.Release.Cli.Tests/OrganizedJihad.Release.Cli.Tests.csproj
+- tests/OrganizedJihad.Release.Cli.Tests/ReleaseOptionsTests.cs
+- ~docs/copilot-chats/2026-05-30-userscript-build-auto.md
+
+## Issues
+- Epic: #333
+- Release pipeline migration: #335
+- PR tracking: #209
+
+## Validation
+- dotnet test tests/OrganizedJihad.Release.Cli.Tests/OrganizedJihad.Release.Cli.Tests.csproj -c Release (pass)
+- dotnet build OrganizedJihad.sln -c Release (pass)
