@@ -59,6 +59,38 @@
 
 ## Validation
 - dotnet build api/OrganizedJihad.Api.csproj -c Release (pass)
+
+---
+
+## Session
+- Date: 2026-05-30
+- Session Number: 21
+- Scope: TrayHost Program.cs decomposition into focused runtime classes
+
+## Summary
+- Simplified `api/OrganizedJihad.Api.TrayHost/Program.cs` to entrypoint-only logic for both Windows tray and headless runtime modes.
+- Extracted tray host argument parsing into `TrayHostOptions` and settings JSON parsing into `TrayRuntimeSettingsParser`.
+- Moved Windows tray runtime behavior into dedicated `TrayContext.Windows.cs` file.
+- Moved non-Windows headless supervisor behavior into dedicated `HeadlessRuntimeHost.cs` file.
+- Added `AssemblyInfo.cs` for centralized `InternalsVisibleTo` instead of embedding assembly attributes in Program.cs.
+
+## Files Modified
+- api/OrganizedJihad.Api.TrayHost/Program.cs
+- api/OrganizedJihad.Api.TrayHost/AssemblyInfo.cs
+- api/OrganizedJihad.Api.TrayHost/TrayHostOptions.cs
+- api/OrganizedJihad.Api.TrayHost/TrayRuntimeSettingsParser.cs
+- api/OrganizedJihad.Api.TrayHost/TrayContext.Windows.cs
+- api/OrganizedJihad.Api.TrayHost/HeadlessRuntimeHost.cs
+- ~docs/copilot-chats/2026-05-30-userscript-build-auto.md
+
+## Issues
+- Epic: #333
+- Installer/runtime migration: #334
+- PR tracking: #209
+
+## Validation
+- dotnet build api/OrganizedJihad.Api.TrayHost/OrganizedJihad.Api.TrayHost.csproj -c Release (pass)
+- dotnet build api/OrganizedJihad.Api.csproj -c Release (pass)
 - dotnet build installer-core/OrganizedJihad.Installer.Cli/OrganizedJihad.Installer.Cli.csproj -c Release (pass)
 - dotnet build installer-core/OrganizedJihad.Release.Cli/OrganizedJihad.Release.Cli.csproj -c Release (pass)
 - dotnet run --project installer-core/OrganizedJihad.Release.Cli -- --version 0.2.3 --runtimes win-x64,linux-x64,osx-x64,osx-arm64 --output-root artifacts (pass)
@@ -413,6 +445,47 @@
 ## Validation
 - dotnet build installer-ui/OrganizedJihad.Installer.csproj -c Release (pass)
 - dotnet build installer-core/OrganizedJihad.Installer.Cli/OrganizedJihad.Installer.Cli.csproj -c Release (pass)
+
+---
+
+## Session
+- Date: 2026-05-30
+- Session Number: 20
+- Scope: API startup architecture cleanup by extracting Program.cs responsibilities
+
+## Summary
+- Refactored `api/Program.cs` into a thin composition root that only performs startup orchestration.
+- Extracted API service registration to `api/Extensions/ApiServiceCollectionExtensions.cs`.
+- Extracted database initialization and UI security middleware wiring to `api/Extensions/WebApplicationSetupExtensions.cs`.
+- Extracted UI routes/settings/diagnostics pages to `api/Endpoints/ApiUiEndpoints.cs` and root/system endpoint mapping to `api/Endpoints/SystemEndpoints.cs`.
+- Moved UI and diagnostics concerns into dedicated services and models (`ApiRuntimePaths`, `ApiUiAccessPolicy`, `ApiUiTemplateRenderer`, `ApiUiSettingsStore`, `ApiUiInputNormalizer`, `UserscriptHandshakeDiagnosticsService`, `ScheduledTaskProbeService`).
+- Moved UI contract records out of Program.cs into `api/Models/Ui/*`.
+
+## Files Modified
+- api/Program.cs
+- api/Extensions/ApiServiceCollectionExtensions.cs
+- api/Extensions/WebApplicationSetupExtensions.cs
+- api/Endpoints/ApiUiEndpoints.cs
+- api/Endpoints/SystemEndpoints.cs
+- api/Models/Ui/ApiUiSettings.cs
+- api/Models/Ui/UserscriptHandshakeStatus.cs
+- api/Models/Ui/ScheduledTaskProbeResult.cs
+- api/Services/Ui/ApiRuntimePaths.cs
+- api/Services/Ui/ApiUiAccessPolicy.cs
+- api/Services/Ui/ApiUiTemplateRenderer.cs
+- api/Services/Ui/ApiUiSettingsStore.cs
+- api/Services/Ui/ApiUiInputNormalizer.cs
+- api/Services/Diagnostics/UserscriptHandshakeDiagnosticsService.cs
+- api/Services/Diagnostics/ScheduledTaskProbeService.cs
+- ~docs/copilot-chats/2026-05-30-userscript-build-auto.md
+
+## Issues
+- Epic: #333
+- Installer/runtime migration: #334
+- PR tracking: #209
+
+## Validation
+- dotnet build api/OrganizedJihad.Api.csproj -c Release (pass)
 
 ---
 
