@@ -48,8 +48,8 @@ Windows download safety prompt guidance:
 
 To build release artifacts locally:
 
-```powershell
-pwsh -ExecutionPolicy Bypass -File .\Publish-ReleaseArtifacts.ps1 -Version 0.2.2
+```bash
+dotnet run --project installer-core/OrganizedJihad.Release.Cli -- --version 0.2.3 --runtimes win-x64
 ```
 
 For cross-platform 0.2.3 matrix artifacts (Windows/macOS/Linux):
@@ -61,6 +61,7 @@ dotnet run --project installer-core/OrganizedJihad.Release.Cli -- --version 0.2.
 Useful release CLI options:
 
 - `--runtimes win-x64,linux-x64,osx-x64,osx-arm64` to choose target runtime matrix
+- `--smoke-runtime auto|none|<runtime>` to control which published runtime gets smoke validation
 - `--skip-userscript-build` to reuse existing userscript bundle for faster reruns
 - `--release-notes-path ~docs/plans/release-v0.2.3-github-body.md` to control copied release notes draft
 
@@ -167,6 +168,7 @@ New reliability behaviors:
 Legacy note:
 
 - `Install-OrganizedJihad.ps1` and `Install-OrganizedJihad.cmd` remain in the repository for compatibility, but v0.2.3 primary install flow is managed `.NET` CLI/UI.
+- `Publish-ReleaseArtifacts.ps1` and `Publish-ReleaseArtifacts-0.2.3.ps1` are compatibility wrappers that now delegate to `OrganizedJihad.Release.Cli`.
 
 ### Build & Run
 
@@ -196,6 +198,9 @@ dotnet run --project desktop-app
 ```bash
 # Validate migration path + win-x64 smoke checks as part of managed matrix run
 dotnet run --project installer-core/OrganizedJihad.Release.Cli -- --version 0.2.3 --runtimes win-x64,linux-x64,osx-x64,osx-arm64
+
+# Force smoke checks on linux-x64 publish (when running on compatible host)
+dotnet run --project installer-core/OrganizedJihad.Release.Cli -- --version 0.2.3 --runtimes linux-x64,osx-arm64 --smoke-runtime linux-x64
 
 # Optional fast rerun while skipping managed validation checks
 dotnet run --project installer-core/OrganizedJihad.Release.Cli -- --version 0.2.3 --runtimes win-x64 --skip-migration-check --skip-smoke-test --skip-userscript-build

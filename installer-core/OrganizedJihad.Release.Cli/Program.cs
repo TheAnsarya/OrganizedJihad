@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Net;
+using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 using System.Text.Json;
 
@@ -28,6 +29,7 @@ internal sealed class ReleaseOptions {
 	public bool SkipUserscriptBuild { get; init; }
 	public bool SkipMigrationCheck { get; init; }
 	public bool SkipSmokeTest { get; init; }
+	public string SmokeRuntime { get; init; } = "auto";
 	public string ReleaseNotesPath { get; init; } = "~docs/plans/release-v0.2.3-github-body.md";
 	public string MigrationFirstRunUrl { get; init; } = "http://localhost:5334";
 	public string MigrationSecondRunUrl { get; init; } = "http://localhost:5335";
@@ -78,6 +80,11 @@ internal sealed class ReleaseOptions {
 			: "http://localhost:5234";
 		smokeApiUrl = ValidateAbsoluteUrl(smokeApiUrl, "smoke-api-url");
 
+		var smokeRuntime = map.TryGetValue("smoke-runtime", out var smokeRuntimeRaw) && !string.IsNullOrWhiteSpace(smokeRuntimeRaw)
+			? smokeRuntimeRaw.Trim()
+			: "auto";
+		smokeRuntime = ValidateSmokeRuntime(smokeRuntime);
+
 		return new ReleaseOptions {
 			Version = map.TryGetValue("version", out var version) && !string.IsNullOrWhiteSpace(version)
 				? version
@@ -93,6 +100,7 @@ internal sealed class ReleaseOptions {
 			SkipUserscriptBuild = flags.Contains("skip-userscript-build"),
 			SkipMigrationCheck = flags.Contains("skip-migration-check"),
 			SkipSmokeTest = flags.Contains("skip-smoke-test"),
+			SmokeRuntime = smokeRuntime,
 			ReleaseNotesPath = map.TryGetValue("release-notes-path", out var releaseNotesPath) && !string.IsNullOrWhiteSpace(releaseNotesPath)
 				? releaseNotesPath
 				: "~docs/plans/release-v0.2.3-github-body.md",
@@ -117,6 +125,26 @@ internal sealed class ReleaseOptions {
 
 		return uri.GetLeftPart(UriPartial.Authority) + uri.AbsolutePath.TrimEnd('/');
 	}
+
+	private static string ValidateSmokeRuntime(string candidate) {
+		if (string.IsNullOrWhiteSpace(candidate)) {
+			return "auto";
+		}
+
+		var normalized = candidate.Trim();
+		if (string.Equals(normalized, "auto", StringComparison.OrdinalIgnoreCase)) {
+			return "auto";
+		}
+		if (string.Equals(normalized, "none", StringComparison.OrdinalIgnoreCase)) {
+			return "none";
+		}
+
+		if (normalized.Any(char.IsWhiteSpace)) {
+			throw new ArgumentException($"Invalid runtime value for --smoke-runtime: '{candidate}'.");
+		}
+
+		return normalized;
+	}
 }
 
 internal sealed class ReleasePipeline {
@@ -124,12 +152,14 @@ internal sealed class ReleasePipeline {
 	private readonly string _repoRoot;
 	private readonly string _artifactRoot;
 	private readonly string _bundlePayloadDir;
+	private readonly string? _smokeRuntime;
 
 	public ReleasePipeline(ReleaseOptions options) {
 		_options = options;
 		_repoRoot = ResolveRepoRoot();
 		_artifactRoot = Path.Combine(_repoRoot, _options.OutputRoot, $"v{_options.Version}");
 		_bundlePayloadDir = Path.Combine(_repoRoot, "installer-ui", "bundle-payload");
+		_smokeRuntime = ResolveSmokeRuntimeForExecution(_options.Runtimes, _options.SkipSmokeTest, _options.SmokeRuntime, GetHostRuntimeIdentifier());
 	}
 
 	public void Run() {
@@ -140,6 +170,14 @@ internal sealed class ReleasePipeline {
 
 		BuildUserscriptBundle();
 		PrepareArtifactRoot();
+
+		if (_options.SkipSmokeTest) {
+			WriteStep("Skipping published API smoke test (--skip-smoke-test).");
+		} else if (string.IsNullOrWhiteSpace(_smokeRuntime)) {
+			WriteStep("Skipping published API smoke test: no host-compatible runtime in requested matrix.", ConsoleColor.Yellow);
+		} else {
+			WriteStep($"Published API smoke test will run for runtime '{_smokeRuntime}'.");
+		}
 
 		var desktopPublishDir = TryPublishDesktopPayload();
 		var manifestEntries = new List<ManifestRuntime>();
@@ -237,8 +275,8 @@ internal sealed class ReleasePipeline {
 
 		RunDotnetPublish(apiProject, $"-c {_options.Configuration} -r {runtime} --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -o \"{apiOut}\"");
 
-		if (!_options.SkipSmokeTest && runtime.Equals("win-x64", StringComparison.OrdinalIgnoreCase)) {
-			RunPublishedApiSmokeTest(apiOut);
+		if (ShouldRunSmokeForRuntime(runtime)) {
+			RunPublishedApiSmokeTest(apiOut, runtime);
 		}
 
 		var runtimeHostTfm = runtime.StartsWith("win-", StringComparison.OrdinalIgnoreCase)
@@ -513,8 +551,13 @@ internal sealed class ReleasePipeline {
 		}
 	}
 
-	private void RunPublishedApiSmokeTest(string publishedApiDirectory) {
-		WriteStep("Running published API smoke test (win-x64).", ConsoleColor.DarkCyan);
+	private bool ShouldRunSmokeForRuntime(string runtime) {
+		return !string.IsNullOrWhiteSpace(_smokeRuntime)
+			&& runtime.Equals(_smokeRuntime, StringComparison.OrdinalIgnoreCase);
+	}
+
+	private void RunPublishedApiSmokeTest(string publishedApiDirectory, string runtime) {
+		WriteStep($"Running published API smoke test ({runtime}).", ConsoleColor.DarkCyan);
 
 		var apiExecutable = ResolvePublishedApiExecutable(publishedApiDirectory);
 		if (string.IsNullOrWhiteSpace(apiExecutable)) {
@@ -577,6 +620,64 @@ internal sealed class ReleasePipeline {
 		};
 
 		return candidates.FirstOrDefault(File.Exists);
+	}
+
+	internal static string? ResolveSmokeRuntimeForExecution(string[] runtimes, bool skipSmokeTest, string smokeRuntimeOption, string? hostRuntime) {
+		if (skipSmokeTest) {
+			return null;
+		}
+
+		var normalizedOption = string.IsNullOrWhiteSpace(smokeRuntimeOption)
+			? "auto"
+			: smokeRuntimeOption.Trim();
+
+		if (string.Equals(normalizedOption, "none", StringComparison.OrdinalIgnoreCase)) {
+			return null;
+		}
+
+		if (string.Equals(normalizedOption, "auto", StringComparison.OrdinalIgnoreCase)) {
+			if (string.IsNullOrWhiteSpace(hostRuntime)) {
+				return null;
+			}
+
+			var hostMatch = runtimes.FirstOrDefault(runtime => runtime.Equals(hostRuntime, StringComparison.OrdinalIgnoreCase));
+			return hostMatch;
+		}
+
+		var explicitMatch = runtimes.FirstOrDefault(runtime => runtime.Equals(normalizedOption, StringComparison.OrdinalIgnoreCase));
+		if (string.IsNullOrWhiteSpace(explicitMatch)) {
+			throw new ArgumentException($"Smoke runtime '{normalizedOption}' is not present in --runtimes.");
+		}
+
+		return explicitMatch;
+	}
+
+	private static string? GetHostRuntimeIdentifier() {
+		if (OperatingSystem.IsWindows()) {
+			return RuntimeInformation.ProcessArchitecture switch {
+				Architecture.X64 => "win-x64",
+				Architecture.Arm64 => "win-arm64",
+				_ => null,
+			};
+		}
+
+		if (OperatingSystem.IsLinux()) {
+			return RuntimeInformation.ProcessArchitecture switch {
+				Architecture.X64 => "linux-x64",
+				Architecture.Arm64 => "linux-arm64",
+				_ => null,
+			};
+		}
+
+		if (OperatingSystem.IsMacOS()) {
+			return RuntimeInformation.ProcessArchitecture switch {
+				Architecture.X64 => "osx-x64",
+				Architecture.Arm64 => "osx-arm64",
+				_ => null,
+			};
+		}
+
+		return null;
 	}
 
 	private static bool WaitHealthy(string baseUrl, int timeoutSeconds) {

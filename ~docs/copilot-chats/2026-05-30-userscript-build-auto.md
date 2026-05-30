@@ -132,3 +132,35 @@
 ## Validation
 - dotnet test tests/OrganizedJihad.Release.Cli.Tests/OrganizedJihad.Release.Cli.Tests.csproj -c Release (pass)
 - dotnet build OrganizedJihad.sln -c Release (pass)
+
+---
+
+## Session
+- Date: 2026-05-30
+- Session Number: 5
+- Scope: host-aware smoke runtime control + legacy release script delegation
+
+## Summary
+- Added runtime-aware smoke selection to managed release pipeline with new `--smoke-runtime` option (`auto`, `none`, or explicit runtime).
+- Updated smoke behavior so validation runs only for host-compatible runtime in the selected matrix (or explicit runtime when provided), preventing non-runnable cross-OS smoke attempts.
+- Converted `Publish-ReleaseArtifacts.ps1` and `Publish-ReleaseArtifacts-0.2.3.ps1` into compatibility wrappers that forward to `OrganizedJihad.Release.Cli`.
+- Expanded release CLI unit tests to cover smoke runtime parsing and resolution behavior.
+- Updated README and v0.2.3 release plan docs to reflect managed smoke-runtime controls and wrapper behavior.
+
+## Files Modified
+- installer-core/OrganizedJihad.Release.Cli/Program.cs
+- tests/OrganizedJihad.Release.Cli.Tests/ReleaseOptionsTests.cs
+- Publish-ReleaseArtifacts.ps1
+- Publish-ReleaseArtifacts-0.2.3.ps1
+- README.md
+- ~docs/plans/release-v0.2.3.md
+- ~docs/copilot-chats/2026-05-30-userscript-build-auto.md
+
+## Issues
+- Epic: #333
+- Release pipeline migration: #335
+- PR tracking: #209
+
+## Validation
+- dotnet test tests/OrganizedJihad.Release.Cli.Tests/OrganizedJihad.Release.Cli.Tests.csproj -c Release (pass)
+- dotnet build installer-core/OrganizedJihad.Release.Cli/OrganizedJihad.Release.Cli.csproj -c Release (pass)

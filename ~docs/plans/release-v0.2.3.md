@@ -84,6 +84,11 @@ Managed validation controls:
 
 - `--skip-migration-check` to bypass migration validation
 - `--skip-smoke-test` to bypass published API smoke checks
+- `--smoke-runtime auto|none|<runtime>` to select which published runtime executes smoke probes
+
+Compatibility entrypoint note:
+
+- `Publish-ReleaseArtifacts.ps1` and `Publish-ReleaseArtifacts-0.2.3.ps1` now forward to `OrganizedJihad.Release.Cli` so legacy commands keep working without diverging release logic.
 
 ## Known Notes
 

@@ -16,6 +16,7 @@ public class ReleaseOptionsTests {
 		options.Runtimes.Should().ContainInOrder(["win-x64", "linux-x64", "osx-x64", "osx-arm64"]);
 		options.SkipMigrationCheck.Should().BeFalse();
 		options.SkipSmokeTest.Should().BeFalse();
+		options.SmokeRuntime.Should().Be("auto");
 	}
 
 	[Fact]
@@ -50,5 +51,54 @@ public class ReleaseOptionsTests {
 		var action = () => ReleaseOptions.Parse(["--migration-first-run-url", "ftp://localhost:5000"]);
 
 		action.Should().Throw<ArgumentException>().WithMessage("*http or https*");
+	}
+
+	[Fact]
+	public void Parse_Should_Set_Smoke_Runtime_When_Provided() {
+		var options = ReleaseOptions.Parse(["--smoke-runtime", "linux-x64"]);
+
+		options.SmokeRuntime.Should().Be("linux-x64");
+	}
+
+	[Fact]
+	public void Parse_Should_Throw_For_Invalid_Smoke_Runtime_With_Whitespace() {
+		var action = () => ReleaseOptions.Parse(["--smoke-runtime", "linux x64"]);
+
+		action.Should().Throw<ArgumentException>().WithMessage("*--smoke-runtime*");
+	}
+
+	[Fact]
+	public void ResolveSmokeRuntimeForExecution_Should_Return_Null_When_Skip_Enabled() {
+		var runtime = ReleasePipeline.ResolveSmokeRuntimeForExecution(["win-x64"], true, "auto", "win-x64");
+
+		runtime.Should().BeNull();
+	}
+
+	[Fact]
+	public void ResolveSmokeRuntimeForExecution_Should_Return_Host_Runtime_For_Auto_When_Present() {
+		var runtime = ReleasePipeline.ResolveSmokeRuntimeForExecution(["linux-x64", "osx-x64"], false, "auto", "linux-x64");
+
+		runtime.Should().Be("linux-x64");
+	}
+
+	[Fact]
+	public void ResolveSmokeRuntimeForExecution_Should_Return_Null_For_Auto_When_Host_Not_In_Matrix() {
+		var runtime = ReleasePipeline.ResolveSmokeRuntimeForExecution(["osx-arm64"], false, "auto", "win-x64");
+
+		runtime.Should().BeNull();
+	}
+
+	[Fact]
+	public void ResolveSmokeRuntimeForExecution_Should_Return_Null_For_None() {
+		var runtime = ReleasePipeline.ResolveSmokeRuntimeForExecution(["win-x64"], false, "none", "win-x64");
+
+		runtime.Should().BeNull();
+	}
+
+	[Fact]
+	public void ResolveSmokeRuntimeForExecution_Should_Throw_When_Explicit_Runtime_Not_In_Matrix() {
+		var action = () => ReleasePipeline.ResolveSmokeRuntimeForExecution(["linux-x64"], false, "win-x64", "linux-x64");
+
+		action.Should().Throw<ArgumentException>().WithMessage("*not present in --runtimes*");
 	}
 }
