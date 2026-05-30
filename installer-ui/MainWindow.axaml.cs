@@ -143,12 +143,27 @@ public partial class MainWindow : Window {
 		RefreshTampermonkeyStatus(logResult: true);
 	}
 
+	private void OnReinstallTampermonkeyClick(object? sender, RoutedEventArgs e) {
+		if (_isInstalling) {
+			return;
+		}
+
+		if (BrowserComboBox.SelectedItem is not BrowserOption selectedBrowser) {
+			SetStatus("Status: Select a browser first.");
+			return;
+		}
+
+		SetStatus("Status: Opening Tampermonkey reinstall page.");
+		AppendLog($"[Installer UI] Reinstall requested for {selectedBrowser.Label}. Opening Tampermonkey store page.");
+		OpenTampermonkeyStore(selectedBrowser.Argument);
+	}
+
 	private async Task RunInstallWorkflowAsync(bool installApi, bool installDesktop, bool installUserscript, bool openTampermonkeySetup, bool allowUserscriptBypass, string stepLabel) {
 		if (_isInstalling) {
 			return;
 		}
 
-		var elevationRequired = installApi || installDesktop;
+		var elevationRequired = installApi;
 		if (!EnsureElevatedUiContext(elevationRequired)) {
 			return;
 		}
@@ -958,7 +973,7 @@ public partial class MainWindow : Window {
 
 	private void UpdateQuickActionState() {
 		InstallButton.IsEnabled = !_isInstalling;
-		InstallTampermonkeyButton.IsEnabled = !_isInstalling;
+		InstallTampermonkeyButton.IsEnabled = !_isInstalling && !_tampermonkeyInstalledForSelection;
 		InstallApiStepButton.IsEnabled = !_isInstalling;
 		InstallDesktopStepButton.IsEnabled = !_isInstalling;
 		InstallUserscriptBypassButton.IsEnabled = !_isInstalling;
@@ -972,5 +987,10 @@ public partial class MainWindow : Window {
 		OpenTampermonkeySetupCheckBox.IsEnabled = !_isInstalling;
 		FirstRunDiagnosticsCheckBox.IsEnabled = !_isInstalling;
 		OpenDiagnosticsCheckBox.IsEnabled = !_isInstalling;
+
+		if (ReinstallTampermonkeyMenuItem is not null) {
+			ReinstallTampermonkeyMenuItem.IsVisible = !_isInstalling && _tampermonkeyInstalledForSelection;
+			ReinstallTampermonkeyMenuItem.IsEnabled = !_isInstalling && _tampermonkeyInstalledForSelection;
+		}
 	}
 }

@@ -145,7 +145,12 @@ internal sealed class InstallerWorkflow {
 	}
 
 	private void InstallDesktopPayload() {
-		var source = ResolveOptionalDirectoryCandidate(Path.Combine(_baseDir, "bundled", "desktop-app"));
+		var source = ResolveOptionalDirectoryCandidate(
+			Path.Combine(_baseDir, "bundled", "desktop-app"),
+			Path.GetFullPath(Path.Combine(_baseDir, "..", "..", "..", "desktop-app", "bin", "Release", "net10.0-windows10.0.19041.0", "win-x64", "publish")),
+			Path.GetFullPath(Path.Combine(_baseDir, "..", "..", "..", "..", "desktop-app", "bin", "Release", "net10.0-windows10.0.19041.0", "win-x64", "publish")),
+			Path.GetFullPath(Path.Combine(_baseDir, "..", "..", "..", "desktop-app", "bin", "Debug", "net10.0-windows10.0.19041.0", "win-x64", "publish")),
+			Path.GetFullPath(Path.Combine(_baseDir, "..", "..", "..", "..", "desktop-app", "bin", "Debug", "net10.0-windows10.0.19041.0", "win-x64", "publish")));
 		if (string.IsNullOrWhiteSpace(source)) {
 			Console.WriteLine("[OJ Installer.Cli] Desktop payload not found in bundle. Skipping desktop install.");
 			return;

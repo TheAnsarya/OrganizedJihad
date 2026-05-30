@@ -36,12 +36,19 @@
 			</Grid>
 
 			<Border BorderThickness="1" BorderBrush="#3A3A3A" CornerRadius="6" Padding="10">
-				<Grid ColumnDefinitions="260,*" RowDefinitions="Auto,Auto,Auto,Auto,Auto">
-					<Button x:Name="InstallTampermonkeyButton" Grid.Row="0" Grid.Column="0" Width="240" Height="34" HorizontalAlignment="Left" Content="Step 1: Install / Verify Tampermonkey" Click="OnInstallTampermonkeyClick" />
-					<Button x:Name="InstallApiStepButton" Grid.Row="1" Grid.Column="0" Margin="0,8,0,0" Width="240" Height="34" HorizontalAlignment="Left" Content="Step 2: Install API Server" Click="OnInstallApiStepClick" />
-					<Button x:Name="InstallDesktopStepButton" Grid.Row="2" Grid.Column="0" Margin="0,8,0,0" Width="240" Height="34" HorizontalAlignment="Left" Content="Step 3: Install Desktop App" Click="OnInstallDesktopStepClick" />
-					<Button x:Name="InstallUserscriptStepButton" Grid.Row="3" Grid.Column="0" Margin="0,8,0,0" Width="240" Height="34" HorizontalAlignment="Left" Content="Step 4: Install Userscript" Click="OnInstallUserscriptStepClick" />
-					<Button x:Name="InstallUserscriptBypassButton" Grid.Row="4" Grid.Column="0" Margin="0,8,0,0" Width="240" Height="34" HorizontalAlignment="Left" Content="Step 4b: Install Userscript (Bypass)" Click="OnInstallUserscriptBypassStepClick" />
+				<Grid ColumnDefinitions="320,*" RowDefinitions="Auto,Auto,Auto,Auto,Auto">
+					<Border Grid.Row="0" Grid.Column="0">
+						<Border.ContextMenu>
+							<ContextMenu>
+								<MenuItem x:Name="ReinstallTampermonkeyMenuItem" Header="Reinstall" Click="OnReinstallTampermonkeyClick" />
+							</ContextMenu>
+						</Border.ContextMenu>
+						<Button x:Name="InstallTampermonkeyButton" Width="300" Height="34" HorizontalAlignment="Left" Content="Step 1: Install / Verify Tampermonkey" Click="OnInstallTampermonkeyClick" />
+					</Border>
+					<Button x:Name="InstallApiStepButton" Grid.Row="1" Grid.Column="0" Margin="0,8,0,0" Width="300" Height="34" HorizontalAlignment="Left" Content="Step 2: Install API Server" Click="OnInstallApiStepClick" />
+					<Button x:Name="InstallDesktopStepButton" Grid.Row="2" Grid.Column="0" Margin="0,8,0,0" Width="300" Height="34" HorizontalAlignment="Left" Content="Step 3: Install Desktop App" Click="OnInstallDesktopStepClick" />
+					<Button x:Name="InstallUserscriptStepButton" Grid.Row="3" Grid.Column="0" Margin="0,8,0,0" Width="300" Height="34" HorizontalAlignment="Left" Content="Step 4: Install Userscript" Click="OnInstallUserscriptStepClick" />
+					<Button x:Name="InstallUserscriptBypassButton" Grid.Row="4" Grid.Column="0" Margin="0,8,0,0" Width="300" Height="34" HorizontalAlignment="Left" Content="Step 4b: Install Userscript (Bypass)" Click="OnInstallUserscriptBypassStepClick" />
 
 					<StackPanel Grid.Row="0" Grid.Column="1" Grid.RowSpan="5" Margin="12,0,0,0" Spacing="6">
 						<TextBlock Text="Step Status" FontWeight="SemiBold" />

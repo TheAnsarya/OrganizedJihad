@@ -7,4 +7,9 @@
 		<ImplicitUsings>enable</ImplicitUsings>
 		<AssemblyName>OrganizedJihad.Api.TrayHost</AssemblyName>
 	</PropertyGroup>
+
+	<ItemGroup>
+		<None Include="Assets\Icons\*.ico" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+		<None Include="Assets\Icons\*.png" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+	</ItemGroup>
 </Project>

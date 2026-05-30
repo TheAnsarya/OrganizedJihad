@@ -418,6 +418,49 @@
 
 ## Session
 - Date: 2026-05-30
+- Session Number: 15
+- Scope: installer desktop-step reliability, Step 1 Tampermonkey UX, and tray icon asset refresh
+
+## Summary
+- Fixed desktop-step payload source resolution in managed installer CLI by adding repo publish fallback directories when bundled desktop payload is absent.
+- Changed installer UI elevation requirement so desktop-only and userscript-only actions do not trigger UAC relaunch loops.
+- Updated Step 1 UI behavior:
+	- widened action column/button sizing so full label is visible,
+	- auto-disabled Step 1 when Tampermonkey is already detected,
+	- added right-click context command `Reinstall` (visible only in detected/disabled state).
+- Added new OJ tray icon assets derived from Hero Wars favicon style direction:
+	- primary icon: `oj-tray-primary` (used by tray host),
+	- alternatives: `oj-tray-alt-steel`, `oj-tray-alt-gold`.
+- Wired tray host icon loading to use bundled `Assets/Icons/oj-tray-primary.ico` with safe fallback to default system icon.
+
+## Files Modified
+- installer-core/OrganizedJihad.Installer.Cli/Program.cs
+- installer-ui/MainWindow.axaml
+- installer-ui/MainWindow.axaml.cs
+- api/OrganizedJihad.Api.TrayHost/Program.cs
+- api/OrganizedJihad.Api.TrayHost/OrganizedJihad.Api.TrayHost.csproj
+- api/OrganizedJihad.Api.TrayHost/Assets/Icons/oj-tray-primary.ico
+- api/OrganizedJihad.Api.TrayHost/Assets/Icons/oj-tray-primary.png
+- api/OrganizedJihad.Api.TrayHost/Assets/Icons/oj-tray-alt-steel.ico
+- api/OrganizedJihad.Api.TrayHost/Assets/Icons/oj-tray-alt-steel.png
+- api/OrganizedJihad.Api.TrayHost/Assets/Icons/oj-tray-alt-gold.ico
+- api/OrganizedJihad.Api.TrayHost/Assets/Icons/oj-tray-alt-gold.png
+- ~docs/copilot-chats/2026-05-30-userscript-build-auto.md
+
+## Issues
+- Epic: #333
+- Installer/runtime migration: #334
+- PR tracking: #209
+
+## Validation
+- dotnet build installer-ui/OrganizedJihad.Installer.csproj -c Release (pass)
+- dotnet build installer-core/OrganizedJihad.Installer.Cli/OrganizedJihad.Installer.Cli.csproj -c Release (pass)
+- dotnet build api/OrganizedJihad.Api.TrayHost/OrganizedJihad.Api.TrayHost.csproj -c Release (pass)
+
+---
+
+## Session
+- Date: 2026-05-30
 - Session Number: 14
 - Scope: installer userscript step regression fixes (Opera GX detection + stale CLI path + unwanted elevation relaunch)
 

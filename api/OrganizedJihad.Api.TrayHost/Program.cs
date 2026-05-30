@@ -54,6 +54,7 @@ internal sealed class TrayHostOptions {
 internal sealed class TrayContext : ApplicationContext {
 	private readonly TrayHostOptions _options;
 	private readonly NotifyIcon _notifyIcon;
+	private readonly Icon? _trayIcon;
 	private readonly System.Windows.Forms.Timer _healthTimer;
 	private readonly HttpClient _httpClient;
 	private readonly string _settingsPath;
@@ -65,9 +66,10 @@ internal sealed class TrayContext : ApplicationContext {
 
 	public TrayContext(TrayHostOptions options) {
 		_options = options;
+		_trayIcon = TryLoadTrayIcon();
 
 		_notifyIcon = new NotifyIcon {
-			Icon = SystemIcons.Application,
+			Icon = _trayIcon ?? SystemIcons.Application,
 			Text = "OrganizedJihad API",
 			Visible = true,
 			ContextMenuStrip = BuildMenu(),
@@ -333,7 +335,26 @@ internal sealed class TrayContext : ApplicationContext {
 		_httpClient.Dispose();
 		_notifyIcon.Visible = false;
 		_notifyIcon.Dispose();
+		_trayIcon?.Dispose();
 		base.ExitThreadCore();
+	}
+
+	private Icon? TryLoadTrayIcon() {
+		try {
+			var candidates = new[] {
+				Path.Combine(AppContext.BaseDirectory, "Assets", "Icons", "oj-tray-primary.ico"),
+				Path.Combine(AppContext.BaseDirectory, "oj-tray-primary.ico"),
+			};
+
+			var iconPath = candidates.FirstOrDefault(File.Exists);
+			if (string.IsNullOrWhiteSpace(iconPath)) {
+				return null;
+			}
+
+			return new Icon(iconPath);
+		} catch {
+			return null;
+		}
 	}
 
 	private static string Quote(string value) {
