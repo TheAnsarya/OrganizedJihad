@@ -1,7 +1,6 @@
 #if WINDOWS
 using System.Diagnostics;
 using System.Drawing;
-using System.Net.Sockets;
 
 namespace OrganizedJihad.Api.TrayHost;
 
@@ -109,22 +108,7 @@ internal sealed partial class TrayContext {
 	}
 
 	private bool IsConfiguredPortInUse() {
-		if (!Uri.TryCreate(_options.ApiUrl, UriKind.Absolute, out var uri)) {
-			return false;
-		}
-
-		var port = uri.IsDefaultPort
-			? (string.Equals(uri.Scheme, Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase) ? 443 : 80)
-			: uri.Port;
-
-		try {
-			using var client = new TcpClient();
-			var connectTask = client.ConnectAsync(uri.Host, port);
-			var completed = connectTask.Wait(500);
-			return completed && client.Connected;
-		} catch {
-			return false;
-		}
+		return TrayPortProbe.IsPortInUse(_options.ApiUrl);
 	}
 
 	private void ShowPortConflictNotice() {
@@ -145,23 +129,7 @@ internal sealed partial class TrayContext {
 	}
 
 	private Icon? TryLoadTrayIcon() {
-		try {
-			var candidates = new[] {
-				Path.Combine(AppContext.BaseDirectory, "Assets", "Icons", "oj-tray-alt-steel.ico"),
-				Path.Combine(AppContext.BaseDirectory, "Assets", "Icons", "oj-tray-primary.ico"),
-				Path.Combine(AppContext.BaseDirectory, "oj-tray-alt-steel.ico"),
-				Path.Combine(AppContext.BaseDirectory, "oj-tray-primary.ico"),
-			};
-
-			var iconPath = candidates.FirstOrDefault(File.Exists);
-			if (string.IsNullOrWhiteSpace(iconPath)) {
-				return null;
-			}
-
-			return new Icon(iconPath);
-		} catch {
-			return null;
-		}
+		return TrayIconLoader.TryLoad();
 	}
 
 	private static string Quote(string value) {

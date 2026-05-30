@@ -154,6 +154,34 @@
 
 ## Session
 - Date: 2026-05-30
+- Session Number: 27
+- Scope: continue tray host runtime decomposition (port probe + icon loading extraction)
+
+## Summary
+- Extracted tray port occupancy probing into `TrayPortProbe` to isolate network probing concerns from tray runtime orchestration.
+- Extracted tray icon discovery/loading into `TrayIconLoader` to isolate asset selection concerns from runtime supervision logic.
+- Updated `TrayContext.Windows.Runtime` to delegate both concerns to the new helper classes.
+- Added Windows conditional compilation guard to `TrayIconLoader` to preserve cross-target compilation behavior (`net10.0` + `net10.0-windows`).
+
+## Files Modified
+- api/OrganizedJihad.Api.TrayHost/TrayPortProbe.cs
+- api/OrganizedJihad.Api.TrayHost/TrayIconLoader.cs
+- api/OrganizedJihad.Api.TrayHost/TrayContext.Windows.Runtime.cs
+- ~docs/copilot-chats/2026-05-30-userscript-build-auto.md
+
+## Issues
+- Epic: #333
+- Installer/runtime migration: #334
+- PR tracking: #209
+
+## Validation
+- dotnet build api/OrganizedJihad.Api.TrayHost/OrganizedJihad.Api.TrayHost.csproj -c Release (pass)
+- dotnet build api/OrganizedJihad.Api.csproj -c Release (pass)
+
+---
+
+## Session
+- Date: 2026-05-30
 - Session Number: 24
 - Scope: continue tray host refactor by extracting shared runtime utilities
 
