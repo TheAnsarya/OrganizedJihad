@@ -25,6 +25,8 @@ Each runtime folder includes `SHA256SUMS.txt`.
   - configurable smoke runtime selection via `--smoke-runtime auto|none|<runtime>`
   - configurable API readiness bounds via `--startup-timeout-seconds <10..600>`
   - non-destructive plan mode via `--dry-run`
+  - optional machine-readable plan output via `--dry-run-format json`
+  - built-in option help via `--help`
 
 ### Install
 

@@ -63,6 +63,7 @@ Useful release CLI options:
 - `--runtimes win-x64,linux-x64,osx-x64,osx-arm64` to choose target runtime matrix
 - `--smoke-runtime auto|none|<runtime>` to control which published runtime gets smoke validation
 - `--dry-run` to print the execution plan without running build/publish/check commands
+- `--dry-run-format text|json` to choose human-readable or machine-readable plan output
 - `--startup-timeout-seconds <10..600>` to tune migration/smoke API readiness wait bounds
 - `--runtimes` now validates token safety (max 16 entries; no path separators)
 - `--output-root` is safety-checked to ensure artifact cleanup stays inside repository boundaries
@@ -208,6 +209,12 @@ dotnet run --project installer-core/OrganizedJihad.Release.Cli -- --version 0.2.
 
 # Show release plan only (no build/publish/check execution)
 dotnet run --project installer-core/OrganizedJihad.Release.Cli -- --version 0.2.3 --runtimes win-x64,linux-x64 --dry-run
+
+# Emit plan as JSON for CI preflight checks
+dotnet run --project installer-core/OrganizedJihad.Release.Cli -- --version 0.2.3 --runtimes win-x64,linux-x64 --dry-run --dry-run-format json
+
+# Print built-in command help
+dotnet run --project installer-core/OrganizedJihad.Release.Cli -- --help
 
 # Optional fast rerun while skipping managed validation checks
 dotnet run --project installer-core/OrganizedJihad.Release.Cli -- --version 0.2.3 --runtimes win-x64 --skip-migration-check --skip-smoke-test --skip-userscript-build

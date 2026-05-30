@@ -193,6 +193,40 @@
 ## Validation
 - dotnet test tests/OrganizedJihad.Release.Cli.Tests/OrganizedJihad.Release.Cli.Tests.csproj -c Release (pass)
 - dotnet run --project installer-core/OrganizedJihad.Release.Cli -- --version 0.2.3 --runtimes win-x64,linux-x64 --dry-run --startup-timeout-seconds 120 (pass)
+
+---
+
+## Session
+- Date: 2026-05-30
+- Session Number: 9
+- Scope: release CLI usability hardening (help + json dry-run plan output)
+
+## Summary
+- Added built-in `--help` / `-h` usage output for `OrganizedJihad.Release.Cli` option discoverability.
+- Added `--dry-run-format text|json` for structured preflight plan output, including machine-readable runtime/smoke/userscript settings.
+- Updated legacy wrapper scripts to forward dry-run format and added wrapper-side `ValidateSet('text','json')` constraints.
+- Updated v0.2.3 docs/README to include JSON preflight examples and help usage.
+
+## Files Modified
+- installer-core/OrganizedJihad.Release.Cli/Program.cs
+- tests/OrganizedJihad.Release.Cli.Tests/ReleaseOptionsTests.cs
+- Publish-ReleaseArtifacts.ps1
+- Publish-ReleaseArtifacts-0.2.3.ps1
+- README.md
+- ~docs/plans/release-v0.2.3.md
+- ~docs/plans/release-v0.2.3-github-body.md
+- ~docs/copilot-chats/2026-05-30-userscript-build-auto.md
+
+## Issues
+- Epic: #333
+- Release pipeline migration: #335
+- Notes/docs refresh: #332
+- PR tracking: #209
+
+## Validation
+- dotnet test tests/OrganizedJihad.Release.Cli.Tests/OrganizedJihad.Release.Cli.Tests.csproj -c Release (pass)
+- dotnet run --project installer-core/OrganizedJihad.Release.Cli -- --version 0.2.3 --runtimes win-x64,linux-x64 --dry-run --dry-run-format json (pass)
+- dotnet run --project installer-core/OrganizedJihad.Release.Cli -- --help (pass)
 - dotnet build OrganizedJihad.sln -c Release (pass)
 
 ---

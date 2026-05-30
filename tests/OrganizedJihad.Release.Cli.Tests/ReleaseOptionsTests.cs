@@ -17,6 +17,7 @@ public class ReleaseOptionsTests {
 		options.SkipMigrationCheck.Should().BeFalse();
 		options.SkipSmokeTest.Should().BeFalse();
 		options.SmokeRuntime.Should().Be("auto");
+		options.DryRunFormat.Should().Be("text");
 	}
 
 	[Fact]
@@ -46,6 +47,20 @@ public class ReleaseOptionsTests {
 		var options = ReleaseOptions.Parse(["--startup-timeout-seconds", "120"]);
 
 		options.StartupTimeoutSeconds.Should().Be(120);
+	}
+
+	[Fact]
+	public void Parse_Should_Set_DryRunFormat_When_Valid() {
+		var options = ReleaseOptions.Parse(["--dry-run-format", "json"]);
+
+		options.DryRunFormat.Should().Be("json");
+	}
+
+	[Fact]
+	public void Parse_Should_Throw_For_Invalid_DryRunFormat() {
+		var action = () => ReleaseOptions.Parse(["--dry-run-format", "yaml"]);
+
+		action.Should().Throw<ArgumentException>().WithMessage("*--dry-run-format*");
 	}
 
 	[Fact]

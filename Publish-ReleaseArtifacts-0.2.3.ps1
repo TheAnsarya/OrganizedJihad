@@ -9,6 +9,8 @@ param(
 	[switch]$SkipUserscriptBuild,
 	[switch]$DryRun,
 	[int]$StartupTimeoutSeconds,
+	[ValidateSet('text', 'json')]
+	[string]$DryRunFormat = 'text',
 	[string]$SmokeRuntime = 'auto'
 )
 
@@ -35,6 +37,8 @@ $releaseCliArgs = @(
 	$runtimeValue,
 	'--output-root',
 	$OutputRoot,
+	'--dry-run-format',
+	$DryRunFormat,
 	'--smoke-runtime',
 	$SmokeRuntime
 )

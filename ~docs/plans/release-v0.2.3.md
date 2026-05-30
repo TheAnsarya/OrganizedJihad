@@ -84,6 +84,12 @@ Plan-only preflight (no publish/build/check execution):
 dotnet run --project installer-core/OrganizedJihad.Release.Cli -- --version 0.2.3 --runtimes win-x64,linux-x64 --dry-run
 ```
 
+JSON preflight output for CI/automation:
+
+```bash
+dotnet run --project installer-core/OrganizedJihad.Release.Cli -- --version 0.2.3 --runtimes win-x64,linux-x64 --dry-run --dry-run-format json
+```
+
 Managed artifact output now also copies release-body draft into artifact root as `RELEASE-NOTES.md`.
 
 Managed validation controls:
@@ -93,10 +99,12 @@ Managed validation controls:
 - `--smoke-runtime auto|none|<runtime>` to select which published runtime executes smoke probes
 - `--startup-timeout-seconds <10..600>` to configure API readiness timeout for migration/smoke checks
 - `--dry-run` to print execution planning details without running build/publish/check commands
+- `--dry-run-format text|json` to control dry-run plan output shape
 
 Compatibility entrypoint note:
 
 - `Publish-ReleaseArtifacts.ps1` and `Publish-ReleaseArtifacts-0.2.3.ps1` now forward to `OrganizedJihad.Release.Cli` so legacy commands keep working without diverging release logic.
+- Wrapper scripts support `-DryRun -DryRunFormat json` for CI-oriented preflight output via managed CLI.
 
 ## Known Notes
 

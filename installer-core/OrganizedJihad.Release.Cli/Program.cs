@@ -9,6 +9,11 @@ namespace OrganizedJihad.Release.Cli;
 internal static class Program {
 	private static int Main(string[] args) {
 		try {
+			if (args.Any(arg => string.Equals(arg, "--help", StringComparison.OrdinalIgnoreCase) || string.Equals(arg, "-h", StringComparison.OrdinalIgnoreCase))) {
+				WriteUsage();
+				return 0;
+			}
+
 			var options = ReleaseOptions.Parse(args);
 			var pipeline = new ReleasePipeline(options);
 			pipeline.Run();
@@ -17,6 +22,32 @@ internal static class Program {
 			Console.Error.WriteLine($"[OJ Release.Cli] ERROR: {ex.Message}");
 			return 1;
 		}
+	}
+
+	private static void WriteUsage() {
+		Console.WriteLine("OrganizedJihad.Release.Cli");
+		Console.WriteLine();
+		Console.WriteLine("Usage:");
+		Console.WriteLine("  dotnet run --project installer-core/OrganizedJihad.Release.Cli -- [options]");
+		Console.WriteLine();
+		Console.WriteLine("Options:");
+		Console.WriteLine("  --version <value>                              Release version (default: 0.2.3)");
+		Console.WriteLine("  --configuration <value>                        Build configuration (default: Release)");
+		Console.WriteLine("  --output-root <path>                           Artifact root under repository (default: artifacts)");
+		Console.WriteLine("  --runtimes <csv>                               Runtime matrix CSV");
+		Console.WriteLine("  --release-notes-path <path>                    Release notes draft path");
+		Console.WriteLine("  --migration-first-run-url <url>                Migration validation first run URL");
+		Console.WriteLine("  --migration-second-run-url <url>               Migration validation second run URL");
+		Console.WriteLine("  --smoke-api-url <url>                          Smoke validation API URL");
+		Console.WriteLine("  --startup-timeout-seconds <10..600>            API readiness timeout");
+		Console.WriteLine("  --smoke-runtime <auto|none|runtime>            Runtime to run published smoke checks");
+		Console.WriteLine("  --dry-run                                      Print plan without running publish/checks");
+		Console.WriteLine("  --dry-run-format <text|json>                   Dry-run output format (default: text)");
+		Console.WriteLine("  --skip-yarn-install                            Skip yarn install");
+		Console.WriteLine("  --skip-userscript-build                        Skip userscript build");
+		Console.WriteLine("  --skip-migration-check                         Skip migration validation");
+		Console.WriteLine("  --skip-smoke-test                              Skip published API smoke checks");
+		Console.WriteLine("  --help, -h                                     Show this help");
 	}
 }
 
@@ -30,6 +61,7 @@ internal sealed class ReleaseOptions {
 	public bool SkipMigrationCheck { get; init; }
 	public bool SkipSmokeTest { get; init; }
 	public bool DryRun { get; init; }
+	public string DryRunFormat { get; init; } = "text";
 	public string SmokeRuntime { get; init; } = "auto";
 	public string ReleaseNotesPath { get; init; } = "~docs/plans/release-v0.2.3-github-body.md";
 	public string MigrationFirstRunUrl { get; init; } = "http://localhost:5334";
@@ -51,6 +83,7 @@ internal sealed class ReleaseOptions {
 			"smoke-api-url",
 			"startup-timeout-seconds",
 			"smoke-runtime",
+			"dry-run-format",
 		};
 		var knownFlags = new HashSet<string>(StringComparer.OrdinalIgnoreCase) {
 			"skip-yarn-install",
@@ -118,6 +151,11 @@ internal sealed class ReleaseOptions {
 			: "auto";
 		smokeRuntime = ValidateSmokeRuntime(smokeRuntime);
 
+		var dryRunFormat = map.TryGetValue("dry-run-format", out var dryRunFormatRaw) && !string.IsNullOrWhiteSpace(dryRunFormatRaw)
+			? dryRunFormatRaw.Trim()
+			: "text";
+		dryRunFormat = ValidateDryRunFormat(dryRunFormat);
+
 		var startupTimeoutSeconds = ParseStartupTimeoutSeconds(map);
 
 		return new ReleaseOptions {
@@ -136,6 +174,7 @@ internal sealed class ReleaseOptions {
 			SkipMigrationCheck = flags.Contains("skip-migration-check"),
 			SkipSmokeTest = flags.Contains("skip-smoke-test"),
 			DryRun = flags.Contains("dry-run"),
+			DryRunFormat = dryRunFormat,
 			SmokeRuntime = smokeRuntime,
 			ReleaseNotesPath = map.TryGetValue("release-notes-path", out var releaseNotesPath) && !string.IsNullOrWhiteSpace(releaseNotesPath)
 				? releaseNotesPath
@@ -194,6 +233,21 @@ internal sealed class ReleaseOptions {
 		}
 
 		return normalized;
+	}
+
+	private static string ValidateDryRunFormat(string candidate) {
+		if (string.IsNullOrWhiteSpace(candidate)) {
+			return "text";
+		}
+
+		if (string.Equals(candidate.Trim(), "text", StringComparison.OrdinalIgnoreCase)) {
+			return "text";
+		}
+		if (string.Equals(candidate.Trim(), "json", StringComparison.OrdinalIgnoreCase)) {
+			return "json";
+		}
+
+		throw new ArgumentException($"Unsupported value for --dry-run-format: '{candidate}'. Use text or json.");
 	}
 
 	private static void ValidateRuntimes(string[] runtimes) {
@@ -271,6 +325,15 @@ internal sealed class ReleasePipeline {
 	}
 
 	private void WriteExecutionPlan() {
+		if (string.Equals(_options.DryRunFormat, "json", StringComparison.OrdinalIgnoreCase)) {
+			WriteExecutionPlanJson();
+			return;
+		}
+
+		WriteExecutionPlanText();
+	}
+
+	private void WriteExecutionPlanText() {
 		var smokeSummary = _options.SkipSmokeTest
 			? "disabled (--skip-smoke-test)"
 			: string.IsNullOrWhiteSpace(_smokeRuntime)
@@ -288,6 +351,35 @@ internal sealed class ReleasePipeline {
 		WriteStep($"  userscript install: {(!_options.SkipYarnInstall ? "enabled" : "disabled")}");
 		WriteStep($"  userscript build: {(!_options.SkipUserscriptBuild ? "enabled" : "disabled")}");
 		WriteStep($"  startup timeout seconds: {_options.StartupTimeoutSeconds}");
+	}
+
+	private void WriteExecutionPlanJson() {
+		var hostRuntime = GetHostRuntimeIdentifier();
+		var payload = new DryRunPlan {
+			Version = _options.Version,
+			Configuration = _options.Configuration,
+			OutputRoot = _artifactRoot,
+			HostRuntime = hostRuntime,
+			Runtimes = _options.Runtimes,
+			MigrationCheckEnabled = !_options.SkipMigrationCheck,
+			Smoke = new DryRunSmokePlan {
+				Enabled = !_options.SkipSmokeTest && !string.IsNullOrWhiteSpace(_smokeRuntime),
+				RequestedRuntime = _options.SmokeRuntime,
+				ResolvedRuntime = _smokeRuntime,
+				ApiUrl = _options.SmokeApiUrl,
+			},
+			Userscript = new DryRunUserscriptPlan {
+				InstallEnabled = !_options.SkipYarnInstall,
+				BuildEnabled = !_options.SkipUserscriptBuild,
+			},
+			StartupTimeoutSeconds = _options.StartupTimeoutSeconds,
+		};
+
+		var json = JsonSerializer.Serialize(payload, new JsonSerializerOptions {
+			WriteIndented = true,
+			PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+		});
+		Console.WriteLine(json);
 	}
 
 	private void BuildUserscriptBundle() {
@@ -870,5 +962,29 @@ internal sealed class ReleasePipeline {
 		public string Runtime { get; init; } = string.Empty;
 		public string Installer { get; init; } = string.Empty;
 		public string ChecksumFile { get; init; } = string.Empty;
+	}
+
+	private sealed class DryRunPlan {
+		public string Version { get; init; } = string.Empty;
+		public string Configuration { get; init; } = string.Empty;
+		public string OutputRoot { get; init; } = string.Empty;
+		public string? HostRuntime { get; init; }
+		public string[] Runtimes { get; init; } = [];
+		public bool MigrationCheckEnabled { get; init; }
+		public DryRunSmokePlan Smoke { get; init; } = new();
+		public DryRunUserscriptPlan Userscript { get; init; } = new();
+		public int StartupTimeoutSeconds { get; init; }
+	}
+
+	private sealed class DryRunSmokePlan {
+		public bool Enabled { get; init; }
+		public string RequestedRuntime { get; init; } = string.Empty;
+		public string? ResolvedRuntime { get; init; }
+		public string ApiUrl { get; init; } = string.Empty;
+	}
+
+	private sealed class DryRunUserscriptPlan {
+		public bool InstallEnabled { get; init; }
+		public bool BuildEnabled { get; init; }
 	}
 }
