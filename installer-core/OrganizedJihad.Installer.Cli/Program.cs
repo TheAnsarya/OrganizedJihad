@@ -96,7 +96,9 @@ internal sealed class InstallerWorkflow {
 		Directory.CreateDirectory(_options.InstallRoot);
 
 		if (!_options.SkipApiInstall) {
+			StopLegacyApiProcesses();
 			InstallApiPayload();
+			CleanupLegacyApiExecutableVariants();
 		}
 
 		if (!_options.SkipDesktopAppInstall) {
@@ -124,6 +126,63 @@ internal sealed class InstallerWorkflow {
 		}
 
 		Console.WriteLine("[OJ Installer.Cli] Installation complete.");
+	}
+
+	private void StopLegacyApiProcesses() {
+		if (!OperatingSystem.IsWindows()) {
+			return;
+		}
+
+		var prefixes = new[] {
+			"OrganizedJihad.Api",
+			"OrganizedJihad.Api.TrayHost",
+		};
+
+		foreach (var process in Process.GetProcesses()) {
+			try {
+				if (process.HasExited) {
+					continue;
+				}
+
+				var name = process.ProcessName;
+				if (!prefixes.Any(prefix => name.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))) {
+					continue;
+				}
+
+				process.Kill(true);
+				process.WaitForExit(3000);
+				Console.WriteLine($"[OJ Installer.Cli] Stopped legacy process: {name} (PID {process.Id})");
+			} catch {
+				// Best effort cleanup only.
+			}
+		}
+	}
+
+	private void CleanupLegacyApiExecutableVariants() {
+		var apiDir = Path.Combine(_options.InstallRoot, "api");
+		DeleteVersionedExecutables(apiDir, "OrganizedJihad.Api.*.exe", "OrganizedJihad.Api.exe");
+
+		var runtimeHostDir = Path.Combine(_options.InstallRoot, "runtime-host");
+		DeleteVersionedExecutables(runtimeHostDir, "OrganizedJihad.Api.TrayHost.*.exe", "OrganizedJihad.Api.TrayHost.exe");
+	}
+
+	private static void DeleteVersionedExecutables(string directory, string searchPattern, string keepFileName) {
+		if (!Directory.Exists(directory)) {
+			return;
+		}
+
+		foreach (var file in Directory.GetFiles(directory, searchPattern, SearchOption.TopDirectoryOnly)) {
+			if (string.Equals(Path.GetFileName(file), keepFileName, StringComparison.OrdinalIgnoreCase)) {
+				continue;
+			}
+
+			try {
+				File.Delete(file);
+				Console.WriteLine($"[OJ Installer.Cli] Removed legacy executable variant: {file}");
+			} catch {
+				// Best effort cleanup only.
+			}
+		}
 	}
 
 	private void InstallApiPayload() {

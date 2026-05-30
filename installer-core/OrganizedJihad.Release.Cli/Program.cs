@@ -555,6 +555,7 @@ internal sealed class ReleasePipeline {
 		var installerUiOut = Path.Combine(_repoRoot, "installer-ui", "publish", runtime);
 
 		RunDotnetPublish(apiProject, $"-c {_options.Configuration} -r {runtime} --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -o \"{apiOut}\"");
+		PrunePublishPayload(apiOut);
 
 		if (ShouldRunSmokeForRuntime(runtime)) {
 			RunPublishedApiSmokeTest(apiOut, runtime);
@@ -564,18 +565,21 @@ internal sealed class ReleasePipeline {
 			? "net10.0-windows10.0.19041.0"
 			: "net10.0";
 		RunDotnetPublish(runtimeHostProject, $"-f {runtimeHostTfm} -c {_options.Configuration} -r {runtime} --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -o \"{runtimeHostOut}\"");
+		PrunePublishPayload(runtimeHostOut);
 
 		RunDotnetPublish(installerCliProject, $"-c {_options.Configuration} -r {runtime} --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -o \"{installerCliOut}\"");
+		PrunePublishPayload(installerCliOut);
 
 		if (runtime.Equals("win-x64", StringComparison.OrdinalIgnoreCase) && !string.IsNullOrWhiteSpace(desktopPublishDir) && Directory.Exists(desktopPublishDir)) {
 			ResetDirectory(desktopOut);
 			CopyDirectory(desktopPublishDir, desktopOut);
+			PrunePublishPayload(desktopOut);
 		}
 
 		CopyBundleSupportAssets();
 
 		DeleteIfExists(installerUiOut);
-		RunDotnetPublish(installerUiProject, $"-c {_options.Configuration} -r {runtime} --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:IncludeAllContentForSelfExtract=true -o \"{installerUiOut}\"");
+		RunDotnetPublish(installerUiProject, $"-c {_options.Configuration} -r {runtime} --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:IncludeAllContentForSelfExtract=true -p:EnableCompressionInSingleFile=true -p:DebugType=None -p:DebugSymbols=false -o \"{installerUiOut}\"");
 
 		var installerBinaryName = runtime.StartsWith("win-", StringComparison.OrdinalIgnoreCase)
 			? "OrganizedJihad.Installer.exe"
@@ -746,6 +750,28 @@ internal sealed class ReleasePipeline {
 				Directory.CreateDirectory(parent);
 			}
 			File.Copy(file, target, overwrite: true);
+		}
+	}
+
+	private static void PrunePublishPayload(string rootDirectory) {
+		if (!Directory.Exists(rootDirectory)) {
+			return;
+		}
+
+		var removablePatterns = new[] {
+			"*.pdb",
+			"*.xml",
+			"*.dbg",
+		};
+
+		foreach (var pattern in removablePatterns) {
+			foreach (var file in Directory.GetFiles(rootDirectory, pattern, SearchOption.AllDirectories)) {
+				try {
+					File.Delete(file);
+				} catch {
+					// Best effort size trimming only.
+				}
+			}
 		}
 	}
 

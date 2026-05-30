@@ -223,7 +223,7 @@ internal sealed class TrayContext : ApplicationContext {
 	}
 
 	private void OpenApiHealth() {
-		var healthUrl = _options.ApiUrl.TrimEnd('/') + "/api/sync/health";
+		var healthUrl = _options.ApiUrl.TrimEnd('/') + "/ui/tray-health";
 		Process.Start(new ProcessStartInfo {
 			FileName = healthUrl,
 			UseShellExecute = true,

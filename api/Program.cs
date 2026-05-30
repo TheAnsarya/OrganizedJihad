@@ -233,14 +233,18 @@ app.MapGet("/ui", (HttpContext context) => {
 	<title>OrganizedJihad API Control</title>
 	<style>
 		:root {
-			--bg: #0b1220;
-			--card: #111a2b;
-			--ink: #f1f5f9;
-			--muted: #94a3b8;
-			--line: #1e293b;
-			--ok: #22c55e;
-			--warn: #f59e0b;
-			--accent: #38bdf8;
+			--oj-purple: #3a143c;
+			--oj-brown-dark: #2a1f14;
+			--oj-orange: #d4821d;
+			--oj-brown-light: #90590d;
+			--bg: #2a1f14;
+			--card: #3a143c;
+			--ink: #fdf3dc;
+			--muted: #d2b583;
+			--line: #90590d;
+			--ok: #d4821d;
+			--warn: #e2a957;
+			--accent: #d4821d;
 		}
 
 		* {
@@ -250,7 +254,7 @@ app.MapGet("/ui", (HttpContext context) => {
 		body {
 			margin: 0;
 			font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-			background: radial-gradient(circle at top, #172554 0%, #0b1220 45%);
+			background: radial-gradient(circle at top, #3a143c 0%, #2a1f14 60%);
 			color: var(--ink);
 		}
 
@@ -278,7 +282,7 @@ app.MapGet("/ui", (HttpContext context) => {
 		}
 
 		.card {
-			background: rgba(17, 26, 43, 0.92);
+			background: rgba(58, 20, 60, 0.92);
 			border: 1px solid var(--line);
 			border-radius: 12px;
 			padding: 14px;
@@ -314,15 +318,15 @@ app.MapGet("/ui", (HttpContext context) => {
 			display: inline-block;
 			padding: 9px 12px;
 			border-radius: 8px;
-			border: 1px solid #0c4a6e;
-			background: rgba(14, 116, 144, 0.24);
+			border: 1px solid var(--oj-brown-light);
+			background: rgba(212, 130, 29, 0.16);
 			color: var(--accent);
 			text-decoration: none;
 			font-weight: 600;
 		}
 
 		code {
-			background: #1e293b;
+			background: rgba(42, 31, 20, 0.92);
 			padding: 2px 6px;
 			border-radius: 6px;
 		}
@@ -375,18 +379,18 @@ app.MapGet("/ui", (HttpContext context) => {
 					</label>
 					<label style="display: grid; gap: 4px;">
 						<span style="color: var(--ink);">API Base URL</span>
-						<input id="apiBaseUrl" type="text" style="padding: 8px; border-radius: 8px; border: 1px solid var(--line); background: #0f172a; color: var(--ink);" />
+						<input id="apiBaseUrl" type="text" style="padding: 8px; border-radius: 8px; border: 1px solid var(--line); background: var(--oj-brown-dark); color: var(--ink);" />
 					</label>
 					<label style="display: grid; gap: 4px;">
 						<span style="color: var(--ink);">Preferred Hero Wars URL</span>
-						<input id="heroWarsUrl" type="text" style="padding: 8px; border-radius: 8px; border: 1px solid var(--line); background: #0f172a; color: var(--ink);" />
+						<input id="heroWarsUrl" type="text" style="padding: 8px; border-radius: 8px; border: 1px solid var(--line); background: var(--oj-brown-dark); color: var(--ink);" />
 					</label>
 					<label style="display: grid; gap: 4px;">
 						<span style="color: var(--ink);">Notes</span>
-						<textarea id="uiNotes" rows="3" style="padding: 8px; border-radius: 8px; border: 1px solid var(--line); background: #0f172a; color: var(--ink);"></textarea>
+						<textarea id="uiNotes" rows="3" style="padding: 8px; border-radius: 8px; border: 1px solid var(--line); background: var(--oj-brown-dark); color: var(--ink);"></textarea>
 					</label>
 					<div class="actions">
-						<button id="saveSettings" style="cursor: pointer; padding: 9px 12px; border-radius: 8px; border: 1px solid #0c4a6e; background: rgba(14, 116, 144, 0.24); color: var(--accent); font-weight: 600;">Save Settings</button>
+						<button id="saveSettings" style="cursor: pointer; padding: 9px 12px; border-radius: 8px; border: 1px solid var(--oj-brown-light); background: rgba(212, 130, 29, 0.16); color: var(--accent); font-weight: 600;">Save Settings</button>
 					</div>
 					<div id="settingsStatus" style="color: var(--muted);">Loading settings...</div>
 				</div>
@@ -521,6 +525,116 @@ app.MapGet("/ui", (HttpContext context) => {
 	return Results.Content(html, "text/html");
 });
 
+app.MapGet("/ui/tray-health", async (HttpContext context, IDbContextFactory<GameDatabaseContext> contextFactory) => {
+	if (!IsLocalUiAccessRequest(context)) {
+		return Results.StatusCode(StatusCodes.Status403Forbidden);
+	}
+
+	var healthStatus = "unknown";
+	try {
+		using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(4) };
+		var probeUrl = $"{context.Request.Scheme}://{context.Request.Host}/api/sync/health";
+		using var response = await http.GetAsync(probeUrl);
+		healthStatus = response.IsSuccessStatusCode ? "online" : $"degraded ({(int)response.StatusCode})";
+	} catch {
+		healthStatus = "offline";
+	}
+
+	var repair = await GetUserscriptHandshakeStatusAsync(contextFactory);
+	var now = DateTime.UtcNow;
+	var html = $$"""
+<!doctype html>
+<html lang="en">
+<head>
+	<meta charset="utf-8" />
+	<meta name="viewport" content="width=device-width, initial-scale=1" />
+	<title>OJ Tray Health</title>
+	<style>
+		:root {
+			--oj-purple: #3a143c;
+			--oj-brown-dark: #2a1f14;
+			--oj-orange: #d4821d;
+			--oj-brown-light: #90590d;
+			--ink: #fdf3dc;
+			--muted: #d2b583;
+		}
+
+		* { box-sizing: border-box; }
+		body {
+			margin: 0;
+			font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+			background: radial-gradient(circle at top, var(--oj-purple) 0%, var(--oj-brown-dark) 58%);
+			color: var(--ink);
+		}
+		main {
+			max-width: 860px;
+			margin: 0 auto;
+			padding: 24px 18px 36px;
+		}
+		.grid {
+			display: grid;
+			grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+			gap: 12px;
+			margin-top: 14px;
+		}
+		.card {
+			border: 1px solid var(--oj-brown-light);
+			background: rgba(58, 20, 60, 0.88);
+			border-radius: 12px;
+			padding: 12px;
+		}
+		h1 { margin: 0; }
+		h2 { margin: 0 0 8px; font-size: 17px; }
+		.value { font-size: 25px; font-weight: 700; }
+		.muted { color: var(--muted); }
+		a.button {
+			display: inline-block;
+			padding: 8px 11px;
+			margin-right: 8px;
+			margin-top: 8px;
+			border-radius: 8px;
+			border: 1px solid var(--oj-brown-light);
+			background: rgba(212, 130, 29, 0.18);
+			color: var(--ink);
+			text-decoration: none;
+		}
+	</style>
+</head>
+<body>
+	<main>
+		<h1>OrganizedJihad Tray Health</h1>
+		<p class="muted">Live runtime summary for tray-launched API instance.</p>
+		<div class="grid">
+			<section class="card">
+				<h2>API Health</h2>
+				<div class="value">{{healthStatus}}</div>
+				<div class="muted">Probe URL: {{context.Request.Scheme}}://{{context.Request.Host}}/api/sync/health</div>
+			</section>
+			<section class="card">
+				<h2>API Base URL</h2>
+				<div class="value">{{context.Request.Scheme}}://{{context.Request.Host}}</div>
+				<div class="muted">Checked UTC: {{now:yyyy-MM-dd HH:mm:ss}}</div>
+			</section>
+			<section class="card">
+				<h2>Userscript Handshake</h2>
+				<div class="value">{{repair.Status}}</div>
+				<div class="muted">Last sync: {{(repair.LastSyncUtc is null ? "none" : repair.LastSyncUtc.Value.ToString("u"))}}</div>
+			</section>
+		</div>
+		<div style="margin-top: 14px;">
+			<a class="button" href="/ui">Open API Control UI</a>
+			<a class="button" href="/ui/repair-status">Open Repair Status JSON</a>
+			<a class="button" href="/ui/userscript-handshake">Open Handshake JSON</a>
+			<a class="button" href="/api/sync/stats">Open Sync Stats JSON</a>
+		</div>
+	</main>
+</body>
+</html>
+""";
+
+	return Results.Content(html, "text/html");
+});
+
 // Root endpoint - provides API information and available endpoints
 // https://learn.microsoft.com/en-us/aspnet/core/fundamentals/minimal-apis
 app.MapGet("/", () => new {
@@ -531,6 +645,7 @@ app.MapGet("/", () => new {
 	endpoints = new[]
 	{
 		"GET  /ui - Local web UI for API status/config shell",
+		"GET  /ui/tray-health - Local tray health dashboard page",
 		"GET  /ui/settings - Get persisted API UI settings",
 		"POST /ui/settings - Save persisted API UI settings",
 		"GET  /ui/repair-status - Runtime setup/update repair hints",

@@ -520,6 +520,62 @@
 
 ## Session
 - Date: 2026-05-30
+- Session Number: 18
+- Scope: installer cleanup + installer size reduction + tray health dashboard + palette rollout + extra icons
+
+## Summary
+- Added installer-side cleanup for legacy API/tray executable variants under `%LOCALAPPDATA%/OrganizedJihad/api` and `%LOCALAPPDATA%/OrganizedJihad/runtime-host`.
+- Added installer pre-copy process cleanup for legacy API and tray-host processes to improve replacement reliability.
+- Reduced installer artifact size by:
+	- enabling single-file compression,
+	- disabling debug symbol output for installer publish,
+	- pruning `.pdb/.xml/.dbg` payload files from bundled runtime payloads in release pipeline.
+- Verified local publish size drop for win-x64 installer executable from ~1.07 GB range to ~324.89 MB.
+- Updated tray host "Open API Health" action to open a rendered dashboard page (`/ui/tray-health`) instead of raw health JSON.
+- Added `/ui/tray-health` endpoint with runtime summary (API health state, API base URL, userscript handshake status, quick links).
+- Applied requested palette (`#3a143c`, `#2a1f14`, `#d4821d`, `#90590d`) across:
+	- installer UI,
+	- API local UI shell,
+	- desktop app CSS/layout shell.
+- Added extra fun icon variants:
+	- `oj-tray-fun-orb` (PNG/ICO)
+	- `oj-tray-fun-shield` (PNG/ICO)
+
+## Files Modified
+- installer-core/OrganizedJihad.Installer.Cli/Program.cs
+- installer-core/OrganizedJihad.Release.Cli/Program.cs
+- installer-ui/MainWindow.axaml
+- installer-ui/OrganizedJihad.Installer.csproj
+- api/OrganizedJihad.Api.TrayHost/Program.cs
+- api/Program.cs
+- desktop-app/wwwroot/app.css
+- desktop-app/Components/Layout/MainLayout.razor.css
+- desktop-app/Components/Layout/NavMenu.razor.css
+- api/OrganizedJihad.Api.TrayHost/Assets/Icons/oj-tray-fun-orb.ico
+- api/OrganizedJihad.Api.TrayHost/Assets/Icons/oj-tray-fun-orb.png
+- api/OrganizedJihad.Api.TrayHost/Assets/Icons/oj-tray-fun-shield.ico
+- api/OrganizedJihad.Api.TrayHost/Assets/Icons/oj-tray-fun-shield.png
+- ~docs/copilot-chats/2026-05-30-userscript-build-auto.md
+
+## Issues
+- Epic: #333
+- Installer/runtime migration: #334
+- PR tracking: #209
+
+## Validation
+- dotnet build installer-core/OrganizedJihad.Installer.Cli/OrganizedJihad.Installer.Cli.csproj -c Release (pass)
+- dotnet build installer-core/OrganizedJihad.Release.Cli/OrganizedJihad.Release.Cli.csproj -c Release (pass)
+- dotnet build api/OrganizedJihad.Api.csproj -c Release (pass)
+- dotnet build api/OrganizedJihad.Api.TrayHost/OrganizedJihad.Api.TrayHost.csproj -c Release (pass)
+- dotnet build installer-ui/OrganizedJihad.Installer.csproj -c Release (pass)
+- dotnet build desktop-app/OrganizedJihad.Desktop.csproj -c Release (pass)
+- dotnet publish installer-ui/OrganizedJihad.Installer.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:IncludeAllContentForSelfExtract=true -o installer-ui/publish/win-x64 (pass)
+- installer-ui/publish/win-x64/OrganizedJihad.Installer.exe => 324.89 MB
+
+---
+
+## Session
+- Date: 2026-05-30
 - Session Number: 14
 - Scope: installer userscript step regression fixes (Opera GX detection + stale CLI path + unwanted elevation relaunch)
 

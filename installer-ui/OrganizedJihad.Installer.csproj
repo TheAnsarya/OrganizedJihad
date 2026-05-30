@@ -7,6 +7,9 @@
 		<AssemblyName>OrganizedJihad.Installer</AssemblyName>
 		<RootNamespace>OrganizedJihad.Installer</RootNamespace>
 		<IncludeAllContentForSelfExtract>true</IncludeAllContentForSelfExtract>
+		<EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
+		<DebugType>None</DebugType>
+		<DebugSymbols>false</DebugSymbols>
 	</PropertyGroup>
 
 	<ItemGroup>
