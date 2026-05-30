@@ -54,9 +54,8 @@ yarn install:check --open failed
 
 Run these checks before packaging or publishing:
 
-```powershell
-pwsh -ExecutionPolicy Bypass -File .\Test-ApiMigrationPath.ps1
-pwsh -ExecutionPolicy Bypass -File .\Test-ReleaseSmoke.ps1
+```bash
+dotnet run --project installer-core/OrganizedJihad.Release.Cli -- --version 0.2.3 --runtimes win-x64
 ```
 
-`Publish-ReleaseArtifacts.ps1` runs both by default unless explicitly skipped.
+`OrganizedJihad.Release.Cli` runs migration-path + smoke validation by default unless explicitly skipped.

@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Net;
 using System.Security.Cryptography;
 using System.Text.Json;
 
@@ -25,7 +26,13 @@ internal sealed class ReleaseOptions {
 	public string[] Runtimes { get; init; } = ["win-x64", "linux-x64", "osx-x64", "osx-arm64"];
 	public bool SkipYarnInstall { get; init; }
 	public bool SkipUserscriptBuild { get; init; }
+	public bool SkipMigrationCheck { get; init; }
+	public bool SkipSmokeTest { get; init; }
 	public string ReleaseNotesPath { get; init; } = "~docs/plans/release-v0.2.3-github-body.md";
+	public string MigrationFirstRunUrl { get; init; } = "http://localhost:5334";
+	public string MigrationSecondRunUrl { get; init; } = "http://localhost:5335";
+	public string SmokeApiUrl { get; init; } = "http://localhost:5234";
+	public int StartupTimeoutSeconds { get; init; } = 60;
 
 	public static ReleaseOptions Parse(string[] args) {
 		var map = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
@@ -68,9 +75,23 @@ internal sealed class ReleaseOptions {
 			Runtimes = runtimes,
 			SkipYarnInstall = flags.Contains("skip-yarn-install"),
 			SkipUserscriptBuild = flags.Contains("skip-userscript-build"),
+			SkipMigrationCheck = flags.Contains("skip-migration-check"),
+			SkipSmokeTest = flags.Contains("skip-smoke-test"),
 			ReleaseNotesPath = map.TryGetValue("release-notes-path", out var releaseNotesPath) && !string.IsNullOrWhiteSpace(releaseNotesPath)
 				? releaseNotesPath
 				: "~docs/plans/release-v0.2.3-github-body.md",
+			MigrationFirstRunUrl = map.TryGetValue("migration-first-run-url", out var firstRunUrl) && !string.IsNullOrWhiteSpace(firstRunUrl)
+				? firstRunUrl
+				: "http://localhost:5334",
+			MigrationSecondRunUrl = map.TryGetValue("migration-second-run-url", out var secondRunUrl) && !string.IsNullOrWhiteSpace(secondRunUrl)
+				? secondRunUrl
+				: "http://localhost:5335",
+			SmokeApiUrl = map.TryGetValue("smoke-api-url", out var smokeApiUrl) && !string.IsNullOrWhiteSpace(smokeApiUrl)
+				? smokeApiUrl
+				: "http://localhost:5234",
+			StartupTimeoutSeconds = map.TryGetValue("startup-timeout-seconds", out var timeoutRaw) && int.TryParse(timeoutRaw, out var timeout)
+				? Math.Max(10, timeout)
+				: 60,
 		};
 	}
 }
@@ -90,6 +111,10 @@ internal sealed class ReleasePipeline {
 
 	public void Run() {
 		WriteStep("Starting managed cross-platform release pipeline.");
+		if (!_options.SkipMigrationCheck) {
+			RunMigrationPathCheck();
+		}
+
 		BuildUserscriptBundle();
 		PrepareArtifactRoot();
 
@@ -188,6 +213,10 @@ internal sealed class ReleasePipeline {
 		var installerUiOut = Path.Combine(_repoRoot, "installer-ui", "publish", runtime);
 
 		RunDotnetPublish(apiProject, $"-c {_options.Configuration} -r {runtime} --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -o \"{apiOut}\"");
+
+		if (!_options.SkipSmokeTest && runtime.Equals("win-x64", StringComparison.OrdinalIgnoreCase)) {
+			RunPublishedApiSmokeTest(apiOut);
+		}
 
 		var runtimeHostTfm = runtime.StartsWith("win-", StringComparison.OrdinalIgnoreCase)
 			? "net10.0-windows10.0.19041.0"
@@ -400,6 +429,189 @@ internal sealed class ReleasePipeline {
 		}
 
 		throw new DirectoryNotFoundException("Could not resolve repository root containing OrganizedJihad.sln.");
+	}
+
+	private void RunMigrationPathCheck() {
+		WriteStep("Running migration-path check (cold start + repeat start).", ConsoleColor.DarkCyan);
+
+		var apiProject = Path.Combine(_repoRoot, "api", "OrganizedJihad.Api.csproj");
+		if (!File.Exists(apiProject)) {
+			throw new FileNotFoundException($"Missing API project for migration check: {apiProject}");
+		}
+
+		var tempRoot = Path.Combine(Path.GetTempPath(), "oj-migration-" + Guid.NewGuid().ToString("N"));
+		Directory.CreateDirectory(tempRoot);
+		var dbPath = Path.Combine(tempRoot, "migration-herowars.db");
+
+		try {
+			RunApiCycle(apiProject, _options.MigrationFirstRunUrl, dbPath, _options.StartupTimeoutSeconds);
+			RunApiCycle(apiProject, _options.MigrationSecondRunUrl, dbPath, _options.StartupTimeoutSeconds);
+
+			if (!File.Exists(dbPath)) {
+				throw new InvalidOperationException("Migration check failed: database file was not created.");
+			}
+
+			var dbFile = new FileInfo(dbPath);
+			if (dbFile.Length <= 0) {
+				throw new InvalidOperationException("Migration check failed: database file is empty.");
+			}
+
+			WriteStep("Migration-path check passed.", ConsoleColor.Green);
+		} finally {
+			TryDeleteDirectory(tempRoot);
+		}
+	}
+
+	private void RunApiCycle(string apiProjectPath, string baseUrl, string dbPath, int timeoutSeconds) {
+		Process? process = null;
+
+		try {
+			var startInfo = new ProcessStartInfo {
+				FileName = ResolveCommand("dotnet"),
+				Arguments = $"run --project \"{apiProjectPath}\" -- --urls {baseUrl}",
+				WorkingDirectory = _repoRoot,
+				UseShellExecute = false,
+				CreateNoWindow = true,
+				RedirectStandardOutput = true,
+				RedirectStandardError = true,
+			};
+			startInfo.Environment["OJ_DB_PATH"] = dbPath;
+
+			process = Process.Start(startInfo);
+			if (process is null) {
+				throw new InvalidOperationException("Could not launch API project for migration cycle.");
+			}
+
+			if (!WaitHealthy(baseUrl, timeoutSeconds)) {
+				throw new InvalidOperationException($"API did not become healthy at {baseUrl} within {timeoutSeconds}s.");
+			}
+		} finally {
+			TryStopProcess(process);
+		}
+	}
+
+	private void RunPublishedApiSmokeTest(string publishedApiDirectory) {
+		WriteStep("Running published API smoke test (win-x64).", ConsoleColor.DarkCyan);
+
+		var apiExecutable = ResolvePublishedApiExecutable(publishedApiDirectory);
+		if (string.IsNullOrWhiteSpace(apiExecutable)) {
+			throw new FileNotFoundException($"Could not locate published API executable in: {publishedApiDirectory}");
+		}
+
+		var workingDirectory = Path.GetDirectoryName(apiExecutable) ?? _repoRoot;
+		var tempRoot = Path.Combine(Path.GetTempPath(), "oj-smoke-" + Guid.NewGuid().ToString("N"));
+		Directory.CreateDirectory(tempRoot);
+		var dbPath = Path.Combine(tempRoot, "smoke-herowars.db");
+
+		Process? process = null;
+		try {
+			var startInfo = new ProcessStartInfo {
+				FileName = apiExecutable,
+				Arguments = $"--urls {_options.SmokeApiUrl}",
+				WorkingDirectory = workingDirectory,
+				UseShellExecute = false,
+				CreateNoWindow = true,
+				RedirectStandardOutput = true,
+				RedirectStandardError = true,
+			};
+			startInfo.Environment["OJ_DB_PATH"] = dbPath;
+
+			process = Process.Start(startInfo);
+			if (process is null) {
+				throw new InvalidOperationException("Could not launch published API executable for smoke test.");
+			}
+
+			if (!WaitHealthy(_options.SmokeApiUrl, _options.StartupTimeoutSeconds)) {
+				throw new InvalidOperationException($"Published API did not become healthy at {_options.SmokeApiUrl} within {_options.StartupTimeoutSeconds}s.");
+			}
+
+			var probeEndpoints = new[] {
+				$"{_options.SmokeApiUrl.TrimEnd('/')}/api/sync/health",
+				$"{_options.SmokeApiUrl.TrimEnd('/')}/ui/settings",
+				$"{_options.SmokeApiUrl.TrimEnd('/')}/ui/repair-status",
+				$"{_options.SmokeApiUrl.TrimEnd('/')}/ui/userscript-handshake",
+			};
+
+			using var client = new HttpClient { Timeout = TimeSpan.FromSeconds(8) };
+			foreach (var endpoint in probeEndpoints) {
+				using var response = client.GetAsync(endpoint).GetAwaiter().GetResult();
+				if (response.StatusCode is < HttpStatusCode.OK or >= HttpStatusCode.MultipleChoices) {
+					throw new InvalidOperationException($"Smoke probe failed for {endpoint} (HTTP {(int)response.StatusCode}).");
+				}
+			}
+
+			WriteStep("Published API smoke test passed.", ConsoleColor.Green);
+		} finally {
+			TryStopProcess(process);
+			TryDeleteDirectory(tempRoot);
+		}
+	}
+
+	private static string? ResolvePublishedApiExecutable(string publishedApiDirectory) {
+		var candidates = new[] {
+			Path.Combine(publishedApiDirectory, "OrganizedJihad.Api.exe"),
+			Path.Combine(publishedApiDirectory, "OrganizedJihad.Api"),
+		};
+
+		return candidates.FirstOrDefault(File.Exists);
+	}
+
+	private static bool WaitHealthy(string baseUrl, int timeoutSeconds) {
+		var healthUrl = $"{baseUrl.TrimEnd('/')}/api/sync/health";
+		var deadline = DateTime.UtcNow.AddSeconds(timeoutSeconds);
+		using var client = new HttpClient { Timeout = TimeSpan.FromSeconds(5) };
+
+		while (DateTime.UtcNow < deadline) {
+			try {
+				using var response = client.GetAsync(healthUrl).GetAwaiter().GetResult();
+				if (response.StatusCode is >= HttpStatusCode.OK and < HttpStatusCode.MultipleChoices) {
+					return true;
+				}
+			} catch {
+				// Keep waiting until timeout.
+			}
+
+			Thread.Sleep(800);
+		}
+
+		return false;
+	}
+
+	private static void TryStopProcess(Process? process) {
+		if (process is null) {
+			return;
+		}
+
+		try {
+			if (!process.HasExited) {
+				process.Kill(entireProcessTree: true);
+				process.WaitForExit(8000);
+			}
+		} catch {
+			// Best effort process cleanup.
+		} finally {
+			process.Dispose();
+		}
+	}
+
+	private static void TryDeleteDirectory(string path) {
+		try {
+			if (Directory.Exists(path)) {
+				Directory.Delete(path, recursive: true);
+			}
+		} catch {
+			// Best effort cleanup.
+		}
+	}
+
+	private static void WriteStep(string message, ConsoleColor color) {
+		var previous = Console.ForegroundColor;
+		try {
+			Console.ForegroundColor = color;
+			WriteStep(message);
+		} finally {
+			Console.ForegroundColor = previous;
+		}
 	}
 
 	private sealed class ReleaseManifest {

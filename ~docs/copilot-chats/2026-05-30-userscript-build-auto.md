@@ -63,3 +63,42 @@
 - dotnet build installer-core/OrganizedJihad.Release.Cli/OrganizedJihad.Release.Cli.csproj -c Release (pass)
 - dotnet run --project installer-core/OrganizedJihad.Release.Cli -- --version 0.2.3 --runtimes win-x64,linux-x64,osx-x64,osx-arm64 --output-root artifacts (pass)
 - dotnet run --project installer-core/OrganizedJihad.Release.Cli -- --version 0.2.3 --runtimes linux-x64 --output-root artifacts-managed-check --skip-userscript-build (pass)
+
+---
+
+## Session
+- Date: 2026-05-30
+- Session Number: 3
+- Scope: continue managed release hardening and PS1 validation path retirement
+
+## Summary
+- Integrated migration-path and win-x64 smoke checks directly into `OrganizedJihad.Release.Cli` so release validation no longer requires running `Test-ApiMigrationPath.ps1` / `Test-ReleaseSmoke.ps1` manually.
+- Added managed release CLI controls:
+	- `--skip-migration-check`
+	- `--skip-smoke-test`
+	- `--migration-first-run-url`
+	- `--migration-second-run-url`
+	- `--smoke-api-url`
+	- `--startup-timeout-seconds`
+- Updated active docs (`README`, `userscript/INSTALL.md`, operational + v0.2.3 release docs) to prioritize managed .NET installer/release commands.
+
+## Files Modified
+- installer-core/OrganizedJihad.Release.Cli/Program.cs
+- README.md
+- userscript/INSTALL.md
+- ~docs/plans/operational-recovery-playbook.md
+- ~docs/plans/release-v0.2.3.md
+- ~docs/plans/release-v0.2.3-github-body.md
+- ~docs/copilot-chats/2026-05-30-userscript-build-auto.md
+
+## Issues
+- Epic: #333
+- Installer/runtime migration: #334
+- Release pipeline migration: #335
+- Notes/docs refresh: #332
+- PR tracking: #209
+
+## Validation
+- dotnet build installer-core/OrganizedJihad.Release.Cli/OrganizedJihad.Release.Cli.csproj -c Release (pass)
+- dotnet run --project installer-core/OrganizedJihad.Release.Cli -- --version 0.2.3 --runtimes win-x64 --output-root artifacts-managed-validate --skip-userscript-build (pass; includes built-in migration + smoke checks)
+- dotnet run --project installer-core/OrganizedJihad.Release.Cli -- --version 0.2.3 --runtimes linux-x64 --output-root artifacts-managed-fast --skip-userscript-build --skip-migration-check --skip-smoke-test (pass)

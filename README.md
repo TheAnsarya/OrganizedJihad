@@ -34,7 +34,7 @@ See [Tracking Reference](~docs/plans/tracking-reference.md) for the complete dat
 
 ### Stable Release Download (v0.2.2)
 
-- GitHub Release: https://github.com/TheAnsarya/OrganizedJihad/releases/tag/v0.2.2
+- GitHub Release: <https://github.com/TheAnsarya/OrganizedJihad/releases/tag/v0.2.2>
 - Recommended asset: `OrganizedJihad.Installer.exe`
 - Verify integrity using bundled `SHA256SUMS.txt`
 - The EXE is self-contained (API + desktop + userscript payloads included); source repository files are not required.
@@ -193,16 +193,16 @@ dotnet run --project desktop-app
 
 ### Release Validation Automation
 
-```powershell
-# Validate migration path across cold start + repeat start using same DB
-pwsh -ExecutionPolicy Bypass -File .\Test-ApiMigrationPath.ps1
+```bash
+# Validate migration path + win-x64 smoke checks as part of managed matrix run
+dotnet run --project installer-core/OrganizedJihad.Release.Cli -- --version 0.2.3 --runtimes win-x64,linux-x64,osx-x64,osx-arm64
 
-# Smoke-test published API binary and key endpoints
-pwsh -ExecutionPolicy Bypass -File .\Test-ReleaseSmoke.ps1
+# Optional fast rerun while skipping managed validation checks
+dotnet run --project installer-core/OrganizedJihad.Release.Cli -- --version 0.2.3 --runtimes win-x64 --skip-migration-check --skip-smoke-test --skip-userscript-build
 ```
 
-`Publish-ReleaseArtifacts.ps1` now runs migration + smoke checks by default.
-Use `-SkipMigrationCheck` and/or `-SkipSmokeTest` only when intentionally bypassing validation.
+`OrganizedJihad.Release.Cli` now runs migration + smoke checks by default.
+Use `--skip-migration-check` and/or `--skip-smoke-test` only when intentionally bypassing validation.
 
 ### Running Tests
 

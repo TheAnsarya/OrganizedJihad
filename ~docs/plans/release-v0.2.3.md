@@ -14,6 +14,9 @@ v0.2.3 is the first cross-platform installer/runtime milestone: one installer fl
 - New managed release pipeline for 0.2.3:
   - `OrganizedJihad.Release.Cli`
   - Target runtimes: `win-x64`, `linux-x64`, `osx-x64`, `osx-arm64`
+  - Built-in reliability checks:
+    - migration cold-start + repeat-start validation
+    - win-x64 published API smoke probes (`/api/sync/health`, `/ui/settings`, `/ui/repair-status`, `/ui/userscript-handshake`)
 
 ## Installation Instructions
 
@@ -76,6 +79,11 @@ dotnet run --project installer-core/OrganizedJihad.Release.Cli -- --version 0.2.
 ```
 
 Managed artifact output now also copies release-body draft into artifact root as `RELEASE-NOTES.md`.
+
+Managed validation controls:
+
+- `--skip-migration-check` to bypass migration validation
+- `--skip-smoke-test` to bypass published API smoke checks
 
 ## Known Notes
 
