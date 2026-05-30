@@ -95,6 +95,36 @@
 
 ## Session
 - Date: 2026-05-30
+- Session Number: 25
+- Scope: continue API endpoint architecture cleanup via partial endpoint modules
+
+## Summary
+- Refactored `ApiUiEndpoints` into concern-specific partial files while preserving endpoint behavior and routes.
+- Kept `ApiUiEndpoints.cs` as a thin endpoint-orchestration shell calling settings/diagnostics/page mapping methods.
+- Added `ApiUiEndpoints.Settings.cs` for `/ui/settings` GET/POST handlers.
+- Added `ApiUiEndpoints.Diagnostics.cs` for `/ui/repair-status` and `/ui/userscript-handshake` handlers.
+- Added `ApiUiEndpoints.Pages.cs` for `/ui` and `/ui/tray-health` handlers.
+
+## Files Modified
+- api/Endpoints/ApiUiEndpoints.cs
+- api/Endpoints/ApiUiEndpoints.Settings.cs
+- api/Endpoints/ApiUiEndpoints.Diagnostics.cs
+- api/Endpoints/ApiUiEndpoints.Pages.cs
+- ~docs/copilot-chats/2026-05-30-userscript-build-auto.md
+
+## Issues
+- Epic: #333
+- Installer/runtime migration: #334
+- PR tracking: #209
+
+## Validation
+- dotnet build api/OrganizedJihad.Api.csproj -c Release (pass)
+- dotnet build api/OrganizedJihad.Api.TrayHost/OrganizedJihad.Api.TrayHost.csproj -c Release (pass)
+
+---
+
+## Session
+- Date: 2026-05-30
 - Session Number: 24
 - Scope: continue tray host refactor by extracting shared runtime utilities
 
