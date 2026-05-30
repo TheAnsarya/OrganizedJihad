@@ -90,6 +90,33 @@
 
 ## Validation
 - dotnet build api/OrganizedJihad.Api.TrayHost/OrganizedJihad.Api.TrayHost.csproj -c Release (pass)
+
+---
+
+## Session
+- Date: 2026-05-30
+- Session Number: 24
+- Scope: continue tray host refactor by extracting shared runtime utilities
+
+## Summary
+- Added shared helper `TrayHostRuntimeUtilities` to centralize common runtime behavior used by both Windows tray and headless hosts.
+- Moved shared health probing, settings-file URL update detection, log append behavior, and argument quoting into the utility class.
+- Updated `TrayContext.Windows.Runtime` and `HeadlessRuntimeHost` to use the shared utility methods while preserving existing host-specific behavior.
+- Kept runtime semantics unchanged; this refactor reduces duplication and clarifies architecture boundaries.
+
+## Files Modified
+- api/OrganizedJihad.Api.TrayHost/TrayHostRuntimeUtilities.cs
+- api/OrganizedJihad.Api.TrayHost/TrayContext.Windows.Runtime.cs
+- api/OrganizedJihad.Api.TrayHost/HeadlessRuntimeHost.cs
+- ~docs/copilot-chats/2026-05-30-userscript-build-auto.md
+
+## Issues
+- Epic: #333
+- Installer/runtime migration: #334
+- PR tracking: #209
+
+## Validation
+- dotnet build api/OrganizedJihad.Api.TrayHost/OrganizedJihad.Api.TrayHost.csproj -c Release (pass)
 - dotnet build api/OrganizedJihad.Api.csproj -c Release (pass)
 
 ---

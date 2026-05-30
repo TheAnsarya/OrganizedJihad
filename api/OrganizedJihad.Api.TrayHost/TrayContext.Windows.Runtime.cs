@@ -64,19 +64,8 @@ internal sealed partial class TrayContext {
 
 	private void ReloadRuntimeSettingsIfChanged() {
 		try {
-			if (!File.Exists(_settingsPath)) {
-				return;
-			}
-
-			var lastWriteUtc = File.GetLastWriteTimeUtc(_settingsPath);
-			if (lastWriteUtc <= _lastSettingsWriteUtc) {
-				return;
-			}
-
-			var raw = File.ReadAllText(_settingsPath);
-			if (TrayRuntimeSettingsParser.TryReadApiBaseUrl(raw, out var configuredApiUrl)
-				&& !string.IsNullOrWhiteSpace(configuredApiUrl)
-				&& !string.Equals(_options.ApiUrl, configuredApiUrl, StringComparison.OrdinalIgnoreCase)) {
+			if (TrayHostRuntimeUtilities.TryGetUpdatedApiUrl(_settingsPath, ref _lastSettingsWriteUtc, _options.ApiUrl, out var configuredApiUrl)
+				&& !string.IsNullOrWhiteSpace(configuredApiUrl)) {
 				_options.ApiUrl = configuredApiUrl;
 				_notifyIcon.BalloonTipTitle = "OJ API Tray";
 				_notifyIcon.BalloonTipText = $"API base URL updated to {_options.ApiUrl}.";
@@ -87,8 +76,6 @@ internal sealed partial class TrayContext {
 					RestartApi();
 				}
 			}
-
-			_lastSettingsWriteUtc = lastWriteUtc;
 		} catch (Exception ex) {
 			AppendTrayLog($"Settings reload failed: {ex.Message}");
 			// Ignore transient parsing or file lock issues and retry later.
@@ -161,13 +148,7 @@ internal sealed partial class TrayContext {
 	}
 
 	private bool IsApiHealthy() {
-		try {
-			var healthUrl = _options.ApiUrl.TrimEnd('/') + "/api/sync/health";
-			var response = _httpClient.GetAsync(healthUrl).GetAwaiter().GetResult();
-			return response.IsSuccessStatusCode;
-		} catch {
-			return false;
-		}
+		return TrayHostRuntimeUtilities.IsApiHealthy(_httpClient, _options.ApiUrl);
 	}
 
 	private void StopApiProcessesByName() {
@@ -207,16 +188,11 @@ internal sealed partial class TrayContext {
 	}
 
 	private static string Quote(string value) {
-		return $"\"{value.Replace("\"", "\\\"")}\"";
+		return TrayHostRuntimeUtilities.QuoteArgument(value);
 	}
 
 	private void AppendTrayLog(string message) {
-		try {
-			var line = $"[{DateTime.UtcNow:O}] {message}{Environment.NewLine}";
-			File.AppendAllText(_logPath, line);
-		} catch {
-			// Best effort logging only.
-		}
+		TrayHostRuntimeUtilities.AppendLog(_logPath, message);
 	}
 }
 #endif

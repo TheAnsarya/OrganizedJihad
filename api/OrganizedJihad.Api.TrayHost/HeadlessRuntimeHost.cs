@@ -61,19 +61,8 @@ internal sealed class HeadlessRuntimeHost : IDisposable {
 
 	private void ReloadRuntimeSettingsIfChanged() {
 		try {
-			if (!File.Exists(_settingsPath)) {
-				return;
-			}
-
-			var lastWriteUtc = File.GetLastWriteTimeUtc(_settingsPath);
-			if (lastWriteUtc <= _lastSettingsWriteUtc) {
-				return;
-			}
-
-			var raw = File.ReadAllText(_settingsPath);
-			if (TrayRuntimeSettingsParser.TryReadApiBaseUrl(raw, out var configuredApiUrl)
-				&& !string.IsNullOrWhiteSpace(configuredApiUrl)
-				&& !string.Equals(_options.ApiUrl, configuredApiUrl, StringComparison.OrdinalIgnoreCase)) {
+			if (TrayHostRuntimeUtilities.TryGetUpdatedApiUrl(_settingsPath, ref _lastSettingsWriteUtc, _options.ApiUrl, out var configuredApiUrl)
+				&& !string.IsNullOrWhiteSpace(configuredApiUrl)) {
 				_options.ApiUrl = configuredApiUrl;
 				AppendLog($"Applied updated apiBaseUrl from settings: {_options.ApiUrl}");
 
@@ -86,30 +75,17 @@ internal sealed class HeadlessRuntimeHost : IDisposable {
 					_apiProcess = null;
 				}
 			}
-
-			_lastSettingsWriteUtc = lastWriteUtc;
 		} catch (Exception ex) {
 			AppendLog($"Settings reload failed: {ex.Message}");
 		}
 	}
 
 	private bool IsApiHealthy() {
-		try {
-			var healthUrl = _options.ApiUrl.TrimEnd('/') + "/api/sync/health";
-			var response = _httpClient.GetAsync(healthUrl).GetAwaiter().GetResult();
-			return response.IsSuccessStatusCode;
-		} catch {
-			return false;
-		}
+		return TrayHostRuntimeUtilities.IsApiHealthy(_httpClient, _options.ApiUrl);
 	}
 
 	private void AppendLog(string message) {
-		try {
-			var line = $"[{DateTime.UtcNow:O}] {message}{Environment.NewLine}";
-			File.AppendAllText(_logPath, line);
-		} catch {
-			// Best effort logging only.
-		}
+		TrayHostRuntimeUtilities.AppendLog(_logPath, message);
 	}
 
 	public void Dispose() {
