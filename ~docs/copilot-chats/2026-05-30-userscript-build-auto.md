@@ -164,3 +164,30 @@
 ## Validation
 - dotnet test tests/OrganizedJihad.Release.Cli.Tests/OrganizedJihad.Release.Cli.Tests.csproj -c Release (pass)
 - dotnet build installer-core/OrganizedJihad.Release.Cli/OrganizedJihad.Release.Cli.csproj -c Release (pass)
+
+---
+
+## Session
+- Date: 2026-05-30
+- Session Number: 6
+- Scope: release CLI parser strictness and release-note alignment
+
+## Summary
+- Hardened `ReleaseOptions.Parse` to reject unknown value-options and unknown flags instead of silently ignoring them.
+- Added test coverage for unknown option and unknown flag rejection paths.
+- Updated v0.2.3 release draft docs to reflect host-compatible smoke behavior and `--smoke-runtime auto|none|<runtime>` control.
+
+## Files Modified
+- installer-core/OrganizedJihad.Release.Cli/Program.cs
+- tests/OrganizedJihad.Release.Cli.Tests/ReleaseOptionsTests.cs
+- README.md
+- ~docs/plans/release-v0.2.3-github-body.md
+- ~docs/copilot-chats/2026-05-30-userscript-build-auto.md
+
+## Issues
+- Epic: #333
+- Release pipeline migration: #335
+- PR tracking: #209
+
+## Validation
+- dotnet test tests/OrganizedJihad.Release.Cli.Tests/OrganizedJihad.Release.Cli.Tests.csproj -c Release (pass)

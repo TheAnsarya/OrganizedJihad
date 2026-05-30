@@ -196,7 +196,7 @@ dotnet run --project desktop-app
 ### Release Validation Automation
 
 ```bash
-# Validate migration path + win-x64 smoke checks as part of managed matrix run
+# Validate migration path + host-compatible smoke checks as part of managed matrix run
 dotnet run --project installer-core/OrganizedJihad.Release.Cli -- --version 0.2.3 --runtimes win-x64,linux-x64,osx-x64,osx-arm64
 
 # Force smoke checks on linux-x64 publish (when running on compatible host)

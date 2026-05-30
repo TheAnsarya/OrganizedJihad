@@ -39,6 +39,24 @@ internal sealed class ReleaseOptions {
 	public static ReleaseOptions Parse(string[] args) {
 		var map = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
 		var flags = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+		var knownValueOptions = new HashSet<string>(StringComparer.OrdinalIgnoreCase) {
+			"version",
+			"configuration",
+			"output-root",
+			"runtimes",
+			"release-notes-path",
+			"migration-first-run-url",
+			"migration-second-run-url",
+			"smoke-api-url",
+			"startup-timeout-seconds",
+			"smoke-runtime",
+		};
+		var knownFlags = new HashSet<string>(StringComparer.OrdinalIgnoreCase) {
+			"skip-yarn-install",
+			"skip-userscript-build",
+			"skip-migration-check",
+			"skip-smoke-test",
+		};
 
 		for (var i = 0; i < args.Length; i++) {
 			var token = args[i]?.Trim() ?? string.Empty;
@@ -53,6 +71,18 @@ internal sealed class ReleaseOptions {
 			}
 
 			flags.Add(key);
+		}
+
+		foreach (var key in map.Keys) {
+			if (!knownValueOptions.Contains(key)) {
+				throw new ArgumentException($"Unknown option '--{key}'.");
+			}
+		}
+
+		foreach (var key in flags) {
+			if (!knownFlags.Contains(key)) {
+				throw new ArgumentException($"Unknown flag '--{key}'.");
+			}
 		}
 
 		var runtimesRaw = map.TryGetValue("runtimes", out var runtimesValue)

@@ -101,4 +101,18 @@ public class ReleaseOptionsTests {
 
 		action.Should().Throw<ArgumentException>().WithMessage("*not present in --runtimes*");
 	}
+
+	[Fact]
+	public void Parse_Should_Throw_For_Unknown_Value_Option() {
+		var action = () => ReleaseOptions.Parse(["--not-a-real-option", "123"]);
+
+		action.Should().Throw<ArgumentException>().WithMessage("*Unknown option*--not-a-real-option*");
+	}
+
+	[Fact]
+	public void Parse_Should_Throw_For_Unknown_Flag() {
+		var action = () => ReleaseOptions.Parse(["--not-a-real-flag"]);
+
+		action.Should().Throw<ArgumentException>().WithMessage("*Unknown flag*--not-a-real-flag*");
+	}
 }

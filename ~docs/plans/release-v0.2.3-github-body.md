@@ -21,7 +21,8 @@ Each runtime folder includes `SHA256SUMS.txt`.
 - New multi-runtime managed release CLI: `OrganizedJihad.Release.Cli`.
 - Managed release CLI now includes built-in validation checks:
   - migration-path validation (cold start + repeat start)
-  - win-x64 published API smoke probes for `/api/sync/health`, `/ui/settings`, `/ui/repair-status`, and `/ui/userscript-handshake`
+  - host-compatible published API smoke probes for `/api/sync/health`, `/ui/settings`, `/ui/repair-status`, and `/ui/userscript-handshake`
+  - configurable smoke runtime selection via `--smoke-runtime auto|none|<runtime>`
 
 ### Install
 
