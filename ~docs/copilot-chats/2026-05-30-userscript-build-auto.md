@@ -490,6 +490,36 @@
 
 ## Session
 - Date: 2026-05-30
+- Session Number: 17
+- Scope: tray icon quality uplift for `ico` output + no-text alternative set
+
+## Summary
+- Rebuilt `oj-tray-alt-steel.ico` as a multi-resolution icon package (`16, 20, 24, 32, 40, 48, 64, 128, 256`) using 32-bit ARGB PNG icon entries to improve tray rendering clarity and color fidelity.
+- Added graphics-only no-text alternative icon pair:
+	- `oj-tray-alt-steel-glyph.png`
+	- `oj-tray-alt-steel-glyph.ico`
+- Updated tray host icon selection order to prefer `oj-tray-alt-steel.ico` by default, with primary icon fallback.
+
+## Files Modified
+- api/OrganizedJihad.Api.TrayHost/Assets/Icons/oj-tray-alt-steel.ico
+- api/OrganizedJihad.Api.TrayHost/Assets/Icons/oj-tray-alt-steel-glyph.ico
+- api/OrganizedJihad.Api.TrayHost/Assets/Icons/oj-tray-alt-steel-glyph.png
+- api/OrganizedJihad.Api.TrayHost/Program.cs
+- ~docs/copilot-chats/2026-05-30-userscript-build-auto.md
+
+## Issues
+- Epic: #333
+- Installer/runtime migration: #334
+- PR tracking: #209
+
+## Validation
+- dotnet build api/OrganizedJihad.Api.TrayHost/OrganizedJihad.Api.TrayHost.csproj -c Release (pass)
+- Visual preview of `oj-tray-alt-steel.png` and `oj-tray-alt-steel-glyph.png` (pass)
+
+---
+
+## Session
+- Date: 2026-05-30
 - Session Number: 14
 - Scope: installer userscript step regression fixes (Opera GX detection + stale CLI path + unwanted elevation relaunch)
 

@@ -342,7 +342,9 @@ internal sealed class TrayContext : ApplicationContext {
 	private Icon? TryLoadTrayIcon() {
 		try {
 			var candidates = new[] {
+				Path.Combine(AppContext.BaseDirectory, "Assets", "Icons", "oj-tray-alt-steel.ico"),
 				Path.Combine(AppContext.BaseDirectory, "Assets", "Icons", "oj-tray-primary.ico"),
+				Path.Combine(AppContext.BaseDirectory, "oj-tray-alt-steel.ico"),
 				Path.Combine(AppContext.BaseDirectory, "oj-tray-primary.ico"),
 			};
 
