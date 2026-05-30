@@ -461,6 +461,35 @@
 
 ## Session
 - Date: 2026-05-30
+- Session Number: 16
+- Scope: tray icon visual redesign (transparent OJ monogram from Hero Wars favicon palette)
+
+## Summary
+- Replaced tray icon assets to remove legacy/H-like glyph treatment and use transparent-background `OJ` monogram only.
+- Sampled Hero Wars favicon colors and applied them to the new icon set (yellow/orange/red/burgundy palette family).
+- Regenerated primary icon used by tray host plus two alternate visual variants.
+
+## Files Modified
+- api/OrganizedJihad.Api.TrayHost/Assets/Icons/oj-tray-primary.ico
+- api/OrganizedJihad.Api.TrayHost/Assets/Icons/oj-tray-primary.png
+- api/OrganizedJihad.Api.TrayHost/Assets/Icons/oj-tray-alt-steel.ico
+- api/OrganizedJihad.Api.TrayHost/Assets/Icons/oj-tray-alt-steel.png
+- api/OrganizedJihad.Api.TrayHost/Assets/Icons/oj-tray-alt-gold.ico
+- api/OrganizedJihad.Api.TrayHost/Assets/Icons/oj-tray-alt-gold.png
+- ~docs/copilot-chats/2026-05-30-userscript-build-auto.md
+
+## Issues
+- Epic: #333
+- Installer/runtime migration: #334
+- PR tracking: #209
+
+## Validation
+- Visual verification via direct image preview of regenerated PNG assets.
+
+---
+
+## Session
+- Date: 2026-05-30
 - Session Number: 14
 - Scope: installer userscript step regression fixes (Opera GX detection + stale CLI path + unwanted elevation relaunch)
 
