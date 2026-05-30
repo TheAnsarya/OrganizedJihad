@@ -10,6 +10,8 @@ using OrganizedJihad.Api.Extensions;
 
 var builder = WebApplication.CreateBuilder(args);
 
+// Registers all previous Program.cs service wiring:
+// CORS, DbContextFactory, HttpClient, SyncService, and UI/diagnostics services.
 builder.Services.AddApiComposition();
 
 var app = builder.Build();
@@ -20,7 +22,9 @@ app.UseCors();
 app.UseUiSecurityHeaders();
 
 app.MapControllers();
+// Maps all previous /ui* endpoints and their logic via extracted endpoint modules.
 app.MapApiUiEndpoints();
+// Maps the previous root info endpoint.
 app.MapSystemEndpoints();
 
 app.Run();

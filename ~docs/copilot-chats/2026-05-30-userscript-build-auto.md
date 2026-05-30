@@ -91,6 +91,32 @@
 ## Validation
 - dotnet build api/OrganizedJihad.Api.TrayHost/OrganizedJihad.Api.TrayHost.csproj -c Release (pass)
 - dotnet build api/OrganizedJihad.Api.csproj -c Release (pass)
+
+---
+
+## Session
+- Date: 2026-05-30
+- Session Number: 22
+- Scope: verify no functionality loss after Program decomposition + call-flow clarity
+
+## Summary
+- Verified that API and TrayHost entrypoint composition roots still invoke all previous behavior through extracted endpoint/service/runtime classes.
+- Added explicit composition comments in startup entrypoints to make call flow discoverable for maintainers.
+- Revalidated both TrayHost and API release builds after the clarification-only edits.
+
+## Files Modified
+- api/Program.cs
+- api/OrganizedJihad.Api.TrayHost/Program.cs
+- ~docs/copilot-chats/2026-05-30-userscript-build-auto.md
+
+## Issues
+- Epic: #333
+- Installer/runtime migration: #334
+- PR tracking: #209
+
+## Validation
+- dotnet build api/OrganizedJihad.Api.TrayHost/OrganizedJihad.Api.TrayHost.csproj -c Release (pass)
+- dotnet build api/OrganizedJihad.Api.csproj -c Release (pass)
 - dotnet build installer-core/OrganizedJihad.Installer.Cli/OrganizedJihad.Installer.Cli.csproj -c Release (pass)
 - dotnet build installer-core/OrganizedJihad.Release.Cli/OrganizedJihad.Release.Cli.csproj -c Release (pass)
 - dotnet run --project installer-core/OrganizedJihad.Release.Cli -- --version 0.2.3 --runtimes win-x64,linux-x64,osx-x64,osx-arm64 --output-root artifacts (pass)
