@@ -57,6 +57,9 @@ builder.Services.AddScoped<ITeamRecommendationStateStore, TeamRecommendationSync
 builder.Services.AddScoped<SyncService>();
 
 var app = builder.Build();
+var uiProbeClient = new HttpClient {
+	Timeout = TimeSpan.FromSeconds(4),
+};
 
 // Initialize database with EF Core migrations
 // Skip in test environment to avoid conflicts with InMemory provider
@@ -223,304 +226,10 @@ app.MapGet("/ui", (HttpContext context) => {
 		return Results.StatusCode(StatusCodes.Status403Forbidden);
 	}
 
-	var baseUrl = $"{context.Request.Scheme}://{context.Request.Host}";
-	var html = $$"""
-<!doctype html>
-<html lang="en">
-<head>
-	<meta charset="utf-8" />
-	<meta name="viewport" content="width=device-width, initial-scale=1" />
-	<title>OrganizedJihad API Control</title>
-	<style>
-		:root {
-			--oj-purple: #3a143c;
-			--oj-brown-dark: #2a1f14;
-			--oj-orange: #d4821d;
-			--oj-brown-light: #90590d;
-			--bg: #2a1f14;
-			--card: #3a143c;
-			--ink: #fdf3dc;
-			--muted: #d2b583;
-			--line: #90590d;
-			--ok: #d4821d;
-			--warn: #e2a957;
-			--accent: #d4821d;
-		}
-
-		* {
-			box-sizing: border-box;
-		}
-
-		body {
-			margin: 0;
-			font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-			background: radial-gradient(circle at top, #3a143c 0%, #2a1f14 60%);
-			color: var(--ink);
-		}
-
-		main {
-			max-width: 960px;
-			margin: 0 auto;
-			padding: 28px 18px 40px;
-		}
-
-		h1 {
-			margin: 0 0 10px;
-			font-size: 30px;
-		}
-
-		p {
-			margin: 0;
-			color: var(--muted);
-		}
-
-		.grid {
-			display: grid;
-			grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
-			gap: 14px;
-			margin-top: 20px;
-		}
-
-		.card {
-			background: rgba(58, 20, 60, 0.92);
-			border: 1px solid var(--line);
-			border-radius: 12px;
-			padding: 14px;
-		}
-
-		h2 {
-			margin: 0 0 10px;
-			font-size: 18px;
-		}
-
-		.stat {
-			font-size: 26px;
-			font-weight: 700;
-			margin: 2px 0;
-		}
-
-		.ok {
-			color: var(--ok);
-		}
-
-		.warn {
-			color: var(--warn);
-		}
-
-		.actions {
-			display: flex;
-			flex-wrap: wrap;
-			gap: 10px;
-			margin-top: 14px;
-		}
-
-		a.button {
-			display: inline-block;
-			padding: 9px 12px;
-			border-radius: 8px;
-			border: 1px solid var(--oj-brown-light);
-			background: rgba(212, 130, 29, 0.16);
-			color: var(--accent);
-			text-decoration: none;
-			font-weight: 600;
-		}
-
-		code {
-			background: rgba(42, 31, 20, 0.92);
-			padding: 2px 6px;
-			border-radius: 6px;
-		}
-	</style>
-</head>
-<body>
-	<main>
-		<h1>OrganizedJihad API Control</h1>
-		<p>
-			This local page is used for service-style runtime checks, userscript connectivity validation, and setup/update guidance.
-		</p>
-
-		<div class="grid">
-			<section class="card">
-				<h2>Service Status</h2>
-				<div id="healthState" class="stat">Checking...</div>
-				<p id="healthDetail">Probing <code>{{baseUrl}}/api/sync/health</code></p>
-			</section>
-
-			<section class="card">
-				<h2>Sync Metadata</h2>
-				<div id="lastSync" class="stat">...</div>
-				<p>Last known sync time from browser userscript.</p>
-			</section>
-
-			<section class="card">
-				<h2>Setup / Update</h2>
-				<p>
-					If userscript, API, or tray startup behavior needs repair, rerun installer script from your install bundle.
-				</p>
-				<div id="repairSummary" style="margin-top: 10px; color: var(--muted);">Checking runtime artifacts...</div>
-				<div id="taskSummary" style="margin-top: 6px; color: var(--muted);">Checking startup task status...</div>
-				<div id="handshakeSummary" style="margin-top: 6px; color: var(--muted);">Checking userscript handshake...</div>
-				<div class="actions">
-					<a class="button" href="/api/sync/health" target="_blank" rel="noreferrer">Open Health JSON</a>
-					<a class="button" href="/api/sync/last-sync" target="_blank" rel="noreferrer">Open Last Sync JSON</a>
-					<a class="button" href="/api/sync/stats" target="_blank" rel="noreferrer">Open Stats JSON</a>
-					<a class="button" href="/ui/userscript-handshake" target="_blank" rel="noreferrer">Open Handshake JSON</a>
-					<a class="button" id="openHeroWars" href="https://www.hero-wars.com/" target="_blank" rel="noreferrer">Open Hero Wars</a>
-				</div>
-			</section>
-
-			<section class="card">
-				<h2>UI Settings</h2>
-				<p style="margin-bottom: 10px;">Settings are persisted to <code>api-ui-settings.json</code> next to API binaries.</p>
-				<div style="display: grid; gap: 8px;">
-					<label style="display: flex; gap: 8px; align-items: center; color: var(--ink);">
-						<input id="autoHealth" type="checkbox" />
-						Auto-load health and sync data when page opens
-					</label>
-					<label style="display: grid; gap: 4px;">
-						<span style="color: var(--ink);">API Base URL</span>
-						<input id="apiBaseUrl" type="text" style="padding: 8px; border-radius: 8px; border: 1px solid var(--line); background: var(--oj-brown-dark); color: var(--ink);" />
-					</label>
-					<label style="display: grid; gap: 4px;">
-						<span style="color: var(--ink);">Preferred Hero Wars URL</span>
-						<input id="heroWarsUrl" type="text" style="padding: 8px; border-radius: 8px; border: 1px solid var(--line); background: var(--oj-brown-dark); color: var(--ink);" />
-					</label>
-					<label style="display: grid; gap: 4px;">
-						<span style="color: var(--ink);">Notes</span>
-						<textarea id="uiNotes" rows="3" style="padding: 8px; border-radius: 8px; border: 1px solid var(--line); background: var(--oj-brown-dark); color: var(--ink);"></textarea>
-					</label>
-					<div class="actions">
-						<button id="saveSettings" style="cursor: pointer; padding: 9px 12px; border-radius: 8px; border: 1px solid var(--oj-brown-light); background: rgba(212, 130, 29, 0.16); color: var(--accent); font-weight: 600;">Save Settings</button>
-					</div>
-					<div id="settingsStatus" style="color: var(--muted);">Loading settings...</div>
-				</div>
-			</section>
-		</div>
-	</main>
-
-	<script>
-		async function fetchJson(url) {
-			const response = await fetch(url, { cache: 'no-store' });
-			if (!response.ok) {
-				throw new Error('HTTP ' + response.status);
-			}
-			return await response.json();
-		}
-
-		async function refresh() {
-			const healthState = document.getElementById('healthState');
-			const healthDetail = document.getElementById('healthDetail');
-			const lastSync = document.getElementById('lastSync');
-			const repairSummary = document.getElementById('repairSummary');
-			const taskSummary = document.getElementById('taskSummary');
-			const handshakeSummary = document.getElementById('handshakeSummary');
-
-			try {
-				const health = await fetchJson('/api/sync/health');
-				healthState.textContent = 'Online';
-				healthState.className = 'stat ok';
-				healthDetail.textContent = 'API health: ' + JSON.stringify(health);
-			} catch (error) {
-				healthState.textContent = 'Unavailable';
-				healthState.className = 'stat warn';
-				healthDetail.textContent = 'Health probe failed: ' + error.message;
-			}
-
-			try {
-				const sync = await fetchJson('/api/sync/last-sync');
-				if (sync.lastSyncTime) {
-					lastSync.textContent = new Date(sync.lastSyncTime).toLocaleString();
-				} else {
-					lastSync.textContent = 'No sync yet';
-				}
-			} catch {
-				lastSync.textContent = 'Unknown';
-			}
-
-			try {
-				const repair = await fetchJson('/ui/repair-status');
-				repairSummary.textContent = repair.recommendation + ' (Checked: ' + new Date(repair.checkedUtc).toLocaleString() + ')';
-				taskSummary.textContent = 'Startup tasks -> Service: ' + repair.apiServiceTaskStatus + ' | Tray: ' + repair.apiTrayTaskStatus;
-				handshakeSummary.textContent = 'Handshake -> ' + repair.handshakeStatus + (repair.handshakeLastSyncUtc ? ' (Last sync: ' + new Date(repair.handshakeLastSyncUtc).toLocaleString() + ')' : ' (No sync recorded yet)');
-			} catch {
-				repairSummary.textContent = 'Could not retrieve runtime repair status.';
-				taskSummary.textContent = 'Startup task status unavailable.';
-				handshakeSummary.textContent = 'Userscript handshake status unavailable.';
-			}
-		}
-
-		async function loadSettings() {
-			const autoHealth = document.getElementById('autoHealth');
-			const apiBaseUrl = document.getElementById('apiBaseUrl');
-			const heroWarsUrl = document.getElementById('heroWarsUrl');
-			const uiNotes = document.getElementById('uiNotes');
-			const openHeroWars = document.getElementById('openHeroWars');
-			const settingsStatus = document.getElementById('settingsStatus');
-
-			try {
-				const settings = await fetchJson('/ui/settings');
-				autoHealth.checked = !!settings.autoOpenHealthOnLoad;
-				apiBaseUrl.value = settings.apiBaseUrl || window.location.origin;
-				heroWarsUrl.value = settings.preferredHeroWarsUrl || 'https://www.hero-wars.com/';
-				uiNotes.value = settings.notes || '';
-				openHeroWars.href = heroWarsUrl.value;
-				settingsStatus.textContent = 'Settings loaded.';
-			} catch (error) {
-				settingsStatus.textContent = 'Settings load failed: ' + error.message;
-			}
-		}
-
-		async function saveSettings() {
-			const autoHealth = document.getElementById('autoHealth');
-			const apiBaseUrl = document.getElementById('apiBaseUrl');
-			const heroWarsUrl = document.getElementById('heroWarsUrl');
-			const uiNotes = document.getElementById('uiNotes');
-			const openHeroWars = document.getElementById('openHeroWars');
-			const settingsStatus = document.getElementById('settingsStatus');
-
-			settingsStatus.textContent = 'Saving settings...';
-			try {
-				const response = await fetch('/ui/settings', {
-					method: 'POST',
-					headers: { 'Content-Type': 'application/json' },
-					body: JSON.stringify({
-						autoOpenHealthOnLoad: autoHealth.checked,
-						apiBaseUrl: apiBaseUrl.value,
-						preferredHeroWarsUrl: heroWarsUrl.value,
-						notes: uiNotes.value
-					})
-				});
-				if (!response.ok) {
-					throw new Error('HTTP ' + response.status);
-				}
-				const saved = await response.json();
-				apiBaseUrl.value = saved.apiBaseUrl || apiBaseUrl.value;
-				heroWarsUrl.value = saved.preferredHeroWarsUrl || heroWarsUrl.value;
-				openHeroWars.href = heroWarsUrl.value;
-				settingsStatus.textContent = 'Settings saved at ' + new Date(saved.updatedUtc).toLocaleString();
-			} catch (error) {
-				settingsStatus.textContent = 'Save failed: ' + error.message;
-			}
-		}
-
-		document.getElementById('saveSettings').addEventListener('click', saveSettings);
-
-		(async function initialize() {
-			await loadSettings();
-			const autoHealth = document.getElementById('autoHealth');
-			if (autoHealth.checked) {
-				await refresh();
-				setInterval(refresh, 15000);
-			} else {
-				document.getElementById('healthState').textContent = 'Auto refresh disabled';
-				document.getElementById('healthState').className = 'stat warn';
-				document.getElementById('healthDetail').textContent = 'Enable "Auto-load health" in settings, then save and refresh this page.';
-			}
-		})();
-	</script>
-</body>
-</html>
-""";
+	var baseUrl = GetRequestBaseUrl(context);
+	var html = LoadUiTemplate("api-control.html", new Dictionary<string, string> {
+		["__BASE_URL__"] = WebUtility.HtmlEncode(baseUrl),
+	});
 
 	return Results.Content(html, "text/html");
 });
@@ -532,9 +241,8 @@ app.MapGet("/ui/tray-health", async (HttpContext context, IDbContextFactory<Game
 
 	var healthStatus = "unknown";
 	try {
-		using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(4) };
 		var probeUrl = $"{context.Request.Scheme}://{context.Request.Host}/api/sync/health";
-		using var response = await http.GetAsync(probeUrl);
+		using var response = await uiProbeClient.GetAsync(probeUrl);
 		healthStatus = response.IsSuccessStatusCode ? "online" : $"degraded ({(int)response.StatusCode})";
 	} catch {
 		healthStatus = "offline";
@@ -542,95 +250,14 @@ app.MapGet("/ui/tray-health", async (HttpContext context, IDbContextFactory<Game
 
 	var repair = await GetUserscriptHandshakeStatusAsync(contextFactory);
 	var now = DateTime.UtcNow;
-	var html = $$"""
-<!doctype html>
-<html lang="en">
-<head>
-	<meta charset="utf-8" />
-	<meta name="viewport" content="width=device-width, initial-scale=1" />
-	<title>OJ Tray Health</title>
-	<style>
-		:root {
-			--oj-purple: #3a143c;
-			--oj-brown-dark: #2a1f14;
-			--oj-orange: #d4821d;
-			--oj-brown-light: #90590d;
-			--ink: #fdf3dc;
-			--muted: #d2b583;
-		}
-
-		* { box-sizing: border-box; }
-		body {
-			margin: 0;
-			font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-			background: radial-gradient(circle at top, var(--oj-purple) 0%, var(--oj-brown-dark) 58%);
-			color: var(--ink);
-		}
-		main {
-			max-width: 860px;
-			margin: 0 auto;
-			padding: 24px 18px 36px;
-		}
-		.grid {
-			display: grid;
-			grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-			gap: 12px;
-			margin-top: 14px;
-		}
-		.card {
-			border: 1px solid var(--oj-brown-light);
-			background: rgba(58, 20, 60, 0.88);
-			border-radius: 12px;
-			padding: 12px;
-		}
-		h1 { margin: 0; }
-		h2 { margin: 0 0 8px; font-size: 17px; }
-		.value { font-size: 25px; font-weight: 700; }
-		.muted { color: var(--muted); }
-		a.button {
-			display: inline-block;
-			padding: 8px 11px;
-			margin-right: 8px;
-			margin-top: 8px;
-			border-radius: 8px;
-			border: 1px solid var(--oj-brown-light);
-			background: rgba(212, 130, 29, 0.18);
-			color: var(--ink);
-			text-decoration: none;
-		}
-	</style>
-</head>
-<body>
-	<main>
-		<h1>OrganizedJihad Tray Health</h1>
-		<p class="muted">Live runtime summary for tray-launched API instance.</p>
-		<div class="grid">
-			<section class="card">
-				<h2>API Health</h2>
-				<div class="value">{{healthStatus}}</div>
-				<div class="muted">Probe URL: {{context.Request.Scheme}}://{{context.Request.Host}}/api/sync/health</div>
-			</section>
-			<section class="card">
-				<h2>API Base URL</h2>
-				<div class="value">{{context.Request.Scheme}}://{{context.Request.Host}}</div>
-				<div class="muted">Checked UTC: {{now:yyyy-MM-dd HH:mm:ss}}</div>
-			</section>
-			<section class="card">
-				<h2>Userscript Handshake</h2>
-				<div class="value">{{repair.Status}}</div>
-				<div class="muted">Last sync: {{(repair.LastSyncUtc is null ? "none" : repair.LastSyncUtc.Value.ToString("u"))}}</div>
-			</section>
-		</div>
-		<div style="margin-top: 14px;">
-			<a class="button" href="/ui">Open API Control UI</a>
-			<a class="button" href="/ui/repair-status">Open Repair Status JSON</a>
-			<a class="button" href="/ui/userscript-handshake">Open Handshake JSON</a>
-			<a class="button" href="/api/sync/stats">Open Sync Stats JSON</a>
-		</div>
-	</main>
-</body>
-</html>
-""";
+	var baseUrl = GetRequestBaseUrl(context);
+	var html = LoadUiTemplate("tray-health.html", new Dictionary<string, string> {
+		["__BASE_URL__"] = WebUtility.HtmlEncode(baseUrl),
+		["__HEALTH_STATUS__"] = WebUtility.HtmlEncode(healthStatus),
+		["__CHECKED_UTC__"] = WebUtility.HtmlEncode(now.ToString("yyyy-MM-dd HH:mm:ss")),
+		["__HANDSHAKE_STATUS__"] = WebUtility.HtmlEncode(repair.Status),
+		["__LAST_SYNC_UTC__"] = WebUtility.HtmlEncode(repair.LastSyncUtc is null ? "none" : repair.LastSyncUtc.Value.ToString("u")),
+	});
 
 	return Results.Content(html, "text/html");
 });
@@ -678,6 +305,28 @@ static string ResolveApiDatabasePath() {
 	}
 
 	return Path.Combine(AppContext.BaseDirectory, "herowars.db");
+}
+
+static string GetRequestBaseUrl(HttpContext context) {
+	return $"{context.Request.Scheme}://{context.Request.Host}";
+}
+
+static string LoadUiTemplate(string templateFileName, IReadOnlyDictionary<string, string> replacements) {
+	var templatePath = ResolveUiTemplatePath(templateFileName);
+	if (!File.Exists(templatePath)) {
+		throw new FileNotFoundException($"UI template not found: {templatePath}");
+	}
+
+	var html = File.ReadAllText(templatePath);
+	foreach (var replacement in replacements) {
+		html = html.Replace(replacement.Key, replacement.Value, StringComparison.Ordinal);
+	}
+
+	return html;
+}
+
+static string ResolveUiTemplatePath(string templateFileName) {
+	return Path.Combine(AppContext.BaseDirectory, "Resources", "UiTemplates", templateFileName);
 }
 
 static bool IsLocalUiAccessRequest(HttpContext context) {

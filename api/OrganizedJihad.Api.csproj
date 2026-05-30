@@ -20,6 +20,13 @@
   </ItemGroup>
 
   <ItemGroup>
+    <Content Include="Resources\UiTemplates\**\*.html">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+    </Content>
+  </ItemGroup>
+
+  <ItemGroup>
     <Compile Remove="OrganizedJihad.Api.TrayHost\**\*.cs" />
     <EmbeddedResource Remove="OrganizedJihad.Api.TrayHost\**\*" />
     <None Remove="OrganizedJihad.Api.TrayHost\**\*" />

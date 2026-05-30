@@ -576,6 +576,37 @@
 
 ## Session
 - Date: 2026-05-30
+- Session Number: 19
+- Scope: Program.cs UI template extraction + Program.cs cleanup
+
+## Summary
+- Removed large raw HTML/CSS route strings from `api/Program.cs` for `/ui` and `/ui/tray-health`.
+- Added external UI template files under `api/Resources/UiTemplates/`:
+	- `api-control.html`
+	- `tray-health.html`
+- Added Program.cs helpers to resolve/load template files and inject runtime tokens (base URL, health state, timestamps, handshake data).
+- Updated API project file to copy template resources into build/publish outputs.
+- Cleaned up Program.cs health probe flow by reusing a shared `HttpClient` for `/ui/tray-health` instead of allocating per request.
+
+## Files Modified
+- api/Program.cs
+- api/OrganizedJihad.Api.csproj
+- api/Resources/UiTemplates/api-control.html
+- api/Resources/UiTemplates/tray-health.html
+- ~docs/copilot-chats/2026-05-30-userscript-build-auto.md
+
+## Issues
+- Epic: #333
+- Installer/runtime migration: #334
+- PR tracking: #209
+
+## Validation
+- dotnet build api/OrganizedJihad.Api.csproj -c Release (pass)
+
+---
+
+## Session
+- Date: 2026-05-30
 - Session Number: 14
 - Scope: installer userscript step regression fixes (Opera GX detection + stale CLI path + unwanted elevation relaunch)
 
