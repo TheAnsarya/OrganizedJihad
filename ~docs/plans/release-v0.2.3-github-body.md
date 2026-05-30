@@ -1,64 +1,86 @@
-## OrganizedJihad v0.2.3 - Three Kingdoms, One Installer
+## OrganizedJihad v0.2.3 - Empire Forge: One Installer to Rule Three Platforms
 
-Cross-platform installer/runtime milestone for Windows, macOS, and Linux.
+v0.2.3 is the cross-platform release milestone: a unified managed install/release flow for Windows, Linux, and macOS.
 
-### Downloads
+### Download Assets
 
-- Windows: `artifacts/v0.2.3/win-x64/OrganizedJihad.Installer.exe`
-- Linux: `artifacts/v0.2.3/linux-x64/OrganizedJihad.Installer`
-- macOS Intel: `artifacts/v0.2.3/osx-x64/OrganizedJihad.Installer`
-- macOS Apple Silicon: `artifacts/v0.2.3/osx-arm64/OrganizedJihad.Installer`
+- Windows x64 installer: `artifacts/v0.2.3/win-x64/OrganizedJihad.Installer.exe`
+- Linux x64 installer: `artifacts/v0.2.3/linux-x64/OrganizedJihad.Installer`
+- macOS Intel installer: `artifacts/v0.2.3/osx-x64/OrganizedJihad.Installer`
+- macOS Apple Silicon installer: `artifacts/v0.2.3/osx-arm64/OrganizedJihad.Installer`
 
-Each runtime folder includes `SHA256SUMS.txt`.
+Each runtime directory includes `SHA256SUMS.txt`.
 
-### What Changed
+### Highlights
 
-- New managed installer CLI (`OrganizedJihad.Installer.Cli`) for cross-platform install orchestration.
-- Avalonia installer UI now runs managed installer CLI only (PowerShell fallback removed).
-- Runtime host is now multi-targeted:
-  - Windows tray mode retained.
-  - macOS/Linux headless supervisor fallback enabled.
-- New multi-runtime managed release CLI: `OrganizedJihad.Release.Cli`.
-- Managed release CLI now includes built-in validation checks:
-  - migration-path validation (cold start + repeat start)
-  - host-compatible published API smoke probes for `/api/sync/health`, `/ui/settings`, `/ui/repair-status`, and `/ui/userscript-handshake`
-  - configurable smoke runtime selection via `--smoke-runtime auto|none|<runtime>`
-  - configurable API readiness bounds via `--startup-timeout-seconds <10..600>`
-  - non-destructive plan mode via `--dry-run`
-  - optional machine-readable plan output via `--dry-run-format json`
-  - optional dry-run artifact export via `--dry-run-output-path`
-  - built-in option help via `--help`
+- Managed installer-first architecture (`OrganizedJihad.Installer.Cli`) is now the baseline.
+- Avalonia installer UI now depends on managed installer CLI only.
+- Runtime host model is cross-platform:
+  - Windows tray host flow retained.
+  - Linux/macOS headless runtime-host supervision enabled.
+- Managed release pipeline (`OrganizedJihad.Release.Cli`) now includes:
+  - migration path validation (cold start + repeat start)
+  - host-compatible smoke checks for `/api/sync/health`, `/ui/settings`, `/ui/repair-status`, `/ui/userscript-handshake`
+  - dry-run planning modes (`--dry-run`, `--dry-run-format json`, `--dry-run-output-path`)
+  - dry-run policy gates for CI (`--dry-run-fail-on-warnings`, `--dry-run-fail-on-errors`)
+  - runtime and artifact path safety guardrails
 
-### Install
+Dry-run JSON output includes policy-friendly metadata: `schemaVersion`, `notices`, `hasWarnings`, and `hasErrors`.
+
+### Installation
 
 #### Windows
 
-1. Run `OrganizedJihad.Installer.exe`.
-2. Complete installer step buttons.
+1. Run `OrganizedJihad.Installer.exe` from the `win-x64` asset folder.
+2. In the installer UI, run each step in sequence:
+   - Install or verify Tampermonkey
+   - Install API server/runtime host
+   - Install desktop app
+   - Install userscript
+3. Verify API health at `http://localhost:5124/api/sync/health`.
 
-#### macOS / Linux
+#### Linux and macOS
+
+1. Download the runtime-matching `OrganizedJihad.Installer` binary.
+2. Mark as executable and run:
 
 ```bash
 chmod +x OrganizedJihad.Installer
 ./OrganizedJihad.Installer
 ```
 
-Then complete installer workflow and userscript setup guide.
+1. Follow installer prompts and complete userscript setup.
 
-### Userscript Setup Guide
+### Userscript Setup Guide and Screenshots
 
-- Guide: `~docs/installer-guide/tampermonkey-setup.html`
-- Screenshot links:
+- Local setup guide file: `~docs/installer-guide/tampermonkey-setup.html`
+- Screenshot references:
   - `~docs/installer-guide/screenshots/chrome-setup.png`
   - `~docs/installer-guide/screenshots/edge-setup.png`
   - `~docs/installer-guide/screenshots/firefox-setup.png`
   - `~docs/installer-guide/screenshots/opera-setup.png`
   - `~docs/installer-guide/screenshots/opera-gx-setup.png`
+  - `~docs/installer-guide/screenshots/tampermonkey-import-utilities.png`
+  - `~docs/installer-guide/screenshots/tampermonkey-enabled-dashboard.png`
 
-### Tracking Issues
+### Optional Integrity Verification
+
+Use the runtime folder checksum file before install:
+
+```bash
+sha256sum -c SHA256SUMS.txt
+```
+
+On PowerShell:
+
+```powershell
+Get-FileHash .\OrganizedJihad.Installer.exe -Algorithm SHA256
+```
+
+### Tracking
 
 - Epic: #333
-- Installer core: #334
+- Installer core migration: #334
 - Runtime host abstraction: #331
-- Release matrix: #335
+- Release matrix and validation: #335
 - Notes/docs refresh: #332

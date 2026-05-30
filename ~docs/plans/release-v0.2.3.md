@@ -101,6 +101,15 @@ Managed validation controls:
 - `--dry-run` to print execution planning details without running build/publish/check commands
 - `--dry-run-format text|json` to control dry-run plan output shape
 - `--dry-run-output-path <path>` to write dry-run plan output to a file for CI artifacts
+- `--dry-run-fail-on-warnings` to fail dry-run with non-zero exit when warnings are present
+- `--dry-run-fail-on-errors` to fail dry-run with non-zero exit when errors are present
+
+Dry-run JSON metadata for CI:
+
+- `schemaVersion`
+- `notices`
+- `hasWarnings`
+- `hasErrors`
 
 Compatibility entrypoint note:
 

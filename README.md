@@ -65,6 +65,9 @@ Useful release CLI options:
 - `--dry-run` to print the execution plan without running build/publish/check commands
 - `--dry-run-format text|json` to choose human-readable or machine-readable plan output
 - `--dry-run-output-path <path>` to persist dry-run plan output to a file
+- `--dry-run-fail-on-warnings` to return non-zero when dry-run detects warnings
+- `--dry-run-fail-on-errors` to return non-zero when dry-run detects errors
+- dry-run JSON output includes `schemaVersion`, `notices`, `hasWarnings`, and `hasErrors` for CI policy gates
 - `--startup-timeout-seconds <10..600>` to tune migration/smoke API readiness wait bounds
 - `--runtimes` now validates token safety (max 16 entries; no path separators)
 - `--output-root` is safety-checked to ensure artifact cleanup stays inside repository boundaries
@@ -216,6 +219,9 @@ dotnet run --project installer-core/OrganizedJihad.Release.Cli -- --version 0.2.
 
 # Emit and persist plan JSON for CI artifacts
 dotnet run --project installer-core/OrganizedJihad.Release.Cli -- --version 0.2.3 --runtimes win-x64,linux-x64 --dry-run --dry-run-format json --dry-run-output-path artifacts/dryrun/plan.json
+
+# Fail CI on dry-run warnings
+dotnet run --project installer-core/OrganizedJihad.Release.Cli -- --version 0.2.3 --runtimes osx-arm64 --dry-run --dry-run-fail-on-warnings
 
 # Print built-in command help
 dotnet run --project installer-core/OrganizedJihad.Release.Cli -- --help

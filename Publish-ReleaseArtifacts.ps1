@@ -8,6 +8,8 @@ param(
 	[switch]$SkipYarnInstall,
 	[switch]$SkipUserscriptBuild,
 	[switch]$DryRun,
+	[switch]$DryRunFailOnWarnings,
+	[switch]$DryRunFailOnErrors,
 	[int]$StartupTimeoutSeconds,
 	[ValidateSet('text', 'json')]
 	[string]$DryRunFormat = 'text',
@@ -55,6 +57,12 @@ if ($SkipUserscriptBuild) {
 }
 if ($DryRun) {
 	$releaseCliArgs += '--dry-run'
+}
+if ($DryRunFailOnWarnings) {
+	$releaseCliArgs += '--dry-run-fail-on-warnings'
+}
+if ($DryRunFailOnErrors) {
+	$releaseCliArgs += '--dry-run-fail-on-errors'
 }
 if ($PSBoundParameters.ContainsKey('StartupTimeoutSeconds')) {
 	$releaseCliArgs += @('--startup-timeout-seconds', $StartupTimeoutSeconds)

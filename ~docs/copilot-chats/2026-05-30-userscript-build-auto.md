@@ -321,3 +321,67 @@
 
 ## Validation
 - dotnet test tests/OrganizedJihad.Release.Cli.Tests/OrganizedJihad.Release.Cli.Tests.csproj -c Release (pass)
+---
+
+## Session
+- Date: 2026-05-30
+- Session Number: 11
+- Scope: Automated userscript build session logging
+
+## Summary
+- Auto-generated entry from userscript build pipeline.
+- Captures a timestamp and a git working-tree snapshot for traceability.
+
+## Files Modified
+- ublish-ReleaseArtifacts-0.2.3.ps1
+- Publish-ReleaseArtifacts.ps1
+- README.md
+- installer-core/OrganizedJihad.Release.Cli/Program.cs
+- tests/OrganizedJihad.Release.Cli.Tests/ReleaseOptionsTests.cs
+- userscript/package.json
+- ~docs/oj-manual-prompts-log.txt
+- ~docs/plans/release-v0.2.3-github-body.md
+
+## Validation
+- yarn build
+
+## Generated
+- Timestamp UTC: 2026-05-30T10:36:19.030Z
+
+---
+
+## Session
+- Date: 2026-05-30
+- Session Number: 12
+- Scope: 0.2.3 release prep finalization (release notes + full artifact matrix build)
+
+## Summary
+- Finalized `~docs/plans/release-v0.2.3-github-body.md` with a polished release title, expanded install steps, integrity verification commands, and explicit userscript screenshot references.
+- Added dry-run CI policy controls to managed release CLI (`--dry-run-fail-on-warnings`, `--dry-run-fail-on-errors`) with schema-stable JSON metadata fields for gating (`schemaVersion`, `notices`, `hasWarnings`, `hasErrors`).
+- Updated legacy release wrapper scripts to forward new dry-run policy controls.
+- Executed full managed release build for `win-x64`, `linux-x64`, `osx-x64`, and `osx-arm64` with migration and host-compatible smoke validation enabled.
+- Verified generated artifact directories and expected installer + checksum files for each runtime.
+
+## Files Modified
+- installer-core/OrganizedJihad.Release.Cli/Program.cs
+- tests/OrganizedJihad.Release.Cli.Tests/ReleaseOptionsTests.cs
+- Publish-ReleaseArtifacts.ps1
+- Publish-ReleaseArtifacts-0.2.3.ps1
+- README.md
+- userscript/package.json
+- ~docs/plans/release-v0.2.3-github-body.md
+- ~docs/plans/release-v0.2.3.md
+- ~docs/copilot-chats/2026-05-30-userscript-build-auto.md
+
+## Issues
+- Epic: #333
+- Installer core migration: #334
+- Release matrix and validation: #335
+- Notes/docs refresh: #332
+- PR tracking: #209
+
+## Validation
+- dotnet test tests/OrganizedJihad.Release.Cli.Tests/OrganizedJihad.Release.Cli.Tests.csproj -c Release (pass)
+- dotnet run --project installer-core/OrganizedJihad.Release.Cli -- --version 0.2.3 --runtimes osx-arm64 --dry-run --dry-run-format json --dry-run-fail-on-warnings (expected fail; warning policy gate confirmed)
+- dotnet run --project installer-core/OrganizedJihad.Release.Cli -- --version 0.2.3 --runtimes win-x64 --dry-run --dry-run-format json --dry-run-fail-on-warnings (pass)
+- dotnet run --project installer-core/OrganizedJihad.Release.Cli -- --version 0.2.3 --runtimes win-x64,linux-x64,osx-x64,osx-arm64 --output-root artifacts (pass)

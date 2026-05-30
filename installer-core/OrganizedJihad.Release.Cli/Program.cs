@@ -44,6 +44,8 @@ internal static class Program {
 		Console.WriteLine("  --dry-run                                      Print plan without running publish/checks");
 		Console.WriteLine("  --dry-run-format <text|json>                   Dry-run output format (default: text)");
 		Console.WriteLine("  --dry-run-output-path <path>                   Optional file path to write dry-run plan");
+		Console.WriteLine("  --dry-run-fail-on-warnings                     Return non-zero when dry-run has warnings");
+		Console.WriteLine("  --dry-run-fail-on-errors                       Return non-zero when dry-run has errors");
 		Console.WriteLine("  --skip-yarn-install                            Skip yarn install");
 		Console.WriteLine("  --skip-userscript-build                        Skip userscript build");
 		Console.WriteLine("  --skip-migration-check                         Skip migration validation");
@@ -64,6 +66,8 @@ internal sealed class ReleaseOptions {
 	public bool DryRun { get; init; }
 	public string DryRunFormat { get; init; } = "text";
 	public string? DryRunOutputPath { get; init; }
+	public bool DryRunFailOnWarnings { get; init; }
+	public bool DryRunFailOnErrors { get; init; }
 	public string SmokeRuntime { get; init; } = "auto";
 	public string ReleaseNotesPath { get; init; } = "~docs/plans/release-v0.2.3-github-body.md";
 	public string MigrationFirstRunUrl { get; init; } = "http://localhost:5334";
@@ -94,6 +98,8 @@ internal sealed class ReleaseOptions {
 			"skip-migration-check",
 			"skip-smoke-test",
 			"dry-run",
+			"dry-run-fail-on-warnings",
+			"dry-run-fail-on-errors",
 		};
 
 		for (var i = 0; i < args.Length; i++) {
@@ -181,6 +187,8 @@ internal sealed class ReleaseOptions {
 			DryRunOutputPath = map.TryGetValue("dry-run-output-path", out var dryRunOutputPath) && !string.IsNullOrWhiteSpace(dryRunOutputPath)
 				? dryRunOutputPath.Trim()
 				: null,
+			DryRunFailOnWarnings = flags.Contains("dry-run-fail-on-warnings"),
+			DryRunFailOnErrors = flags.Contains("dry-run-fail-on-errors"),
 			SmokeRuntime = smokeRuntime,
 			ReleaseNotesPath = map.TryGetValue("release-notes-path", out var releaseNotesPath) && !string.IsNullOrWhiteSpace(releaseNotesPath)
 				? releaseNotesPath
@@ -284,6 +292,9 @@ internal sealed class ReleasePipeline {
 	private readonly string _artifactRoot;
 	private readonly string _bundlePayloadDir;
 	private readonly string? _smokeRuntime;
+	private bool _dryRunHasWarnings;
+	private bool _dryRunHasErrors;
+	private readonly List<string> _dryRunMessages = [];
 
 	public ReleasePipeline(ReleaseOptions options) {
 		_options = options;
@@ -299,6 +310,12 @@ internal sealed class ReleasePipeline {
 
 		if (_options.DryRun) {
 			WriteExecutionPlan();
+			if (_options.DryRunFailOnErrors && _dryRunHasErrors) {
+				throw new InvalidOperationException("Dry-run reported errors and --dry-run-fail-on-errors is enabled.");
+			}
+			if (_options.DryRunFailOnWarnings && _dryRunHasWarnings) {
+				throw new InvalidOperationException("Dry-run reported warnings and --dry-run-fail-on-warnings is enabled.");
+			}
 			WriteStep("Dry-run complete. No build/publish/check processes executed.");
 			return;
 		}
@@ -331,6 +348,8 @@ internal sealed class ReleasePipeline {
 	}
 
 	private void WriteExecutionPlan() {
+		EvaluateDryRunMessages();
+
 		var plan = string.Equals(_options.DryRunFormat, "json", StringComparison.OrdinalIgnoreCase)
 			? BuildExecutionPlanJson()
 			: BuildExecutionPlanText();
@@ -355,7 +374,7 @@ internal sealed class ReleasePipeline {
 				? "not scheduled (no host-compatible runtime in matrix)"
 				: $"enabled for '{_smokeRuntime}'";
 
-		var lines = new[] {
+		var lines = new List<string> {
 			$"[OJ Release.Cli] Dry-run execution plan:",
 			$"[OJ Release.Cli]   version: {_options.Version}",
 			$"[OJ Release.Cli]   configuration: {_options.Configuration}",
@@ -369,12 +388,20 @@ internal sealed class ReleasePipeline {
 			$"[OJ Release.Cli]   startup timeout seconds: {_options.StartupTimeoutSeconds}",
 		};
 
+		if (_dryRunMessages.Count > 0) {
+			lines.Add("[OJ Release.Cli]   dry-run notices:");
+			foreach (var message in _dryRunMessages) {
+				lines.Add($"[OJ Release.Cli]     - {message}");
+			}
+		}
+
 		return string.Join(Environment.NewLine, lines);
 	}
 
 	private string BuildExecutionPlanJson() {
 		var hostRuntime = GetHostRuntimeIdentifier();
 		var payload = new DryRunPlan {
+			SchemaVersion = "1.0",
 			Version = _options.Version,
 			Configuration = _options.Configuration,
 			OutputRoot = _artifactRoot,
@@ -392,6 +419,9 @@ internal sealed class ReleasePipeline {
 				BuildEnabled = !_options.SkipUserscriptBuild,
 			},
 			StartupTimeoutSeconds = _options.StartupTimeoutSeconds,
+			Notices = _dryRunMessages.ToArray(),
+			HasWarnings = _dryRunHasWarnings,
+			HasErrors = _dryRunHasErrors,
 		};
 
 		var json = JsonSerializer.Serialize(payload, new JsonSerializerOptions {
@@ -408,6 +438,38 @@ internal sealed class ReleasePipeline {
 		}
 
 		return Path.Combine(_repoRoot, configuredPath.Replace('/', Path.DirectorySeparatorChar));
+	}
+
+	private void EvaluateDryRunMessages() {
+		_dryRunMessages.Clear();
+		_dryRunHasWarnings = false;
+		_dryRunHasErrors = false;
+
+		if (_options.SkipSmokeTest) {
+			_dryRunMessages.Add("INFO: smoke checks disabled by --skip-smoke-test.");
+		}
+
+		if (!_options.SkipSmokeTest && string.IsNullOrWhiteSpace(_smokeRuntime)) {
+			_dryRunMessages.Add("WARNING: no host-compatible runtime selected for smoke checks.");
+			_dryRunHasWarnings = true;
+		}
+
+		if (!_options.SkipUserscriptBuild && _options.SkipYarnInstall) {
+			_dryRunMessages.Add("WARNING: userscript build enabled while yarn install is skipped.");
+			_dryRunHasWarnings = true;
+		}
+
+		if (_options.SkipMigrationCheck && _options.SkipSmokeTest) {
+			_dryRunMessages.Add("WARNING: both migration and smoke validation are disabled.");
+			_dryRunHasWarnings = true;
+		}
+
+		if (_options.DryRunFailOnWarnings && !_dryRunHasWarnings) {
+			_dryRunMessages.Add("INFO: --dry-run-fail-on-warnings set; no warnings detected.");
+		}
+		if (_options.DryRunFailOnErrors && !_dryRunHasErrors) {
+			_dryRunMessages.Add("INFO: --dry-run-fail-on-errors set; no errors detected.");
+		}
 	}
 
 	private void BuildUserscriptBundle() {
@@ -993,6 +1055,7 @@ internal sealed class ReleasePipeline {
 	}
 
 	private sealed class DryRunPlan {
+		public string SchemaVersion { get; init; } = string.Empty;
 		public string Version { get; init; } = string.Empty;
 		public string Configuration { get; init; } = string.Empty;
 		public string OutputRoot { get; init; } = string.Empty;
@@ -1002,6 +1065,9 @@ internal sealed class ReleasePipeline {
 		public DryRunSmokePlan Smoke { get; init; } = new();
 		public DryRunUserscriptPlan Userscript { get; init; } = new();
 		public int StartupTimeoutSeconds { get; init; }
+		public string[] Notices { get; init; } = [];
+		public bool HasWarnings { get; init; }
+		public bool HasErrors { get; init; }
 	}
 
 	private sealed class DryRunSmokePlan {

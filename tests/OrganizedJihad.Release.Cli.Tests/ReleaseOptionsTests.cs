@@ -33,13 +33,17 @@ public class ReleaseOptionsTests {
 			"--skip-userscript-build",
 			"--skip-migration-check",
 			"--skip-smoke-test",
-			"--dry-run"
+			"--dry-run",
+			"--dry-run-fail-on-warnings",
+			"--dry-run-fail-on-errors"
 		]);
 
 		options.SkipUserscriptBuild.Should().BeTrue();
 		options.SkipMigrationCheck.Should().BeTrue();
 		options.SkipSmokeTest.Should().BeTrue();
 		options.DryRun.Should().BeTrue();
+		options.DryRunFailOnWarnings.Should().BeTrue();
+		options.DryRunFailOnErrors.Should().BeTrue();
 	}
 
 	[Fact]
