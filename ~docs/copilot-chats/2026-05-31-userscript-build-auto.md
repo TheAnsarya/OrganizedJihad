@@ -963,3 +963,54 @@
 
 ## Validation
 - dotnet test tests/OrganizedJihad.Api.Tests/OrganizedJihad.Api.Tests.csproj (pass, 99/99)
+
+---
+
+## Session
+- Date: 2026-05-31
+- Session Number: 26
+- Scope: continuation wave - objective-aware calibration scale and API validation hardening
+
+## Summary
+- Hardened recommendation calibration scaling to use objective-specific trend observations when available, with mode-wide fallback to avoid sparse-objective regressions.
+- Hardened API request validation for unsupported trend-window overrides and unknown preference mode inputs to prevent silent fallback or accidental canonical mutation.
+- Expanded unit/integration regressions for objective-aware calibration scale behavior and new 400 validation paths.
+
+## High-Risk Slices Completed (6)
+1. Added objective-aware friction-scale resolution path so recommendation scoring can use objective-specific calibration bias instead of mode-only aggregates.
+2. Added sparse-objective fallback logic to mode-wide trend metrics to prevent degraded recommendations when objective observations are insufficient.
+3. Added explicit 400 validation for unsupported `preferredTrendWindowDays` on recommendations endpoint.
+4. Added explicit 400 validation for unsupported `preferredTrendWindowDays` on calibration endpoint.
+5. Added unknown-mode rejection for trend preference writes to prevent accidental mutation of canonical mode preferences from invalid input.
+6. Added integration regressions enforcing new validation contracts and error behavior at public API boundary.
+
+## Medium-Risk Slices Completed (12)
+1. Updated `ResolveSuggestedScaleFromModeState` signature to accept objective context.
+2. Added objective filter support in calibration trend-window builder.
+3. Added objective normalization on calibration observation filtering.
+4. Added mode-wide fallback window evaluation when filtered objective has zero samples.
+5. Wired objective context into orchestration `ResolveModeFrictionCalibrationScaleAsync`.
+6. Wired objective context from recommendation pipeline into orchestration friction-scale call.
+7. Updated calibration metadata response friction-scale computation to use latest objective context.
+8. Added service-level guard for unknown preference mode writes using known-mode validation.
+9. Added controller-level 400 mapping for `ArgumentException` from preference save path.
+10. Added integration test for invalid recommendation trend-window query override.
+11. Added integration test for invalid calibration trend-window query override.
+12. Added unit test proving objective-specific calibration scale diverges correctly from opposing objective observations.
+
+## Files Modified
+- api/Controllers/SyncQueryController.cs
+- api/Services/SyncService.cs
+- api/Services/TeamRecommendation/TeamRecommendationCalibrationStateMath.cs
+- api/Services/TeamRecommendation/TeamRecommendationOrchestrationMath.cs
+- tests/OrganizedJihad.Api.Tests/SyncControllerTests.cs
+- tests/OrganizedJihad.Api.Tests/TeamRecommendationMathTests.cs
+- ~docs/copilot-chats/2026-05-31-userscript-build-auto.md
+
+## Issues
+- Epic: #333
+- Installer/runtime migration umbrella used by current branch workflow: #334
+- PR tracking: #209
+
+## Validation
+- dotnet test tests/OrganizedJihad.Api.Tests/OrganizedJihad.Api.Tests.csproj (pass, 102/102)
