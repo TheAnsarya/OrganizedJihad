@@ -337,6 +337,64 @@ public class TeamRecommendationMathTests {
 		store.CalibrationState.Modes["arena"].Samples.Should().Be(1);
 	}
 
+	[Fact]
+	public async Task UpdateCalibrationStateAsync_Should_Normalize_Mode_Key_For_Alias_Input() {
+		await using var context = CreateContext();
+		var store = new FakeStateStore {
+			CalibrationState = new TeamRecommendationCalibrationState {
+				Modes = new Dictionary<string, TeamRecommendationCalibrationModeState>(StringComparer.OrdinalIgnoreCase)
+			}
+		};
+		var backtest = new TeamRecommendationBacktestResponse {
+			Mode = "ta",
+			Objective = "balanced",
+			MatchedTeamCount = 2,
+			MatchedBattleSamples = 10,
+			MeanAbsoluteError = 0.10,
+			MeanBrierScore = 0.08,
+			MeanPredictedWin = 0.60,
+			MeanActualWin = 0.55,
+		};
+
+		await TeamRecommendationOrchestrationMath.UpdateCalibrationStateAsync(store, context, backtest, [7, 30, 90]);
+
+		store.CalibrationState.Modes.Should().ContainKey("arena");
+		store.CalibrationState.Modes.Should().NotContainKey("ta");
+	}
+
+	[Fact]
+	public async Task UpdateCalibrationStateAsync_Should_Normalize_Objective_For_Persisted_State() {
+		await using var context = CreateContext();
+		var store = new FakeStateStore {
+			TrendPreferenceState = new TeamRecommendationTrendPreferenceState {
+				ModeTrendWindowDays = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase) {
+					["titan-arena"] = 90,
+				}
+			},
+			CalibrationState = new TeamRecommendationCalibrationState {
+				Modes = new Dictionary<string, TeamRecommendationCalibrationModeState>(StringComparer.OrdinalIgnoreCase)
+			}
+		};
+		var backtest = new TeamRecommendationBacktestResponse {
+			Mode = "ta",
+			Objective = "attack",
+			MatchedTeamCount = 2,
+			MatchedBattleSamples = 8,
+			MeanAbsoluteError = 0.12,
+			MeanBrierScore = 0.09,
+			MeanPredictedWin = 0.63,
+			MeanActualWin = 0.55,
+		};
+
+		await TeamRecommendationOrchestrationMath.UpdateCalibrationStateAsync(store, context, backtest, [7, 30, 90]);
+
+		var modeState = store.CalibrationState.Modes["arena"];
+		modeState.LastObjective.Should().Be("offense");
+		modeState.PreferredTrendWindowDays.Should().Be(90);
+		modeState.Observations.Should().NotBeEmpty();
+		modeState.Observations.Last().Objective.Should().Be("offense");
+	}
+
 	private static GameDatabaseContext CreateContext() {
 		var options = new DbContextOptionsBuilder<GameDatabaseContext>()
 			.UseInMemoryDatabase(Guid.NewGuid().ToString())

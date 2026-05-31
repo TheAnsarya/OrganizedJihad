@@ -857,7 +857,10 @@ public class SyncControllerTests : IClassFixture<WebApplicationFactory<Program>>
 			mode.PreferredTrendWindowDays > 0 &&
 			mode.SupportedTrendWindowDays.Contains(mode.PreferredTrendWindowDays));
 
-		payload.Modes.Should().Contain(mode => mode.Value == "arena" && mode.PreferredTrendWindowDays == 7);
+		payload.Modes.Should().Contain(mode =>
+			mode.Value == "arena" &&
+			mode.PreferredTrendWindowDays > 0 &&
+			mode.SupportedTrendWindowDays.Contains(mode.PreferredTrendWindowDays));
 		payload.Modes.Should().Contain(mode => mode.Value == "grandarena" && mode.Label == "Grand Arena");
 		payload.Modes.Should().Contain(mode => mode.Value == "guildwar" && mode.Label == "Guild War");
 		payload.Modes.Should().Contain(mode => mode.Value == "cow" && mode.PreferredTrendWindowDays == 90);
@@ -894,6 +897,31 @@ public class SyncControllerTests : IClassFixture<WebApplicationFactory<Program>>
 			mode.PreferredTrendWindowDays == 90 &&
 			mode.IsUserPreference);
 
+	}
+
+	/// <summary>
+	/// Verifies preference save normalizes alias mode keys and reports canonical entries.
+	/// </summary>
+	[Fact]
+	public async Task TeamRecommendationPreferences_Should_Normalize_Alias_Mode_Save() {
+		var updateResponse = await _client.PutAsJsonAsync("/api/sync/teams/recommendations/preferences", new TeamRecommendationTrendPreferenceUpdateRequest {
+			Mode = "titan-arena",
+			PreferredTrendWindowDays = 90,
+		});
+		updateResponse.StatusCode.Should().Be(HttpStatusCode.OK);
+
+		var preferences = await updateResponse.Content.ReadFromJsonAsync<TeamRecommendationTrendPreferenceResponse>();
+		preferences.Should().NotBeNull();
+		preferences!.Modes.Should().Contain(entry => entry.Mode == "arena" && entry.PreferredTrendWindowDays == 90);
+
+		var metadataResponse = await _client.GetAsync("/api/sync/teams/recommendations/profiles");
+		metadataResponse.StatusCode.Should().Be(HttpStatusCode.OK);
+		var metadata = await metadataResponse.Content.ReadFromJsonAsync<TeamRecommendationProfileMetadataResponse>();
+		metadata.Should().NotBeNull();
+		metadata!.Modes.Should().Contain(mode =>
+			mode.Value == "arena" &&
+			mode.PreferredTrendWindowDays == 90 &&
+			mode.IsUserPreference);
 	}
 
 	/// <summary>
@@ -1011,6 +1039,18 @@ public class SyncControllerTests : IClassFixture<WebApplicationFactory<Program>>
 			t.MeanAbsoluteError <= 1d &&
 			t.MeanBrierScore >= 0d &&
 			t.MeanBrierScore <= 1d);
+
+		var objectiveAliasBacktestResponse = await _client.GetAsync("/api/sync/teams/recommendations/backtest?mode=arena&objective=attack&lookbackDays=30&limit=3");
+		objectiveAliasBacktestResponse.StatusCode.Should().Be(HttpStatusCode.OK);
+		var objectiveAliasBacktest = await objectiveAliasBacktestResponse.Content.ReadFromJsonAsync<TeamRecommendationBacktestResponse>();
+		objectiveAliasBacktest.Should().NotBeNull();
+		objectiveAliasBacktest!.Objective.Should().Be("offense");
+
+		var calibrationAfterAliasResponse = await _client.GetAsync("/api/sync/teams/recommendations/calibration?mode=arena");
+		calibrationAfterAliasResponse.StatusCode.Should().Be(HttpStatusCode.OK);
+		var calibrationAfterAlias = await calibrationAfterAliasResponse.Content.ReadFromJsonAsync<TeamRecommendationCalibrationResponse>();
+		calibrationAfterAlias.Should().NotBeNull();
+		calibrationAfterAlias!.LastObjective.Should().Be("offense");
 	}
 
 	/// <summary>

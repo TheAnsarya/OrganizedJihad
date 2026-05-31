@@ -65,11 +65,16 @@ public static class TeamRecommendationOrchestrationMath {
 			return;
 		}
 
+		var normalizedMode = NormalizeMode(backtest.Mode);
+		var normalizedObjective = NormalizeObjective(backtest.Objective);
+		backtest.Mode = normalizedMode;
+		backtest.Objective = normalizedObjective;
+
 		var state = await stateStore.LoadCalibrationStateAsync(context);
 		var preferenceState = await stateStore.LoadTrendPreferenceStateAsync(context);
-		if (!state.Modes.TryGetValue(backtest.Mode, out var modeState)) {
+		if (!state.Modes.TryGetValue(normalizedMode, out var modeState)) {
 			modeState = new TeamRecommendationCalibrationModeState();
-			state.Modes[backtest.Mode] = modeState;
+			state.Modes[normalizedMode] = modeState;
 		}
 
 		TeamRecommendationCalibrationStateMath.ApplyBacktestObservation(

@@ -20,9 +20,7 @@ internal static class TeamRecommendationCalibrationStateMath {
 			return preferredTrendWindowDays.Value;
 		}
 
-		if (preferenceState != null &&
-			preferenceState.ModeTrendWindowDays.TryGetValue(mode, out var preferredByMode) &&
-			IsSupportedCalibrationTrendWindow(preferredByMode, supportedTrendWindows)) {
+		if (preferenceState != null && TryGetPreferredWindowFromPreferences(preferenceState, mode, supportedTrendWindows, out var preferredByMode)) {
 			return preferredByMode;
 		}
 
@@ -30,7 +28,7 @@ internal static class TeamRecommendationCalibrationStateMath {
 			return modeState.PreferredTrendWindowDays;
 		}
 
-		return TeamRecommendationProfileCatalog.GetDefaultCalibrationTrendWindowDays(mode);
+		return ResolveDefaultSupportedTrendWindowDays(mode, supportedTrendWindows);
 	}
 
 	/// <summary>
@@ -41,11 +39,60 @@ internal static class TeamRecommendationCalibrationStateMath {
 		TeamRecommendationTrendPreferenceState preferenceState,
 		IReadOnlyList<int> supportedTrendWindows
 	) {
-		if (preferenceState.ModeTrendWindowDays.TryGetValue(mode, out var preferredWindowDays) && IsSupportedCalibrationTrendWindow(preferredWindowDays, supportedTrendWindows)) {
+		if (TryGetPreferredWindowFromPreferences(preferenceState, mode, supportedTrendWindows, out var preferredWindowDays)) {
 			return preferredWindowDays;
 		}
 
-		return TeamRecommendationProfileCatalog.GetDefaultCalibrationTrendWindowDays(mode);
+		return ResolveDefaultSupportedTrendWindowDays(mode, supportedTrendWindows);
+	}
+
+	/// <summary>
+	/// Returns whether preferences contain a value for the specified mode, including legacy alias keys.
+	/// </summary>
+	public static bool HasModeTrendPreference(string mode, TeamRecommendationTrendPreferenceState? preferenceState) {
+		if (preferenceState == null) {
+			return false;
+		}
+
+		var normalizedMode = TeamRecommendationModeNormalization.NormalizeMode(mode);
+		if (preferenceState.ModeTrendWindowDays.ContainsKey(normalizedMode)) {
+			return true;
+		}
+
+		foreach (var key in preferenceState.ModeTrendWindowDays.Keys) {
+			if (string.Equals(TeamRecommendationModeNormalization.NormalizeMode(key), normalizedMode, StringComparison.OrdinalIgnoreCase)) {
+				return true;
+			}
+		}
+
+		return false;
+	}
+
+	/// <summary>
+	/// Saves a mode trend preference under canonical mode key and removes legacy alias duplicates.
+	/// </summary>
+	public static void SetModeTrendPreference(
+		TeamRecommendationTrendPreferenceState preferenceState,
+		string mode,
+		int preferredTrendWindowDays,
+		IReadOnlyList<int> supportedTrendWindows
+	) {
+		var normalizedMode = TeamRecommendationModeNormalization.NormalizeMode(mode);
+		if (!IsSupportedCalibrationTrendWindow(preferredTrendWindowDays, supportedTrendWindows)) {
+			throw new ArgumentOutOfRangeException(nameof(preferredTrendWindowDays), "Supported values: 7, 30, 90.");
+		}
+
+		var duplicateKeys = preferenceState.ModeTrendWindowDays.Keys
+			.Where(key =>
+				!string.Equals(key, normalizedMode, StringComparison.OrdinalIgnoreCase) &&
+				string.Equals(TeamRecommendationModeNormalization.NormalizeMode(key), normalizedMode, StringComparison.OrdinalIgnoreCase))
+			.ToList();
+
+		foreach (var duplicate in duplicateKeys) {
+			preferenceState.ModeTrendWindowDays.Remove(duplicate);
+		}
+
+		preferenceState.ModeTrendWindowDays[normalizedMode] = preferredTrendWindowDays;
 	}
 
 	/// <summary>
@@ -97,15 +144,17 @@ internal static class TeamRecommendationCalibrationStateMath {
 		DateTime nowUtc,
 		IReadOnlyList<int> supportedTrendWindows
 	) {
+		var normalizedMode = TeamRecommendationModeNormalization.NormalizeMode(backtest.Mode);
+		var normalizedObjective = TeamRecommendationModeNormalization.NormalizeObjective(backtest.Objective);
 		var nextSamples = Math.Max(1, modeState.Samples + 1);
 		modeState.MeanAbsoluteError = ((modeState.MeanAbsoluteError * modeState.Samples) + backtest.MeanAbsoluteError) / nextSamples;
 		modeState.MeanBrierScore = ((modeState.MeanBrierScore * modeState.Samples) + backtest.MeanBrierScore) / nextSamples;
 		var bias = backtest.MeanPredictedWin - backtest.MeanActualWin;
 		modeState.PredictionBias = ((modeState.PredictionBias * modeState.Samples) + bias) / nextSamples;
 		modeState.Samples = nextSamples;
-		modeState.LastObjective = backtest.Objective;
+		modeState.LastObjective = normalizedObjective;
 		modeState.LastUpdatedUtc = nowUtc;
-		modeState.PreferredTrendWindowDays = ResolvePreferredCalibrationTrendWindowDays(modeState, preferenceState, backtest.Mode, null, supportedTrendWindows);
+		modeState.PreferredTrendWindowDays = ResolvePreferredCalibrationTrendWindowDays(modeState, preferenceState, normalizedMode, null, supportedTrendWindows);
 		modeState.SuggestedFrictionScale = Math.Clamp(1d + (modeState.PredictionBias * 0.85d), 0.65d, 1.45d);
 		modeState.Observations.Add(new TeamRecommendationCalibrationObservation {
 			TimestampUtc = nowUtc,
@@ -114,7 +163,7 @@ internal static class TeamRecommendationCalibrationStateMath {
 			PredictionBias = Math.Clamp(backtest.MeanPredictedWin - backtest.MeanActualWin, -1d, 1d),
 			MatchedTeams = Math.Max(0, backtest.MatchedTeamCount),
 			MatchedSamples = Math.Max(0, backtest.MatchedBattleSamples),
-			Objective = backtest.Objective,
+			Objective = normalizedObjective,
 		});
 
 		var cutoff = nowUtc.AddDays(-120);
@@ -124,6 +173,47 @@ internal static class TeamRecommendationCalibrationStateMath {
 			.Take(256)
 			.OrderBy(observation => observation.TimestampUtc)
 			.ToList();
+	}
+
+	private static bool TryGetPreferredWindowFromPreferences(
+		TeamRecommendationTrendPreferenceState preferenceState,
+		string mode,
+		IReadOnlyList<int> supportedTrendWindows,
+		out int preferredWindowDays
+	) {
+		var normalizedMode = TeamRecommendationModeNormalization.NormalizeMode(mode);
+		if (preferenceState.ModeTrendWindowDays.TryGetValue(normalizedMode, out preferredWindowDays) && IsSupportedCalibrationTrendWindow(preferredWindowDays, supportedTrendWindows)) {
+			return true;
+		}
+
+		foreach (var (key, value) in preferenceState.ModeTrendWindowDays) {
+			if (!string.Equals(TeamRecommendationModeNormalization.NormalizeMode(key), normalizedMode, StringComparison.OrdinalIgnoreCase)) {
+				continue;
+			}
+
+			if (IsSupportedCalibrationTrendWindow(value, supportedTrendWindows)) {
+				preferredWindowDays = value;
+				return true;
+			}
+		}
+
+		preferredWindowDays = default;
+		return false;
+	}
+
+	private static int ResolveDefaultSupportedTrendWindowDays(string mode, IReadOnlyList<int> supportedTrendWindows) {
+		var defaultWindow = TeamRecommendationProfileCatalog.GetDefaultCalibrationTrendWindowDays(mode);
+		if (IsSupportedCalibrationTrendWindow(defaultWindow, supportedTrendWindows)) {
+			return defaultWindow;
+		}
+
+		var fallback = supportedTrendWindows
+			.Where(window => window > 0)
+			.Distinct()
+			.OrderBy(window => window)
+			.FirstOrDefault();
+
+		return fallback > 0 ? fallback : 30;
 	}
 
 	private static TeamRecommendationCalibrationTrendWindow BuildCalibrationTrendWindow(

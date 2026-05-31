@@ -1843,7 +1843,7 @@ public class SyncService {
 				Value = option.Value,
 				Label = option.Label,
 				PreferredTrendWindowDays = TeamRecommendationCalibrationStateMath.ResolveModePreferredTrendWindowDays(option.Value, preferenceState, SupportedCalibrationTrendWindowDays),
-				IsUserPreference = preferenceState.ModeTrendWindowDays.ContainsKey(option.Value),
+				IsUserPreference = TeamRecommendationCalibrationStateMath.HasModeTrendPreference(option.Value, preferenceState),
 				SupportedTrendWindowDays = [.. SupportedCalibrationTrendWindowDays],
 			})
 			.ToList();
@@ -1914,14 +1914,9 @@ public class SyncService {
 	/// Saves a preferred Team Recommendation trend window for a mode.
 	/// </summary>
 	public async Task<TeamRecommendationTrendPreferenceResponse> SetTeamRecommendationTrendPreferenceAsync(string mode, int preferredTrendWindowDays) {
-		var normalizedMode = TeamRecommendationOrchestrationMath.NormalizeMode(mode);
-		if (!TeamRecommendationCalibrationStateMath.IsSupportedCalibrationTrendWindow(preferredTrendWindowDays, SupportedCalibrationTrendWindowDays)) {
-			throw new ArgumentOutOfRangeException(nameof(preferredTrendWindowDays), "Supported values: 7, 30, 90.");
-		}
-
 		await using var context = await _contextFactory.CreateDbContextAsync();
 		var preferenceState = await _teamRecommendationStateStore.LoadTrendPreferenceStateAsync(context);
-		preferenceState.ModeTrendWindowDays[normalizedMode] = preferredTrendWindowDays;
+		TeamRecommendationCalibrationStateMath.SetModeTrendPreference(preferenceState, mode, preferredTrendWindowDays, SupportedCalibrationTrendWindowDays);
 		preferenceState.UpdatedAtUtc = DateTime.UtcNow;
 
 		await _teamRecommendationStateStore.SaveTrendPreferenceStateAsync(context, preferenceState);
