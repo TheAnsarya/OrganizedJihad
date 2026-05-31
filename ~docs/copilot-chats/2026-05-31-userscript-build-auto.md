@@ -862,3 +862,54 @@
 - dotnet test tests/OrganizedJihad.Api.Tests/OrganizedJihad.Api.Tests.csproj (pass, 95/95)
 - yarn test (pass, 37/37 suites, 843/843 tests)
 - yarn build (pass)
+
+---
+
+## Session
+- Date: 2026-05-31
+- Session Number: 24
+- Scope: continuation wave - separator-insensitive alias hardening and objective normalization parity
+
+## Summary
+- Hardened shared Team Recommendation normalization to collapse separator-heavy input (spaces, underscores, hyphens, slashes) before alias resolution, reducing noisy-query drift.
+- Added broader objective alias support and rewired profile and external-signal layers to consume shared objective normalization for parity across scoring, metadata, and signal weighting.
+- Expanded unit and integration regressions for spaced/slashed mode aliases and objective aliases, then reran focused and full API sweeps.
+
+## High-Risk Slices Completed (6)
+1. Added compact-token normalization pipeline in shared mode/objective normalizer to sanitize noisy query input consistently.
+2. Extended canonical mode alias coverage to include additional live-query patterns (`ranked`, spaced mode names, slash-separated dungeon aliases).
+3. Extended canonical objective alias coverage to include offensive/defensive/sustain/speed intent variants.
+4. Switched Team Recommendation profile scoring resolution to shared objective normalization to prevent objective weighting drift.
+5. Switched external signal objective-bias logic to shared objective normalization to prevent confidence adjustment drift.
+6. Added integration-level alias regressions validating normalized response payload mode/objective values through the public HTTP endpoint.
+
+## Medium-Risk Slices Completed (12)
+1. Added mode token collapse helper that strips non-alphanumeric separators.
+2. Added objective token collapse helper reuse for consistent alias matching behavior.
+3. Added strict `IsKnownMode` helper with explicit alias-token catalog.
+4. Added strict `IsKnownObjective` helper with explicit alias-token catalog.
+5. Added mode unit test coverage for uppercase alias normalization (`PVP`).
+6. Added mode unit test coverage for spaced alias normalization (`Grand Arena`, `Guild War`).
+7. Added mode unit test coverage for slash alias normalization (`titan/dungeon`).
+8. Added mode unit test coverage for spaced ToE alias normalization (`power tournament`).
+9. Added objective unit test coverage for alias mapping (`atk`, `defensive`, `tempo`, `survival`, `healing`).
+10. Added known-token helper assertions for positive and negative mode/objective cases.
+11. Added team recommendation integration assertions for spaced and slash mode aliases.
+12. Added team recommendation integration assertions for objective aliases (`attack`, `defensive`, `healing`).
+
+## Files Modified
+- api/Services/TeamRecommendation/TeamRecommendationModeNormalization.cs
+- api/Services/TeamRecommendation/TeamRecommendationProfiles.cs
+- api/Services/TeamRecommendation/ExternalSignalProviders.cs
+- tests/OrganizedJihad.Api.Tests/TeamRecommendationMathTests.cs
+- tests/OrganizedJihad.Api.Tests/SyncControllerTests.cs
+- ~docs/copilot-chats/2026-05-31-userscript-build-auto.md
+
+## Issues
+- Epic: #333
+- Installer/runtime migration umbrella used by current branch workflow: #334
+- PR tracking: #209
+
+## Validation
+- dotnet test tests/OrganizedJihad.Api.Tests/OrganizedJihad.Api.Tests.csproj (pass, 96/96)
+- runTests focused files (pass, 43/43)
