@@ -9,12 +9,16 @@ internal static class TrayRuntimeSettingsParser {
 			return false;
 		}
 
-		using var document = JsonDocument.Parse(rawJson);
-		if (!document.RootElement.TryGetProperty("apiBaseUrl", out var apiBaseUrlProperty)) {
+		try {
+			using var document = JsonDocument.Parse(rawJson);
+			if (!document.RootElement.TryGetProperty("apiBaseUrl", out var apiBaseUrlProperty)) {
+				return false;
+			}
+
+			apiBaseUrl = apiBaseUrlProperty.GetString()?.Trim();
+			return !string.IsNullOrWhiteSpace(apiBaseUrl);
+		} catch (JsonException) {
 			return false;
 		}
-
-		apiBaseUrl = apiBaseUrlProperty.GetString()?.Trim();
-		return !string.IsNullOrWhiteSpace(apiBaseUrl);
 	}
 }

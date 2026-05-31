@@ -7,6 +7,7 @@ namespace OrganizedJihad.Api.TrayHost;
 internal sealed class HeadlessRuntimeHost : IDisposable {
 	private readonly TrayHostOptions _options;
 	private readonly HttpClient _httpClient;
+	private readonly CancellationTokenSource _shutdownCts;
 	private readonly string _settingsPath;
 	private readonly string _logPath;
 	private Process? _apiProcess;
@@ -15,6 +16,7 @@ internal sealed class HeadlessRuntimeHost : IDisposable {
 
 	public HeadlessRuntimeHost(TrayHostOptions options) {
 		_options = options;
+		_shutdownCts = new CancellationTokenSource();
 		_settingsPath = Path.Combine(_options.WorkingDirectory, "api-ui-settings.json");
 		_logPath = Path.Combine(_options.WorkingDirectory, "runtime-host.log");
 		_httpClient = new HttpClient {
@@ -26,10 +28,10 @@ internal sealed class HeadlessRuntimeHost : IDisposable {
 		AppendLog("Headless runtime host started.");
 		EnsureApiRunning();
 
-		while (true) {
+		using var timer = new PeriodicTimer(TimeSpan.FromSeconds(15));
+		while (timer.WaitForNextTickAsync(_shutdownCts.Token).AsTask().GetAwaiter().GetResult()) {
 			ReloadRuntimeSettingsIfChanged();
 			EnsureApiRunning();
-			Thread.Sleep(TimeSpan.FromSeconds(15));
 		}
 	}
 
@@ -48,7 +50,11 @@ internal sealed class HeadlessRuntimeHost : IDisposable {
 			return;
 		}
 
-		ApiProcessRuntime.TryStartProcess(_options, out _apiProcess);
+		var started = ApiProcessRuntime.TryStartProcess(_options, out _apiProcess, out var startError);
+		if (!started) {
+			AppendLog($"API process start failed for {_options.ApiUrl}: {startError}");
+			return;
+		}
 
 		AppendLog($"API process start attempted for {_options.ApiUrl}.");
 	}
@@ -88,6 +94,8 @@ internal sealed class HeadlessRuntimeHost : IDisposable {
 		}
 
 		_disposed = true;
+		_shutdownCts.Cancel();
+		_shutdownCts.Dispose();
 		_httpClient.Dispose();
 	}
 }

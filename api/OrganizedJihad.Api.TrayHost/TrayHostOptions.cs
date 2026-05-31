@@ -34,6 +34,25 @@ internal sealed class TrayHostOptions {
 #endif
 		}
 
+		parsed.ApiUrl = NormalizeApiUrl(parsed.ApiUrl);
+
 		return parsed;
+	}
+
+	private static string NormalizeApiUrl(string? rawApiUrl) {
+		if (string.IsNullOrWhiteSpace(rawApiUrl)) {
+			return "http://localhost:5124";
+		}
+
+		if (!Uri.TryCreate(rawApiUrl.Trim(), UriKind.Absolute, out var uri)) {
+			return "http://localhost:5124";
+		}
+
+		if (!string.Equals(uri.Scheme, Uri.UriSchemeHttp, StringComparison.OrdinalIgnoreCase)
+			&& !string.Equals(uri.Scheme, Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase)) {
+			return "http://localhost:5124";
+		}
+
+		return uri.GetLeftPart(UriPartial.Authority);
 	}
 }

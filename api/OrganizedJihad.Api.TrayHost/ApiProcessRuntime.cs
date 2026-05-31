@@ -3,16 +3,29 @@ using System.Diagnostics;
 namespace OrganizedJihad.Api.TrayHost;
 
 internal static class ApiProcessRuntime {
-	public static bool TryStartProcess(TrayHostOptions options, out Process? process) {
-		process = Process.Start(new ProcessStartInfo {
-			FileName = options.ApiExecutablePath,
-			Arguments = $"--urls {options.ApiUrl}",
-			WorkingDirectory = options.WorkingDirectory,
-			UseShellExecute = false,
-			CreateNoWindow = true,
-		});
+	public static bool TryStartProcess(TrayHostOptions options, out Process? process, out string? error) {
+		process = null;
+		error = null;
 
-		return process is not null;
+		try {
+			process = Process.Start(new ProcessStartInfo {
+				FileName = options.ApiExecutablePath,
+				Arguments = $"--urls {options.ApiUrl}",
+				WorkingDirectory = options.WorkingDirectory,
+				UseShellExecute = false,
+				CreateNoWindow = true,
+			});
+
+			if (process is null) {
+				error = "Process.Start returned null.";
+				return false;
+			}
+
+			return true;
+		} catch (Exception ex) {
+			error = ex.Message;
+			return false;
+		}
 	}
 
 	public static void StopManagedProcess(Process? process) {
@@ -21,7 +34,9 @@ internal static class ApiProcessRuntime {
 		}
 
 		process.Kill(true);
-		process.WaitForExit(3000);
+		if (!process.WaitForExit(3000)) {
+			process.Kill(true);
+		}
 	}
 
 	public static void StopProcessesByName(string apiExecutablePath) {

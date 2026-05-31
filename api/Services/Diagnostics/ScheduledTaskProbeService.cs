@@ -32,7 +32,14 @@ public sealed class ScheduledTaskProbeService {
 
 			var output = process.StandardOutput.ReadToEnd();
 			var errors = process.StandardError.ReadToEnd();
-			process.WaitForExit(5000);
+			if (!process.WaitForExit(5000)) {
+				try {
+					process.Kill(true);
+				} catch {
+					// Best effort timeout cleanup.
+				}
+				return new ScheduledTaskProbeResult("timeout", "Task query timed out after 5000ms.");
+			}
 
 			if (process.ExitCode != 0) {
 				var message = string.IsNullOrWhiteSpace(errors) ? "Task missing or inaccessible." : errors.Trim();

@@ -59,6 +59,14 @@ public sealed class ApiUiSettingsStore {
 		}
 
 		var json = JsonSerializer.Serialize(settings, new JsonSerializerOptions { WriteIndented = true });
-		await File.WriteAllTextAsync(SettingsPath, json);
+		var tempPath = SettingsPath + ".tmp";
+		await File.WriteAllTextAsync(tempPath, json);
+
+		if (File.Exists(SettingsPath)) {
+			File.Replace(tempPath, SettingsPath, destinationBackupFileName: null, ignoreMetadataErrors: true);
+			return;
+		}
+
+		File.Move(tempPath, SettingsPath);
 	}
 }

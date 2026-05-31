@@ -33,9 +33,13 @@ internal sealed partial class TrayContext {
 				return;
 			}
 
-			ApiProcessRuntime.TryStartProcess(_options, out _apiProcess);
+			var started = ApiProcessRuntime.TryStartProcess(_options, out _apiProcess, out var startError);
 			_apiManagedByTray = _apiProcess is not null;
-			AppendTrayLog($"API process start attempted. ManagedByTray={_apiManagedByTray}, Url={_options.ApiUrl}");
+			if (!started) {
+				AppendTrayLog($"API process start failed. Url={_options.ApiUrl}, Error={startError}");
+			} else {
+				AppendTrayLog($"API process start attempted. ManagedByTray={_apiManagedByTray}, Url={_options.ApiUrl}");
+			}
 
 			if (_apiProcess is not null) {
 				_apiProcess.EnableRaisingEvents = true;

@@ -125,6 +125,41 @@
 
 ## Session
 - Date: 2026-05-31
+- Session Number: 30
+- Scope: continuation hardening slices for tray/runtime + diagnostics robustness
+
+## Summary
+- Hardened shared process runtime startup with explicit error reporting and timeout-safe shutdown semantics.
+- Updated tray Windows/runtime and headless runtime hosts to consume startup error output and emit clearer logs on process launch failure.
+- Reworked headless supervisor loop to use `PeriodicTimer` with cancellation token source instead of raw infinite sleep loop.
+- Added API URL normalization/validation in `TrayHostOptions` parsing for safer runtime defaults.
+- Hardened tray settings parser against malformed JSON by handling `JsonException` explicitly.
+- Hardened scheduled task probe with explicit timeout detection and cleanup.
+- Switched API UI settings persistence to atomic temp-write + replace/move semantics.
+
+## Files Modified
+- api/OrganizedJihad.Api.TrayHost/ApiProcessRuntime.cs
+- api/OrganizedJihad.Api.TrayHost/TrayContext.Windows.Runtime.cs
+- api/OrganizedJihad.Api.TrayHost/HeadlessRuntimeHost.cs
+- api/OrganizedJihad.Api.TrayHost/TrayHostOptions.cs
+- api/OrganizedJihad.Api.TrayHost/TrayRuntimeSettingsParser.cs
+- api/Services/Diagnostics/ScheduledTaskProbeService.cs
+- api/Services/Ui/ApiUiSettingsStore.cs
+- ~docs/copilot-chats/2026-05-30-userscript-build-auto.md
+
+## Issues
+- Epic: #333
+- Installer/runtime migration: #334
+- PR tracking: #209
+
+## Validation
+- dotnet build api/OrganizedJihad.Api.csproj -c Release (pass)
+- dotnet build api/OrganizedJihad.Api.TrayHost/OrganizedJihad.Api.TrayHost.csproj -c Release (pass)
+
+---
+
+## Session
+- Date: 2026-05-31
 - Session Number: 29
 - Scope: continue API diagnostics architecture with typed response models/builder
 
