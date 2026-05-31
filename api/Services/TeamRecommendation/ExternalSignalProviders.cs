@@ -46,7 +46,7 @@ public sealed class CuratedToolCatalogSignalProvider : IExternalRecommendationSi
 	/// <inheritdoc />
 	public IReadOnlyList<ExternalRecommendationSignal> GetSignals(string mode, string objective) {
 		var normalizedMode = TeamRecommendationModeNormalization.NormalizeMode(mode);
-		var normalizedObjective = (objective ?? "balanced").Trim().ToLowerInvariant();
+		var normalizedObjective = TeamRecommendationModeNormalization.NormalizeObjective(objective);
 		var modeWeight = GetModeExternalSignalWeight(normalizedMode);
 
 		var signals = new List<ExternalRecommendationSignal> {

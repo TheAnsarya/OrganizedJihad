@@ -750,6 +750,74 @@ public class SyncControllerTests : IClassFixture<WebApplicationFactory<Program>>
 		pvpAliasPayload.Should().NotBeNull();
 		pvpAliasPayload!.Mode.Should().Be("arena");
 		pvpAliasPayload.Recommendations.Should().NotBeEmpty();
+
+		var spacedAliasResponse = await _client.GetAsync("/api/sync/teams/recommendations?mode=Grand%20Arena&objective=balanced&limit=3");
+		spacedAliasResponse.StatusCode.Should().Be(HttpStatusCode.OK);
+		var spacedAliasPayload = await spacedAliasResponse.Content.ReadFromJsonAsync<TeamRecommendationEngineResponse>();
+		spacedAliasPayload.Should().NotBeNull();
+		spacedAliasPayload!.Mode.Should().Be("grandarena");
+		spacedAliasPayload.Recommendations.Should().NotBeEmpty();
+
+		var slashAliasResponse = await _client.GetAsync("/api/sync/teams/recommendations?mode=titan/dungeon&objective=balanced&limit=3");
+		slashAliasResponse.StatusCode.Should().Be(HttpStatusCode.OK);
+		var slashAliasPayload = await slashAliasResponse.Content.ReadFromJsonAsync<TeamRecommendationEngineResponse>();
+		slashAliasPayload.Should().NotBeNull();
+		slashAliasPayload!.Mode.Should().Be("dungeon");
+		slashAliasPayload.Recommendations.Should().NotBeEmpty();
+	}
+
+	/// <summary>
+	/// Verifies Team Recommendation Engine normalizes objective aliases.
+	/// </summary>
+	[Fact]
+	public async Task TeamRecommendationEngine_Should_Normalize_Objective_Aliases() {
+		var now = DateTime.UtcNow;
+		var syncData = new BrowserSyncData {
+			CurrentSnapshot = new PlayerSnapshot {
+				PlayerId = 7666,
+				PlayerName = "AliasObjectiveTester",
+				Timestamp = now,
+				Level = 120,
+				TeamPower = 1410000,
+				Gold = 1600000,
+				Emeralds = 2000,
+			},
+			Heroes = [
+				new Hero { HeroId = 1, HeroName = "Astaroth", Level = 120, Stars = 6, Color = 12, Power = 112000, Timestamp = now, PlayerId = 7666 },
+				new Hero { HeroId = 2, HeroName = "Keira", Level = 120, Stars = 6, Color = 12, Power = 111000, Timestamp = now, PlayerId = 7666 },
+				new Hero { HeroId = 3, HeroName = "Sebastian", Level = 120, Stars = 6, Color = 12, Power = 109000, Timestamp = now, PlayerId = 7666 },
+				new Hero { HeroId = 4, HeroName = "Martha", Level = 120, Stars = 6, Color = 12, Power = 104000, Timestamp = now, PlayerId = 7666 },
+				new Hero { HeroId = 5, HeroName = "Jet", Level = 120, Stars = 6, Color = 12, Power = 101000, Timestamp = now, PlayerId = 7666 },
+			],
+			Titans = [],
+			ArenaBattles = [],
+			GrandArenaBattles = [],
+			TitanArenaBattles = [],
+		};
+
+		var importResponse = await _client.PostAsJsonAsync("/api/sync/import", syncData);
+		importResponse.StatusCode.Should().Be(HttpStatusCode.OK);
+
+		var attackAliasResponse = await _client.GetAsync("/api/sync/teams/recommendations?mode=arena&objective=attack&limit=3");
+		attackAliasResponse.StatusCode.Should().Be(HttpStatusCode.OK);
+		var attackAliasPayload = await attackAliasResponse.Content.ReadFromJsonAsync<TeamRecommendationEngineResponse>();
+		attackAliasPayload.Should().NotBeNull();
+		attackAliasPayload!.Objective.Should().Be("offense");
+		attackAliasPayload.Recommendations.Should().NotBeEmpty();
+
+		var defensiveAliasResponse = await _client.GetAsync("/api/sync/teams/recommendations?mode=arena&objective=defensive&limit=3");
+		defensiveAliasResponse.StatusCode.Should().Be(HttpStatusCode.OK);
+		var defensiveAliasPayload = await defensiveAliasResponse.Content.ReadFromJsonAsync<TeamRecommendationEngineResponse>();
+		defensiveAliasPayload.Should().NotBeNull();
+		defensiveAliasPayload!.Objective.Should().Be("defense");
+		defensiveAliasPayload.Recommendations.Should().NotBeEmpty();
+
+		var healAliasResponse = await _client.GetAsync("/api/sync/teams/recommendations?mode=arena&objective=healing&limit=3");
+		healAliasResponse.StatusCode.Should().Be(HttpStatusCode.OK);
+		var healAliasPayload = await healAliasResponse.Content.ReadFromJsonAsync<TeamRecommendationEngineResponse>();
+		healAliasPayload.Should().NotBeNull();
+		healAliasPayload!.Objective.Should().Be("sustain");
+		healAliasPayload.Recommendations.Should().NotBeEmpty();
 	}
 
 	/// <summary>

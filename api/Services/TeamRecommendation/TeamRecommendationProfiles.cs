@@ -33,7 +33,7 @@ public static class TeamRecommendationProfileCatalog {
 	/// </summary>
 	public static TeamRecommendationScoringProfile Resolve(string mode, string objective) {
 		var normalizedMode = TeamRecommendationModeNormalization.NormalizeMode(mode);
-		var normalizedObjective = (objective ?? "balanced").Trim().ToLowerInvariant();
+		var normalizedObjective = TeamRecommendationModeNormalization.NormalizeObjective(objective);
 
 		var objectiveWeights = normalizedObjective switch {
 			"offense" => (Win: 0.60, Ready: 0.20, Conf: 0.20),

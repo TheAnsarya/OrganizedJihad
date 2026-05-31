@@ -148,14 +148,19 @@ public class TeamRecommendationMathTests {
 	[Fact]
 	public void NormalizeMode_Should_Handle_Aliases_And_Defaults() {
 		TeamRecommendationOrchestrationMath.NormalizeMode("pvp").Should().Be("arena");
+		TeamRecommendationOrchestrationMath.NormalizeMode("PVP").Should().Be("arena");
 		TeamRecommendationOrchestrationMath.NormalizeMode("grand_arena").Should().Be("grandarena");
+		TeamRecommendationOrchestrationMath.NormalizeMode("Grand Arena").Should().Be("grandarena");
 		TeamRecommendationOrchestrationMath.NormalizeMode("ga").Should().Be("grandarena");
 		TeamRecommendationOrchestrationMath.NormalizeMode("titan-arena").Should().Be("arena");
 		TeamRecommendationOrchestrationMath.NormalizeMode("gw").Should().Be("guildwar");
+		TeamRecommendationOrchestrationMath.NormalizeMode("Guild War").Should().Be("guildwar");
 		TeamRecommendationOrchestrationMath.NormalizeMode("clash-of-worlds").Should().Be("cow");
 		TeamRecommendationOrchestrationMath.NormalizeMode("dungeon-run").Should().Be("dungeon");
+		TeamRecommendationOrchestrationMath.NormalizeMode("titan/dungeon").Should().Be("dungeon");
 		TeamRecommendationOrchestrationMath.NormalizeMode("titan-dungeon").Should().Be("dungeon");
 		TeamRecommendationOrchestrationMath.NormalizeMode("power-tournament").Should().Be("toe");
+		TeamRecommendationOrchestrationMath.NormalizeMode("power tournament").Should().Be("toe");
 		TeamRecommendationOrchestrationMath.NormalizeMode("tournament-of-elements").Should().Be("toe");
 		TeamRecommendationOrchestrationMath.NormalizeMode("unknown").Should().Be("arena");
 	}
@@ -165,12 +170,16 @@ public class TeamRecommendationMathTests {
 		var samples = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) {
 			["arena"] = "arena",
 			["pvp"] = "arena",
+			["ranked"] = "arena",
 			["ga"] = "grandarena",
 			["grand_arena"] = "grandarena",
+			["Grand Arena"] = "grandarena",
 			["titan-arena"] = "arena",
 			["gw"] = "guildwar",
+			["Guild War"] = "guildwar",
 			["clash-of-worlds"] = "cow",
 			["dungeon-run"] = "dungeon",
+			["titan/dungeon"] = "dungeon",
 			["power-tournament"] = "toe",
 			["unknown"] = "arena",
 		};
@@ -181,13 +190,26 @@ public class TeamRecommendationMathTests {
 		}
 
 		TeamRecommendationModeNormalization.NormalizeObjective("offense").Should().Be("offense");
+		TeamRecommendationModeNormalization.NormalizeObjective("attack").Should().Be("offense");
+		TeamRecommendationModeNormalization.NormalizeObjective("defensive").Should().Be("defense");
+		TeamRecommendationModeNormalization.NormalizeObjective("fast").Should().Be("speed");
+		TeamRecommendationModeNormalization.NormalizeObjective("healing").Should().Be("sustain");
 		TeamRecommendationModeNormalization.NormalizeObjective("invalid").Should().Be("balanced");
+
+		TeamRecommendationModeNormalization.IsKnownMode("Grand Arena").Should().BeTrue();
+		TeamRecommendationModeNormalization.IsKnownMode("invalid-mode").Should().BeFalse();
+		TeamRecommendationModeNormalization.IsKnownObjective("attack").Should().BeTrue();
+		TeamRecommendationModeNormalization.IsKnownObjective("not-an-objective").Should().BeFalse();
 	}
 
 	[Fact]
 	public void NormalizeObjective_Should_Handle_Values_And_Default() {
 		TeamRecommendationOrchestrationMath.NormalizeObjective("offense").Should().Be("offense");
+		TeamRecommendationOrchestrationMath.NormalizeObjective("atk").Should().Be("offense");
+		TeamRecommendationOrchestrationMath.NormalizeObjective("defensive").Should().Be("defense");
+		TeamRecommendationOrchestrationMath.NormalizeObjective("tempo").Should().Be("speed");
 		TeamRecommendationOrchestrationMath.NormalizeObjective("sustain").Should().Be("sustain");
+		TeamRecommendationOrchestrationMath.NormalizeObjective("survival").Should().Be("sustain");
 		TeamRecommendationOrchestrationMath.NormalizeObjective("bad-value").Should().Be("balanced");
 	}
 
