@@ -18,6 +18,22 @@ const MAX_BACKOFF_MS = 30000;
 const MIN_REFRESH_GAP_MS = 1200;
 const MAX_DEEP_SCAN_DEPTH = 4;
 const MAX_CANDIDATES = 30;
+const MODE_SWITCH_COOLDOWN_MS = 1500;
+const MAX_VALID_ID = 2147483647;
+const MAX_VALID_POWER = 500000000;
+const CONTEXT_FRESHNESS_OVERRIDE_MS = 60000;
+const CONTEXT_CONFIDENCE_GUARD_DELTA = 0.15;
+const DEFAULT_CANDIDATE_MAX_AGE_MS = 15 * 60 * 1000;
+const MODE_CANDIDATE_MAX_AGE_MS = Object.freeze({
+	arena: 8 * 60 * 1000,
+	grandarena: 8 * 60 * 1000,
+	titanarena: 8 * 60 * 1000,
+	guildwar: 20 * 60 * 1000,
+	cow: 20 * 60 * 1000,
+	adventure: 12 * 60 * 1000,
+	dungeon: 10 * 60 * 1000,
+	toe: 15 * 60 * 1000,
+});
 
 const ATTACK_CALL_TO_CONTEXT = Object.freeze({
 	arenaAttack: { mode: 'arena', enemyMetadataKey: 'arenaEnemies', sourceLabel: 'arena attack target' },
@@ -27,6 +43,20 @@ const ATTACK_CALL_TO_CONTEXT = Object.freeze({
 	titanArenaAttack: { mode: 'titanarena', enemyMetadataKey: 'titanArenaEnemies', sourceLabel: 'titan arena target' },
 	titanArenaEnd: { mode: 'titanarena', enemyMetadataKey: 'titanArenaEnemies', sourceLabel: 'titan arena result target' },
 	clanWarAttack: { mode: 'guildwar', sourceLabel: 'guild war attack target' },
+	clanWarBattle: { mode: 'guildwar', sourceLabel: 'guild war battle target' },
+	clanWarEnd: { mode: 'guildwar', sourceLabel: 'guild war result target' },
+	adventureBattle: { mode: 'adventure', sourceLabel: 'adventure battle target' },
+	adventureEnd: { mode: 'adventure', sourceLabel: 'adventure result target' },
+	adventureSoloBattle: { mode: 'adventure', sourceLabel: 'adventure solo target' },
+	adventureSoloEnd: { mode: 'adventure', sourceLabel: 'adventure solo result target' },
+	dungeonBattle: { mode: 'dungeon', sourceLabel: 'dungeon battle target' },
+	dungeonEnd: { mode: 'dungeon', sourceLabel: 'dungeon result target' },
+	titanDungeonBattle: { mode: 'dungeon', sourceLabel: 'titan dungeon battle target' },
+	titanDungeonEnd: { mode: 'dungeon', sourceLabel: 'titan dungeon result target' },
+	titanDungeonFight: { mode: 'dungeon', sourceLabel: 'titan dungeon fight target' },
+	clanDungeonBattle: { mode: 'dungeon', sourceLabel: 'clan dungeon target' },
+	tournamentBattle: { mode: 'toe', sourceLabel: 'tournament target' },
+	tournamentEnd: { mode: 'toe', sourceLabel: 'tournament result target' },
 	clashBattle: { mode: 'cow', sourceLabel: 'clash target' },
 	clashEnd: { mode: 'cow', sourceLabel: 'clash result target' },
 });
@@ -37,23 +67,73 @@ const ENEMY_LIST_CALL_TO_CONTEXT = Object.freeze({
 	grandArenaGetEnemies: { mode: 'grandarena', enemyMetadataKey: 'grandArenaEnemies', sourceLabel: 'grand arena enemy list' },
 	titanArenaGetEnemies: { mode: 'titanarena', enemyMetadataKey: 'titanArenaEnemies', sourceLabel: 'titan arena enemy list' },
 	clanWarGetDefence: { mode: 'guildwar', sourceLabel: 'guild war defence list' },
+	clanWarGetBriefInfo: { mode: 'guildwar', sourceLabel: 'guild war brief state' },
+	adventureGetAll: { mode: 'adventure', sourceLabel: 'adventure active data' },
+	adventure_getActiveData: { mode: 'adventure', sourceLabel: 'adventure active data' },
+	adventureSolo_getActiveData: { mode: 'adventure', sourceLabel: 'adventure solo data' },
+	dungeonGetState: { mode: 'dungeon', sourceLabel: 'dungeon state' },
+	titanDungeonGetInfo: { mode: 'dungeon', sourceLabel: 'titan dungeon state' },
+	towerGetState: { mode: 'dungeon', sourceLabel: 'tower state' },
+	tournamentGetInfo: { mode: 'toe', sourceLabel: 'tournament state' },
+	tournament_getInfo: { mode: 'toe', sourceLabel: 'tournament state' },
+	powerTournament_getState: { mode: 'toe', sourceLabel: 'power tournament state' },
 	crossClanWar_getAttackMap: { mode: 'cow', sourceLabel: 'clash attack map' },
 });
 
 const MODE_ONLY_CALL_TO_CONTEXT = Object.freeze({
 	clanWarGetInfo: { mode: 'guildwar', sourceLabel: 'guild war state' },
+	clanWarUserGetInfo: { mode: 'guildwar', sourceLabel: 'guild war user state' },
+	adventure_find: { mode: 'adventure', sourceLabel: 'adventure lobby state' },
+	seasonAdventure_getInfo: { mode: 'adventure', sourceLabel: 'season adventure state' },
+	crossClanWar_getInfo: { mode: 'cow', sourceLabel: 'clash state' },
 	clashGetInfo: { mode: 'cow', sourceLabel: 'clash state' },
 	crossClanWar_getSettings: { mode: 'cow', sourceLabel: 'clash settings' },
 });
 
 const MODE_METADATA_KEYS = Object.freeze({
-	guildwar: ['guildWarDefense', 'currentGuildWar', 'guildWarWarlord'],
+	arena: ['battleRecommendationLastTargetArena', 'arenaEnemies'],
+	grandarena: ['battleRecommendationLastTargetGrandArena', 'grandArenaEnemies'],
+	titanarena: ['battleRecommendationLastTargetTitanArena', 'titanArenaEnemies'],
+	guildwar: ['battleRecommendationLastTargetGuildWar', 'guildWarDefense', 'currentGuildWar', 'guildWarWarlord', 'guildWarBrief'],
+	adventure: ['battleRecommendationLastTargetAdventure', 'adventureActive', 'adventureSoloActive', 'soloAdventure', 'adventurePassed', 'adventureLobbies', 'seasonAdventure'],
+	dungeon: ['battleRecommendationLastTargetDungeon', 'towerState', 'currentRaidBoss', 'raidRating', 'raidSubscription', 'guildActivityStats'],
+	toe: ['battleRecommendationLastTargetToe', 'powerTournament', 'hallOfFame'],
 	cow: ['cowAttackMap', 'cowDefensePlan', 'cowSettings'],
 });
 
-const SUPPORTED_MODES = new Set(['arena', 'grandarena', 'titanarena', 'guildwar', 'cow']);
+const SUPPORTED_MODES = new Set(['arena', 'grandarena', 'titanarena', 'guildwar', 'cow', 'adventure', 'dungeon', 'toe']);
 const ARENA_FAMILY_MODES = new Set(['arena', 'grandarena', 'titanarena']);
 const SUPPORTED_OBJECTIVES = new Set(['balanced', 'offense', 'defense', 'speed', 'sustain']);
+const MODE_DEFAULT_OBJECTIVE = Object.freeze({
+	arena: 'balanced',
+	grandarena: 'balanced',
+	titanarena: 'offense',
+	guildwar: 'defense',
+	cow: 'balanced',
+	adventure: 'sustain',
+	dungeon: 'sustain',
+	toe: 'defense',
+});
+const MODE_CONTEXT_PRIORITY = Object.freeze({
+	attack: 3,
+	enemyList: 2,
+	modeState: 1,
+});
+const MODE_POWER_WINDOW = Object.freeze({
+	arena: 40000,
+	grandarena: 25000,
+	titanarena: 30000,
+});
+const ENGINE_MODE_MAP = Object.freeze({
+	arena: 'arena',
+	grandarena: 'grandarena',
+	titanarena: 'arena',
+	guildwar: 'guildwar',
+	cow: 'cow',
+	adventure: 'adventure',
+	dungeon: 'dungeon',
+	toe: 'toe',
+});
 
 class BattleRecommendationOverlay {
 	/**
@@ -88,6 +168,7 @@ class BattleRecommendationOverlay {
 			opponentPower: null,
 			opponentName: '',
 			opponentTeams: [],
+			signalConfidence: 0,
 			source: 'initial',
 			updatedAt: Date.now(),
 		};
@@ -110,6 +191,10 @@ class BattleRecommendationOverlay {
 		this._dataHealth = 'live';
 		/** @type {number|null} */
 		this._refreshTimer = null;
+		/** @type {number} */
+		this._lastContextPriority = 0;
+		/** @type {number} */
+		this._lastModeSwitchAt = 0;
 
 		// Drag state
 		this._isDragging = false;
@@ -182,9 +267,9 @@ class BattleRecommendationOverlay {
 			const attackContext = ATTACK_CALL_TO_CONTEXT[callName];
 			if (attackContext) {
 				if (attackContext.enemyMetadataKey) {
-					await this._setContextFromAttackCall(attackContext, call?.args || {});
+					await this._setContextFromAttackCall(attackContext, call?.args || {}, MODE_CONTEXT_PRIORITY.attack);
 				} else {
-					await this._setContextFromMetadataOnlyMode(attackContext, call?.args || {});
+					await this._setContextFromMetadataOnlyMode(attackContext, call?.args || {}, MODE_CONTEXT_PRIORITY.attack);
 				}
 				shouldRefresh = true;
 				continue;
@@ -193,9 +278,9 @@ class BattleRecommendationOverlay {
 			const listContext = ENEMY_LIST_CALL_TO_CONTEXT[callName];
 			if (listContext) {
 				if (listContext.enemyMetadataKey) {
-					await this._setContextFromEnemyList(listContext);
+					await this._setContextFromEnemyList(listContext, MODE_CONTEXT_PRIORITY.enemyList);
 				} else {
-					await this._setContextFromMetadataOnlyMode(listContext, call?.args || {});
+					await this._setContextFromMetadataOnlyMode(listContext, call?.args || {}, MODE_CONTEXT_PRIORITY.enemyList);
 				}
 				shouldRefresh = true;
 				continue;
@@ -203,7 +288,7 @@ class BattleRecommendationOverlay {
 
 			const modeContext = MODE_ONLY_CALL_TO_CONTEXT[callName];
 			if (modeContext) {
-				await this._setContextFromMetadataOnlyMode(modeContext, call?.args || {});
+				await this._setContextFromMetadataOnlyMode(modeContext, call?.args || {}, MODE_CONTEXT_PRIORITY.modeState);
 				shouldRefresh = true;
 			}
 		}
@@ -264,10 +349,14 @@ class BattleRecommendationOverlay {
 	 */
 	_buildQueryKey() {
 		const teamHash = this._context.opponentTeams.map((t) => `${t.slot}:${t.power}`).join(',');
+		const objective = this._resolveObjectiveForMode(this._context.mode);
+		const confidenceBucket = Math.round(this._sanitizeConfidence(this._context.signalConfidence || 0) * 10);
 		return [
 			this._context.mode,
 			this._context.opponentId || 0,
 			this._context.opponentPower || 0,
+			objective,
+			confidenceBucket,
 			teamHash,
 			this._context.source,
 		].join(':');
@@ -296,51 +385,67 @@ class BattleRecommendationOverlay {
 	 *
 	 * @param {{ mode: string, enemyMetadataKey: string, sourceLabel: string }} context - Context map entry
 	 * @param {object} args - API call args
+	 * @param {number} priority - Context priority
 	 * @returns {Promise<void>}
 	 * @private
 	 */
-	async _setContextFromAttackCall(context, args) {
+	async _setContextFromAttackCall(context, args, priority) {
 		const resolvedMode = this._normalizeMode(context.mode);
 		const enemyUserId = this._extractEnemyUserId(args);
 		const enemyList = await this.idbStorage.getMetadata(context.enemyMetadataKey, []);
 		const selected = Array.isArray(enemyList)
 			? enemyList.find((item) => this._extractEnemyUserId(item) === enemyUserId) || null
 			: null;
+		const argCandidate = this._buildCandidateFromArgs(args, resolvedMode, `${context.sourceLabel || 'attack'} args`);
+		const metadataFallback = (!selected && !argCandidate)
+			? await this._findMetadataFallbackCandidate(resolvedMode, enemyUserId)
+			: null;
+		const active = selected || argCandidate || metadataFallback;
 
-		const teams = this._extractOpponentTeams(selected);
+		const teams = this._extractOpponentTeams(active);
 		const powerFromTeams = teams.reduce((sum, team) => sum + Number(team.power || 0), 0) || null;
+		const activeId = active?.userId || enemyUserId;
+		const activeUpdatedAt = this._extractTimestamp(active) || Date.now();
 
-		this._context.mode = resolvedMode;
-		this._context.opponentId = Number.isFinite(enemyUserId) && enemyUserId > 0 ? enemyUserId : null;
-		this._context.opponentPower = this._extractOpponentPower(selected) || powerFromTeams;
-		this._context.opponentName = selected?.name || '';
-		this._context.opponentTeams = teams;
-		this._context.source = context.sourceLabel || 'attack';
-		this._context.updatedAt = Date.now();
+		this._commitContext({
+			mode: resolvedMode,
+			opponentId: Number.isFinite(activeId) && activeId > 0 ? activeId : null,
+			opponentPower: this._extractOpponentPower(active) || powerFromTeams,
+			opponentName: active?.name || '',
+			opponentTeams: teams,
+			signalConfidence: this._resolveCandidateConfidence(active, teams, this._extractOpponentPower(active) || powerFromTeams, activeId, active?.name),
+			source: selected ? (context.sourceLabel || 'attack') : (argCandidate?.source || context.sourceLabel || 'attack'),
+			updatedAt: activeUpdatedAt,
+		}, priority);
 	}
 
 	/**
 	 * Set context from latest enemy list metadata when opening enemy selection views.
 	 *
 	 * @param {{ mode: string, enemyMetadataKey: string, sourceLabel: string }} context - Context map entry
+	 * @param {number} priority - Context priority
 	 * @returns {Promise<void>}
 	 * @private
 	 */
-	async _setContextFromEnemyList(context) {
+	async _setContextFromEnemyList(context, priority) {
 		const resolvedMode = this._normalizeMode(context.mode);
 		const enemyList = await this.idbStorage.getMetadata(context.enemyMetadataKey, []);
-		const selected = Array.isArray(enemyList) && enemyList.length > 0 ? enemyList[0] : null;
+		const selected = this._pickEnemyFromList(enemyList);
 		const selectedId = this._extractEnemyUserId(selected);
 		const teams = this._extractOpponentTeams(selected);
 		const powerFromTeams = teams.reduce((sum, team) => sum + Number(team.power || 0), 0) || null;
+		const selectedUpdatedAt = this._extractTimestamp(selected) || Date.now();
 
-		this._context.mode = resolvedMode;
-		this._context.opponentId = Number.isFinite(selectedId) && selectedId > 0 ? selectedId : null;
-		this._context.opponentPower = this._extractOpponentPower(selected) || powerFromTeams;
-		this._context.opponentName = selected?.name || '';
-		this._context.opponentTeams = teams;
-		this._context.source = context.sourceLabel || 'enemy list';
-		this._context.updatedAt = Date.now();
+		this._commitContext({
+			mode: resolvedMode,
+			opponentId: Number.isFinite(selectedId) && selectedId > 0 ? selectedId : null,
+			opponentPower: this._extractOpponentPower(selected) || powerFromTeams,
+			opponentName: selected?.name || '',
+			opponentTeams: teams,
+			signalConfidence: this._resolveCandidateConfidence(selected, teams, this._extractOpponentPower(selected) || powerFromTeams, selectedId, selected?.name),
+			source: context.sourceLabel || 'enemy list',
+			updatedAt: selectedUpdatedAt,
+		}, priority);
 	}
 
 	/**
@@ -348,37 +453,277 @@ class BattleRecommendationOverlay {
 	 *
 	 * @param {{ mode: string, sourceLabel: string }} context - Context map entry
 	 * @param {object} args - API call args
+	 * @param {number} priority - Context priority
 	 * @returns {Promise<void>}
 	 * @private
 	 */
-	async _setContextFromMetadataOnlyMode(context, args) {
+	async _setContextFromMetadataOnlyMode(context, args, priority) {
 		const mode = this._normalizeMode(context.mode);
 		const preferredId = this._extractEnemyUserId(args);
+		const candidates = await this._collectModeCandidates(mode);
+		const argCandidate = this._buildCandidateFromArgs(args, mode, `${context.sourceLabel || 'mode'} args`);
+
+		const pool = argCandidate ? [argCandidate, ...candidates] : candidates;
+
+		const selected = this._selectBestCandidate(pool, preferredId, mode);
+
+		this._commitContext({
+			mode,
+			opponentId: selected?.userId || (preferredId > 0 ? preferredId : null),
+			opponentPower: selected?.power || null,
+			opponentName: selected?.name || '',
+			opponentTeams: Array.isArray(selected?.teams) ? selected.teams : [],
+			signalConfidence: this._resolveCandidateConfidence(selected, selected?.teams, selected?.power, selected?.userId, selected?.name),
+			source: selected?.source || context.sourceLabel || 'mode metadata',
+			updatedAt: this._extractTimestamp(selected) || Date.now(),
+		}, priority);
+	}
+
+	/**
+	 * Collect and age-filter metadata candidates for mode context resolution.
+	 *
+	 * @param {string} mode - Recommendation mode
+	 * @returns {Promise<Array<object>>} candidates
+	 * @private
+	 */
+	async _collectModeCandidates(mode) {
 		const keys = MODE_METADATA_KEYS[mode] || [];
 		const candidates = [];
-
-		for (const key of keys) {
-			const payload = await this.idbStorage.getMetadata(key, null);
+		const metadataPayloads = await Promise.all(keys.map((key) => this.idbStorage.getMetadata(key, null)));
+		for (let index = 0; index < keys.length; index += 1) {
+			const key = keys[index];
+			const payload = metadataPayloads[index];
 			if (!payload) continue;
 			const extracted = this._extractEnemyCandidates(payload, key);
 			for (const row of extracted) {
 				if (candidates.length >= MAX_CANDIDATES) break;
+				if (!this._isCandidateUsable(row, mode)) continue;
 				candidates.push(row);
 			}
 		}
+		return candidates;
+	}
 
-		const selected = candidates.find((c) => c.userId && c.userId === preferredId)
-			|| candidates.find((c) => c.power > 0)
-			|| candidates[0]
-			|| null;
+	/**
+	 * Resolve a metadata fallback candidate when attack/list payloads are sparse.
+	 *
+	 * @param {string} mode - Recommendation mode
+	 * @param {number} preferredId - Preferred enemy id
+	 * @returns {Promise<object|null>} candidate
+	 * @private
+	 */
+	async _findMetadataFallbackCandidate(mode, preferredId) {
+		const candidates = await this._collectModeCandidates(mode);
+		return this._selectBestCandidate(candidates, preferredId, mode);
+	}
 
-		this._context.mode = mode;
-		this._context.opponentId = selected?.userId || (preferredId > 0 ? preferredId : null);
-		this._context.opponentPower = selected?.power || null;
-		this._context.opponentName = selected?.name || '';
-		this._context.opponentTeams = Array.isArray(selected?.teams) ? selected.teams : [];
-		this._context.source = selected?.source || context.sourceLabel || 'mode metadata';
-		this._context.updatedAt = Date.now();
+	/**
+	 * Build candidate row directly from attack/list args for modes where metadata can lag.
+	 *
+	 * @param {object|null|undefined} args - API call args
+	 * @param {string} mode - Mode key
+	 * @param {string} source - Source label
+	 * @returns {{ userId:number|null, name:string, power:number, teams:Array<{slot:number,power:number}>, source:string }|null} candidate
+	 * @private
+	 */
+	_buildCandidateFromArgs(args, mode, source) {
+		if (!args || typeof args !== 'object') return null;
+		const userId = this._extractEnemyUserId(args) || null;
+		const name = this._resolveCandidateName(args);
+		const teams = this._extractOpponentTeams(args);
+		const power = this._resolveCandidatePower(args) || teams.reduce((sum, team) => sum + this._sanitizePower(Number(team.power || 0)), 0) || 0;
+		const updatedAt = this._extractTimestamp(args) || Date.now();
+		const confidence = this._resolveCandidateConfidence(args, teams, power, userId, name);
+
+		if (!userId && !name && power <= 0 && teams.length === 0) {
+			return null;
+		}
+
+		return {
+			userId,
+			name,
+			power,
+			teams,
+			confidence,
+			updatedAt,
+			source: source || `${mode || 'mode'} args`,
+		};
+	}
+
+	/**
+	 * Commit context if it satisfies priority and mode-switch stability constraints.
+	 *
+	 * @param {object} nextContext - Proposed context
+	 * @param {number} priority - Context source priority
+	 * @private
+	 */
+	_commitContext(nextContext, priority) {
+		const now = Date.now();
+		const normalizedPriority = Number.isFinite(priority) ? Number(priority) : 0;
+		const switchingMode = nextContext?.mode && nextContext.mode !== this._context.mode;
+		const nextConfidence = this._sanitizeConfidence(nextContext?.signalConfidence || 0);
+		const currentConfidence = this._sanitizeConfidence(this._context?.signalConfidence || 0);
+		const nextUpdatedAt = Number(nextContext?.updatedAt || now);
+		const currentUpdatedAt = Number(this._context?.updatedAt || 0);
+		const isNotFreshUpgrade = (nextUpdatedAt - currentUpdatedAt) < CONTEXT_FRESHNESS_OVERRIDE_MS;
+		const confidenceDrop = currentConfidence - nextConfidence;
+
+		if (switchingMode && normalizedPriority < this._lastContextPriority && (now - this._lastModeSwitchAt) < MODE_SWITCH_COOLDOWN_MS) {
+			return;
+		}
+
+		if (!switchingMode && normalizedPriority <= this._lastContextPriority && confidenceDrop >= CONTEXT_CONFIDENCE_GUARD_DELTA && isNotFreshUpgrade) {
+			return;
+		}
+
+		if (switchingMode) {
+			this._lastModeSwitchAt = now;
+		}
+
+		this._lastContextPriority = normalizedPriority;
+		this._context = {
+			...this._context,
+			...nextContext,
+			updatedAt: Number(nextContext?.updatedAt || now),
+		};
+	}
+
+	/**
+	 * Pick best enemy row from enemy-list metadata.
+	 *
+	 * @param {Array<object>|null|undefined} enemyList - Enemy list
+	 * @returns {object|null} Best row
+	 * @private
+	 */
+	_pickEnemyFromList(enemyList) {
+		if (!Array.isArray(enemyList) || enemyList.length === 0) {
+			return null;
+		}
+		return enemyList
+			.slice(0, MAX_CANDIDATES)
+			.sort((a, b) => {
+				const powerDiff = this._extractOpponentPower(b) - this._extractOpponentPower(a);
+				if (powerDiff !== 0) {
+					return powerDiff;
+				}
+				return this._extractTimestamp(b) - this._extractTimestamp(a);
+			})[0] || null;
+	}
+
+	/**
+	 * Select the strongest candidate from args/metadata pool.
+	 *
+	 * @param {Array<object>} pool - Candidate pool
+	 * @param {number} preferredId - Preferred opponent id
+	 * @param {string} mode - Context mode
+	 * @returns {object|null} Selected candidate
+	 * @private
+	 */
+	_selectBestCandidate(pool, preferredId, mode) {
+		if (!Array.isArray(pool) || pool.length === 0) {
+			return null;
+		}
+		let best = null;
+		let bestScore = -Infinity;
+		for (const candidate of pool.slice(0, MAX_CANDIDATES)) {
+			if (!this._isCandidateUsable(candidate, mode)) {
+				continue;
+			}
+			const score = this._scoreCandidate(candidate, preferredId, mode);
+			if (score > bestScore) {
+				best = candidate;
+				bestScore = score;
+			}
+		}
+		return best;
+	}
+
+	/**
+	 * Score candidate using id match, signal richness, recency and source trust.
+	 *
+	 * @param {object|null|undefined} candidate - Candidate
+	 * @param {number} preferredId - Preferred id
+	 * @param {string} mode - Mode key
+	 * @returns {number} Score
+	 * @private
+	 */
+	_scoreCandidate(candidate, preferredId, mode) {
+		if (!candidate || typeof candidate !== 'object') {
+			return -1000;
+		}
+
+		let score = 0;
+		if (preferredId > 0 && candidate.userId === preferredId) {
+			score += 500;
+		}
+		if (candidate.userId) {
+			score += 80;
+		}
+		if (candidate.name) {
+			score += 35;
+		}
+		score += Math.round(this._sanitizeConfidence(candidate.confidence || 0) * 140);
+		if (candidate.power > 0) {
+			score += Math.min(200, Math.round(candidate.power / 50000));
+		}
+		if (Array.isArray(candidate.teams) && candidate.teams.length > 0) {
+			score += Math.min(120, candidate.teams.length * 40);
+		}
+
+		const ageMs = Date.now() - this._extractTimestamp(candidate);
+		if (Number.isFinite(ageMs) && ageMs >= 0) {
+			score += Math.max(0, 100 - Math.floor(ageMs / 60000) * 10);
+		}
+
+		const source = String(candidate.source || '').toLowerCase();
+		if (source.includes('args')) {
+			score += 120;
+		}
+		if (source.includes('guildwar') || source.includes('dungeon') || source.includes('tournament') || source.includes('power')) {
+			score += 20;
+		}
+		if (source.includes('lasttarget')) {
+			score += 45;
+		}
+
+		if (mode === 'guildwar' && source.includes('guildwarbrief')) {
+			score -= 50;
+		}
+
+		if (!this._isCandidateUsable(candidate, mode)) {
+			score -= 600;
+		}
+
+		return score;
+	}
+
+	/**
+	 * Check whether candidate is usable by age and signal quality.
+	 *
+	 * @param {object|null|undefined} candidate - Candidate row
+	 * @param {string} mode - Recommendation mode
+	 * @returns {boolean} true when candidate should remain in selection pool
+	 * @private
+	 */
+	_isCandidateUsable(candidate, mode) {
+		if (!candidate || typeof candidate !== 'object') {
+			return false;
+		}
+		const hasSignal = Boolean(candidate.userId) || Boolean(candidate.name) || Number(candidate.power || 0) > 0 || (Array.isArray(candidate.teams) && candidate.teams.length > 0);
+		if (!hasSignal) {
+			return false;
+		}
+		const confidence = this._sanitizeConfidence(candidate.confidence || 0);
+		if (!candidate.userId && (!Array.isArray(candidate.teams) || candidate.teams.length === 0) && confidence < 0.20) {
+			return false;
+		}
+
+		const maxAgeMs = MODE_CANDIDATE_MAX_AGE_MS[this._normalizeMode(mode)] || DEFAULT_CANDIDATE_MAX_AGE_MS;
+		const updatedAt = this._extractTimestamp(candidate);
+		if (updatedAt <= 0) {
+			return true;
+		}
+		return (Date.now() - updatedAt) <= maxAgeMs;
 	}
 
 	/**
@@ -392,6 +737,7 @@ class BattleRecommendationOverlay {
 	_extractEnemyCandidates(payload, source) {
 		const candidates = [];
 		const seen = new Set();
+		const payloadUpdatedAt = this._extractTimestamp(payload);
 		const walk = (node, depth) => {
 			if (!node || depth > MAX_DEEP_SCAN_DEPTH || candidates.length >= MAX_CANDIDATES) return;
 			if (Array.isArray(node)) {
@@ -407,10 +753,19 @@ class BattleRecommendationOverlay {
 			const name = this._resolveCandidateName(node);
 			const power = this._resolveCandidatePower(node);
 			const teams = this._extractOpponentTeams(node);
+			const updatedAt = this._extractTimestamp(node) || payloadUpdatedAt;
 			const key = `${userId || 0}:${name}:${power}`;
 			if ((userId || name || power > 0 || teams.length > 0) && !seen.has(key)) {
 				seen.add(key);
-				candidates.push({ userId: userId || null, name, power, teams, source });
+				candidates.push({
+					userId: userId || null,
+					name,
+					power,
+					teams,
+					source,
+					updatedAt,
+					confidence: this._resolveCandidateConfidence(node, teams, power, userId, name),
+				});
 			}
 
 			for (const value of Object.values(node)) {
@@ -426,6 +781,34 @@ class BattleRecommendationOverlay {
 	}
 
 	/**
+	 * Extract a timestamp from mixed payloads.
+	 *
+	 * @param {object|null|undefined} node - Candidate node
+	 * @returns {number} Epoch milliseconds or 0
+	 * @private
+	 */
+	_extractTimestamp(node) {
+		if (!node || typeof node !== 'object') {
+			return 0;
+		}
+		const raw = Number(
+			node.updatedAt
+			|| node.lastUpdate
+			|| node.updatedAtUtc
+			|| node.timestamp
+			|| node.time
+			|| 0
+		);
+		if (!Number.isFinite(raw) || raw <= 0) {
+			return 0;
+		}
+		if (raw < 1000000000000) {
+			return raw * 1000;
+		}
+		return raw;
+	}
+
+	/**
 	 * Resolve candidate display name from arbitrary object shape.
 	 *
 	 * @param {object} node - Candidate object
@@ -433,8 +816,34 @@ class BattleRecommendationOverlay {
 	 * @private
 	 */
 	_resolveCandidateName(node) {
-		const raw = node?.name || node?.opponentName || node?.userName || node?.nickname || node?.nick || '';
-		return typeof raw === 'string' ? raw : '';
+		const raw = node?.name
+			|| node?.opponentName
+			|| node?.userName
+			|| node?.nickname
+			|| node?.nick
+			|| node?.enemyName
+			|| node?.defenderName
+			|| node?.targetName
+			|| node?.enemy?.name
+			|| node?.opponent?.name
+			|| node?.defender?.name
+			|| node?.target?.name
+			|| '';
+		if (typeof raw === 'string' && raw.trim().length > 0) {
+			return raw;
+		}
+
+		const floor = Number(node?.floor || node?.towerFloor || node?.stage || node?.dungeonFloor || 0);
+		if (Number.isFinite(floor) && floor > 0) {
+			return `Floor ${Math.trunc(floor)}`;
+		}
+
+		const tournamentSlot = Number(node?.slot || node?.group || node?.position || 0);
+		if (Number.isFinite(tournamentSlot) && tournamentSlot > 0) {
+			return `Slot ${Math.trunc(tournamentSlot)}`;
+		}
+
+		return '';
 	}
 
 	/**
@@ -445,7 +854,21 @@ class BattleRecommendationOverlay {
 	 * @private
 	 */
 	_resolveCandidatePower(node) {
-		const value = Number(node?.power || node?.teamPower || node?.lastKnownPower || node?.totalPower || 0);
+		const value = this._sanitizePower(Number(
+			node?.power
+			|| node?.teamPower
+			|| node?.lastKnownPower
+			|| node?.totalPower
+			|| node?.targetPower
+			|| node?.enemyPower
+			|| node?.defenderPower
+			|| node?.opponentPower
+			|| node?.enemy?.power
+			|| node?.opponent?.power
+			|| node?.defender?.power
+			|| node?.target?.power
+			|| 0
+		));
 		return Number.isFinite(value) && value > 0 ? value : 0;
 	}
 
@@ -464,9 +887,18 @@ class BattleRecommendationOverlay {
 			|| args?.defenderUserId
 			|| args?.opponentId
 			|| args?.userId
+			|| args?.id
+			|| args?.enemy?.userId
+			|| args?.opponent?.userId
+			|| args?.defender?.userId
+			|| args?.target?.userId
+			|| args?.enemy?.id
+			|| args?.opponent?.id
+			|| args?.defender?.id
+			|| args?.target?.id
 			|| 0
 		);
-		return Number.isFinite(value) && value > 0 ? value : 0;
+		return this._sanitizeId(value);
 	}
 
 	/**
@@ -478,7 +910,7 @@ class BattleRecommendationOverlay {
 	 */
 	_extractOpponentPower(enemy) {
 		if (!enemy || typeof enemy !== 'object') return null;
-		const primary = Number(enemy.power || enemy.teamPower || enemy.totalPower || 0);
+		const primary = this._sanitizePower(Number(enemy.power || enemy.teamPower || enemy.totalPower || 0));
 		if (Number.isFinite(primary) && primary > 0) {
 			return primary;
 		}
@@ -496,16 +928,81 @@ class BattleRecommendationOverlay {
 	 * @private
 	 */
 	_extractOpponentTeams(enemy) {
-		if (!enemy || typeof enemy !== 'object' || !Array.isArray(enemy.teams)) {
+		if (!enemy || typeof enemy !== 'object') {
 			return [];
 		}
-		return enemy.teams
+
+		const collectionKeys = ['teams', 'enemyTeams', 'opponentTeams', 'defenders', 'lineups', 'squads', 'battleTeams', 'slots'];
+		let rows = [];
+		for (const key of collectionKeys) {
+			if (Array.isArray(enemy[key])) {
+				rows = enemy[key];
+				break;
+			}
+		}
+
+		if (rows.length === 0 && enemy.team && typeof enemy.team === 'object') {
+			rows = [enemy.team];
+		}
+
+		return rows
 			.map((team, index) => ({
 				slot: index + 1,
-				power: Number(team?.power || team?.teamPower || 0),
+				power: this._resolveTeamPower(team),
 			}))
 			.filter((row) => Number.isFinite(row.power) && row.power > 0)
 			.slice(0, 3);
+	}
+
+	/**
+	 * Resolve team power from heterogeneous team payloads.
+	 *
+	 * @param {object|null|undefined} team - Team object
+	 * @returns {number} Team power
+	 * @private
+	 */
+	_resolveTeamPower(team) {
+		if (!team || typeof team !== 'object') return 0;
+		const direct = this._sanitizePower(Number(team.power || team.teamPower || team.totalPower || team.heroPower || team.targetPower || 0));
+		if (Number.isFinite(direct) && direct > 0) {
+			return direct;
+		}
+		if (!Array.isArray(team.heroes)) {
+			return 0;
+		}
+		const sum = team.heroes.reduce((acc, hero) => {
+			const value = this._sanitizePower(Number(hero?.power || hero?.teamPower || 0));
+			return acc + (Number.isFinite(value) && value > 0 ? value : 0);
+		}, 0);
+		return sum > 0 ? sum : 0;
+	}
+
+	/**
+	 * Sanitize candidate id to expected numeric range.
+	 *
+	 * @param {number} value - Raw id
+	 * @returns {number} Safe id or 0
+	 * @private
+	 */
+	_sanitizeId(value) {
+		if (!Number.isFinite(value) || value <= 0 || value > MAX_VALID_ID) {
+			return 0;
+		}
+		return Math.trunc(value);
+	}
+
+	/**
+	 * Sanitize power value to expected numeric range.
+	 *
+	 * @param {number} value - Raw power
+	 * @returns {number} Safe power or 0
+	 * @private
+	 */
+	_sanitizePower(value) {
+		if (!Number.isFinite(value) || value <= 0 || value > MAX_VALID_POWER) {
+			return 0;
+		}
+		return Math.trunc(value);
 	}
 
 	/**
@@ -527,17 +1024,18 @@ class BattleRecommendationOverlay {
 		this._activeFetchController = new AbortController();
 		const sequence = ++this._requestSequence;
 
-		const mode = this._normalizeMode(this._context.mode);
-		const objective = this._normalizeObjective(this.prefStorage.get('teamRecommendationsObjective', 'balanced'));
-		const minSamples = this._resolveMinSamples(mode);
+		const contextMode = this._normalizeMode(this._context.mode);
+		const mode = this._resolveEngineMode(contextMode);
+		const objective = this._resolveObjectiveForMode(contextMode);
+		const minSamples = this._resolveMinSamples(contextMode);
 
 		try {
 			let payload = null;
 
-			if (mode === 'grandarena' && this._context.opponentTeams.length > 1) {
+			if (contextMode === 'grandarena' && this._context.opponentTeams.length > 1) {
 				payload = await this._fetchGrandArenaSegmentedRecommendations(sequence, minSamples);
-			} else if (ARENA_FAMILY_MODES.has(mode)) {
-				payload = await this._fetchBattleRecommendationsForTarget(sequence, mode, minSamples);
+			} else if (ARENA_FAMILY_MODES.has(contextMode)) {
+				payload = await this._fetchBattleRecommendationsForTarget(sequence, contextMode, minSamples);
 			}
 
 			if (!this._hasRecommendations(payload)) {
@@ -586,7 +1084,7 @@ class BattleRecommendationOverlay {
 
 		if (this._context.opponentPower) {
 			url.searchParams.set('opponentPower', String(this._context.opponentPower));
-			url.searchParams.set('powerWindow', '40000');
+			url.searchParams.set('powerWindow', String(this._resolvePowerWindow(mode, this._context.opponentPower)));
 		}
 
 		const payload = await this._requestJson(url.toString(), sequence);
@@ -736,10 +1234,58 @@ class BattleRecommendationOverlay {
 		switch (mode) {
 			case 'guildwar':
 			case 'cow':
+			case 'dungeon':
+			case 'toe':
 				return 1;
 			default:
 				return 2;
 		}
+	}
+
+	/**
+	 * Resolve context mode to API-supported team engine mode.
+	 *
+	 * @param {string} mode - Context mode
+	 * @returns {string} Engine mode
+	 * @private
+	 */
+	_resolveEngineMode(mode) {
+		const normalized = this._normalizeMode(mode);
+		return ENGINE_MODE_MAP[normalized] || 'arena';
+	}
+
+	/**
+	 * Resolve objective with mode-specific defaults when preference remains balanced.
+	 *
+	 * @param {string} mode - Context mode
+	 * @returns {string} Objective key
+	 * @private
+	 */
+	_resolveObjectiveForMode(mode) {
+		const normalizedMode = this._normalizeMode(mode);
+		const preferred = this._normalizeObjective(this.prefStorage.get('teamRecommendationsObjective', 'balanced'));
+		if (preferred !== 'balanced') {
+			return preferred;
+		}
+		return MODE_DEFAULT_OBJECTIVE[normalizedMode] || 'balanced';
+	}
+
+	/**
+	 * Resolve battle power window with mode baseline and opponent scaling.
+	 *
+	 * @param {string} mode - Battle mode
+	 * @param {number} opponentPower - Opponent power
+	 * @returns {number} powerWindow
+	 * @private
+	 */
+	_resolvePowerWindow(mode, opponentPower) {
+		const base = MODE_POWER_WINDOW[this._normalizeMode(mode)] || 35000;
+		const power = Number(opponentPower || 0);
+		if (!Number.isFinite(power) || power <= 0) {
+			return base;
+		}
+		const scaled = Math.round(power * 0.08);
+		return Math.max(20000, Math.min(120000, Math.max(base, scaled)));
 	}
 
 	/**
@@ -789,7 +1335,7 @@ class BattleRecommendationOverlay {
 				</div>
 			</div>
 			<div class="oj-bro-content" id="oj-bro-content">
-				<div class="oj-bro-subtitle" id="oj-bro-context">Waiting for arena enemy data...</div>
+				<div class="oj-bro-subtitle" id="oj-bro-context">Waiting for battle context data...</div>
 				<div class="oj-bro-body" id="oj-bro-body"></div>
 			</div>
 		`;
@@ -882,7 +1428,8 @@ class BattleRecommendationOverlay {
 		if (contextEl) {
 			const target = this._context.opponentName || (this._context.opponentId ? `opponent #${this._context.opponentId}` : 'mode context');
 			const source = this._escapeHtml(this._context.source || 'detected context');
-			contextEl.innerHTML = `${this._labelForMode(this._context.mode)} • ${this._escapeHtml(target)} • ${source}`;
+			const signal = this._escapeHtml(this._describeContextSignal());
+			contextEl.innerHTML = `${this._labelForMode(this._context.mode)} • ${this._escapeHtml(target)} • ${source} • ${signal}`;
 		}
 		if (bodyEl) {
 			bodyEl.innerHTML = '<div class="oj-bro-empty">Loading recommendations...</div>';
@@ -923,8 +1470,77 @@ class BattleRecommendationOverlay {
 		if (contextEl) {
 			const target = this._context.opponentName || (this._context.opponentId ? `opponent #${this._context.opponentId}` : 'mode-level recommendations');
 			const source = this._escapeHtml(this._context.source || 'detected context');
-			contextEl.innerHTML = `${this._labelForMode(mode)} • ${this._escapeHtml(target)} • ${source}`;
+			const signal = this._escapeHtml(this._describeContextSignal());
+			contextEl.innerHTML = `${this._labelForMode(mode)} • ${this._escapeHtml(target)} • ${source} • ${signal}`;
 		}
+	}
+
+	/**
+	 * Describe current context signal quality for quick operator confidence.
+	 *
+	 * @returns {string} Human label
+	 * @private
+	 */
+	_describeContextSignal() {
+		const source = String(this._context?.source || '').toLowerCase();
+		const ageMs = Math.max(0, Date.now() - Number(this._context?.updatedAt || 0));
+		if (source.includes('args')) {
+			return 'Live Args';
+		}
+		const confidence = this._sanitizeConfidence(this._context?.signalConfidence || 0);
+		if ((ageMs <= 60000 && confidence >= 0.35) || (ageMs <= 180000 && confidence >= 0.90)) {
+			return 'Fresh Metadata';
+		}
+		return 'Stale Metadata';
+	}
+
+	/**
+	 * Resolve candidate confidence using explicit field when available, otherwise derive a heuristic confidence.
+	 *
+	 * @param {object|null|undefined} node - Candidate node
+	 * @param {Array<{slot:number,power:number}>|null|undefined} teams - Candidate teams
+	 * @param {number} power - Candidate power
+	 * @param {number|null|undefined} userId - Candidate user id
+	 * @param {string|null|undefined} name - Candidate display name
+	 * @returns {number} Confidence in range [0..1]
+	 * @private
+	 */
+	_resolveCandidateConfidence(node, teams, power, userId, name) {
+		const explicit = this._sanitizeConfidence(Number(
+			node?.confidence
+			|| node?.signalConfidence
+			|| node?.confidenceScore
+			|| node?.quality
+			|| 0
+		));
+		if (explicit > 0) {
+			return explicit;
+		}
+
+		let score = 0.20;
+		if (Number(userId || 0) > 0) score += 0.25;
+		if (typeof name === 'string' && name.trim().length > 0) score += 0.15;
+		if (Number(power || 0) > 0) score += 0.20;
+		if (Array.isArray(teams) && teams.length > 0) score += 0.20;
+
+		const source = String(node?.source || node?.sourceCall || '').toLowerCase();
+		if (source.includes('attack') || source.includes('battle')) score += 0.05;
+
+		return this._sanitizeConfidence(score);
+	}
+
+	/**
+	 * Clamp confidence to [0, 1].
+	 *
+	 * @param {number} value - Raw confidence
+	 * @returns {number} Normalized confidence
+	 * @private
+	 */
+	_sanitizeConfidence(value) {
+		if (!Number.isFinite(value)) {
+			return 0;
+		}
+		return Math.max(0, Math.min(1, Number(value)));
 	}
 
 	/**
@@ -1040,6 +1656,9 @@ class BattleRecommendationOverlay {
 			case 'titanarena': return 'Titan Arena';
 			case 'guildwar': return 'Guild War';
 			case 'cow': return 'Clash of Worlds';
+			case 'adventure': return 'Adventure';
+			case 'dungeon': return 'Dungeon';
+			case 'toe': return 'Tournament of Elements';
 			default: return mode || 'Battle';
 		}
 	}

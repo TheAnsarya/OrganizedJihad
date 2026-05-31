@@ -179,6 +179,566 @@ describe('BattleRecommendationOverlay', () => {
 		overlay.destroy();
 	});
 
+	it('should use adventure mode for adventure context recommendations', async () => {
+		const overlay = new BattleRecommendationOverlay(makeIdbStorage(), makePrefStorage({ teamRecommendationsObjective: 'sustain' }));
+		overlay.init();
+
+		global.fetch.mockResolvedValue({
+			ok: true,
+			json: async () => ({ recommendations: [{ teamPreview: 'Adventure Team', estimatedWinProbability: 0.63, confidenceScore: 0.56, finalScore: 0.61 }] }),
+		});
+
+		await overlay.onApiProcessed({ calls: [{ name: 'adventure_getActiveData', args: {} }] });
+		await flushScheduledRefresh();
+
+		const url = global.fetch.mock.calls[0][0];
+		expect(url).toContain('mode=adventure');
+		expect(url).toContain('objective=sustain');
+
+		const ctxText = document.querySelector('#oj-bro-context')?.textContent || '';
+		expect(ctxText).toContain('Adventure');
+
+		overlay.destroy();
+	});
+
+	it('should use dungeon engine mode for dungeon context with sparse min samples', async () => {
+		const overlay = new BattleRecommendationOverlay(makeIdbStorage(), makePrefStorage());
+		overlay.init();
+
+		global.fetch.mockResolvedValue({
+			ok: true,
+			json: async () => ({ recommendations: [{ teamPreview: 'Dungeon Team', estimatedWinProbability: 0.57, confidenceScore: 0.46, finalScore: 0.55 }] }),
+		});
+
+		await overlay.onApiProcessed({ calls: [{ name: 'dungeonGetState', args: {} }] });
+		await flushScheduledRefresh();
+
+		const url = global.fetch.mock.calls[0][0];
+		expect(url).toContain('mode=dungeon');
+		expect(url).toContain('minSamples=1');
+
+		const ctxText = document.querySelector('#oj-bro-context')?.textContent || '';
+		expect(ctxText).toContain('Dungeon');
+
+		overlay.destroy();
+	});
+
+	it('should use toe engine mode for toe context while preserving toe label', async () => {
+		const overlay = new BattleRecommendationOverlay(makeIdbStorage(), makePrefStorage());
+		overlay.init();
+
+		global.fetch.mockResolvedValue({
+			ok: true,
+			json: async () => ({ recommendations: [{ teamPreview: 'ToE Team', estimatedWinProbability: 0.6, confidenceScore: 0.5, finalScore: 0.58 }] }),
+		});
+
+		await overlay.onApiProcessed({ calls: [{ name: 'powerTournament_getState', args: {} }] });
+		await flushScheduledRefresh();
+
+		const url = global.fetch.mock.calls[0][0];
+		expect(url).toContain('mode=toe');
+		expect(url).toContain('minSamples=1');
+
+		const ctxText = document.querySelector('#oj-bro-context')?.textContent || '';
+		expect(ctxText).toContain('Tournament of Elements');
+
+		overlay.destroy();
+	});
+
+	it('should use dungeon args to enrich context name and opponent id for battle calls', async () => {
+		const overlay = new BattleRecommendationOverlay(makeIdbStorage(), makePrefStorage());
+		overlay.init();
+
+		global.fetch.mockResolvedValue({
+			ok: true,
+			json: async () => ({ recommendations: [{ teamPreview: 'Dungeon Push', estimatedWinProbability: 0.61, confidenceScore: 0.49, finalScore: 0.57 }] }),
+		});
+
+		await overlay.onApiProcessed({
+			calls: [{
+				name: 'dungeonBattle',
+				args: {
+					targetUserId: 777,
+					targetName: 'Dungeon Guardian',
+					targetPower: 345000,
+				},
+			}],
+		});
+		await flushScheduledRefresh();
+
+		const url = global.fetch.mock.calls[0][0];
+		expect(url).toContain('mode=dungeon');
+
+		const ctxText = document.querySelector('#oj-bro-context')?.textContent || '';
+		expect(ctxText).toContain('Dungeon');
+		expect(ctxText).toContain('Dungeon Guardian');
+
+		overlay.destroy();
+	});
+
+	it('should extract toe nested args for context labels and direct toe mode requests', async () => {
+		const overlay = new BattleRecommendationOverlay(makeIdbStorage(), makePrefStorage());
+		overlay.init();
+
+		global.fetch.mockResolvedValue({
+			ok: true,
+			json: async () => ({ recommendations: [{ teamPreview: 'Element Team', estimatedWinProbability: 0.62, confidenceScore: 0.51, finalScore: 0.6 }] }),
+		});
+
+		await overlay.onApiProcessed({
+			calls: [{
+				name: 'tournamentBattle',
+				args: {
+					target: {
+						id: 991,
+						name: 'Elemental Champion',
+						power: 510000,
+					},
+				},
+			}],
+		});
+		await flushScheduledRefresh();
+
+		const url = global.fetch.mock.calls[0][0];
+		expect(url).toContain('mode=toe');
+
+		const ctxText = document.querySelector('#oj-bro-context')?.textContent || '';
+		expect(ctxText).toContain('Tournament of Elements');
+		expect(ctxText).toContain('Elemental Champion');
+
+		overlay.destroy();
+	});
+
+	it('should keep high-priority toe battle context when low-priority mode state call follows', async () => {
+		const overlay = new BattleRecommendationOverlay(makeIdbStorage(), makePrefStorage());
+		overlay.init();
+
+		global.fetch.mockResolvedValue({
+			ok: true,
+			json: async () => ({ recommendations: [{ teamPreview: 'Stable ToE Team', estimatedWinProbability: 0.64, confidenceScore: 0.53, finalScore: 0.61 }] }),
+		});
+
+		await overlay.onApiProcessed({
+			calls: [
+				{ name: 'tournamentBattle', args: { targetUserId: 22, targetName: 'ToE Rival', targetPower: 420000 } },
+				{ name: 'clashGetInfo', args: {} },
+			],
+		});
+		await flushScheduledRefresh();
+
+		const url = global.fetch.mock.calls[0][0];
+		expect(url).toContain('mode=toe');
+
+		const ctxText = document.querySelector('#oj-bro-context')?.textContent || '';
+		expect(ctxText).toContain('Tournament of Elements');
+
+		overlay.destroy();
+	});
+
+	it('should use defense objective by default for guild war mode', async () => {
+		const overlay = new BattleRecommendationOverlay(makeIdbStorage(), makePrefStorage({ teamRecommendationsObjective: 'balanced' }));
+		overlay.init();
+
+		global.fetch.mockResolvedValue({
+			ok: true,
+			json: async () => ({ recommendations: [{ teamPreview: 'War Team', estimatedWinProbability: 0.58, confidenceScore: 0.48, finalScore: 0.56 }] }),
+		});
+
+		await overlay.onApiProcessed({ calls: [{ name: 'clanWarGetInfo', args: {} }] });
+		await flushScheduledRefresh();
+
+		const url = global.fetch.mock.calls[0][0];
+		expect(url).toContain('mode=guildwar');
+		expect(url).toContain('objective=defense');
+
+		overlay.destroy();
+	});
+
+	it('should adapt arena power window based on opponent power', async () => {
+		const idb = makeIdbStorage({
+			arenaEnemies: [{ userId: 900, name: 'Heavy Target', power: 900000 }],
+		});
+		const overlay = new BattleRecommendationOverlay(idb, makePrefStorage());
+		overlay.init();
+
+		global.fetch.mockResolvedValue({
+			ok: true,
+			json: async () => ({ recommendations: [{ teamPreview: 'Arena Team', weightedWinRate: 0.62, confidence: 0.52, score: 0.6, battles: 20 }] }),
+		});
+
+		await overlay.onApiProcessed({ calls: [{ name: 'arenaAttack', args: { enemyUserId: 900 } }] });
+		await flushScheduledRefresh();
+
+		const url = global.fetch.mock.calls[0][0];
+		expect(url).toContain('powerWindow=72000');
+
+		overlay.destroy();
+	});
+
+	it('should ignore invalid oversized ids and powers from args in arena battle queries', async () => {
+		const overlay = new BattleRecommendationOverlay(makeIdbStorage(), makePrefStorage());
+		overlay.init();
+
+		global.fetch.mockResolvedValue({
+			ok: true,
+			json: async () => ({ recommendations: [{ teamPreview: 'Safe Arena Team', weightedWinRate: 0.55, confidence: 0.45, score: 0.54, battles: 6 }] }),
+		});
+
+		await overlay.onApiProcessed({
+			calls: [{
+				name: 'arenaAttack',
+				args: {
+					targetUserId: 999999999999,
+					targetPower: 999999999999,
+				},
+			}],
+		});
+		await flushScheduledRefresh();
+
+		const url = global.fetch.mock.calls[0][0];
+		expect(url).toContain('battleType=arena');
+		expect(url).not.toContain('opponentId=');
+		expect(url).not.toContain('opponentPower=');
+
+		overlay.destroy();
+	});
+
+	it('should pick strongest enemy from enemy list context instead of first row', async () => {
+		const idb = makeIdbStorage({
+			arenaEnemies: [
+				{ userId: 1, name: 'Low', power: 120000 },
+				{ userId: 2, name: 'High', power: 510000 },
+			],
+		});
+		const overlay = new BattleRecommendationOverlay(idb, makePrefStorage());
+		overlay.init();
+
+		global.fetch.mockResolvedValue({
+			ok: true,
+			json: async () => ({ recommendations: [{ teamPreview: 'List Team', weightedWinRate: 0.58, confidence: 0.49, score: 0.57, battles: 9 }] }),
+		});
+
+		await overlay.onApiProcessed({ calls: [{ name: 'arenaGetEnemies', args: {} }] });
+		await flushScheduledRefresh();
+
+		const url = global.fetch.mock.calls[0][0];
+		expect(url).toContain('opponentId=2');
+		expect(url).toContain('opponentPower=510000');
+
+		overlay.destroy();
+	});
+
+	it('should fallback to floor label when dungeon payload has no explicit target name', async () => {
+		const overlay = new BattleRecommendationOverlay(makeIdbStorage(), makePrefStorage());
+		overlay.init();
+
+		global.fetch.mockResolvedValue({
+			ok: true,
+			json: async () => ({ recommendations: [{ teamPreview: 'Floor Team', estimatedWinProbability: 0.59, confidenceScore: 0.48, finalScore: 0.57 }] }),
+		});
+
+		await overlay.onApiProcessed({ calls: [{ name: 'dungeonBattle', args: { floor: 7 } }] });
+		await flushScheduledRefresh();
+
+		const ctxText = document.querySelector('#oj-bro-context')?.textContent || '';
+		expect(ctxText).toContain('Floor 7');
+
+		overlay.destroy();
+	});
+
+	it('should prioritize dedicated last-target metadata for dungeon context', async () => {
+		const idb = makeIdbStorage({
+			battleRecommendationLastTargetDungeon: {
+				userId: 456,
+				name: 'Dungeon Last Target',
+				power: 380000,
+				lastUpdate: Date.now(),
+			},
+			towerState: {
+				floor: 10,
+				lastUpdate: Date.now() - 120000,
+			},
+		});
+		const overlay = new BattleRecommendationOverlay(idb, makePrefStorage());
+		overlay.init();
+
+		global.fetch.mockResolvedValue({
+			ok: true,
+			json: async () => ({ recommendations: [{ teamPreview: 'Dungeon Last Team', estimatedWinProbability: 0.6, confidenceScore: 0.5, finalScore: 0.58 }] }),
+		});
+
+		await overlay.onApiProcessed({ calls: [{ name: 'dungeonGetState', args: {} }] });
+		await flushScheduledRefresh();
+
+		const url = global.fetch.mock.calls[0][0];
+		expect(url).toContain('mode=dungeon');
+
+		const ctxText = document.querySelector('#oj-bro-context')?.textContent || '';
+		expect(ctxText).toContain('Dungeon Last Target');
+		expect(ctxText).toContain('Fresh Metadata');
+
+		overlay.destroy();
+	});
+
+	it('should show live args signal when context comes from battle args', async () => {
+		const overlay = new BattleRecommendationOverlay(makeIdbStorage(), makePrefStorage());
+		overlay.init();
+
+		global.fetch.mockResolvedValue({
+			ok: true,
+			json: async () => ({ recommendations: [{ teamPreview: 'Args Team', estimatedWinProbability: 0.61, confidenceScore: 0.5, finalScore: 0.58 }] }),
+		});
+
+		await overlay.onApiProcessed({
+			calls: [{
+				name: 'tournamentBattle',
+				args: { targetUserId: 44, targetName: 'Args Rival', targetPower: 300000 },
+			}],
+		});
+		await flushScheduledRefresh();
+
+		const ctxText = document.querySelector('#oj-bro-context')?.textContent || '';
+		expect(ctxText).toContain('Live Args');
+
+		overlay.destroy();
+	});
+
+	it('should fallback to dedicated arena last-target metadata when attack args are sparse', async () => {
+		const idb = makeIdbStorage({
+			arenaEnemies: [],
+			battleRecommendationLastTargetArena: {
+				userId: 701,
+				name: 'Arena Last Target',
+				power: 540000,
+				lastUpdate: Date.now(),
+			},
+		});
+		const overlay = new BattleRecommendationOverlay(idb, makePrefStorage());
+		overlay.init();
+
+		global.fetch.mockResolvedValue({
+			ok: true,
+			json: async () => ({ recommendations: [{ teamPreview: 'Arena Anchor', weightedWinRate: 0.62, confidence: 0.52, score: 0.6, battles: 11 }] }),
+		});
+
+		await overlay.onApiProcessed({ calls: [{ name: 'arenaAttack', args: {} }] });
+		await flushScheduledRefresh();
+
+		const url = global.fetch.mock.calls[0][0];
+		expect(url).toContain('battleType=arena');
+		expect(url).toContain('opponentId=701');
+		expect(url).toContain('opponentPower=540000');
+
+		const ctxText = document.querySelector('#oj-bro-context')?.textContent || '';
+		expect(ctxText).toContain('Arena Last Target');
+
+		overlay.destroy();
+	});
+
+	it('should use dedicated grand arena last-target metadata teams for segmented requests', async () => {
+		const idb = makeIdbStorage({
+			grandArenaEnemies: [],
+			battleRecommendationLastTargetGrandArena: {
+				userId: 815,
+				name: 'Grand Last Target',
+				teams: [{ power: 210000 }, { power: 220000 }, { power: 230000 }],
+				lastUpdate: Date.now(),
+			},
+		});
+		const overlay = new BattleRecommendationOverlay(idb, makePrefStorage());
+		overlay.init();
+
+		global.fetch.mockResolvedValue({
+			ok: true,
+			json: async () => ({ recommendations: [{ teamPreview: 'Grand Segment', weightedWinRate: 0.57, confidence: 0.47, score: 0.56, battles: 7 }] }),
+		});
+
+		await overlay.onApiProcessed({ calls: [{ name: 'grandArenaAttack', args: {} }] });
+		await flushScheduledRefresh();
+
+		expect(global.fetch).toHaveBeenCalledTimes(3);
+		expect(global.fetch.mock.calls[0][0]).toContain('opponentPower=210000');
+		expect(global.fetch.mock.calls[1][0]).toContain('opponentPower=220000');
+		expect(global.fetch.mock.calls[2][0]).toContain('opponentPower=230000');
+
+		overlay.destroy();
+	});
+
+	it('should ignore stale dungeon metadata candidates beyond mode TTL', async () => {
+		jest.setSystemTime(new Date('2026-01-01T00:30:00.000Z'));
+		const staleTimestamp = Date.now() - (11 * 60 * 1000);
+		const idb = makeIdbStorage({
+			battleRecommendationLastTargetDungeon: {
+				userId: 902,
+				name: 'Stale Dungeon Target',
+				power: 410000,
+				lastUpdate: staleTimestamp,
+			},
+		});
+		const overlay = new BattleRecommendationOverlay(idb, makePrefStorage());
+		overlay.init();
+
+		global.fetch.mockResolvedValue({
+			ok: true,
+			json: async () => ({ recommendations: [{ teamPreview: 'Dungeon Safe Team', estimatedWinProbability: 0.58, confidenceScore: 0.47, finalScore: 0.56 }] }),
+		});
+
+		await overlay.onApiProcessed({ calls: [{ name: 'dungeonGetState', args: {} }] });
+		await flushScheduledRefresh();
+
+		const url = global.fetch.mock.calls[0][0];
+		expect(url).toContain('/api/sync/teams/recommendations');
+		expect(url).toContain('mode=dungeon');
+
+		const ctxText = document.querySelector('#oj-bro-context')?.textContent || '';
+		expect(ctxText).not.toContain('Stale Dungeon Target');
+
+		overlay.destroy();
+	});
+
+	it('should mark stale metadata signal when selected metadata context is old but still within mode TTL', async () => {
+		jest.setSystemTime(new Date('2026-01-01T00:30:00.000Z'));
+		const oldTimestamp = Date.now() - (3 * 60 * 1000);
+		const idb = makeIdbStorage({
+			battleRecommendationLastTargetAdventure: {
+				userId: 303,
+				name: 'Old Adventure Target',
+				power: 300000,
+				lastUpdate: oldTimestamp,
+			},
+		});
+		const overlay = new BattleRecommendationOverlay(idb, makePrefStorage());
+		overlay.init();
+
+		global.fetch.mockResolvedValue({
+			ok: true,
+			json: async () => ({ recommendations: [{ teamPreview: 'Adventure Safe', estimatedWinProbability: 0.57, confidenceScore: 0.46, finalScore: 0.55 }] }),
+		});
+
+		await overlay.onApiProcessed({ calls: [{ name: 'adventure_getActiveData', args: {} }] });
+		await flushScheduledRefresh();
+
+		const ctxText = document.querySelector('#oj-bro-context')?.textContent || '';
+		expect(ctxText).toContain('Old Adventure Target');
+		expect(ctxText).toContain('Stale Metadata');
+
+		overlay.destroy();
+	});
+
+	it('should keep high-confidence metadata fresh within extended confidence window', async () => {
+		jest.setSystemTime(new Date('2026-01-01T00:30:00.000Z'));
+		const recentTimestamp = Date.now() - (2 * 60 * 1000);
+		const idb = makeIdbStorage({
+			battleRecommendationLastTargetDungeon: {
+				userId: 1001,
+				name: 'Confident Dungeon Target',
+				power: 420000,
+				confidence: 0.96,
+				lastUpdate: recentTimestamp,
+			},
+		});
+		const overlay = new BattleRecommendationOverlay(idb, makePrefStorage());
+		overlay.init();
+
+		global.fetch.mockResolvedValue({
+			ok: true,
+			json: async () => ({ recommendations: [{ teamPreview: 'Confidence Team', estimatedWinProbability: 0.6, confidenceScore: 0.52, finalScore: 0.58 }] }),
+		});
+
+		await overlay.onApiProcessed({ calls: [{ name: 'dungeonGetState', args: {} }] });
+		await flushScheduledRefresh();
+
+		const ctxText = document.querySelector('#oj-bro-context')?.textContent || '';
+		expect(ctxText).toContain('Confident Dungeon Target');
+		expect(ctxText).toContain('Fresh Metadata');
+
+		overlay.destroy();
+	});
+
+	it('should ignore same-mode low-confidence context overwrite when update is not materially fresher', async () => {
+		const metadata = {
+			battleRecommendationLastTargetDungeon: {
+				userId: 5001,
+				name: 'High Confidence Target',
+				power: 430000,
+				confidence: 0.95,
+				lastUpdate: Date.now(),
+			},
+		};
+		const idb = {
+			getMetadata: jest.fn(async (key, def) => (key in metadata ? metadata[key] : def)),
+			setMetadata: jest.fn(async () => undefined),
+		};
+		const overlay = new BattleRecommendationOverlay(idb, makePrefStorage());
+		overlay.init();
+
+		global.fetch.mockResolvedValue({
+			ok: true,
+			json: async () => ({ recommendations: [{ teamPreview: 'Guard Team', estimatedWinProbability: 0.6, confidenceScore: 0.5, finalScore: 0.58 }] }),
+		});
+
+		await overlay.onApiProcessed({ calls: [{ name: 'dungeonGetState', args: {} }] });
+		await flushScheduledRefresh();
+
+		metadata.battleRecommendationLastTargetDungeon = {
+			userId: 5001,
+			name: 'Low Confidence Replacement',
+			power: 430000,
+			confidence: 0.10,
+			lastUpdate: Date.now() + 1000,
+		};
+
+		await overlay.onApiProcessed({ calls: [{ name: 'dungeonGetState', args: {} }] });
+		await flushScheduledRefresh();
+
+		const ctxText = document.querySelector('#oj-bro-context')?.textContent || '';
+		expect(ctxText).toContain('High Confidence Target');
+		expect(ctxText).not.toContain('Low Confidence Replacement');
+
+		overlay.destroy();
+	});
+
+	it('should re-fetch when confidence bucket changes even if target identity is unchanged', async () => {
+		const metadata = {
+			battleRecommendationLastTargetDungeon: {
+				userId: 6002,
+				name: 'Bucket Target',
+				power: 410000,
+				confidence: 0.11,
+				lastUpdate: Date.now(),
+			},
+		};
+		const idb = {
+			getMetadata: jest.fn(async (key, def) => (key in metadata ? metadata[key] : def)),
+			setMetadata: jest.fn(async () => undefined),
+		};
+		const overlay = new BattleRecommendationOverlay(idb, makePrefStorage());
+		overlay.init();
+
+		global.fetch.mockResolvedValue({
+			ok: true,
+			json: async () => ({ recommendations: [{ teamPreview: 'Bucket Team', estimatedWinProbability: 0.59, confidenceScore: 0.49, finalScore: 0.57 }] }),
+		});
+
+		await overlay.onApiProcessed({ calls: [{ name: 'dungeonGetState', args: {} }] });
+		await flushScheduledRefresh();
+
+		metadata.battleRecommendationLastTargetDungeon = {
+			userId: 6002,
+			name: 'Bucket Target',
+			power: 410000,
+			confidence: 0.96,
+			lastUpdate: Date.now() + 1000,
+		};
+
+		await overlay.onApiProcessed({ calls: [{ name: 'dungeonGetState', args: {} }] });
+		await flushScheduledRefresh();
+
+		expect(global.fetch).toHaveBeenCalledTimes(2);
+
+		overlay.destroy();
+	});
+
 	it('should use cached payload when API failures trigger backoff', async () => {
 		const idb = makeIdbStorage({ arenaEnemies: [{ userId: 10, name: 'A', power: 100000 }] });
 		const overlay = new BattleRecommendationOverlay(idb, makePrefStorage());

@@ -1959,6 +1959,19 @@ class GameTracker {
 		if (battleType === 'Adventure' && battle.mission) {
 			await this._recordAdventureGuideEntry(battle);
 		}
+
+		// Persist a focused "last target" metadata snapshot for overlay context
+		// so recommendation context can lock to active combat targets even when
+		// broader mode metadata is sparse or delayed.
+		const lowerCall = String(callName || '').toLowerCase();
+		const modeKey = lowerCall.includes('tournament')
+			? 'toe'
+			: (lowerCall.includes('dungeon')
+				? 'dungeon'
+				: (lowerCall.includes('adventure') ? 'adventure' : ''));
+		if (modeKey) {
+			await this._storeBattleRecommendationLastTarget(modeKey, args, data, callName);
+		}
 	}
 
 	/**
@@ -2047,6 +2060,7 @@ class GameTracker {
 		// Live activity event
 		const arenaOppDisplay = battle.opponentName || `opponent #${battle.opponentId || '?'}`;
 		await this._logActivity('battle', `Arena ${battle.isWin ? 'WIN' : 'LOSS'} vs ${arenaOppDisplay}`, { isWin: battle.isWin });
+		await this._storeBattleRecommendationLastTarget('arena', args, data, 'arenaAttack');
 
 		// Update opponent record (#51 — fixed param order, boolean→string, use IDB store)
 		await this.updateOpponentRecord('Arena', args.enemyUserId, battle.isWin, {
@@ -2147,6 +2161,7 @@ class GameTracker {
 		// Live activity event
 		const titanOppDisplay = battle.opponentName || `opponent #${battle.opponentId || '?'}`;
 		await this._logActivity('battle', `Titan Arena ${battle.isWin ? 'WIN' : 'LOSS'} vs ${titanOppDisplay}`, { isWin: battle.isWin });
+		await this._storeBattleRecommendationLastTarget('titanarena', args, data, 'titanArenaAttack');
 
 		// Track resource rewards from titan arena battle
 		// Titan Arena rewards: gold, titan tokens/potions
@@ -2262,6 +2277,7 @@ class GameTracker {
 		// Live activity event
 		const oppDisplay = battle.opponentName || `opponent #${battle.opponentId || '?'}`;
 		await this._logActivity('battle', `Grand Arena ${battle.isWin ? 'WIN' : 'LOSS'} vs ${oppDisplay}`, { isWin: battle.isWin });
+		await this._storeBattleRecommendationLastTarget('grandarena', args, data, 'grandArenaAttack');
 
 		// Track resource rewards from grand arena battle
 		// Grand Arena rewards: gold, trophies, sometimes emeralds
@@ -2303,6 +2319,128 @@ class GameTracker {
 	 */
 	async trackGuildWarBattle(args, data) {
 		await executeGuildWarBattleTracking(this, args, data);
+		await this._storeBattleRecommendationLastTarget('guildwar', args, data, 'clanWarAttack');
+	}
+
+	/**
+	 * Persist most recent battle target snapshot used by recommendation overlay.
+	 *
+	 * @param {string} modeKey - Recommendation mode key
+	 * @param {Object} args - API call args
+	 * @param {Object} data - API response data
+	 * @param {string} sourceCall - Source API call name
+	 * @returns {Promise<void>}
+	 * @private
+	 */
+	async _storeBattleRecommendationLastTarget(modeKey, args, data, sourceCall) {
+		const normalizedMode = String(modeKey || '').toLowerCase();
+		const keyMap = {
+			arena: 'battleRecommendationLastTargetArena',
+			grandarena: 'battleRecommendationLastTargetGrandArena',
+			titanarena: 'battleRecommendationLastTargetTitanArena',
+			adventure: 'battleRecommendationLastTargetAdventure',
+			dungeon: 'battleRecommendationLastTargetDungeon',
+			toe: 'battleRecommendationLastTargetToe',
+			guildwar: 'battleRecommendationLastTargetGuildWar',
+		};
+		const metadataKey = keyMap[normalizedMode];
+		if (!metadataKey) {
+			return;
+		}
+
+		const opponentId = Number(
+			args?.targetUserId
+			|| args?.defenderUserId
+			|| args?.enemyUserId
+			|| args?.opponentId
+			|| args?.userId
+			|| args?.target?.id
+			|| args?.defender?.id
+			|| args?.enemy?.id
+			|| data?.target?.id
+			|| data?.defender?.id
+			|| data?.enemy?.id
+			|| 0
+		);
+		const opponentName = String(
+			args?.targetName
+			|| args?.defenderName
+			|| args?.enemyName
+			|| args?.target?.name
+			|| args?.defender?.name
+			|| args?.enemy?.name
+			|| data?.target?.name
+			|| data?.defender?.name
+			|| data?.enemy?.name
+			|| ''
+		);
+
+		const defenders = Array.isArray(data?.defenders) ? data.defenders : [];
+		const teams = [];
+
+		if (Array.isArray(data?.battles) && data.battles.length > 0) {
+			for (let index = 0; index < data.battles.length && teams.length < 3; index += 1) {
+				const row = data.battles[index];
+				if (!Array.isArray(row?.defenders) || row.defenders.length === 0) continue;
+				const power = this.calculateTeamPower(row.defenders);
+				if (!Number.isFinite(power) || power <= 0) continue;
+				teams.push({
+					slot: teams.length + 1,
+					power,
+				});
+			}
+		}
+
+		if (teams.length === 0 && defenders.length > 0) {
+			const power = this.calculateTeamPower(defenders);
+			if (Number.isFinite(power) && power > 0) {
+				teams.push({
+					slot: 1,
+					power,
+				});
+			}
+		}
+
+		const enemyTeams = Array.isArray(args?.enemyTeams) ? args.enemyTeams : [];
+		for (const row of enemyTeams) {
+			if (teams.length >= 3) break;
+			const heroes = Array.isArray(row?.heroes) ? row.heroes : [];
+			const power = heroes.length > 0
+				? this.calculateTeamPower(heroes)
+				: Number(row?.power || row?.teamPower || 0);
+			if (!Number.isFinite(power) || power <= 0) continue;
+			teams.push({
+				slot: teams.length + 1,
+				power,
+			});
+		}
+
+		const defenderPower = teams.length > 1
+			? teams.reduce((sum, row) => sum + Number(row.power || 0), 0)
+			: (teams.length === 1 ? teams[0].power : 0);
+		const resolvedPower = defenderPower > 0
+			? defenderPower
+			: Number(args?.targetPower || args?.defenderPower || args?.enemyPower || 0);
+
+		let confidence = 0.20;
+		if (Number.isFinite(opponentId) && opponentId > 0) confidence += 0.25;
+		if (opponentName.trim().length > 0) confidence += 0.15;
+		if (Number.isFinite(resolvedPower) && resolvedPower > 0) confidence += 0.20;
+		if (teams.length > 0) confidence += 0.20;
+		if (String(sourceCall || '').toLowerCase().includes('attack') || String(sourceCall || '').toLowerCase().includes('battle')) confidence += 0.05;
+		confidence = Math.max(0, Math.min(1, confidence));
+
+		await this.storage.setMetadata(metadataKey, {
+			mode: normalizedMode,
+			userId: Number.isFinite(opponentId) && opponentId > 0 ? opponentId : null,
+			name: opponentName,
+			power: Number.isFinite(resolvedPower) && resolvedPower > 0 ? resolvedPower : 0,
+			teams,
+			signalConfidence: confidence,
+			confidence,
+			sourceCall,
+			lastUpdate: Date.now(),
+		});
 	}
 
 	/**
