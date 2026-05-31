@@ -34,9 +34,22 @@ internal sealed class TrayHostOptions {
 #endif
 		}
 
+		parsed.WorkingDirectory = NormalizeWorkingDirectory(parsed.WorkingDirectory);
 		parsed.ApiUrl = NormalizeApiUrl(parsed.ApiUrl);
 
 		return parsed;
+	}
+
+	private static string NormalizeWorkingDirectory(string? rawWorkingDirectory) {
+		if (string.IsNullOrWhiteSpace(rawWorkingDirectory)) {
+			return AppContext.BaseDirectory;
+		}
+
+		try {
+			return Path.GetFullPath(rawWorkingDirectory.Trim());
+		} catch {
+			return AppContext.BaseDirectory;
+		}
 	}
 
 	private static string NormalizeApiUrl(string? rawApiUrl) {
@@ -44,7 +57,8 @@ internal sealed class TrayHostOptions {
 			return "http://localhost:5124";
 		}
 
-		if (!Uri.TryCreate(rawApiUrl.Trim(), UriKind.Absolute, out var uri)) {
+		var candidate = rawApiUrl.Trim();
+		if (!Uri.TryCreate(candidate, UriKind.Absolute, out var uri)) {
 			return "http://localhost:5124";
 		}
 

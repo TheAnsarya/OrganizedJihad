@@ -28,10 +28,14 @@ internal sealed class HeadlessRuntimeHost : IDisposable {
 		AppendLog("Headless runtime host started.");
 		EnsureApiRunning();
 
-		using var timer = new PeriodicTimer(TimeSpan.FromSeconds(15));
-		while (timer.WaitForNextTickAsync(_shutdownCts.Token).AsTask().GetAwaiter().GetResult()) {
-			ReloadRuntimeSettingsIfChanged();
-			EnsureApiRunning();
+		try {
+			using var timer = new PeriodicTimer(TimeSpan.FromSeconds(15));
+			while (timer.WaitForNextTickAsync(_shutdownCts.Token).AsTask().GetAwaiter().GetResult()) {
+				ReloadRuntimeSettingsIfChanged();
+				EnsureApiRunning();
+			}
+		} catch (OperationCanceledException) {
+			// Expected during graceful shutdown.
 		}
 	}
 

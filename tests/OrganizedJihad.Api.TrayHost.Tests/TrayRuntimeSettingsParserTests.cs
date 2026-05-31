@@ -28,9 +28,10 @@ public class TrayRuntimeSettingsParserTests {
 	}
 
 	[Fact]
-	public void TryReadApiBaseUrl_Should_Throw_For_Invalid_Json() {
-		var action = () => TrayRuntimeSettingsParser.TryReadApiBaseUrl("not-json", out _);
+	public void TryReadApiBaseUrl_Should_Return_False_For_Invalid_Json() {
+		var ok = TrayRuntimeSettingsParser.TryReadApiBaseUrl("not-json", out var apiBaseUrl);
 
-		action.Should().Throw<System.Text.Json.JsonException>();
+		ok.Should().BeFalse();
+		apiBaseUrl.Should().BeNull();
 	}
 }

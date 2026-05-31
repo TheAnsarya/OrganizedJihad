@@ -8,13 +8,16 @@ internal static class ApiProcessRuntime {
 		error = null;
 
 		try {
-			process = Process.Start(new ProcessStartInfo {
+			var startInfo = new ProcessStartInfo {
 				FileName = options.ApiExecutablePath,
-				Arguments = $"--urls {options.ApiUrl}",
 				WorkingDirectory = options.WorkingDirectory,
 				UseShellExecute = false,
 				CreateNoWindow = true,
-			});
+			};
+			startInfo.ArgumentList.Add("--urls");
+			startInfo.ArgumentList.Add(options.ApiUrl);
+
+			process = Process.Start(startInfo);
 
 			if (process is null) {
 				error = "Process.Start returned null.";
