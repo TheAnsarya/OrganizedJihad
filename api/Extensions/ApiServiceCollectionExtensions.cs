@@ -39,6 +39,9 @@ public static class ApiServiceCollectionExtensions {
 		services.AddSingleton<ApiUiTemplateRenderer>();
 		services.AddSingleton<ApiUiSettingsStore>();
 		services.AddSingleton<ApiUiDiagnosticsResponseBuilder>();
+		services.AddSingleton<ApiUiRepairRecommendationBuilder>();
+		services.AddSingleton<ApiUiPageTokenBuilder>();
+		services.AddScoped<ApiUiHealthProbeService>();
 		services.AddSingleton<UserscriptHandshakeDiagnosticsService>();
 		services.AddSingleton<ScheduledTaskProbeService>();
 		services.AddScoped<ApiUiSettingsEndpointHandler>();

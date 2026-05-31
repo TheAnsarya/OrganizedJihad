@@ -125,6 +125,39 @@
 
 ## Session
 - Date: 2026-05-31
+- Session Number: 31
+- Scope: continue API UI decomposition via dedicated page/probe/recommendation builders
+
+## Summary
+- Added `ApiUiHealthProbeService` to isolate local `/api/sync/health` probe behavior from page handlers.
+- Added `ApiUiPageTokenBuilder` to centralize HTML token-map construction for `/ui` and `/ui/tray-health` templates.
+- Added `ApiUiRepairRecommendationBuilder` to isolate recommendation-text composition from diagnostics endpoint handling.
+- Updated `ApiUiPageEndpointHandler` to delegate probe and token construction to dedicated services.
+- Updated `ApiUiDiagnosticsEndpointHandler` to delegate recommendation assembly to dedicated builder service.
+- Registered all new services in API DI composition.
+
+## Files Modified
+- api/Services/Ui/ApiUiHealthProbeService.cs
+- api/Services/Ui/ApiUiPageTokenBuilder.cs
+- api/Services/Ui/ApiUiRepairRecommendationBuilder.cs
+- api/Services/Ui/ApiUiPageEndpointHandler.cs
+- api/Services/Ui/ApiUiDiagnosticsEndpointHandler.cs
+- api/Extensions/ApiServiceCollectionExtensions.cs
+- ~docs/copilot-chats/2026-05-30-userscript-build-auto.md
+
+## Issues
+- Epic: #333
+- Installer/runtime migration: #334
+- PR tracking: #209
+
+## Validation
+- dotnet build api/OrganizedJihad.Api.csproj -c Release (pass)
+- dotnet build api/OrganizedJihad.Api.TrayHost/OrganizedJihad.Api.TrayHost.csproj -c Release (pass)
+
+---
+
+## Session
+- Date: 2026-05-31
 - Session Number: 30
 - Scope: continuation hardening slices for tray/runtime + diagnostics robustness
 

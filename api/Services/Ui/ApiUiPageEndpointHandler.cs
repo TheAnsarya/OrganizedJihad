@@ -1,4 +1,3 @@
-using System.Net;
 using Microsoft.EntityFrameworkCore;
 using OrganizedJihad.Api.Services.Diagnostics;
 using OrganizedJihad.Data;
@@ -11,9 +10,10 @@ namespace OrganizedJihad.Api.Services.Ui;
 public sealed class ApiUiPageEndpointHandler {
 	private readonly ApiUiAccessPolicy _accessPolicy;
 	private readonly ApiUiTemplateRenderer _renderer;
+	private readonly ApiUiPageTokenBuilder _tokenBuilder;
+	private readonly ApiUiHealthProbeService _healthProbe;
 	private readonly UserscriptHandshakeDiagnosticsService _handshakeDiagnostics;
 	private readonly IDbContextFactory<GameDatabaseContext> _contextFactory;
-	private readonly IHttpClientFactory _httpClientFactory;
 
 	/// <summary>
 	/// Initializes a new instance of the page endpoint handler.
@@ -21,14 +21,16 @@ public sealed class ApiUiPageEndpointHandler {
 	public ApiUiPageEndpointHandler(
 		ApiUiAccessPolicy accessPolicy,
 		ApiUiTemplateRenderer renderer,
+		ApiUiPageTokenBuilder tokenBuilder,
+		ApiUiHealthProbeService healthProbe,
 		UserscriptHandshakeDiagnosticsService handshakeDiagnostics,
-		IDbContextFactory<GameDatabaseContext> contextFactory,
-		IHttpClientFactory httpClientFactory) {
+		IDbContextFactory<GameDatabaseContext> contextFactory) {
 		_accessPolicy = accessPolicy;
 		_renderer = renderer;
+		_tokenBuilder = tokenBuilder;
+		_healthProbe = healthProbe;
 		_handshakeDiagnostics = handshakeDiagnostics;
 		_contextFactory = contextFactory;
-		_httpClientFactory = httpClientFactory;
 	}
 
 	/// <summary>
@@ -39,10 +41,7 @@ public sealed class ApiUiPageEndpointHandler {
 			return Results.StatusCode(StatusCodes.Status403Forbidden);
 		}
 
-		var baseUrl = $"{context.Request.Scheme}://{context.Request.Host}";
-		var html = _renderer.Render("api-control.html", new Dictionary<string, string> {
-			["__BASE_URL__"] = WebUtility.HtmlEncode(baseUrl),
-		});
+		var html = _renderer.Render("api-control.html", _tokenBuilder.BuildUiTokens(context));
 
 		return Results.Content(html, "text/html");
 	}
@@ -55,25 +54,11 @@ public sealed class ApiUiPageEndpointHandler {
 			return Results.StatusCode(StatusCodes.Status403Forbidden);
 		}
 
-		var healthStatus = "unknown";
-		try {
-			var probeUrl = $"{context.Request.Scheme}://{context.Request.Host}/api/sync/health";
-			using var response = await _httpClientFactory.CreateClient("UiProbeClient").GetAsync(probeUrl);
-			healthStatus = response.IsSuccessStatusCode ? "online" : $"degraded ({(int)response.StatusCode})";
-		} catch {
-			healthStatus = "offline";
-		}
+ 		var healthStatus = await _healthProbe.ProbeStatusAsync(context);
 
 		var handshake = await _handshakeDiagnostics.GetStatusAsync(_contextFactory);
 		var now = DateTime.UtcNow;
-		var baseUrl = $"{context.Request.Scheme}://{context.Request.Host}";
-		var html = _renderer.Render("tray-health.html", new Dictionary<string, string> {
-			["__BASE_URL__"] = WebUtility.HtmlEncode(baseUrl),
-			["__HEALTH_STATUS__"] = WebUtility.HtmlEncode(healthStatus),
-			["__CHECKED_UTC__"] = WebUtility.HtmlEncode(now.ToString("yyyy-MM-dd HH:mm:ss")),
-			["__HANDSHAKE_STATUS__"] = WebUtility.HtmlEncode(handshake.Status),
-			["__LAST_SYNC_UTC__"] = WebUtility.HtmlEncode(handshake.LastSyncUtc is null ? "none" : handshake.LastSyncUtc.Value.ToString("u")),
-		});
+		var html = _renderer.Render("tray-health.html", _tokenBuilder.BuildTrayHealthTokens(context, healthStatus, handshake, now));
 
 		return Results.Content(html, "text/html");
 	}

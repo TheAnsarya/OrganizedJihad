@@ -13,6 +13,7 @@ public sealed class ApiUiDiagnosticsEndpointHandler {
 	private readonly ScheduledTaskProbeService _taskProbe;
 	private readonly UserscriptHandshakeDiagnosticsService _handshakeDiagnostics;
 	private readonly ApiUiDiagnosticsResponseBuilder _responseBuilder;
+	private readonly ApiUiRepairRecommendationBuilder _recommendationBuilder;
 	private readonly IDbContextFactory<GameDatabaseContext> _contextFactory;
 	private readonly ILogger<ApiUiDiagnosticsEndpointHandler> _logger;
 
@@ -25,6 +26,7 @@ public sealed class ApiUiDiagnosticsEndpointHandler {
 		ScheduledTaskProbeService taskProbe,
 		UserscriptHandshakeDiagnosticsService handshakeDiagnostics,
 		ApiUiDiagnosticsResponseBuilder responseBuilder,
+		ApiUiRepairRecommendationBuilder recommendationBuilder,
 		IDbContextFactory<GameDatabaseContext> contextFactory,
 		ILogger<ApiUiDiagnosticsEndpointHandler> logger) {
 		_accessPolicy = accessPolicy;
@@ -32,6 +34,7 @@ public sealed class ApiUiDiagnosticsEndpointHandler {
 		_taskProbe = taskProbe;
 		_handshakeDiagnostics = handshakeDiagnostics;
 		_responseBuilder = responseBuilder;
+		_recommendationBuilder = recommendationBuilder;
 		_contextFactory = contextFactory;
 		_logger = logger;
 	}
@@ -55,19 +58,13 @@ public sealed class ApiUiDiagnosticsEndpointHandler {
 		var hasUserscript = File.Exists(userscriptPath);
 		var hasTrayHost = File.Exists(runtimeHostPath) || File.Exists(legacyTrayHostPath);
 
-		var recommendation = hasDatabase && hasUserscript && hasTrayHost
-			? "Runtime artifacts look healthy."
-			: "One or more runtime artifacts are missing. Re-run installer with managed CLI (dotnet run --project installer-core/OrganizedJihad.Installer.Cli -- --run-install-health-check) from your install bundle/repo to repair setup.";
-
-		if (OperatingSystem.IsWindows()
-			&& (apiServiceTaskStatus.Status.StartsWith("missing", StringComparison.OrdinalIgnoreCase)
-			|| apiTrayTaskStatus.Status.StartsWith("missing", StringComparison.OrdinalIgnoreCase))) {
-			recommendation += " Startup tasks are not fully registered; rerun installer as Administrator to restore service/tray startup automation.";
-		}
-
-		if (!handshake.HasRecentSync) {
-			recommendation += " Userscript handshake is stale or missing; verify Tampermonkey script enablement and run install-health-check diagnostics.";
-		}
+		var recommendation = _recommendationBuilder.Build(
+			hasDatabase: hasDatabase,
+			hasUserscript: hasUserscript,
+			hasTrayHost: hasTrayHost,
+			apiServiceTaskStatus: apiServiceTaskStatus.Status,
+			apiTrayTaskStatus: apiTrayTaskStatus.Status,
+			hasRecentSync: handshake.HasRecentSync);
 
 		_logger.LogInformation(
 			"Repair status requested. DB={HasDatabase}, Script={HasUserscript}, Tray={HasTrayHost}, Handshake={HandshakeStatus}",
