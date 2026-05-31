@@ -821,6 +821,17 @@ public class SyncControllerTests : IClassFixture<WebApplicationFactory<Program>>
 	}
 
 	/// <summary>
+	/// Verifies recommendations endpoint rejects unsupported preferred trend windows.
+	/// </summary>
+	[Fact]
+	public async Task TeamRecommendationEngine_Should_Reject_Invalid_PreferredTrendWindow() {
+		var response = await _client.GetAsync("/api/sync/teams/recommendations?mode=arena&objective=balanced&preferredTrendWindowDays=14");
+		response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+		var body = await response.Content.ReadAsStringAsync();
+		body.Should().Contain("preferredTrendWindowDays must be one of: 7, 30, 90");
+	}
+
+	/// <summary>
 	/// Verifies Team Recommendation profile metadata endpoint returns options and profile weights.
 	/// </summary>
 	[Fact]
@@ -922,6 +933,21 @@ public class SyncControllerTests : IClassFixture<WebApplicationFactory<Program>>
 			mode.Value == "arena" &&
 			mode.PreferredTrendWindowDays == 90 &&
 			mode.IsUserPreference);
+	}
+
+	/// <summary>
+	/// Verifies preference save rejects unknown modes instead of mutating canonical defaults.
+	/// </summary>
+	[Fact]
+	public async Task TeamRecommendationPreferences_Should_Reject_Unknown_Mode() {
+		var response = await _client.PutAsJsonAsync("/api/sync/teams/recommendations/preferences", new TeamRecommendationTrendPreferenceUpdateRequest {
+			Mode = "definitely-not-a-real-mode",
+			PreferredTrendWindowDays = 30,
+		});
+
+		response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+		var body = await response.Content.ReadAsStringAsync();
+		body.Should().Contain("Unknown mode");
 	}
 
 	/// <summary>
@@ -1096,5 +1122,10 @@ public class SyncControllerTests : IClassFixture<WebApplicationFactory<Program>>
 		titanArenaAliasPayload!.Mode.Should().Be("arena");
 		titanArenaAliasPayload.PreferredTrendWindowDays.Should().BeGreaterThan(0);
 		titanArenaAliasPayload.SupportedTrendWindowDays.Should().Contain(titanArenaAliasPayload.PreferredTrendWindowDays);
+
+		var invalidWindowResponse = await _client.GetAsync("/api/sync/teams/recommendations/calibration?mode=arena&preferredTrendWindowDays=14");
+		invalidWindowResponse.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+		var invalidWindowBody = await invalidWindowResponse.Content.ReadAsStringAsync();
+		invalidWindowBody.Should().Contain("preferredTrendWindowDays must be one of: 7, 30, 90");
 	}
 }

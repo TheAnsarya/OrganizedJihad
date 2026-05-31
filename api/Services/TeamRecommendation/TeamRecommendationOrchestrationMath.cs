@@ -36,6 +36,7 @@ public static class TeamRecommendationOrchestrationMath {
 		ITeamRecommendationStateStore stateStore,
 		GameDatabaseContext context,
 		string mode,
+		string objective,
 		int? preferredTrendWindowDays,
 		IReadOnlyList<int> supportedTrendWindowDays
 	) {
@@ -49,7 +50,7 @@ public static class TeamRecommendationOrchestrationMath {
 				preferredTrendWindowDays,
 				supportedTrendWindowDays
 			);
-			return TeamRecommendationCalibrationStateMath.ResolveSuggestedScaleFromModeState(modeState, resolvedTrendWindowDays, DateTime.UtcNow);
+			return TeamRecommendationCalibrationStateMath.ResolveSuggestedScaleFromModeState(modeState, resolvedTrendWindowDays, objective, DateTime.UtcNow);
 		}
 
 		return 1d;

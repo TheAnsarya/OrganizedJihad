@@ -252,6 +252,7 @@ public class TeamRecommendationMathTests {
 			store,
 			context,
 			"arena",
+			"balanced",
 			preferredTrendWindowDays: null,
 			supportedTrendWindowDays: [7, 30, 90]
 		);
@@ -291,11 +292,82 @@ public class TeamRecommendationMathTests {
 			store,
 			context,
 			"arena",
+			"balanced",
 			preferredTrendWindowDays: 30,
 			supportedTrendWindowDays: [7, 30, 90]
 		);
 
 		scale.Should().BeGreaterThan(1.0);
+	}
+
+	[Fact]
+	public async Task ResolveModeFrictionCalibrationScaleAsync_Should_Prefer_Objective_Specific_Trend_Observations() {
+		await using var context = CreateContext();
+		var now = DateTime.UtcNow;
+		var modeState = new TeamRecommendationCalibrationModeState {
+			Samples = 6,
+			SuggestedFrictionScale = 1.00,
+			PreferredTrendWindowDays = 30,
+			Observations = [
+				new TeamRecommendationCalibrationObservation {
+					TimestampUtc = now.AddDays(-2),
+					MeanAbsoluteError = 0.10,
+					MeanBrierScore = 0.08,
+					PredictionBias = 0.22,
+					MatchedTeams = 3,
+					MatchedSamples = 20,
+					Objective = "offense",
+				},
+				new TeamRecommendationCalibrationObservation {
+					TimestampUtc = now.AddDays(-1),
+					MeanAbsoluteError = 0.12,
+					MeanBrierScore = 0.09,
+					PredictionBias = 0.18,
+					MatchedTeams = 3,
+					MatchedSamples = 18,
+					Objective = "offense",
+				},
+				new TeamRecommendationCalibrationObservation {
+					TimestampUtc = now.AddDays(-1),
+					MeanAbsoluteError = 0.11,
+					MeanBrierScore = 0.10,
+					PredictionBias = -0.20,
+					MatchedTeams = 3,
+					MatchedSamples = 19,
+					Objective = "defense",
+				}
+			]
+		};
+
+		var store = new FakeStateStore {
+			CalibrationState = new TeamRecommendationCalibrationState {
+				Modes = new Dictionary<string, TeamRecommendationCalibrationModeState>(StringComparer.OrdinalIgnoreCase) {
+					["arena"] = modeState,
+				}
+			},
+		};
+
+		var offenseScale = await TeamRecommendationOrchestrationMath.ResolveModeFrictionCalibrationScaleAsync(
+			store,
+			context,
+			"arena",
+			"attack",
+			preferredTrendWindowDays: 30,
+			supportedTrendWindowDays: [7, 30, 90]
+		);
+
+		var defenseScale = await TeamRecommendationOrchestrationMath.ResolveModeFrictionCalibrationScaleAsync(
+			store,
+			context,
+			"arena",
+			"defense",
+			preferredTrendWindowDays: 30,
+			supportedTrendWindowDays: [7, 30, 90]
+		);
+
+		offenseScale.Should().BeGreaterThan(defenseScale);
+		offenseScale.Should().BeGreaterThan(1.0);
+		defenseScale.Should().BeLessThan(1.0);
 	}
 
 	[Fact]

@@ -133,6 +133,7 @@ public class SyncQueryController : ControllerBase {
 
 	[HttpGet("teams/recommendations")]
 	[ProducesResponseType(typeof(TeamRecommendationEngineResponse), StatusCodes.Status200OK)]
+	[ProducesResponseType(typeof(object), StatusCodes.Status400BadRequest)]
 	[ProducesResponseType(typeof(object), StatusCodes.Status500InternalServerError)]
 	public async Task<IActionResult> GetTeamRecommendations(
 		[FromQuery] string mode = "arena",
@@ -141,6 +142,10 @@ public class SyncQueryController : ControllerBase {
 		[FromQuery] int minSamples = 2,
 		[FromQuery] int? preferredTrendWindowDays = null
 	) {
+		if (preferredTrendWindowDays.HasValue && preferredTrendWindowDays.Value is not (7 or 30 or 90)) {
+			return BadRequest(new { error = "preferredTrendWindowDays must be one of: 7, 30, 90." });
+		}
+
 		try {
 			var result = await _syncService.GetTeamRecommendationsAsync(mode, objective, limit, minSamples, preferredTrendWindowDays);
 			return Ok(result);
@@ -192,6 +197,8 @@ public class SyncQueryController : ControllerBase {
 		try {
 			var result = await _syncService.SetTeamRecommendationTrendPreferenceAsync(request.Mode, request.PreferredTrendWindowDays);
 			return Ok(result);
+		} catch (ArgumentException ex) {
+			return BadRequest(new { error = ex.Message });
 		} catch (Exception ex) {
 			_logger.LogError(ex, "Error saving team recommendation trend preference for mode {Mode}", request.Mode);
 			return StatusCode(500, new { error = ex.Message });
@@ -219,8 +226,13 @@ public class SyncQueryController : ControllerBase {
 
 	[HttpGet("teams/recommendations/calibration")]
 	[ProducesResponseType(typeof(TeamRecommendationCalibrationResponse), StatusCodes.Status200OK)]
+	[ProducesResponseType(typeof(object), StatusCodes.Status400BadRequest)]
 	[ProducesResponseType(typeof(object), StatusCodes.Status500InternalServerError)]
 	public async Task<IActionResult> GetTeamRecommendationCalibration([FromQuery] string mode = "arena", [FromQuery] int? preferredTrendWindowDays = null) {
+		if (preferredTrendWindowDays.HasValue && preferredTrendWindowDays.Value is not (7 or 30 or 90)) {
+			return BadRequest(new { error = "preferredTrendWindowDays must be one of: 7, 30, 90." });
+		}
+
 		try {
 			var result = await _syncService.GetTeamRecommendationCalibrationAsync(mode, preferredTrendWindowDays);
 			return Ok(result);

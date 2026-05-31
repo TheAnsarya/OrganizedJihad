@@ -105,10 +105,22 @@ internal static class TeamRecommendationCalibrationStateMath {
 	/// <summary>
 	/// Resolves suggested friction scale, preferring trend-window calculation when samples exist.
 	/// </summary>
-	public static double ResolveSuggestedScaleFromModeState(TeamRecommendationCalibrationModeState modeState, int preferredWindowDays, DateTime nowUtc) {
-		var preferred = BuildCalibrationTrendWindow(modeState, preferredWindowDays, nowUtc);
+	public static double ResolveSuggestedScaleFromModeState(
+		TeamRecommendationCalibrationModeState modeState,
+		int preferredWindowDays,
+		string? objective,
+		DateTime nowUtc
+	) {
+		var normalizedObjective = TeamRecommendationModeNormalization.NormalizeObjective(objective);
+		var preferred = BuildCalibrationTrendWindow(modeState, preferredWindowDays, nowUtc, normalizedObjective);
 		if (preferred.Samples > 0) {
 			return Math.Clamp(preferred.SuggestedFrictionScale, 0.65d, 1.45d);
+		}
+
+		// If objective-specific observations are sparse, fall back to mode-wide trend metrics.
+		var fallback = BuildCalibrationTrendWindow(modeState, preferredWindowDays, nowUtc, objectiveFilter: null);
+		if (fallback.Samples > 0) {
+			return Math.Clamp(fallback.SuggestedFrictionScale, 0.65d, 1.45d);
 		}
 
 		return Math.Clamp(modeState.SuggestedFrictionScale, 0.65d, 1.45d);
@@ -219,11 +231,18 @@ internal static class TeamRecommendationCalibrationStateMath {
 	private static TeamRecommendationCalibrationTrendWindow BuildCalibrationTrendWindow(
 		TeamRecommendationCalibrationModeState modeState,
 		int windowDays,
-		DateTime nowUtc
+		DateTime nowUtc,
+		string? objectiveFilter = null
 	) {
 		var cutoff = nowUtc.AddDays(-windowDays);
 		var observations = modeState.Observations
 			.Where(observation => observation.TimestampUtc >= cutoff)
+			.Where(observation =>
+				string.IsNullOrWhiteSpace(objectiveFilter) ||
+				string.Equals(
+					TeamRecommendationModeNormalization.NormalizeObjective(observation.Objective),
+					objectiveFilter,
+					StringComparison.OrdinalIgnoreCase))
 			.OrderBy(observation => observation.TimestampUtc)
 			.ToList();
 

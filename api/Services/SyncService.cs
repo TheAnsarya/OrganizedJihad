@@ -1745,6 +1745,7 @@ public class SyncService {
 			_teamRecommendationStateStore,
 			context,
 			normalizedMode,
+			normalizedObjective,
 			preferredTrendWindowDays,
 			SupportedCalibrationTrendWindowDays
 		);
@@ -1914,6 +1915,10 @@ public class SyncService {
 	/// Saves a preferred Team Recommendation trend window for a mode.
 	/// </summary>
 	public async Task<TeamRecommendationTrendPreferenceResponse> SetTeamRecommendationTrendPreferenceAsync(string mode, int preferredTrendWindowDays) {
+		if (!TeamRecommendationModeNormalization.IsKnownMode(mode)) {
+			throw new ArgumentException("Unknown mode. Use a supported mode or alias.", nameof(mode));
+		}
+
 		await using var context = await _contextFactory.CreateDbContextAsync();
 		var preferenceState = await _teamRecommendationStateStore.LoadTrendPreferenceStateAsync(context);
 		TeamRecommendationCalibrationStateMath.SetModeTrendPreference(preferenceState, mode, preferredTrendWindowDays, SupportedCalibrationTrendWindowDays);
@@ -2092,7 +2097,7 @@ public class SyncService {
 			Mode = normalizedMode,
 			PreferredTrendWindowDays = resolvedTrendWindowDays,
 			SupportedTrendWindowDays = [.. SupportedCalibrationTrendWindowDays],
-			SuggestedFrictionScale = Math.Round(TeamRecommendationCalibrationStateMath.ResolveSuggestedScaleFromModeState(modeState, resolvedTrendWindowDays, nowUtc), 6),
+			SuggestedFrictionScale = Math.Round(TeamRecommendationCalibrationStateMath.ResolveSuggestedScaleFromModeState(modeState, resolvedTrendWindowDays, modeState.LastObjective, nowUtc), 6),
 			MeanAbsoluteError = Math.Round(Math.Clamp(modeState.MeanAbsoluteError, 0d, 1d), 6),
 			MeanBrierScore = Math.Round(Math.Clamp(modeState.MeanBrierScore, 0d, 1d), 6),
 			PredictionBias = Math.Round(Math.Clamp(modeState.PredictionBias, -1d, 1d), 6),
