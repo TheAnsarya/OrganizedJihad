@@ -16,8 +16,4 @@ public static partial class ApiUiEndpoints {
 
 		return endpoints;
 	}
-
-	private static string GetRequestBaseUrl(HttpContext context) {
-		return $"{context.Request.Scheme}://{context.Request.Host}";
-	}
 }

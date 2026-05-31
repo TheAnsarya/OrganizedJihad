@@ -12,6 +12,7 @@ public sealed class ApiUiDiagnosticsEndpointHandler {
 	private readonly ApiRuntimePaths _runtimePaths;
 	private readonly ScheduledTaskProbeService _taskProbe;
 	private readonly UserscriptHandshakeDiagnosticsService _handshakeDiagnostics;
+	private readonly ApiUiDiagnosticsResponseBuilder _responseBuilder;
 	private readonly IDbContextFactory<GameDatabaseContext> _contextFactory;
 	private readonly ILogger<ApiUiDiagnosticsEndpointHandler> _logger;
 
@@ -23,12 +24,14 @@ public sealed class ApiUiDiagnosticsEndpointHandler {
 		ApiRuntimePaths runtimePaths,
 		ScheduledTaskProbeService taskProbe,
 		UserscriptHandshakeDiagnosticsService handshakeDiagnostics,
+		ApiUiDiagnosticsResponseBuilder responseBuilder,
 		IDbContextFactory<GameDatabaseContext> contextFactory,
 		ILogger<ApiUiDiagnosticsEndpointHandler> logger) {
 		_accessPolicy = accessPolicy;
 		_runtimePaths = runtimePaths;
 		_taskProbe = taskProbe;
 		_handshakeDiagnostics = handshakeDiagnostics;
+		_responseBuilder = responseBuilder;
 		_contextFactory = contextFactory;
 		_logger = logger;
 	}
@@ -73,19 +76,17 @@ public sealed class ApiUiDiagnosticsEndpointHandler {
 			hasTrayHost,
 			handshake.Status);
 
-		return Results.Ok(new {
-			installRoot = _runtimePaths.InstallRoot,
-			hasDatabase,
-			hasUserscript,
-			hasTrayHost,
-			apiServiceTaskStatus = apiServiceTaskStatus.Status,
-			apiTrayTaskStatus = apiTrayTaskStatus.Status,
-			handshakeStatus = handshake.Status,
-			handshakeLastSyncUtc = handshake.LastSyncUtc,
-			handshakeAgeMinutes = handshake.AgeMinutes,
-			recommendation,
-			checkedUtc = DateTime.UtcNow,
-		});
+		var response = _responseBuilder.BuildRepairStatus(
+			installRoot: _runtimePaths.InstallRoot,
+			hasDatabase: hasDatabase,
+			hasUserscript: hasUserscript,
+			hasTrayHost: hasTrayHost,
+			apiServiceTaskStatus: apiServiceTaskStatus.Status,
+			apiTrayTaskStatus: apiTrayTaskStatus.Status,
+			handshake: handshake,
+			recommendation: recommendation);
+
+		return Results.Ok(response);
 	}
 
 	/// <summary>
@@ -99,18 +100,7 @@ public sealed class ApiUiDiagnosticsEndpointHandler {
 		var handshake = await _handshakeDiagnostics.GetStatusAsync(_contextFactory);
 		_logger.LogInformation("Userscript handshake diagnostics requested. Status={Status}, LastSyncUtc={LastSyncUtc}", handshake.Status, handshake.LastSyncUtc);
 
-		return Results.Ok(new {
-			status = handshake.Status,
-			lastSyncUtc = handshake.LastSyncUtc,
-			ageMinutes = handshake.AgeMinutes,
-			hasRecentSync = handshake.HasRecentSync,
-			recommendedChecks = new[] {
-				"Confirm Tampermonkey extension is installed and enabled in your active browser.",
-				"Confirm organized-jihad.user.js is installed and enabled in Tampermonkey.",
-				"Open Hero Wars, then verify /api/sync/health and /api/sync/last-sync endpoints.",
-				"Run userscript install check: yarn install:check --open failed"
-			},
-			checkedUtc = DateTime.UtcNow,
-		});
+		var response = _responseBuilder.BuildUserscriptHandshake(handshake);
+		return Results.Ok(response);
 	}
 }

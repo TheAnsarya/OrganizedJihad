@@ -38,6 +38,7 @@ public static class ApiServiceCollectionExtensions {
 		services.AddSingleton<ApiUiAccessPolicy>();
 		services.AddSingleton<ApiUiTemplateRenderer>();
 		services.AddSingleton<ApiUiSettingsStore>();
+		services.AddSingleton<ApiUiDiagnosticsResponseBuilder>();
 		services.AddSingleton<UserscriptHandshakeDiagnosticsService>();
 		services.AddSingleton<ScheduledTaskProbeService>();
 		services.AddScoped<ApiUiSettingsEndpointHandler>();

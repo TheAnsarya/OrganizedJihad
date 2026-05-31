@@ -124,6 +124,37 @@
 ---
 
 ## Session
+- Date: 2026-05-31
+- Session Number: 29
+- Scope: continue API diagnostics architecture with typed response models/builder
+
+## Summary
+- Added typed diagnostics response models for `/ui/repair-status` and `/ui/userscript-handshake` payloads.
+- Added `ApiUiDiagnosticsResponseBuilder` to centralize response-object construction logic.
+- Updated `ApiUiDiagnosticsEndpointHandler` to delegate response shaping to the builder instead of inline anonymous payload creation.
+- Registered the diagnostics response builder in DI composition.
+- Removed now-unused `GetRequestBaseUrl` helper from `ApiUiEndpoints` root shell.
+
+## Files Modified
+- api/Models/Ui/ApiUiDiagnosticsResponses.cs
+- api/Services/Ui/ApiUiDiagnosticsResponseBuilder.cs
+- api/Services/Ui/ApiUiDiagnosticsEndpointHandler.cs
+- api/Extensions/ApiServiceCollectionExtensions.cs
+- api/Endpoints/ApiUiEndpoints.cs
+- ~docs/copilot-chats/2026-05-30-userscript-build-auto.md
+
+## Issues
+- Epic: #333
+- Installer/runtime migration: #334
+- PR tracking: #209
+
+## Validation
+- dotnet build api/OrganizedJihad.Api.csproj -c Release (pass)
+- dotnet build api/OrganizedJihad.Api.TrayHost/OrganizedJihad.Api.TrayHost.csproj -c Release (pass)
+
+---
+
+## Session
 - Date: 2026-05-30
 - Session Number: 26
 - Scope: continue tray-host refactor by extracting shared API process runtime operations
