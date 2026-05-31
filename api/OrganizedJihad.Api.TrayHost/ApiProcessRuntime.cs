@@ -32,13 +32,27 @@ internal static class ApiProcessRuntime {
 	}
 
 	public static void StopManagedProcess(Process? process) {
-		if (process is null || process.HasExited) {
+		if (process is null) {
 			return;
 		}
 
-		process.Kill(true);
-		if (!process.WaitForExit(3000)) {
+		try {
+			if (process.HasExited) {
+				return;
+			}
+
+			if (process.CloseMainWindow()) {
+				if (process.WaitForExit(1500)) {
+					return;
+				}
+			}
+
 			process.Kill(true);
+			if (!process.WaitForExit(3000) && !process.HasExited) {
+				process.Kill(true);
+			}
+		} catch {
+			// Best effort shutdown for external process lifecycle.
 		}
 	}
 
@@ -49,11 +63,15 @@ internal static class ApiProcessRuntime {
 		}
 
 		foreach (var process in Process.GetProcessesByName(processName)) {
+			using (process) {
 			try {
-				process.Kill(true);
-				process.WaitForExit(3000);
+				if (!process.HasExited) {
+					process.Kill(true);
+					process.WaitForExit(3000);
+				}
 			} catch {
 				// Best effort shutdown; continue with remaining instances.
+			}
 			}
 		}
 	}

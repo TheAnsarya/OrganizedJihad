@@ -4,6 +4,34 @@
 
 ## Session
 - Date: 2026-05-31
+- Session Number: 34
+- Scope: continue runtime process lifecycle hardening + targeted process tests
+
+## Summary
+- Hardened tray process shutdown semantics with graceful-close attempt before forced kill.
+- Added race-safe/best-effort handling around process stop operations to tolerate exit timing changes and external lifecycle churn.
+- Ensured `StopProcessesByName` disposes enumerated `Process` handles while preserving best-effort shutdown behavior.
+- Added targeted tray host tests for process lifecycle helpers: already-exited stop safety, active process termination, and unknown process-name no-throw contract.
+- Revalidated both tray host and API test suites after runtime/process updates.
+
+## Files Modified
+- api/OrganizedJihad.Api.TrayHost/ApiProcessRuntime.cs
+- tests/OrganizedJihad.Api.TrayHost.Tests/ApiProcessRuntimeTests.cs
+- ~docs/copilot-chats/2026-05-30-userscript-build-auto.md
+
+## Issues
+- Epic: #333
+- Installer/runtime migration: #334
+- PR tracking: #209
+
+## Validation
+- dotnet test tests/OrganizedJihad.Api.TrayHost.Tests/OrganizedJihad.Api.TrayHost.Tests.csproj -c Release (pass)
+- dotnet test tests/OrganizedJihad.Api.Tests/OrganizedJihad.Api.Tests.csproj -c Release (pass)
+
+---
+
+## Session
+- Date: 2026-05-31
 - Session Number: 33
 - Scope: continue high/medium-risk hardening for tray launch/cancellation safety + contract tests
 
