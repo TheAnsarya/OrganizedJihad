@@ -913,3 +913,53 @@
 ## Validation
 - dotnet test tests/OrganizedJihad.Api.Tests/OrganizedJihad.Api.Tests.csproj (pass, 96/96)
 - runTests focused files (pass, 43/43)
+
+---
+
+## Session
+- Date: 2026-05-31
+- Session Number: 25
+- Scope: continuation wave - calibration/objective-trend edge-case hardening and canonical preference hygiene
+
+## Summary
+- Hardened calibration/trend logic to resolve mode preferences through canonical mode normalization, including legacy alias-key fallback and safe supported-window fallback behavior.
+- Hardened orchestration calibration updates so persisted mode keys and objective strings are normalized before state writes, preventing alias/objective drift in calibration metadata.
+- Added unit/integration regressions for alias-keyed trend preference handling, canonical preference persistence, and objective alias normalization through backtest/calibration endpoints.
+
+## High-Risk Slices Completed (6)
+1. Added alias-aware trend preference resolution path so calibration lookup no longer depends on exact legacy mode key matches.
+2. Added canonical preference save path with alias-duplicate cleanup to prevent multi-key drift (`titan-arena` + `arena`) in persisted preference state.
+3. Normalized mode/objective values at orchestration calibration update boundary before persisting calibration state.
+4. Normalized calibration `LastObjective` and observation `Objective` payload fields during persistence to prevent alias/objective drift in calibration telemetry.
+5. Added integration regression validating alias-mode preference writes (`titan-arena`) are reflected under canonical `arena` mode in preferences/profile metadata.
+6. Added integration regression validating objective alias backtest inputs (`attack`) are normalized and persisted consistently into calibration metadata (`LastObjective=offense`).
+
+## Medium-Risk Slices Completed (12)
+1. Added `TryGetPreferredWindowFromPreferences` helper with canonical mode fallback over legacy alias keys.
+2. Added `ResolveDefaultSupportedTrendWindowDays` helper to avoid unsupported default-window returns when supported list changes.
+3. Added `HasModeTrendPreference` helper so profile metadata user-preference flags recognize alias-keyed persisted preferences.
+4. Added `SetModeTrendPreference` helper for canonical writes + legacy alias duplicate key removal.
+5. Updated `ResolvePreferredCalibrationTrendWindowDays` to use alias-aware preference lookup.
+6. Updated `ResolveModePreferredTrendWindowDays` to use alias-aware preference lookup.
+7. Updated `ApplyBacktestObservation` to normalize mode/objective inputs and persist normalized objective in both summary + observations.
+8. Updated profile metadata generation to use `HasModeTrendPreference` instead of exact dictionary key checks.
+9. Updated trend preference save path in `SyncService` to use canonical setter helper and centralized validation.
+10. Added unit test validating calibration update normalizes alias mode key (`ta` -> `arena`).
+11. Added unit test validating calibration update normalizes persisted objective and consumes alias-keyed trend preferences.
+12. Stabilized profile metadata integration assertions to avoid false failures from persisted trend preference state.
+
+## Files Modified
+- api/Services/TeamRecommendation/TeamRecommendationCalibrationStateMath.cs
+- api/Services/TeamRecommendation/TeamRecommendationOrchestrationMath.cs
+- api/Services/SyncService.cs
+- tests/OrganizedJihad.Api.Tests/TeamRecommendationMathTests.cs
+- tests/OrganizedJihad.Api.Tests/SyncControllerTests.cs
+- ~docs/copilot-chats/2026-05-31-userscript-build-auto.md
+
+## Issues
+- Epic: #333
+- Installer/runtime migration umbrella used by current branch workflow: #334
+- PR tracking: #209
+
+## Validation
+- dotnet test tests/OrganizedJihad.Api.Tests/OrganizedJihad.Api.Tests.csproj (pass, 99/99)
