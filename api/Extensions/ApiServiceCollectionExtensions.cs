@@ -40,6 +40,9 @@ public static class ApiServiceCollectionExtensions {
 		services.AddSingleton<ApiUiSettingsStore>();
 		services.AddSingleton<UserscriptHandshakeDiagnosticsService>();
 		services.AddSingleton<ScheduledTaskProbeService>();
+		services.AddScoped<ApiUiSettingsEndpointHandler>();
+		services.AddScoped<ApiUiDiagnosticsEndpointHandler>();
+		services.AddScoped<ApiUiPageEndpointHandler>();
 
 		services.AddScoped<IProjectedItemCatalogProvider, SeededProjectedItemCatalogProvider>();
 		services.AddScoped<IExternalToolCatalogProvider, CuratedExternalToolCatalogProvider>();

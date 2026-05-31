@@ -617,6 +617,40 @@
 ---
 
 ## Session
+- Date: 2026-05-31
+- Session Number: 28
+- Scope: continue API UI architecture decomposition into endpoint handler services
+
+## Summary
+- Extracted endpoint behavior from `ApiUiEndpoints` lambda bodies into dedicated handler classes under `api/Services/Ui`.
+- Added `ApiUiSettingsEndpointHandler` for `/ui/settings` get/save behavior.
+- Added `ApiUiDiagnosticsEndpointHandler` for `/ui/repair-status` and `/ui/userscript-handshake` behavior.
+- Added `ApiUiPageEndpointHandler` for `/ui` and `/ui/tray-health` rendering/probe behavior.
+- Updated endpoint mapping partials to delegate to these handlers while preserving route paths and behavior.
+- Registered the new handler services in API DI composition.
+
+## Files Modified
+- api/Services/Ui/ApiUiSettingsEndpointHandler.cs
+- api/Services/Ui/ApiUiDiagnosticsEndpointHandler.cs
+- api/Services/Ui/ApiUiPageEndpointHandler.cs
+- api/Extensions/ApiServiceCollectionExtensions.cs
+- api/Endpoints/ApiUiEndpoints.Settings.cs
+- api/Endpoints/ApiUiEndpoints.Diagnostics.cs
+- api/Endpoints/ApiUiEndpoints.Pages.cs
+- ~docs/copilot-chats/2026-05-30-userscript-build-auto.md
+
+## Issues
+- Epic: #333
+- Installer/runtime migration: #334
+- PR tracking: #209
+
+## Validation
+- dotnet build api/OrganizedJihad.Api.csproj -c Release (pass)
+- dotnet build api/OrganizedJihad.Api.TrayHost/OrganizedJihad.Api.TrayHost.csproj -c Release (pass)
+
+---
+
+## Session
 - Date: 2026-05-30
 - Session Number: 20
 - Scope: API startup architecture cleanup by extracting Program.cs responsibilities

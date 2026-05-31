@@ -1,92 +1,13 @@
-using Microsoft.EntityFrameworkCore;
-using OrganizedJihad.Api.Services.Diagnostics;
 using OrganizedJihad.Api.Services.Ui;
-using OrganizedJihad.Data;
 
 namespace OrganizedJihad.Api.Endpoints;
 
 public static partial class ApiUiEndpoints {
 	private static void MapDiagnosticsEndpoints(IEndpointRouteBuilder endpoints) {
-		endpoints.MapGet("/ui/repair-status", async (
-			HttpContext context,
-			ApiUiAccessPolicy accessPolicy,
-			ApiRuntimePaths runtimePaths,
-			ScheduledTaskProbeService taskProbe,
-			UserscriptHandshakeDiagnosticsService handshakeDiagnostics,
-			IDbContextFactory<GameDatabaseContext> contextFactory,
-			ILoggerFactory loggerFactory) => {
-			if (!accessPolicy.IsLocalRequest(context)) {
-				return Results.StatusCode(StatusCodes.Status403Forbidden);
-			}
+		endpoints.MapGet("/ui/repair-status", (HttpContext context, ApiUiDiagnosticsEndpointHandler handler) =>
+			handler.GetRepairStatusAsync(context));
 
-			var userscriptPath = Path.Combine(runtimePaths.InstallRoot, "userscript", "organized-jihad.user.js");
-			var runtimeHostPath = Path.Combine(runtimePaths.InstallRoot, "runtime-host", "OrganizedJihad.Api.TrayHost.exe");
-			var legacyTrayHostPath = Path.Combine(runtimePaths.InstallRoot, "api-tray", "OrganizedJihad.Api.TrayHost.exe");
-			var apiServiceTaskStatus = taskProbe.GetStatus("OrganizedJihad.Api.Service");
-			var apiTrayTaskStatus = taskProbe.GetStatus("OrganizedJihad.Api.Tray");
-			var handshake = await handshakeDiagnostics.GetStatusAsync(contextFactory);
-
-			var hasDatabase = File.Exists(runtimePaths.DatabasePath);
-			var hasUserscript = File.Exists(userscriptPath);
-			var hasTrayHost = File.Exists(runtimeHostPath) || File.Exists(legacyTrayHostPath);
-
-			var recommendation = hasDatabase && hasUserscript && hasTrayHost
-				? "Runtime artifacts look healthy."
-				: "One or more runtime artifacts are missing. Re-run installer with managed CLI (dotnet run --project installer-core/OrganizedJihad.Installer.Cli -- --run-install-health-check) from your install bundle/repo to repair setup.";
-
-			if (OperatingSystem.IsWindows()
-				&& (apiServiceTaskStatus.Status.StartsWith("missing", StringComparison.OrdinalIgnoreCase)
-				|| apiTrayTaskStatus.Status.StartsWith("missing", StringComparison.OrdinalIgnoreCase))) {
-				recommendation += " Startup tasks are not fully registered; rerun installer as Administrator to restore service/tray startup automation.";
-			}
-
-			if (!handshake.HasRecentSync) {
-				recommendation += " Userscript handshake is stale or missing; verify Tampermonkey script enablement and run install-health-check diagnostics.";
-			}
-
-			loggerFactory.CreateLogger("ApiUiEndpoints").LogInformation(
-				"Repair status requested. DB={HasDatabase}, Script={HasUserscript}, Tray={HasTrayHost}, Handshake={HandshakeStatus}",
-				hasDatabase,
-				hasUserscript,
-				hasTrayHost,
-				handshake.Status);
-
-			return Results.Ok(new {
-				installRoot = runtimePaths.InstallRoot,
-				hasDatabase,
-				hasUserscript,
-				hasTrayHost,
-				apiServiceTaskStatus = apiServiceTaskStatus.Status,
-				apiTrayTaskStatus = apiTrayTaskStatus.Status,
-				handshakeStatus = handshake.Status,
-				handshakeLastSyncUtc = handshake.LastSyncUtc,
-				handshakeAgeMinutes = handshake.AgeMinutes,
-				recommendation,
-				checkedUtc = DateTime.UtcNow,
-			});
-		});
-
-		endpoints.MapGet("/ui/userscript-handshake", async (HttpContext context, ApiUiAccessPolicy accessPolicy, UserscriptHandshakeDiagnosticsService handshakeDiagnostics, IDbContextFactory<GameDatabaseContext> contextFactory, ILoggerFactory loggerFactory) => {
-			if (!accessPolicy.IsLocalRequest(context)) {
-				return Results.StatusCode(StatusCodes.Status403Forbidden);
-			}
-
-			var handshake = await handshakeDiagnostics.GetStatusAsync(contextFactory);
-			loggerFactory.CreateLogger("ApiUiEndpoints").LogInformation("Userscript handshake diagnostics requested. Status={Status}, LastSyncUtc={LastSyncUtc}", handshake.Status, handshake.LastSyncUtc);
-
-			return Results.Ok(new {
-				status = handshake.Status,
-				lastSyncUtc = handshake.LastSyncUtc,
-				ageMinutes = handshake.AgeMinutes,
-				hasRecentSync = handshake.HasRecentSync,
-				recommendedChecks = new[] {
-					"Confirm Tampermonkey extension is installed and enabled in your active browser.",
-					"Confirm organized-jihad.user.js is installed and enabled in Tampermonkey.",
-					"Open Hero Wars, then verify /api/sync/health and /api/sync/last-sync endpoints.",
-					"Run userscript install check: yarn install:check --open failed"
-				},
-				checkedUtc = DateTime.UtcNow,
-			});
-		});
+		endpoints.MapGet("/ui/userscript-handshake", (HttpContext context, ApiUiDiagnosticsEndpointHandler handler) =>
+			handler.GetUserscriptHandshakeAsync(context));
 	}
 }
