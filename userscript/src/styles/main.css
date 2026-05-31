@@ -1287,6 +1287,141 @@
 	border-radius: 2px;
 }
 
+/* ── Battle recommendation overlay ──────────────────────────────── */
+
+.oj-battle-reco-overlay {
+	position: fixed;
+	top: 64px;
+	left: 18px;
+	width: 320px;
+	max-height: 62vh;
+	background: rgba(14, 24, 34, 0.95);
+	border: 1px solid rgba(120, 204, 164, 0.35);
+	border-radius: 10px;
+	box-shadow: 0 10px 28px rgba(0, 0, 0, 0.5);
+	z-index: 999998;
+	font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+	color: #e3f8ed;
+	overflow: hidden;
+	backdrop-filter: blur(8px);
+}
+
+.oj-bro-header {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	padding: 8px 10px;
+	background: rgba(24, 43, 33, 0.9);
+	border-bottom: 1px solid rgba(120, 204, 164, 0.25);
+}
+
+.oj-bro-title {
+	font-size: 12px;
+	font-weight: 700;
+	letter-spacing: 0.2px;
+	color: #b9f6d2;
+}
+
+.oj-bro-actions {
+	display: flex;
+	gap: 4px;
+}
+
+.oj-bro-btn {
+	background: none;
+	border: none;
+	color: #9fd8bc;
+	font-size: 13px;
+	line-height: 1;
+	padding: 2px 4px;
+	border-radius: 4px;
+	cursor: pointer;
+	transition: background 0.15s, color 0.15s;
+}
+
+.oj-bro-btn:hover {
+	background: rgba(159, 216, 188, 0.14);
+	color: #d6f5e4;
+}
+
+.oj-bro-subtitle {
+	padding: 6px 10px;
+	font-size: 10px;
+	color: #90c4aa;
+	border-bottom: 1px solid rgba(120, 204, 164, 0.18);
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.oj-bro-body {
+	padding: 8px;
+	max-height: calc(62vh - 64px);
+	overflow-y: auto;
+}
+
+.oj-bro-row {
+	border: 1px solid rgba(120, 204, 164, 0.25);
+	border-radius: 8px;
+	background: rgba(20, 34, 28, 0.85);
+	padding: 7px;
+}
+
+.oj-bro-row-title {
+	font-size: 12px;
+	font-weight: 700;
+	color: #b9f6d2;
+	line-height: 1.2;
+}
+
+.oj-bro-metrics {
+	font-size: 10px;
+	color: #99cdb2;
+	margin-top: 3px;
+}
+
+.oj-bro-rationale {
+	font-size: 10px;
+	color: #7ea692;
+	margin-top: 4px;
+	line-height: 1.35;
+}
+
+.oj-bro-empty {
+	font-size: 11px;
+	color: #8cb8a2;
+	text-align: center;
+	padding: 10px 8px;
+	font-style: italic;
+}
+
+.oj-bro-body::-webkit-scrollbar {
+	width: 5px;
+}
+
+.oj-bro-body::-webkit-scrollbar-track {
+	background: transparent;
+}
+
+.oj-bro-body::-webkit-scrollbar-thumb {
+	background: rgba(159, 216, 188, 0.2);
+	border-radius: 3px;
+}
+
+@media (max-width: 900px) {
+	.oj-battle-reco-overlay {
+		top: 52px;
+		left: 10px;
+		width: calc(100vw - 20px);
+		max-width: 360px;
+		max-height: 48vh;
+	}
+
+	.oj-bro-body {
+		max-height: calc(48vh - 64px);
+	}
+}
+
 /* ── Battle team display (#111) ──────────────────────────────────── */
 
 .oj-battle-teams {

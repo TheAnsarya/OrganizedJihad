@@ -33,6 +33,7 @@ import CalendarManager from './modules/calendarManager.js';
 import SuggestionsEngine from './modules/suggestionsEngine.js';
 import APIMonitor from './modules/apiMonitor.js';
 import GameOverlay from './modules/gameOverlay.js';
+import BattleRecommendationOverlay from './modules/battleRecommendationOverlay.js';
 import DomTargeting from './modules/domTargeting.js';
 import NotificationManager from './modules/notificationManager.js';
 import './styles/main.css';
@@ -378,6 +379,10 @@ import './styles/main.css';
 		const gameOverlay = new GameOverlay(idbStorage, prefStorage);
 		gameOverlay.init();
 
+		// Initialize battle recommendation overlay (floating in-game helper, Alt+R)
+		const battleRecommendationOverlay = new BattleRecommendationOverlay(idbStorage, prefStorage);
+		battleRecommendationOverlay.init();
+
 		// Initialize DOM targeting for game-aware positioning (#50)
 		const domTargeting = new DomTargeting({
 			prefStorage,
@@ -444,6 +449,7 @@ import './styles/main.css';
 			}
 
 			await gameOverlay.onHeroDataUpdated();
+			await battleRecommendationOverlay.onApiProcessed(request);
 		};
 
 		// Catch up the badge with API calls captured during PHASE 1
@@ -486,7 +492,7 @@ import './styles/main.css';
 		console.log('[OrganizedJihad] ✅ PHASE 2 complete — Tracker ready');
 
 		// Register modules for cleanup on page unload
-		_destroyables.push(gameTracker, notificationManager, domTargeting, gameOverlay, uiManager, apiMonitor);
+		_destroyables.push(gameTracker, notificationManager, domTargeting, gameOverlay, battleRecommendationOverlay, uiManager, apiMonitor);
 		// Store interval ID for cleanup alongside the sync interval
 		window.organizedJihadSuggestionsInterval = suggestionsIntervalId;
 	}
