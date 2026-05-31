@@ -21,7 +21,7 @@ public static class TeamRecommendationProfileCatalog {
 	/// <summary>
 	/// Supported mode values.
 	/// </summary>
-	public static IReadOnlyList<string> SupportedModes { get; } = ["arena", "grandarena", "guildwar", "cow", "campaign", "adventure"];
+	public static IReadOnlyList<string> SupportedModes { get; } = ["arena", "grandarena", "guildwar", "cow", "campaign", "adventure", "dungeon", "toe"];
 
 	/// <summary>
 	/// Supported objective values.
@@ -32,7 +32,7 @@ public static class TeamRecommendationProfileCatalog {
 	/// Resolve a scoring profile for the specified mode and objective.
 	/// </summary>
 	public static TeamRecommendationScoringProfile Resolve(string mode, string objective) {
-		var normalizedMode = (mode ?? "arena").Trim().ToLowerInvariant();
+		var normalizedMode = TeamRecommendationModeNormalization.NormalizeMode(mode);
 		var normalizedObjective = (objective ?? "balanced").Trim().ToLowerInvariant();
 
 		var objectiveWeights = normalizedObjective switch {
@@ -46,7 +46,9 @@ public static class TeamRecommendationProfileCatalog {
 		var modeAdjustment = normalizedMode switch {
 			"campaign" => (Win: 0.05, Ready: -0.02, Conf: -0.03),
 			"adventure" => (Win: 0.03, Ready: 0.00, Conf: -0.03),
+			"dungeon" => (Win: 0.02, Ready: 0.02, Conf: -0.04),
 			"guildwar" => (Win: -0.03, Ready: 0.05, Conf: -0.02),
+			"toe" => (Win: -0.02, Ready: 0.06, Conf: -0.04),
 			"cow" => (Win: -0.05, Ready: 0.08, Conf: -0.03),
 			_ => (Win: 0.00, Ready: 0.00, Conf: 0.00),
 		};
@@ -77,7 +79,7 @@ public static class TeamRecommendationProfileCatalog {
 	/// Returns the default calibration trend window used by recommendation friction scaling.
 	/// </summary>
 	public static int GetDefaultCalibrationTrendWindowDays(string mode) {
-		var normalizedMode = (mode ?? "arena").Trim().ToLowerInvariant();
+		var normalizedMode = TeamRecommendationModeNormalization.NormalizeMode(mode);
 		return normalizedMode switch {
 			"arena" => 7,
 			"grandarena" => 30,
@@ -85,6 +87,8 @@ public static class TeamRecommendationProfileCatalog {
 			"cow" => 90,
 			"campaign" => 30,
 			"adventure" => 30,
+			"dungeon" => 30,
+			"toe" => 90,
 			_ => 30,
 		};
 	}
@@ -99,6 +103,17 @@ public static class TeamRecommendationProfileCatalog {
 	}
 
 	private static string ToTitleLabel(string value) {
+		switch ((value ?? string.Empty).Trim().ToLowerInvariant()) {
+			case "grandarena":
+				return "Grand Arena";
+			case "guildwar":
+				return "Guild War";
+			case "cow":
+				return "CoW";
+			case "toe":
+				return "ToE";
+		}
+
 		if (string.IsNullOrWhiteSpace(value)) {
 			return string.Empty;
 		}
@@ -107,4 +122,5 @@ public static class TeamRecommendationProfileCatalog {
 			.Split(['-', '_'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
 			.Select(token => char.ToUpperInvariant(token[0]) + token[1..]));
 	}
+
 }

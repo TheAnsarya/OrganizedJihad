@@ -149,9 +149,15 @@ internal static class TeamRecommendationScoringMath {
 				("adventure", "offense") => 0.68,
 				("adventure", "sustain") => 0.69,
 				("adventure", _) => 0.66,
+				("dungeon", "offense") => 0.67,
+				("dungeon", "sustain") => 0.70,
+				("dungeon", _) => 0.66,
 				("guildwar", "defense") => 0.61,
 				("guildwar", "offense") => 0.60,
 				("guildwar", _) => 0.57,
+				("toe", "offense") => 0.61,
+				("toe", "defense") => 0.60,
+				("toe", _) => 0.58,
 				("arena", "offense") => 0.64,
 				("arena", "speed") => 0.63,
 				("arena", _) => 0.62,
@@ -185,6 +191,8 @@ internal static class TeamRecommendationScoringMath {
 				("guildwar", "defense") => 0.58,
 				("campaign", "sustain") => 0.60,
 				("adventure", "sustain") => 0.59,
+				("dungeon", "sustain") => 0.60,
+				("toe", "defense") => 0.57,
 				("arena", "speed") => 0.56,
 				_ => 0.55,
 			};
@@ -207,7 +215,7 @@ internal static class TeamRecommendationScoringMath {
 			));
 		}
 
-		if (mode is "guildwar" or "campaign" or "adventure") {
+		if (mode is "guildwar" or "campaign" or "adventure" or "dungeon" or "toe") {
 			var sustainRanked = RankHeroesForModeAndObjective(heroes, mode, "sustain").Take(5).ToList();
 			if (sustainRanked.Count == 5) {
 				cards.Add(CreateSyntheticCard(
@@ -219,7 +227,11 @@ internal static class TeamRecommendationScoringMath {
 					externalSignals: externalSignals,
 					resourcePressure: resourcePressure,
 					calibrationScale: calibrationScale,
-					winProbability: mode == "guildwar" ? 0.56 : 0.63,
+					winProbability: mode switch {
+						"guildwar" => 0.56,
+						"toe" => 0.58,
+						_ => 0.63,
+					},
 					readiness: ComputeTeamReadinessFromHeroes(sustainRanked),
 					confidence: 0.47,
 					sourceScale: 0.74,
@@ -383,7 +395,9 @@ internal static class TeamRecommendationScoringMath {
 		var modeMultiplier = mode switch {
 			"campaign" => 0.78,
 			"adventure" => 0.82,
+			"dungeon" => 0.80,
 			"guildwar" => 0.95,
+			"toe" => 0.93,
 			"cow" => 0.92,
 			"grandarena" => 1.00,
 			_ => 0.90,
@@ -546,7 +560,9 @@ internal static class TeamRecommendationScoringMath {
 				var modeBias = normalizedMode switch {
 					"campaign" => ((hero.Level / 130d) * 0.14d) + ((hero.Stars / 6d) * 0.06d),
 					"adventure" => ((hero.Color / 20d) * 0.10d) + ((hero.Stars / 6d) * 0.08d),
+					"dungeon" => ((hero.Level / 130d) * 0.10d) + ((hero.Stars / 6d) * 0.10d),
 					"guildwar" => ((hero.Power / 140000d) * 0.08d) + ((hero.Color / 20d) * 0.08d),
+					"toe" => ((hero.Power / 140000d) * 0.10d) + ((hero.SkillLevel1 / 150d) * 0.07d),
 					"grandarena" => ((hero.Power / 140000d) * 0.06d) + ((hero.Stars / 6d) * 0.08d),
 					_ => 0d,
 				};
@@ -600,26 +616,10 @@ internal static class TeamRecommendationScoringMath {
 	}
 
 	private static string NormalizeMode(string? mode) {
-		var normalized = (mode ?? "arena").Trim().ToLowerInvariant();
-		return normalized switch {
-			"arena" => "arena",
-			"grandarena" or "grand_arena" or "grand-arena" => "grandarena",
-			"guildwar" or "guild_war" or "guild-war" or "gw" => "guildwar",
-			"cow" or "clashofworlds" or "clash_of_worlds" or "clash-of-worlds" => "cow",
-			"campaign" => "campaign",
-			"adventure" => "adventure",
-			_ => "arena",
-		};
+		return TeamRecommendationModeNormalization.NormalizeMode(mode);
 	}
 
 	private static string NormalizeObjective(string? objective) {
-		var normalized = (objective ?? "balanced").Trim().ToLowerInvariant();
-		return normalized switch {
-			"offense" => "offense",
-			"defense" => "defense",
-			"speed" => "speed",
-			"sustain" => "sustain",
-			_ => "balanced",
-		};
+		return TeamRecommendationModeNormalization.NormalizeObjective(objective);
 	}
 }

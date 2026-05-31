@@ -596,6 +596,163 @@ public class SyncControllerTests : IClassFixture<WebApplicationFactory<Program>>
 	}
 
 	/// <summary>
+	/// Verifies Team Recommendation Engine returns dungeon-mode recommendations.
+	/// </summary>
+	[Fact]
+	public async Task TeamRecommendationEngine_Should_Return_Dungeon_Mode_Recommendations() {
+		var now = DateTime.UtcNow;
+		var syncData = new BrowserSyncData {
+			CurrentSnapshot = new PlayerSnapshot {
+				PlayerId = 7333,
+				PlayerName = "DungeonModeTester",
+				Timestamp = now,
+				Level = 120,
+				TeamPower = 1400000,
+				Gold = 1800000,
+				Emeralds = 2200,
+			},
+			Heroes = [
+				new Hero { HeroId = 1, HeroName = "Astaroth", Level = 120, Stars = 6, Color = 12, Power = 113000, Timestamp = now, PlayerId = 7333 },
+				new Hero { HeroId = 2, HeroName = "Keira", Level = 120, Stars = 6, Color = 12, Power = 111000, Timestamp = now, PlayerId = 7333 },
+				new Hero { HeroId = 3, HeroName = "Sebastian", Level = 120, Stars = 6, Color = 12, Power = 107000, Timestamp = now, PlayerId = 7333 },
+				new Hero { HeroId = 4, HeroName = "Martha", Level = 120, Stars = 6, Color = 12, Power = 103000, Timestamp = now, PlayerId = 7333 },
+				new Hero { HeroId = 5, HeroName = "Jet", Level = 120, Stars = 6, Color = 12, Power = 101000, Timestamp = now, PlayerId = 7333 },
+			],
+			Titans = [],
+			ArenaBattles = [],
+			GrandArenaBattles = [],
+			TitanArenaBattles = [],
+		};
+
+		var importResponse = await _client.PostAsJsonAsync("/api/sync/import", syncData);
+		importResponse.StatusCode.Should().Be(HttpStatusCode.OK);
+
+		var response = await _client.GetAsync("/api/sync/teams/recommendations?mode=dungeon&objective=sustain&limit=3");
+
+		response.StatusCode.Should().Be(HttpStatusCode.OK);
+		var payload = await response.Content.ReadFromJsonAsync<TeamRecommendationEngineResponse>();
+		payload.Should().NotBeNull();
+		payload!.Mode.Should().Be("dungeon");
+		payload.Objective.Should().Be("sustain");
+		payload.Recommendations.Should().NotBeEmpty();
+		payload.Recommendations.Should().OnlyContain(r =>
+			r.FinalScore >= 0d &&
+			r.FinalScore <= 1d &&
+			!string.IsNullOrWhiteSpace(r.ModeProfile));
+	}
+
+	/// <summary>
+	/// Verifies Team Recommendation Engine returns ToE-mode recommendations.
+	/// </summary>
+	[Fact]
+	public async Task TeamRecommendationEngine_Should_Return_Toe_Mode_Recommendations() {
+		var now = DateTime.UtcNow;
+		var syncData = new BrowserSyncData {
+			CurrentSnapshot = new PlayerSnapshot {
+				PlayerId = 7444,
+				PlayerName = "ToeModeTester",
+				Timestamp = now,
+				Level = 120,
+				TeamPower = 1500000,
+				Gold = 2100000,
+				Emeralds = 3100,
+			},
+			Heroes = [
+				new Hero { HeroId = 1, HeroName = "Astaroth", Level = 120, Stars = 6, Color = 12, Power = 116000, Timestamp = now, PlayerId = 7444 },
+				new Hero { HeroId = 2, HeroName = "Keira", Level = 120, Stars = 6, Color = 12, Power = 114000, Timestamp = now, PlayerId = 7444 },
+				new Hero { HeroId = 3, HeroName = "Sebastian", Level = 120, Stars = 6, Color = 12, Power = 110000, Timestamp = now, PlayerId = 7444 },
+				new Hero { HeroId = 4, HeroName = "Jet", Level = 120, Stars = 6, Color = 12, Power = 105000, Timestamp = now, PlayerId = 7444 },
+				new Hero { HeroId = 5, HeroName = "Martha", Level = 120, Stars = 6, Color = 12, Power = 104000, Timestamp = now, PlayerId = 7444 },
+			],
+			Titans = [
+				new Titan { TitanId = 101, TitanName = "Angus", Level = 120, Stars = 6, Power = 90000, Timestamp = now, PlayerId = 7444 },
+			],
+			ArenaBattles = [],
+			GrandArenaBattles = [],
+			TitanArenaBattles = [],
+		};
+
+		var importResponse = await _client.PostAsJsonAsync("/api/sync/import", syncData);
+		importResponse.StatusCode.Should().Be(HttpStatusCode.OK);
+
+		var response = await _client.GetAsync("/api/sync/teams/recommendations?mode=toe&objective=defense&limit=3");
+
+		response.StatusCode.Should().Be(HttpStatusCode.OK);
+		var payload = await response.Content.ReadFromJsonAsync<TeamRecommendationEngineResponse>();
+		payload.Should().NotBeNull();
+		payload!.Mode.Should().Be("toe");
+		payload.Objective.Should().Be("defense");
+		payload.Recommendations.Should().NotBeEmpty();
+		payload.Recommendations.Should().OnlyContain(r =>
+			r.FinalScore >= 0d &&
+			r.FinalScore <= 1d &&
+			!string.IsNullOrWhiteSpace(r.ModeProfile));
+	}
+
+	/// <summary>
+	/// Verifies Team Recommendation Engine normalizes common mode aliases.
+	/// </summary>
+	[Fact]
+	public async Task TeamRecommendationEngine_Should_Normalize_Mode_Aliases() {
+		var now = DateTime.UtcNow;
+		var syncData = new BrowserSyncData {
+			CurrentSnapshot = new PlayerSnapshot {
+				PlayerId = 7555,
+				PlayerName = "AliasModeTester",
+				Timestamp = now,
+				Level = 120,
+				TeamPower = 1420000,
+				Gold = 1900000,
+				Emeralds = 2500,
+			},
+			Heroes = [
+				new Hero { HeroId = 1, HeroName = "Astaroth", Level = 120, Stars = 6, Color = 12, Power = 112000, Timestamp = now, PlayerId = 7555 },
+				new Hero { HeroId = 2, HeroName = "Keira", Level = 120, Stars = 6, Color = 12, Power = 110000, Timestamp = now, PlayerId = 7555 },
+				new Hero { HeroId = 3, HeroName = "Sebastian", Level = 120, Stars = 6, Color = 12, Power = 108000, Timestamp = now, PlayerId = 7555 },
+				new Hero { HeroId = 4, HeroName = "Martha", Level = 120, Stars = 6, Color = 12, Power = 104000, Timestamp = now, PlayerId = 7555 },
+				new Hero { HeroId = 5, HeroName = "Jet", Level = 120, Stars = 6, Color = 12, Power = 102000, Timestamp = now, PlayerId = 7555 },
+			],
+			Titans = [
+				new Titan { TitanId = 101, TitanName = "Angus", Level = 120, Stars = 6, Power = 91000, Timestamp = now, PlayerId = 7555 },
+			],
+			ArenaBattles = [],
+			GrandArenaBattles = [],
+			TitanArenaBattles = [],
+		};
+
+		var importResponse = await _client.PostAsJsonAsync("/api/sync/import", syncData);
+		importResponse.StatusCode.Should().Be(HttpStatusCode.OK);
+
+		var toeAliasResponse = await _client.GetAsync("/api/sync/teams/recommendations?mode=power-tournament&objective=defense&limit=3");
+		toeAliasResponse.StatusCode.Should().Be(HttpStatusCode.OK);
+		var toeAliasPayload = await toeAliasResponse.Content.ReadFromJsonAsync<TeamRecommendationEngineResponse>();
+		toeAliasPayload.Should().NotBeNull();
+		toeAliasPayload!.Mode.Should().Be("toe");
+		toeAliasPayload.Recommendations.Should().NotBeEmpty();
+
+		var dungeonAliasResponse = await _client.GetAsync("/api/sync/teams/recommendations?mode=dungeon-run&objective=sustain&limit=3");
+		dungeonAliasResponse.StatusCode.Should().Be(HttpStatusCode.OK);
+		var dungeonAliasPayload = await dungeonAliasResponse.Content.ReadFromJsonAsync<TeamRecommendationEngineResponse>();
+		dungeonAliasPayload.Should().NotBeNull();
+		dungeonAliasPayload!.Mode.Should().Be("dungeon");
+		dungeonAliasPayload.Recommendations.Should().NotBeEmpty();
+
+		var grandArenaAliasResponse = await _client.GetAsync("/api/sync/teams/recommendations?mode=ga&objective=balanced&limit=3");
+		grandArenaAliasResponse.StatusCode.Should().Be(HttpStatusCode.OK);
+		var grandArenaAliasPayload = await grandArenaAliasResponse.Content.ReadFromJsonAsync<TeamRecommendationEngineResponse>();
+		grandArenaAliasPayload.Should().NotBeNull();
+		grandArenaAliasPayload!.Mode.Should().Be("grandarena");
+		grandArenaAliasPayload.Recommendations.Should().NotBeEmpty();
+
+		var pvpAliasResponse = await _client.GetAsync("/api/sync/teams/recommendations?mode=pvp&objective=balanced&limit=3");
+		pvpAliasResponse.StatusCode.Should().Be(HttpStatusCode.OK);
+		var pvpAliasPayload = await pvpAliasResponse.Content.ReadFromJsonAsync<TeamRecommendationEngineResponse>();
+		pvpAliasPayload.Should().NotBeNull();
+		pvpAliasPayload!.Mode.Should().Be("arena");
+		pvpAliasPayload.Recommendations.Should().NotBeEmpty();
+	}
+
+	/// <summary>
 	/// Verifies Team Recommendation profile metadata endpoint returns options and profile weights.
 	/// </summary>
 	[Fact]
@@ -633,7 +790,13 @@ public class SyncControllerTests : IClassFixture<WebApplicationFactory<Program>>
 			mode.SupportedTrendWindowDays.Contains(mode.PreferredTrendWindowDays));
 
 		payload.Modes.Should().Contain(mode => mode.Value == "arena" && mode.PreferredTrendWindowDays == 7);
+		payload.Modes.Should().Contain(mode => mode.Value == "grandarena" && mode.Label == "Grand Arena");
+		payload.Modes.Should().Contain(mode => mode.Value == "guildwar" && mode.Label == "Guild War");
 		payload.Modes.Should().Contain(mode => mode.Value == "cow" && mode.PreferredTrendWindowDays == 90);
+		payload.Modes.Should().Contain(mode => mode.Value == "cow" && mode.Label == "CoW");
+		payload.Modes.Should().Contain(mode => mode.Value == "dungeon" && mode.PreferredTrendWindowDays == 30);
+		payload.Modes.Should().Contain(mode => mode.Value == "toe" && mode.PreferredTrendWindowDays == 90);
+		payload.Modes.Should().Contain(mode => mode.Value == "toe" && mode.Label == "ToE");
 	}
 
 	/// <summary>
@@ -662,6 +825,7 @@ public class SyncControllerTests : IClassFixture<WebApplicationFactory<Program>>
 			mode.Value == "guildwar" &&
 			mode.PreferredTrendWindowDays == 90 &&
 			mode.IsUserPreference);
+
 	}
 
 	/// <summary>
@@ -797,5 +961,32 @@ public class SyncControllerTests : IClassFixture<WebApplicationFactory<Program>>
 		payload.Samples.Should().BeGreaterThanOrEqualTo(0);
 		payload.TrendWindows.Should().NotBeEmpty();
 		payload.TrendWindows.Should().Contain(t => t.WindowDays == 30);
+
+		var dungeonResponse = await _client.GetAsync("/api/sync/teams/recommendations/calibration?mode=dungeon");
+		dungeonResponse.StatusCode.Should().Be(HttpStatusCode.OK);
+		var dungeonPayload = await dungeonResponse.Content.ReadFromJsonAsync<TeamRecommendationCalibrationResponse>();
+		dungeonPayload.Should().NotBeNull();
+		dungeonPayload!.Mode.Should().Be("dungeon");
+		dungeonPayload.PreferredTrendWindowDays.Should().Be(30);
+		dungeonPayload.SupportedTrendWindowDays.Should().Contain(30);
+		dungeonPayload.TrendWindows.Should().Contain(t => t.WindowDays == 30);
+
+		var toeResponse = await _client.GetAsync("/api/sync/teams/recommendations/calibration?mode=toe");
+		toeResponse.StatusCode.Should().Be(HttpStatusCode.OK);
+		var toePayload = await toeResponse.Content.ReadFromJsonAsync<TeamRecommendationCalibrationResponse>();
+		toePayload.Should().NotBeNull();
+		toePayload!.Mode.Should().Be("toe");
+		toePayload.PreferredTrendWindowDays.Should().BeGreaterThan(0);
+		toePayload.SupportedTrendWindowDays.Should().Contain(toePayload.PreferredTrendWindowDays);
+		toePayload.SupportedTrendWindowDays.Should().Contain(90);
+		toePayload.TrendWindows.Should().Contain(t => t.WindowDays == 90);
+
+		var titanArenaAliasResponse = await _client.GetAsync("/api/sync/teams/recommendations/calibration?mode=titan-arena");
+		titanArenaAliasResponse.StatusCode.Should().Be(HttpStatusCode.OK);
+		var titanArenaAliasPayload = await titanArenaAliasResponse.Content.ReadFromJsonAsync<TeamRecommendationCalibrationResponse>();
+		titanArenaAliasPayload.Should().NotBeNull();
+		titanArenaAliasPayload!.Mode.Should().Be("arena");
+		titanArenaAliasPayload.PreferredTrendWindowDays.Should().BeGreaterThan(0);
+		titanArenaAliasPayload.SupportedTrendWindowDays.Should().Contain(titanArenaAliasPayload.PreferredTrendWindowDays);
 	}
 }

@@ -147,10 +147,41 @@ public class TeamRecommendationMathTests {
 
 	[Fact]
 	public void NormalizeMode_Should_Handle_Aliases_And_Defaults() {
+		TeamRecommendationOrchestrationMath.NormalizeMode("pvp").Should().Be("arena");
 		TeamRecommendationOrchestrationMath.NormalizeMode("grand_arena").Should().Be("grandarena");
+		TeamRecommendationOrchestrationMath.NormalizeMode("ga").Should().Be("grandarena");
+		TeamRecommendationOrchestrationMath.NormalizeMode("titan-arena").Should().Be("arena");
 		TeamRecommendationOrchestrationMath.NormalizeMode("gw").Should().Be("guildwar");
 		TeamRecommendationOrchestrationMath.NormalizeMode("clash-of-worlds").Should().Be("cow");
+		TeamRecommendationOrchestrationMath.NormalizeMode("dungeon-run").Should().Be("dungeon");
+		TeamRecommendationOrchestrationMath.NormalizeMode("titan-dungeon").Should().Be("dungeon");
+		TeamRecommendationOrchestrationMath.NormalizeMode("power-tournament").Should().Be("toe");
+		TeamRecommendationOrchestrationMath.NormalizeMode("tournament-of-elements").Should().Be("toe");
 		TeamRecommendationOrchestrationMath.NormalizeMode("unknown").Should().Be("arena");
+	}
+
+	[Fact]
+	public void SharedModeNormalizer_Should_Stay_Aligned_With_Orchestration() {
+		var samples = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) {
+			["arena"] = "arena",
+			["pvp"] = "arena",
+			["ga"] = "grandarena",
+			["grand_arena"] = "grandarena",
+			["titan-arena"] = "arena",
+			["gw"] = "guildwar",
+			["clash-of-worlds"] = "cow",
+			["dungeon-run"] = "dungeon",
+			["power-tournament"] = "toe",
+			["unknown"] = "arena",
+		};
+
+		foreach (var (input, expected) in samples) {
+			TeamRecommendationModeNormalization.NormalizeMode(input).Should().Be(expected);
+			TeamRecommendationOrchestrationMath.NormalizeMode(input).Should().Be(expected);
+		}
+
+		TeamRecommendationModeNormalization.NormalizeObjective("offense").Should().Be("offense");
+		TeamRecommendationModeNormalization.NormalizeObjective("invalid").Should().Be("balanced");
 	}
 
 	[Fact]

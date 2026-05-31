@@ -9,27 +9,11 @@ namespace OrganizedJihad.Api.Services.TeamRecommendation;
 /// </summary>
 public static class TeamRecommendationOrchestrationMath {
 	public static string NormalizeMode(string? mode) {
-		var normalized = (mode ?? "arena").Trim().ToLowerInvariant();
-		return normalized switch {
-			"arena" => "arena",
-			"grandarena" or "grand_arena" or "grand-arena" => "grandarena",
-			"guildwar" or "guild_war" or "guild-war" or "gw" => "guildwar",
-			"cow" or "clashofworlds" or "clash_of_worlds" or "clash-of-worlds" => "cow",
-			"campaign" => "campaign",
-			"adventure" => "adventure",
-			_ => "arena",
-		};
+		return TeamRecommendationModeNormalization.NormalizeMode(mode);
 	}
 
 	public static string NormalizeObjective(string? objective) {
-		var normalized = (objective ?? "balanced").Trim().ToLowerInvariant();
-		return normalized switch {
-			"offense" => "offense",
-			"defense" => "defense",
-			"speed" => "speed",
-			"sustain" => "sustain",
-			_ => "balanced",
-		};
+		return TeamRecommendationModeNormalization.NormalizeObjective(objective);
 	}
 
 	public static int ResolveRecommendationLimit(int limit) {

@@ -39,11 +39,13 @@ public sealed class CuratedToolCatalogSignalProvider : IExternalRecommendationSi
 		["cow"] = 0.13,
 		["campaign"] = 0.11,
 		["adventure"] = 0.11,
+		["dungeon"] = 0.12,
+		["toe"] = 0.12,
 	};
 
 	/// <inheritdoc />
 	public IReadOnlyList<ExternalRecommendationSignal> GetSignals(string mode, string objective) {
-		var normalizedMode = (mode ?? "arena").Trim().ToLowerInvariant();
+		var normalizedMode = TeamRecommendationModeNormalization.NormalizeMode(mode);
 		var normalizedObjective = (objective ?? "balanced").Trim().ToLowerInvariant();
 		var modeWeight = GetModeExternalSignalWeight(normalizedMode);
 
@@ -71,7 +73,7 @@ public sealed class CuratedToolCatalogSignalProvider : IExternalRecommendationSi
 			),
 		};
 
-		if (normalizedMode is "campaign" or "adventure") {
+		if (normalizedMode is "campaign" or "adventure" or "dungeon") {
 			signals.Add(new ExternalRecommendationSignal(
 				SourceName: "Hero Wars Hub",
 				SourceType: "external",
@@ -81,7 +83,7 @@ public sealed class CuratedToolCatalogSignalProvider : IExternalRecommendationSi
 			));
 		}
 
-		if (normalizedMode is "guildwar" or "cow") {
+		if (normalizedMode is "guildwar" or "cow" or "toe") {
 			signals.Add(new ExternalRecommendationSignal(
 				SourceName: "Hero Wars Central",
 				SourceType: "external",
@@ -112,7 +114,8 @@ public sealed class CuratedToolCatalogSignalProvider : IExternalRecommendationSi
 	/// Resolve mode-specific external signal weight used by engine scoring.
 	/// </summary>
 	public static double GetModeExternalSignalWeight(string mode) {
-		return ModeExternalSignalWeights.TryGetValue(mode ?? string.Empty, out var weight)
+		var normalizedMode = TeamRecommendationModeNormalization.NormalizeMode(mode);
+		return ModeExternalSignalWeights.TryGetValue(normalizedMode, out var weight)
 			? weight
 			: 0.10;
 	}
