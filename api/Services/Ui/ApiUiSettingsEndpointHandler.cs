@@ -8,6 +8,7 @@ namespace OrganizedJihad.Api.Services.Ui;
 public sealed class ApiUiSettingsEndpointHandler {
 	private readonly ApiUiAccessPolicy _accessPolicy;
 	private readonly ApiUiSettingsStore _settingsStore;
+	private readonly ApiLocalUrlBuilder _localUrlBuilder;
 	private readonly ILogger<ApiUiSettingsEndpointHandler> _logger;
 
 	/// <summary>
@@ -16,9 +17,11 @@ public sealed class ApiUiSettingsEndpointHandler {
 	public ApiUiSettingsEndpointHandler(
 		ApiUiAccessPolicy accessPolicy,
 		ApiUiSettingsStore settingsStore,
+		ApiLocalUrlBuilder localUrlBuilder,
 		ILogger<ApiUiSettingsEndpointHandler> logger) {
 		_accessPolicy = accessPolicy;
 		_settingsStore = settingsStore;
+		_localUrlBuilder = localUrlBuilder;
 		_logger = logger;
 	}
 
@@ -43,7 +46,7 @@ public sealed class ApiUiSettingsEndpointHandler {
 			return Results.StatusCode(StatusCodes.Status403Forbidden);
 		}
 
-		var defaultApiBaseUrl = $"{context.Request.Scheme}://{context.Request.Host}";
+		var defaultApiBaseUrl = _localUrlBuilder.BuildLocalBaseUrl(context);
 		if (!ApiUiInputNormalizer.TryNormalizeLocalApiUrl(request.ApiBaseUrl, defaultApiBaseUrl, out var normalizedApiBaseUrl, out var apiBaseUrlError)) {
 			return Results.BadRequest(new { error = apiBaseUrlError });
 		}

@@ -60,7 +60,11 @@ public static class ApiUiInputNormalizer {
 			return false;
 		}
 
-		if (!uri.Host.Contains("hero-wars.com", StringComparison.OrdinalIgnoreCase)) {
+		var host = uri.Host;
+		var isHeroWarsHost = string.Equals(host, "hero-wars.com", StringComparison.OrdinalIgnoreCase)
+			|| host.EndsWith(".hero-wars.com", StringComparison.OrdinalIgnoreCase);
+
+		if (!isHeroWarsHost) {
 			error = "Preferred Hero Wars URL must target hero-wars.com.";
 			return false;
 		}

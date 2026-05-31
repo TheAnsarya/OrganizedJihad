@@ -5,12 +5,14 @@ namespace OrganizedJihad.Api.Services.Ui;
 /// </summary>
 public sealed class ApiUiHealthProbeService {
 	private readonly IHttpClientFactory _httpClientFactory;
+	private readonly ApiLocalUrlBuilder _localUrlBuilder;
 
 	/// <summary>
 	/// Initializes a new instance of the health probe service.
 	/// </summary>
-	public ApiUiHealthProbeService(IHttpClientFactory httpClientFactory) {
+	public ApiUiHealthProbeService(IHttpClientFactory httpClientFactory, ApiLocalUrlBuilder localUrlBuilder) {
 		_httpClientFactory = httpClientFactory;
+		_localUrlBuilder = localUrlBuilder;
 	}
 
 	/// <summary>
@@ -18,7 +20,7 @@ public sealed class ApiUiHealthProbeService {
 	/// </summary>
 	public async Task<string> ProbeStatusAsync(HttpContext context) {
 		try {
-			var probeUrl = $"{context.Request.Scheme}://{context.Request.Host}/api/sync/health";
+			var probeUrl = _localUrlBuilder.BuildLocalBaseUrl(context) + "/api/sync/health";
 			using var response = await _httpClientFactory.CreateClient("UiProbeClient").GetAsync(probeUrl);
 			return response.IsSuccessStatusCode ? "online" : $"degraded ({(int)response.StatusCode})";
 		} catch {

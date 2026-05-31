@@ -7,6 +7,9 @@ namespace OrganizedJihad.Api.Services.Ui;
 /// Persists local API UI settings as JSON on disk.
 /// </summary>
 public sealed class ApiUiSettingsStore {
+	private const long MaxSettingsBytes = 512 * 1024;
+	private static readonly SemaphoreSlim SettingsFileGate = new(1, 1);
+
 	private readonly ApiRuntimePaths _runtimePaths;
 
 	/// <summary>
@@ -42,6 +45,11 @@ public sealed class ApiUiSettingsStore {
 		}
 
 		try {
+			var fileInfo = new FileInfo(SettingsPath);
+			if (fileInfo.Length > MaxSettingsBytes) {
+				return null;
+			}
+
 			var raw = File.ReadAllText(SettingsPath);
 			return JsonSerializer.Deserialize<ApiUiSettings>(raw);
 		} catch {
@@ -53,6 +61,8 @@ public sealed class ApiUiSettingsStore {
 	/// Saves settings to disk.
 	/// </summary>
 	public async Task SaveAsync(ApiUiSettings settings) {
+		await SettingsFileGate.WaitAsync();
+		try {
 		var directory = Path.GetDirectoryName(SettingsPath);
 		if (!string.IsNullOrWhiteSpace(directory)) {
 			Directory.CreateDirectory(directory);
@@ -64,9 +74,11 @@ public sealed class ApiUiSettingsStore {
 
 		if (File.Exists(SettingsPath)) {
 			File.Replace(tempPath, SettingsPath, destinationBackupFileName: null, ignoreMetadataErrors: true);
-			return;
+		} else {
+			File.Move(tempPath, SettingsPath);
 		}
-
-		File.Move(tempPath, SettingsPath);
+		} finally {
+			SettingsFileGate.Release();
+		}
 	}
 }

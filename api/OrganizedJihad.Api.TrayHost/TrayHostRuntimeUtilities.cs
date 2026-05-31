@@ -3,6 +3,8 @@ using System.Net.Http;
 namespace OrganizedJihad.Api.TrayHost;
 
 internal static class TrayHostRuntimeUtilities {
+	private const long MaxSettingsBytes = 512 * 1024;
+
 	public static bool IsApiHealthy(HttpClient httpClient, string apiUrl) {
 		try {
 			var healthUrl = apiUrl.TrimEnd('/') + "/api/sync/health";
@@ -25,16 +27,46 @@ internal static class TrayHostRuntimeUtilities {
 			return false;
 		}
 
-		var raw = File.ReadAllText(settingsPath);
-		lastSettingsWriteUtc = lastWriteUtc;
-
-		if (!TrayRuntimeSettingsParser.TryReadApiBaseUrl(raw, out var configuredApiUrl)
-			|| string.IsNullOrWhiteSpace(configuredApiUrl)
-			|| string.Equals(currentApiUrl, configuredApiUrl, StringComparison.OrdinalIgnoreCase)) {
+		var fileInfo = new FileInfo(settingsPath);
+		if (fileInfo.Length > MaxSettingsBytes) {
+			lastSettingsWriteUtc = lastWriteUtc;
 			return false;
 		}
 
-		updatedApiUrl = configuredApiUrl;
+		string raw;
+		try {
+			raw = File.ReadAllText(settingsPath);
+		} catch {
+			return false;
+		}
+		lastSettingsWriteUtc = lastWriteUtc;
+
+		if (!TrayRuntimeSettingsParser.TryReadApiBaseUrl(raw, out var configuredApiUrl)
+			|| !TryNormalizeApiBaseUrl(configuredApiUrl, out var normalizedApiBaseUrl)
+			|| string.Equals(currentApiUrl, normalizedApiBaseUrl, StringComparison.OrdinalIgnoreCase)) {
+			return false;
+		}
+
+		updatedApiUrl = normalizedApiBaseUrl;
+		return true;
+	}
+
+	private static bool TryNormalizeApiBaseUrl(string? rawApiUrl, out string normalizedApiUrl) {
+		normalizedApiUrl = string.Empty;
+		if (string.IsNullOrWhiteSpace(rawApiUrl)) {
+			return false;
+		}
+
+		if (!Uri.TryCreate(rawApiUrl.Trim(), UriKind.Absolute, out var uri)) {
+			return false;
+		}
+
+		if (!string.Equals(uri.Scheme, Uri.UriSchemeHttp, StringComparison.OrdinalIgnoreCase)
+			&& !string.Equals(uri.Scheme, Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase)) {
+			return false;
+		}
+
+		normalizedApiUrl = uri.GetLeftPart(UriPartial.Authority);
 		return true;
 	}
 

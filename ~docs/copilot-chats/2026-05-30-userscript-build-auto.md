@@ -125,6 +125,41 @@
 
 ## Session
 - Date: 2026-05-31
+- Session Number: 32
+- Scope: continued high/medium-risk hardening (host-header safety, parser/file bounds, template/path safety)
+
+## Summary
+- Added `ApiLocalUrlBuilder` and integrated it into settings/page/probe flows to avoid deriving internal probe/base URLs from untrusted Host headers.
+- Hardened Hero Wars URL validation to require exact domain or subdomain match (`hero-wars.com` / `*.hero-wars.com`) instead of substring matching.
+- Hardened UI template rendering with file-name-only enforcement (path traversal protection), max-size guardrails, and replacement-key sanity checks.
+- Hardened tray settings refresh utility with file-size guardrails, resilient read behavior, and URL normalization before applying updates.
+- Hardened API UI settings store with bounded reads and serialized atomic writes (semaphore gate) to reduce concurrent write/race risk.
+
+## Files Modified
+- api/Services/Ui/ApiLocalUrlBuilder.cs
+- api/Services/Ui/ApiUiInputNormalizer.cs
+- api/Services/Ui/ApiUiTemplateRenderer.cs
+- api/Services/Ui/ApiUiHealthProbeService.cs
+- api/Services/Ui/ApiUiPageTokenBuilder.cs
+- api/Services/Ui/ApiUiSettingsEndpointHandler.cs
+- api/Services/Ui/ApiUiSettingsStore.cs
+- api/Extensions/ApiServiceCollectionExtensions.cs
+- api/OrganizedJihad.Api.TrayHost/TrayHostRuntimeUtilities.cs
+- ~docs/copilot-chats/2026-05-30-userscript-build-auto.md
+
+## Issues
+- Epic: #333
+- Installer/runtime migration: #334
+- PR tracking: #209
+
+## Validation
+- dotnet build api/OrganizedJihad.Api.csproj -c Release (pass)
+- dotnet build api/OrganizedJihad.Api.TrayHost/OrganizedJihad.Api.TrayHost.csproj -c Release (pass)
+
+---
+
+## Session
+- Date: 2026-05-31
 - Session Number: 31
 - Scope: continue API UI decomposition via dedicated page/probe/recommendation builders
 
