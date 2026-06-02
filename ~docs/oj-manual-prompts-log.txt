@@ -370,6 +370,179 @@ The installer tried to run the userscript instead of install it with tamper monk
 yeah do that
 yeah do that
 
+&&&&&&&&&&&&&&&&&&&&&
+[OJ Installer] Source project structure not found. Using bundled release payloads.
+[OJ Installer] Installing artifacts into 'C:\Users\me\AppData\Local\OrganizedJihad'
+[OJ Installer] Stopped running installed API process to refresh binaries.
+[stderr] [31;1mCopy-Item: [0mC:\Users\me\AppData\Local\Temp\.net\OrganizedJihad.Installer\vgr3GJ1w1Flw\Install-OrganizedJihad.ps1:208[0m
+[stderr] [31;1m[0m[36;1mLine |[0m
+[stderr] [31;1m[0m[36;1m[36;1m 208 | [0m     [36;1mCopy-Item -Path (Join-Path $Source '*') -Destination $Destination[0m .[0m
+[stderr] [31;1m[0m[36;1m[36;1m[0m[36;1m[0m[36;1m     | [31;1m     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~[0m
+[stderr] [31;1m[0m[36;1m[36;1m[0m[36;1m[0m[36;1m[31;1m[31;1m[36;1m     | [31;1mThe process cannot access the file 'C:\Users\me\AppData\Local\OrganizedJihad\api\OrganizedJihad.Api.exe' because[0m
+[stderr] [31;1m[0m[36;1m[36;1m[0m[36;1m[0m[36;1m[31;1m[31;1m[36;1m[31;1m[36;1m     | [31;1mit is being used by another process.[0m
+[Installer UI] Installation failed with exit code 1.
+&&&&&&&&&&&&&&&&&&&&&
+
+[OJ] Opera and Opera GX aren't listed as browser options, or the installer didn't find my OperaGX install. Still too many tamper monkey tabs. The instructions on what to do manually sucks, create an html page with instructions and screenshots for every supported browser; Add to readme.md and the release notes (switch to 0.2.2 for future releases) instructions for the installation and also for the downloading and running of the installer like "keep"ing the file which is an unknown exe file and setting the "unblock" checkbox in Windows properties; Create an icon for the server app that runs on startup and lives in the Windows task menu icons for background apps; continue;
+
+2
+
+[OJ] Add screenshots for the tampermonkey install of the userscript, show all of the steps in every browser; if Tampermonkey is already installed should be a step in the install process; the install process UI is good that it has a visible log, but instead of check boxes we should have a list of buttons with the steps, like "install tampermonkey" "install api server" (and make the api server like "Plex" (an icon in the hidden icons that opens a website that shows the UI)) "install userscript" only available if tampermonkey is installed (but can be run if not, via bypass),; continue;
+
+1
+
+[OJ] The "do it like Plex" instruction for the API server means I don't want to see a command prompt that runs the server, I want a service that starts on startup like Plex and it talks to the userscript and has a Web UI for configuration and continues setup/update if needed and lives in an icon in the notification area; continue;
+
+1
+
+[OJ] continue doing all the next steps and a ton of other work, going through issues; work through at least 12 medium risk slices and 6 high risk slices; take your time fixing everything and continue longer than you think you can; continue;
+[OJ] continue doing all the next steps and a ton of other work, going through issues; work through at least 12 medium risk slices and 6 high risk slices; take your time fixing everything and continue longer than you think you can; continue;
+[OJ] continue doing all the next steps and a ton of other work, going through issues; work through at least 12 medium risk slices and 6 high risk slices; take your time fixing everything and continue longer than you think you can; continue;
+
+1
+
+[OJ] Make MacOS and Linux versions as well so separate Window specific code out or rewrite it to cross-platform (prefered) like get rid of ps1 scripts and move all install code into the dotnet install application, and make the notification-tray application and api service and install app also work on Apple's MacOS and Linux, epics/issues/docs/etc; continue; then prepare for 0.2.3 release and create release notes with installation instructions or at least links to it with screenshots, and a cool title and a full install build with artifacts; continue;
+
+[OJ] Make MacOS and Linux versions as well so separate Window specific code out or rewrite it to cross-platform (prefered) like ***get rid of ps1 scripts*** and move all install code into the dotnet install application, and make the notification-tray application and api service and install app also work on Apple's MacOS and Linux, epics/issues/docs/etc; continue; then prepare for 0.2.3 release and create release notes with installation instructions or at least links to it with screenshots, and a cool title and a full install build with artifacts; continue;
+
+[OJ] continue doing all the next steps and a ton of other work, going through issues; work through at least 12 medium risk slices and 6 high risk slices; take your time fixing everything and continue longer than you think you can; continue;
+--- run 5x
+
+continue;
+continue;
+
+continue; then prepare for 0.2.3 release and create release notes with installation instructions or at least links to it with screenshots, and a cool title and a full install build with artifacts; continue;
+
+1
+
+[OJ] (Installer) The installer doesn't correctly identify/find Opera/OperaGX. When it opens web pages, it also does not use the selected browser but rather the system default browser, which is wrong. The UI needs to be reflowed as components overlap. Resize the installer window and add a vertical scrollbar that only appears when there is something to scroll to. 
+
+run the installer
+
+[OJ] (Installer) Opera/GX now properly detected. Tampermonkey is detected in Edge, but not OperaGX. "Install userscript" causes a installer restart, but the the old version is still there. At one point it installed Tampermonkey on Edge for a second time. 
+
+run the installer
+
+"[OJ Installer.Cli] Desktop payload not found in bundle. Skipping desktop install." Also, when you click the "install desktop app" button it restarts the installer (presumably as admin) but does not then try to install the app and gives no indication of what happened. The "step 1" button does not show it's entire label, and also should be disabled when the Tampermonkey install is already present/detected (with a rightclick context menu with one command "Reinstall", this option menu only available when button is disabled because tampermonkey is already installed); create an icon for the Organized Jihad API tray icon based on the herowars favico `https://heroesweb-a.akamaihd.net/i/hw-web/v2/1799501//images/pwa/favicon-32x32.png` Use the look of the "H" in that favico to make an "OJ" icon, also make alternative icons; 
+
+[OJ] The tray icon is ugly and stupid and includes an H for no reason. Use the colors from the favicon and just make and "OJ" with transparent background in those colors, fix the icon. Also create alternate icons; continue;
+
+These icons are ok, although if you have a graphics only alternative (no text) I'd like to see it, but `oj-tray-alt-steel.png` wins from the the "OJ" icons. However, you need to makea better `ico` version of `oj-tray-alt-steel.png` with good color, not sure why you're using low resolution/low color-depth for the ico files; continue;
+
+[OJ] `C:\Users\me\AppData\Local\OrganizedJihad\api\` has a bunch of versions of the api exe, so the install should remove the older versions from AppData; The installer is like 1gb which is huge, can you reduce the size?; sure make a few more icons just for fun; The tray-icon actions should show not just an api json response (HEalth) but rather a page that uses the response and displays a real health of api, including what the api url is and other information displayed, make the page use the color palette: (purple: #3a143c, dark brown: #2a1f14, orange: #d4821d, light brown: #90590d); Make the installer and desktop app and website use the color palette (purple: #3a143c, dark brown: #2a1f14, orange: #d4821d, light brown: #90590d); continue;
+
+[OJ] Do not include a large raw html/css string in the `Program.cs`, move it to a resource file and continue finding and fixing issues with Program.cs; continue;
+
+[OJ] Simplify `Program.cs` and move most of the code into other classes in a logical manner, with a better architecture; continue;
+
+I don't see where you call all the previous functionality, how are you calling it, you didn't just delete functionality did you? Don't remove functionality, just re structure it; continue;
+
+continue;
+continue;
+continue;
+continue;
+continue;
+
+[OJ] continue doing all the next steps and a ton of other work, going through issues; work through at least 12 medium risk slices and 6 high risk slices; take your time fixing everything and continue longer than you think you can; continue;
+[OJ] continue doing all the next steps and a ton of other work, going through issues; work through at least 12 medium risk slices and 6 high risk slices; take your time fixing everything and continue longer than you think you can; continue;
+
+[OJ] The userscript should generate Battle team recommendations for whatever enemy team we are about to fight in Arena, Guild Arena, Clash of Worlds, etc. and display the recommendations on screen, not just in the separate UI; continue;
+
+[OJ] continue doing all the next steps and a ton of other work, going through issues; work through at least 12 medium risk slices and 6 high risk slices; take your time fixing everything and continue longer than you think you can; continue;
+
+[OJ] continue doing all the next steps and a ton of other work, going through issues; work through at least 12 medium risk slices and 6 high risk slices; take your time fixing everything and continue longer than you think you can; continue; Make sure Adventure and Guild War and Dungeon and ToE; continue;
+
+1
+
+2
+
+[OJ] continue doing all the next steps and a ton of other work, going through issues; work through at least 12 medium risk slices and 6 high risk slices; take your time fixing everything and continue longer than you think you can; continue; Make sure Adventure and Guild War and Dungeon and ToE; continue;
+
+[OJ] continue doing all the next steps and a ton of other work, going through issues; work through at least 12 medium risk slices and 6 high risk slices; take your time fixing everything and continue longer than you think you can; continue;
+
+[OJ] continue doing all the next steps and a ton of other work, going through issues; work through at least 12 medium risk slices and 6 high risk slices; take your time fixing everything and continue longer than you think you can; continue; Also, if other files are in the middle of progress, "Current branch remains dirty with earlier in-progress files", spend some time fixing those issues too so we can safely commit the changes once they are done and clear our workspace; continue;
+
+continue immediately with the next long wave and also do commit-prep cleanup by grouping this into coherent commit chunks without touching unrelated files.
+
+[OJ] continue doing all the next steps and a ton of other work, going through issues; work through at least 12 medium risk slices and 6 high risk slices; take your time fixing everything and continue longer than you think you can; continue; Also, if other files are in the middle of progress, "Current branch remains dirty with earlier in-progress files", spend some time fixing those issues too so we can safely commit the changes once they are done and clear our workspace; git commit anything that is ready to be commited, in chunks; continue;
+
+Push branch updates so PR #209 reflects the two new commits. ; Continue with the next hardening wave (I can target recommendation calibration/objective-trend edge cases next and keep committing in chunks).; continue;
+
+[OJ] continue doing all the next steps and a ton of other work, going through issues; work through at least 12 medium risk slices and 6 high risk slices; take your time fixing everything and continue longer than you think you can; continue;
+
+Prepare a full stable release of everything OJ related and build and run the installer so I can try it out
+
+[OJ] When on OperaGX, step #4 "Install userscript" it doesn't install the user script, it just opens `https://addons.opera.com/en/extensions/details/tampermonkey-beta/` (step 4b does the same), make it actually install the userscript; Step #2 "Install API server/tray" fails (add debugging logs to find the problem) (([OJ Installer.Cli] API payload installed to: C:\Users\me\AppData\Local\OrganizedJihad\api ; [OJ Installer.Cli] ERROR: Could not locate installed API executable. ; [Installer UI] Installation failed with exit code 1.)); Step #3 "Desktop App" fails (add debugging logs to find the problem) (([Installer UI] Running desktop app step: desktop app ; [OJ Installer.Cli] Desktop payload not found in bundle. Skipping desktop install.))
+
+Yes, "package and run a fresh installer publish pass now so you can test this exact patched build immediately." so that I can then do #1 and #2
+
+[OJ}, OK, Step #2 (api server) and #3 (desktop app) still fail in the installer, step #4 simplys opens the tampermonkey install page and downloads the userscript file (you don't just open the `js` file in the borwoser, that does nothing, it needs to be installed in tamper monkey); everything is still broken; Also, in the installer, buttons on-hover has black text and no borders or other highlighting, you can't see it, fix the colors during hover/click/disable where you can actually read the text and maybe some lighter color highlights during hover/click; We're not getting proper crash/debug logs, add more logging and put it in the log files but don't display debug logs in the UI; continue;
+[OJ}, OK, Step #2 (api server) and #3 (desktop app) still fail in the installer, step #4 simplys opens the tampermonkey install page and downloads the userscript file (you don't just open the `js` file in the borwoser, that does nothing, it needs to be installed in tamper monkey); everything is still broken; Also, in the installer, buttons on-hover has black text and no borders or other highlighting, you can't see it, fix the colors during hover/click/disable where you can actually read the text and maybe some lighter color highlights during hover/click; We're not getting proper crash/debug logs, add more logging and put it in the log files but don't display debug logs in the UI; continue;
+
+[OJ] API Server says it installs, but the tray doesn't have the logo we made, and also check the health endpoints because they are failing `http://localhost:5124/ui/repair-status` `http://localhost:5124/ui/userscript-handshake` etc; Browser picker in installer is empty, so fix that; Installer buttons also have hideous on-hover colors where you can't see what the button says, the disabled state is also garbage, so fix those with readable colors and brighter color highlights when hovered; This UI is hard to read! fix it! and make all the buttons have orange borders, dark orange for disabled, medium orange for regular, and bright orange for highlighted (hover/selected); there are checkboxes/etc that you can't read, fix the color contrasts, make them check buttons instead of check boxes, so a button that is highlighted with a check mark when selected, and darker with a red X when not selected; continue;
+
+[OJ] The "install userscript" still does not does that, it opens `C:/Users/me/AppData/Local/OrganizedJihad/userscript/tampermonkey-setup.html` which is out of date and has wrong screenshots and has nothing to do with automatically installing the userscript; colors on buttons and stuff are still off; check box buttons have a bad "red X" icon and are missing the padding between buttons and not all buttons show all the label text; the installer and tray icon should be using the "OJ" icon; fix the installer!; continue;
+
+logs and screenshot, use them
+
+[Oj] this is a screen shot of hovering over button for step #3, see how it doesn't have a border and is dark, it should have an orange border, brighter orange than usual and the background and text should be brighter than the regular button; check box buttons have a bad "red X" icon and are missing the padding between buttons and not all buttons show all the label text; THAT IS THE WRONG "OJ" icon! it should be `oj-tray-alt-steel.png`, where did the other icons go? bring them back! installer is still garbage, fix it fix it, fix it, fixit!; continue;
+
+it didn't run, run it!
+
+I don't see anything
+
+[OJ] The buttons and styles are still not fixed, focus directly on making the styles correct for a highlighted button; Step #2 button still crashes: "[OJ Installer.Cli] Stopped legacy process: OrganizedJihad.Api.TrayHost (PID 6312) ; [OJ Installer.Cli] ERROR: Access to the path 'OrganizedJihad.Api.exe' is denied."; step #3 says it is installed at `C:\Users\me\AppData\Local\OrganizedJihad\desktop-app` but there aren't any shortcuts to the app, like it should be in the start menu; the button for step #4 again just downloads the userscript `js` file, so instead research how to install a userscript in TamperMonkey, probably asking for permission at one point. How do you do an automatic install on the scripts in TamperMonkey? Figure it out or explain to me in a document why not (open the doc) and then work on installation document that shows the manual steps, but automate as much as you can; Instead of Green Checkmarks and red "x"s the buttons say "[Off]" and "[On]" which is nonsense, fix those so that there is an icon, not text, and change the colors based on selected/unselected (green colors for button, or red colors for button, based on check status; Text labels are clipped in some buttons (see the attached screenshot), fix that, always make the button sizes responsive to the contained text label; continue; I'm tired of bringing up the same problems over and over, just fix the fucking installer;
+
+Did you fix anything? Everything is still fucked.
+
+[OJ] After running Step#2 all the other installer buttons are unclickable, fix it;
+[OJ] After running Step#2 all the other installer buttons are unclickable, fix it;
+
+continue;
+
+Button locking looks to be fixed; button styles has not been fixed, fix it!; look at the attached logs for other issues that exist; continue;
+
+continue;
+
+Edge/Chrome tampermonkey detection works, install works (open extension page) and install of user script works but opens 3 tabs, get rid of the extra tabs.; Toggle states are not using explicit color states (red is working okish, greens is not showing up, the selected buttons are blue with no border! make it have a border and green color scheme); continue;
+
+Selected Toggles DO NOT render green with an obvious border, you're lying to me (see image), fix it; disabled buttons do not have borders (see image), fix it; hover on buttons changes their size so the UI moves around, we don't want that, fix it; on-mouse-hover buttons look just like disabled buttons (see image 2) they should look like normalk buttons only with brighter colors and highlight; continue;
+
+Some buttons have text cut off (image), fix thaT; YOU GAVE THE RED TOGGLE BUTTONS A GREEN BORDER, THIS IS WRONG (image 2), fix it, should be a red border like it was; selected toggle buttons are wider than unselected toggle buttons, which shifts the UI which is bad, so fix that (image 2 and image 3); text boxes and text ares when focus have a blue border (image 4), it should match our color palette instead so maybe orange? fix it; button hover is still broken, I'm tired of asking you to fix it, fucking fix it; continue;
+
+1) fixed!; 2) fixed!; 3) horizontal size doesn't change so that's fixed for now (what about longer language strings after localization?) but vertical size changes (all red is smaller than having any green buttons), so fix it, not with exact static button sizes but making the styles match padding, border size, etc; 4) The border is larger than non-focused version which cause the UI to move around which is wrong, fix that; 5) still completely broken, see image 1 and image 2 for examples of hovered buttons how they look like disabled buttons; ALSO, the horizontal scrollbar on the log area appears on top of the text even the very last line, and the log area always starts scrolled to the bottom right corner, but it should start at the top left; continue;
+
+1) fixed!; 2) what...; 3) NOPE! broken; 4) fixed!; git commit everything in logical batches; continue; FOCUS ON THIS QUESTION: Why does on-mouse-hover styles fixes never applied or working for our buttons? I've explained it a million times: on-mouse-hover buttons look just like disabled buttons BUT they should look like normal buttons only with brighter colors and highlight; continue;
+
+The icons on the toggle buttons disappeared, re-add them, we want them; continue;
+
+The checked icon is supposed to be the green check mark icon, not a dot, it was like 2 or 3 git-commits ago, so check those commits and make it look like it did with the right icon; continue;
+
+(image) is all red toggles, (image 2) has a green toggle and has shifted the UI vertically probably because of the icon change, also notice in (image 2) that the check cion is partly cut off on the right; fix both of these issues, don't clip the icon, and make sure that icon changes don't adjust button height, 
+
+selected/focused text boxes have a big border that moves the ui elements around (image = before/unfocused, image 2 = after/focused), we don't want things moving around in the UI, but do not use static values for sizes; make the "OJ" logo fill the whole icon graphics area because we want a bigger "OJ" if we can; The "Target browser" dropdown is still using blue, which we don't want, and has a beige strip on the top and bottom of the drop which is wrong, fix these problems!; continue;
+
+1) Undelected/unfocused text boxes should not have thick borders, no other ui elements have thick bordersd, fix it; 2) NOPE, broken, still blue, top and bottom beige strips are still there but should be removed; 3) if the icon is already using the whole width then offset the "O" and the "J" vertically (o high, J low) so both can be made larger but still fit together in the icon graphical area; The Desktop app is redundant and not useful, please set a bookmark on the code tree for removing it (so we can find the spot were we did it) and then remove the desktop app and all references to it, include removing the step/button/code in the installer; also remove the userscript bypass install button in the installer since we're not requiring a bypass anymore for the regular install button; continue;
+
+1) see image; You messed up the Icon, revert it to the "OJ" version
+
+commit our changes in logical batches and make sure the "remove desktop app" effort was clean and no references are left in the codebase
+
+(userscript) battle recommendation of teams isn't showing any recommendations; also add a tab to the the userscript UI showing the status opf the connection to the tray icon apiserver and the status of the api itself and the configuration options for the connection and server; continue;
+
+yes to both of those! connection status badge is a great idea; On the apiserver status page show recent calls, like last 100 or something so we can make sure it is working; 
+
+Do we have an easy way to update the userscript in the browser? after code changes I'd like to easily test them, the installer installs it easily, do we have a short way to it it here? (In this particular case I use OperaGX but it should support all browsers)
+
+NOPE, all you did was try to run the userscript js file, undo whatever you just did for that because it's wrong; for now just run the installer so I can install the update userscript (have you updated the version number on the userscript lately?); continue;
+
+have you updated the version number on the userscript lately?
+
+[OJ] (Userscript) The connection tab is saying the server is down, but it's not, `http://localhost:5124/api/sync/health` is returning valid data, and instead of just a "Save + Test" button add a "Test" button; I do not see the "connection status badge" anywhere, Add it to the Connection tab button as its icon; Add icons to the other tab buttons as well; continue;
+
+[OJ] (Installer) You fucked something up, go back to the previous code version, "Install User Script" now opens three tabs in the default browser instead of actually running the userscript installation like it did 30 minutes ago; fix it fix it fix it!!!!; continue;
+
+do both; continue; [OJ] (apiserver) the `/ui` page is using three columns, but this is a bad layout, vertically stack these sections instead; 
 
 
 
@@ -384,6 +557,19 @@ yeah do that
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+(purple: #3a143c, dark brown: #2a1f14, orange: #d4821d, light brown: #90590d)
 
 [OJ] Search repository for security issues and outdated or comprimised libraries/packages and ensure modern (security and code) practices and standards and fix and harden the repository; update everything and fix security problems, make sure no HW credentials are stored in our system;
 
