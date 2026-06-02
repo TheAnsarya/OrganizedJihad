@@ -131,6 +131,18 @@ const TOOLS_CATALOG_CACHE_TTL_MS = 30 * 60 * 1000;
 /** @const {number} Max activity events to render in the feed */
 const DISPLAY_LIMIT_ACTIVITY = 100;
 
+/** @const {Array<{code: string, short: string, label: string}>} Supported UI language options */
+const UI_LANGUAGE_OPTIONS = [
+	{ code: 'en', short: 'EN', label: 'English' },
+	{ code: 'ru', short: 'RU', label: 'Russian' },
+	{ code: 'de', short: 'DE', label: 'German' },
+	{ code: 'fr', short: 'FR', label: 'French' },
+	{ code: 'es', short: 'ES', label: 'Spanish' },
+	{ code: 'it', short: 'IT', label: 'Italian' },
+	{ code: 'pt', short: 'PT', label: 'Portuguese' },
+	{ code: 'tr', short: 'TR', label: 'Turkish' },
+];
+
 class UIManager {
 	/**
 	 * @param {import('./storageManager.js').default} prefStorage - Synchronous localStorage wrapper
@@ -151,6 +163,7 @@ class UIManager {
 		this.isVisible = this.prefStorage.get('uiVisible', false);
 		this.currentView = this.prefStorage.get('defaultTab', 'dashboard');
 		this.overlay = null;
+		this._uiLanguage = this._normalizeUiLanguage(this.prefStorage.get('uiLanguage', 'en'));
 		/** @type {'unknown'|'online'|'degraded'|'offline'} */
 		this._connectionNavStatus = 'unknown';
 
@@ -210,6 +223,9 @@ class UIManager {
 		this._runtimeItemNameCatalogTs = 0;
 		/** @type {number} Cache TTL in ms for runtime item-name catalog */
 		this._runtimeItemNameCatalogTtl = 5 * 60_000;
+
+		/** @type {{generatedAt: string, unresolvedCount: number, unresolved: Array<object>}} Latest inventory name diagnostics */
+		this._lastInventoryNameDiagnostics = { generatedAt: '', unresolvedCount: 0, unresolved: [] };
 	}
 
 	/**
@@ -306,6 +322,8 @@ class UIManager {
 	 * Build the overlay container and inject it into the page.
 	 */
 	createOverlay() {
+		const headerLanguageOptions = this._renderLanguageOptionMarkup(this._uiLanguage, true);
+
 		this.overlay = document.createElement('div');
 		this.overlay.id = 'organizedJihad-overlay';
 		this.overlay.className = 'oj-overlay';
@@ -320,6 +338,11 @@ class UIManager {
 				<div class="oj-header">
 					<h2 class="oj-title">⚔️ OrganizedJihad</h2>
 					<div class="oj-header-actions">
+						<label class="oj-lang-select-wrap" title="UI language">
+							<select class="oj-lang-select" id="oj-lang-select" aria-label="UI language">
+								${headerLanguageOptions}
+							</select>
+						</label>
 						<button class="oj-btn oj-btn-icon" id="oj-reset-pos" title="Reset Position">↺</button>
 						<button class="oj-btn oj-btn-icon" id="oj-minimize" title="Minimize">−</button>
 						<button class="oj-btn oj-btn-icon" id="oj-close" title="Close">×</button>
@@ -352,6 +375,7 @@ class UIManager {
 		`;
 
 		document.body.appendChild(this.overlay);
+		this._updateLanguageHeaderControl();
 		this._updateNavButtonLabels();
 
 		// Restore saved position if any, clamped to current viewport (#49)
@@ -422,6 +446,10 @@ class UIManager {
 
 		// Resizable via bottom-right handle
 		this.makeResizable();
+
+		this.overlay.querySelector('#oj-lang-select')?.addEventListener('change', (event) => {
+			this._setUiLanguage(event?.target?.value || 'en');
+		});
 	}
 
 	/**
@@ -492,7 +520,7 @@ class UIManager {
 					? '🔴'
 					: '⚪';
 
-		const labels = {
+		const labelsEn = {
 			dashboard: '📊 Dashboard',
 			activity: '⚡ Activity',
 			heroes: '🛡️ Heroes',
@@ -509,6 +537,25 @@ class UIManager {
 			settings: '⚙️ Settings',
 		};
 
+		const labelsRu = {
+			dashboard: '📊 Панель',
+			activity: '⚡ Активность',
+			heroes: '🛡️ Герои',
+			titans: '🗿 Титаны',
+			pets: '🐾 Питомцы',
+			upgrades: '📈 Улучшения',
+			battles: '⚔️ Битвы',
+			chests: '🎁 Сундуки',
+			inventory: '🎒 Инвентарь',
+			mail: '✉️ Почта',
+			apilog: '📡 API Лог',
+			connection: `${connectionIcon} Связь`,
+			resources: '💰 Ресурсы',
+			settings: '⚙️ Настройки',
+		};
+
+		const labels = this._uiLanguage === 'ru' ? labelsRu : labelsEn;
+
 		return labels[view] || view;
 	}
 
@@ -523,6 +570,75 @@ class UIManager {
 			const view = button?.dataset?.view || '';
 			button.textContent = this._getNavLabel(view);
 		});
+		this._updateLanguageHeaderControl();
+	}
+
+	/**
+	 * Render language option markup for header/settings selectors.
+	 *
+	 * @param {string} selectedLanguage - Selected language code
+	 * @param {boolean} compact - Whether to render compact (icon+abbr) labels
+	 * @returns {string} Option markup
+	 * @private
+	 */
+	_renderLanguageOptionMarkup(selectedLanguage, compact = false) {
+		return UI_LANGUAGE_OPTIONS.map((entry) => {
+			const selected = entry.code === selectedLanguage ? 'selected' : '';
+			const text = compact ? `🌐 ${entry.short}` : `${entry.label} (${entry.short})`;
+			return `<option value="${entry.code}" ${selected}>${text}</option>`;
+		}).join('');
+	}
+
+	/**
+	 * Normalize requested UI language code.
+	 *
+	 * @param {string} value - Raw language code
+	 * @returns {'en'|'ru'} Normalized language code
+	 * @private
+	 */
+	_normalizeUiLanguage(value) {
+		const code = String(value || '').trim().toLowerCase();
+		return UI_LANGUAGE_OPTIONS.some((entry) => entry.code === code) ? code : 'en';
+	}
+
+	/**
+	 * Persist and apply UI language across overlay controls.
+	 *
+	 * @param {'en'|'ru'|string} language - Target language
+	 * @private
+	 */
+	_setUiLanguage(language) {
+		const normalized = this._normalizeUiLanguage(language);
+		if (this._uiLanguage === normalized) return;
+
+		this._uiLanguage = normalized;
+		this.prefStorage.set('uiLanguage', normalized);
+		this._runtimeItemNameCatalogTs = 0;
+		this._updateLanguageHeaderControl();
+		this._updateNavButtonLabels();
+
+		if (this.isVisible) {
+			this.renderView(this.currentView);
+		}
+	}
+
+	/**
+	 * Sync language selectors and metadata with current language.
+	 *
+	 * @private
+	 */
+	_updateLanguageHeaderControl() {
+		const headerSelect = this.overlay?.querySelector('#oj-lang-select');
+		if (headerSelect) {
+			headerSelect.innerHTML = this._renderLanguageOptionMarkup(this._uiLanguage, true);
+			headerSelect.value = this._uiLanguage;
+			headerSelect.title = `UI language (${this._uiLanguage.toUpperCase()})`;
+		}
+
+		const settingsSelect = this.overlay?.querySelector('#oj-ui-language');
+		if (settingsSelect) {
+			settingsSelect.value = this._uiLanguage;
+		}
 	}
 
 	/**
@@ -1086,7 +1202,6 @@ class UIManager {
 			return '';
 		}
 	}
-
 	/**
 	 * Render battle recommendation cards sourced from API recommendations (#161).
 	 * Uses metadata cache and degrades silently when API is unavailable.
@@ -2349,6 +2464,7 @@ class UIManager {
 		const totalPages = Math.max(1, Math.ceil(totalCount / this.PAGE_SIZE));
 		vs.page = Math.min(vs.page, totalPages - 1);
 		const { categoryCount, groupHtml } = this._renderInventoryGroupSections(items);
+		const nameDiagnosticsHtml = this._renderInventoryNameDiagnosticsSection();
 
 		const sortInd = (field) => this._sortIndicator(vs.sortField, vs.sortDir, field);
 
@@ -2358,6 +2474,7 @@ class UIManager {
 			<div class="oj-inventory" data-browser="inventory">
 				<h3>\uD83C\uDF92 Inventory <span class="oj-muted">(${totalCount} items in ${categoryCount} categories)</span></h3>
 				${this._renderSearchBar(vs.filter, 'Search items...')}
+				${nameDiagnosticsHtml}
 				${groupHtml}
 				${usageHtml}
 			</div>
@@ -2378,6 +2495,7 @@ class UIManager {
 	 */
 	_parseRawInventory(rawData, itemNameCatalog = {}) {
 		const items = [];
+		const unresolved = [];
 
 		// Category mapping: API key → display category + name resolver
 		const categories = {
@@ -2410,6 +2528,31 @@ class UIManager {
 				if (qty <= 0) continue;
 
 				const name = this._resolveInventoryItemName(apiKey, itemId, catInfo, itemNameCatalog);
+				const fallbackPatterns = [
+					`${catInfo.prefix} ${itemId}`,
+					`${catInfo.prefix} ${itemId} Stones`,
+				];
+
+				if (fallbackPatterns.includes(name) || this._isPlaceholderItemLabel(name)) {
+					const scopedKey = `${apiKey}:${itemId}`;
+					const tokenKey = `${apiKey}${itemId}`;
+					const directKey = `item:${itemId}`;
+					const catalogHits = [
+						itemNameCatalog[scopedKey],
+						itemNameCatalog[tokenKey],
+						itemNameCatalog[directKey],
+					].filter((value) => value && !this._isPlaceholderItemLabel(value));
+
+					unresolved.push({
+						category: apiKey,
+						itemId: String(itemId),
+						quantity: Number(qty) || 0,
+						renderedName: name,
+						catalogKeys: [scopedKey, tokenKey, directKey],
+						catalogHits,
+						tokenAttempts: this._buildInventoryTokenCandidates(apiKey, itemId),
+					});
+				}
 
 				items.push({
 					itemId,
@@ -2419,6 +2562,12 @@ class UIManager {
 				});
 			}
 		}
+
+		this._lastInventoryNameDiagnostics = {
+			generatedAt: new Date().toISOString(),
+			unresolvedCount: unresolved.length,
+			unresolved,
+		};
 
 		// Sort by category then by count descending
 		items.sort((a, b) => a.category.localeCompare(b.category) || b.count - a.count);
@@ -2439,18 +2588,96 @@ class UIManager {
 	_resolveInventoryItemName(apiKey, itemId, catInfo, itemNameCatalog) {
 		if (apiKey === 'fragmentHero' || apiKey === 'fragmentTitan' || apiKey === 'fragmentPet') {
 			const resolvedName = this._resolveEntityName(Number(itemId));
-			return resolvedName !== `Hero_${itemId}` ? `${resolvedName} Stones` : `${catInfo.prefix} #${itemId} Stones`;
+			if (resolvedName !== `Hero_${itemId}` && !this._isPlaceholderItemLabel(resolvedName)) {
+				return `${resolvedName} Stones`;
+			}
+
+			const tokenResolved = this._resolveInventoryTokenName(apiKey, itemId);
+			if (tokenResolved && !this._isPlaceholderItemLabel(tokenResolved)) {
+				return tokenResolved.toLowerCase().includes('stone') ? tokenResolved : `${tokenResolved} Stones`;
+			}
+
+			return `${catInfo.prefix} ${itemId} Stones`;
 		}
 
 		const tokenKey = `${apiKey}${itemId}`;
 		const scopedKey = `${apiKey}:${itemId}`;
 		const directKey = `item:${itemId}`;
-		const resolved = itemNameCatalog[scopedKey] || itemNameCatalog[tokenKey] || itemNameCatalog[directKey] || '';
-		if (resolved) {
+		const resolved = this._pickBestInventoryLabel([
+			itemNameCatalog[scopedKey],
+			itemNameCatalog[tokenKey],
+			itemNameCatalog[directKey],
+		]);
+		if (resolved && !this._isPlaceholderItemLabel(resolved)) {
 			return resolved;
 		}
 
-		return `${catInfo.prefix} #${itemId}`;
+		const tokenResolved = this._resolveInventoryTokenName(apiKey, itemId);
+		if (tokenResolved && !this._isPlaceholderItemLabel(tokenResolved)) {
+			return tokenResolved;
+		}
+
+		return `${catInfo.prefix} ${itemId}`;
+	}
+
+	/**
+	 * Resolve inventory name from known locale token families.
+	 *
+	 * @param {string} apiKey - Inventory category key from payload
+	 * @param {string|number} itemId - Item identifier
+	 * @returns {string} Resolved localized name or empty string
+	 * @private
+	 */
+	_resolveInventoryTokenName(apiKey, itemId) {
+		for (const token of this._buildInventoryTokenCandidates(apiKey, itemId)) {
+			const resolved = this._resolveLocaleToken(token);
+			if (resolved && !this._isPlaceholderItemLabel(resolved)) {
+				return resolved;
+			}
+		}
+
+		return '';
+	}
+
+	/**
+	 * Build likely locale token candidates for an inventory category/id pair.
+	 *
+	 * @param {string} apiKey - Inventory category key
+	 * @param {string|number} itemId - Inventory item id
+	 * @returns {string[]} Token candidates
+	 * @private
+	 */
+	_buildInventoryTokenCandidates(apiKey, itemId) {
+		const id = String(itemId || '').trim();
+		if (!/^\d+$/.test(id)) return [];
+
+		const tokenMap = {
+			consumable: ['LIB_CONSUMABLE_NAME_'],
+			gear: ['LIB_GEAR_NAME_'],
+			scroll: ['LIB_SCROLL_NAME_'],
+			coin: ['LIB_COIN_NAME_'],
+			artifact: ['LIB_ARTIFACT_NAME_'],
+			petGear: ['LIB_PET_GEAR_NAME_', 'LIB_GEAR_NAME_'],
+			fragmentGear: ['LIB_GEAR_NAME_'],
+			fragmentArtifact: ['LIB_ARTIFACT_NAME_'],
+			fragmentTitanArtifact: ['LIB_TITAN_ARTIFACT_NAME_', 'LIB_ARTIFACT_NAME_'],
+			fragmentHero: ['LIB_HERO_NAME_'],
+			fragmentTitan: ['LIB_TITAN_NAME_'],
+			fragmentPet: ['LIB_PET_NAME_'],
+		};
+
+		const prefixes = tokenMap[apiKey] || [];
+		const candidates = new Set([
+			`${apiKey}_${id}`,
+			`${apiKey}${id}`,
+			`item_${id}`,
+		]);
+
+		for (const prefix of prefixes) {
+			candidates.add(`${prefix}${id}`);
+		}
+
+		return [...candidates];
 	}
 
 	/**
@@ -2462,7 +2689,22 @@ class UIManager {
 	 * @private
 	 */
 	_resolveEntityName(id) {
-		return resolveHeroName(id);
+		const mapped = resolveHeroName(id);
+		if (mapped && mapped !== `Hero_${id}`) {
+			return mapped;
+		}
+
+		const translated = this._pickBestInventoryLabel([
+			this._resolveLocaleToken(`LIB_HERO_NAME_${id}`),
+			this._resolveLocaleToken(`LIB_TITAN_NAME_${id}`),
+			this._resolveLocaleToken(`LIB_PET_NAME_${id}`),
+		]);
+
+		if (translated) {
+			return translated;
+		}
+
+		return `Entity ${id}`;
 	}
 
 	/**
@@ -3107,6 +3349,7 @@ class UIManager {
 		const trackingPrefs = this.gameTracker.getTrackingPrefs();
 		const opacity = this.prefStorage.get('overlayOpacity', 95);
 		const defaultTab = this.prefStorage.get('defaultTab', 'dashboard');
+		const uiLanguage = this._normalizeUiLanguage(this.prefStorage.get('uiLanguage', 'en'));
 
 		// Notification settings (#52)
 		const nm = this.notificationManager;
@@ -3155,6 +3398,8 @@ class UIManager {
 			return `<option value="${val}" ${sel}>${label}</option>`;
 		}).join('');
 
+		const languageOptions = this._renderLanguageOptionMarkup(uiLanguage, false);
+
 		return `
 			<div class="oj-settings">
 				<h3>\u2699\uFE0F Settings</h3>
@@ -3182,6 +3427,15 @@ class UIManager {
 								${tabOptions}
 							</select>
 						</label>
+					</div>
+					<div style="margin-top:6px">
+						<label style="display:flex;align-items:center;gap:8px;font-size:12px">
+							Language:
+							<select id="oj-ui-language" style="background:#2a2a2e;color:#ddd;border:1px solid #555;border-radius:3px;padding:2px 4px">
+								${languageOptions}
+							</select>
+						</label>
+						<p class="oj-muted" style="margin:2px 0 0;font-size:10px">Default is English. Header language dropdown supports additional locales.</p>
 					</div>
 				</div>
 
@@ -3297,6 +3551,7 @@ class UIManager {
 			overlay: this.overlay,
 			prefStorage: this.prefStorage,
 			gameTracker: this.gameTracker,
+			onUiLanguageChange: (language) => this._setUiLanguage(language),
 		});
 
 		bindSettingsNotifications({
@@ -4452,11 +4707,56 @@ class UIManager {
 	_extractPotentialItemLabel(descriptor) {
 		if (!descriptor) return '';
 		if (typeof descriptor === 'string') {
-			return this._resolveLocaleToken(descriptor);
+			const resolved = this._resolveLocaleToken(descriptor);
+			return this._isPlaceholderItemLabel(resolved) ? '' : resolved;
 		}
 		if (typeof descriptor !== 'object') return '';
 
+		const preferredLanguage = this._normalizeUiLanguage(this._uiLanguage || this.prefStorage.get('uiLanguage', 'en'));
+		const localeKeys = [
+			preferredLanguage,
+			preferredLanguage.toUpperCase(),
+			`${preferredLanguage}_${preferredLanguage.toUpperCase()}`,
+			`${preferredLanguage}-${preferredLanguage.toUpperCase()}`,
+			'en',
+			'EN',
+			'en_US',
+			'en-US',
+			'english',
+		];
+
+		const localeCandidates = [];
+		const localeSources = [
+			descriptor.localeData,
+			descriptor.locale,
+			descriptor.translations,
+			descriptor.i18n,
+			descriptor.nameByLocale,
+			descriptor.titleByLocale,
+			descriptor.names,
+			descriptor.titles,
+		];
+
+		for (const localeMap of localeSources) {
+			if (!localeMap || typeof localeMap !== 'object') continue;
+			for (const key of localeKeys) {
+				if (typeof localeMap[key] === 'string') {
+					localeCandidates.push(localeMap[key]);
+				}
+			}
+		}
+
 		const candidates = [
+			...localeCandidates,
+			descriptor.en,
+			descriptor.enUS,
+			descriptor.en_us,
+			descriptor.english,
+			descriptor.displayName,
+			descriptor.display_name,
+			descriptor.localizedName,
+			descriptor.nameEn,
+			descriptor.name_en,
 			descriptor.name,
 			descriptor.title,
 			descriptor.label,
@@ -4474,10 +4774,64 @@ class UIManager {
 		for (const candidate of candidates) {
 			if (!candidate || typeof candidate !== 'string') continue;
 			const resolved = this._resolveLocaleToken(candidate);
-			if (resolved) return resolved;
+			if (resolved && !this._isPlaceholderItemLabel(resolved)) return resolved;
 		}
 
 		return '';
+	}
+
+	/**
+	 * Choose best usable label for the current preferred UI language.
+	 *
+	 * @param {Array<any>} candidates - Candidate labels
+	 * @returns {string} Selected label or empty
+	 * @private
+	 */
+	_pickBestInventoryLabel(candidates) {
+		const filtered = (candidates || [])
+			.map((value) => String(value || '').trim())
+			.filter((value) => value.length > 0)
+			.filter((value) => !this._isPlaceholderItemLabel(value));
+
+		if (filtered.length === 0) return '';
+
+		const preferredLanguage = this._normalizeUiLanguage(this._uiLanguage || this.prefStorage.get('uiLanguage', 'en'));
+		const hasCyrillic = (value) => /[\u0400-\u04FF]/.test(String(value || ''));
+
+		if (preferredLanguage === 'en') {
+			const englishLabel = filtered.find((value) => !hasCyrillic(value));
+			if (englishLabel) return englishLabel;
+		}
+
+		if (preferredLanguage === 'ru') {
+			const cyrillicLabel = filtered.find((value) => hasCyrillic(value));
+			if (cyrillicLabel) return cyrillicLabel;
+		}
+
+		return filtered[0] || '';
+	}
+
+	/**
+	 * Detect unresolved placeholder-like labels.
+	 *
+	 * @param {string} value - Candidate label
+	 * @returns {boolean} True when value is unresolved placeholder text
+	 * @private
+	 */
+	_isPlaceholderItemLabel(value) {
+		const text = String(value || '').trim();
+		if (!text) return true;
+
+		if (/^Hero_\d+$/i.test(text)) return true;
+		if (/^(consumable|gear|scroll|coin|fragment[a-z]*|petGear|bannerStone)_\d+$/i.test(text)) return true;
+		if (/^[A-Z0-9_]{6,}$/.test(text)) return true;
+		if (/^LIB[ _]/i.test(text)) return true;
+		if (/^BUNDLE[ _]/i.test(text)) return true;
+		if (/^(Artifact|Titan Artifact|Hero|Titan|Pet|Gear|Scroll|Consumable|Coin|Item|Resource|Unknown|Entity)( Fragment)?\s*#?\s*\d+( Stones?)?$/i.test(text)) {
+			return true;
+		}
+
+		return false;
 	}
 
 	/**
@@ -4490,6 +4844,44 @@ class UIManager {
 	_resolveLocaleToken(token) {
 		const raw = String(token || '').trim();
 		if (!raw) return '';
+		const preferredLanguage = this._normalizeUiLanguage(this._uiLanguage || this.prefStorage.get('uiLanguage', 'en'));
+		const isCyrillic = (value) => /[\u0400-\u04FF]/.test(String(value || ''));
+		const lookupTokens = this._buildLocaleTokenCandidates(raw);
+		const tryTranslate = (translate) => {
+			for (const localeToken of lookupTokens) {
+				const candidates = [
+					() => translate(localeToken),
+					() => translate(localeToken, preferredLanguage),
+					() => translate(localeToken, { lang: preferredLanguage, locale: preferredLanguage, lng: preferredLanguage }),
+				];
+
+				for (const attempt of candidates) {
+					try {
+						const translated = String(attempt() || '').trim();
+						if (!translated || translated === raw || translated === localeToken) continue;
+						if (/^[A-Z0-9_]+$/.test(translated)) continue;
+						if (this._isPlaceholderItemLabel(translated)) continue;
+
+						if (preferredLanguage === 'en' && isCyrillic(translated)) {
+							continue;
+						}
+
+						if (preferredLanguage === 'ru' && !isCyrillic(translated) && /^[A-Za-z\s\-:'(),.]+$/.test(translated)) {
+							if (!/^[A-Z0-9_]+$/.test(localeToken)) {
+								return translated;
+							}
+							continue;
+						}
+
+						return translated;
+					} catch {
+						// ignore attempt failures
+					}
+				}
+			}
+
+			return '';
+		};
 
 		const translators = [
 			PAGE_WINDOW?.nxg?.i18n?.t,
@@ -4500,19 +4892,67 @@ class UIManager {
 		].filter((fn) => typeof fn === 'function');
 
 		for (const translate of translators) {
-			try {
-				const translated = String(translate(raw) || '').trim();
-				if (translated && translated !== raw && !/^[A-Z0-9_]+$/.test(translated)) {
-					return translated;
+			const translated = tryTranslate(translate);
+			if (translated) {
+				return translated;
+			}
+		}
+
+		if (/^Hero_\d+$/i.test(raw)) {
+			const idMatch = raw.match(/^Hero_(\d+)$/i);
+			if (idMatch) {
+				const entityName = this._resolveEntityName(Number(idMatch[1]));
+				if (entityName && !this._isPlaceholderItemLabel(entityName)) {
+					return entityName;
 				}
-			} catch { /* ignore translator failures */ }
+			}
 		}
 
 		if (/^[A-Z0-9_]+$/.test(raw)) {
-			return this._prettifyLocaleToken(raw);
+			const fallback = this._prettifyLocaleToken(raw);
+			return this._isPlaceholderItemLabel(fallback) ? '' : fallback;
 		}
 
-		return raw;
+		if (/^[a-z]+_\d+$/i.test(raw)) {
+			const fallback = this._prettifyLocaleToken(raw.toUpperCase());
+			return this._isPlaceholderItemLabel(fallback) ? '' : fallback;
+		}
+
+		return this._isPlaceholderItemLabel(raw) ? '' : raw;
+	}
+
+	/**
+	 * Build translation-key candidates for common item token formats.
+	 *
+	 * @param {string} rawToken - Raw token string
+	 * @returns {string[]} Candidate translation keys
+	 * @private
+	 */
+	_buildLocaleTokenCandidates(rawToken) {
+		const raw = String(rawToken || '').trim();
+		if (!raw) return [];
+
+		const out = new Set([raw]);
+		const compactToken = raw.replace(/\s+/g, '_');
+		out.add(compactToken);
+
+		const simpleMatch = compactToken.match(/^([a-z_]+?)[_-](\d+)$/i);
+		if (simpleMatch) {
+			const stem = simpleMatch[1].toUpperCase();
+			const id = simpleMatch[2];
+			out.add(`LIB_${stem}_NAME_${id}`);
+			out.add(`LIB_${stem}_${id}`);
+		}
+
+		const heroMatch = raw.match(/^Hero_(\d+)$/i);
+		if (heroMatch) {
+			const id = heroMatch[1];
+			out.add(`LIB_HERO_NAME_${id}`);
+			out.add(`LIB_TITAN_NAME_${id}`);
+			out.add(`LIB_PET_NAME_${id}`);
+		}
+
+		return [...out];
 	}
 
 	/**
@@ -4531,6 +4971,71 @@ class UIManager {
 			.toLowerCase()
 			.replace(/\b\w/g, (char) => char.toUpperCase())
 			.trim();
+	}
+
+	/**
+	 * Render inventory name diagnostics to identify unresolved placeholders.
+	 *
+	 * @returns {string} Diagnostics HTML
+	 * @private
+	 */
+	_renderInventoryNameDiagnosticsSection() {
+		const diag = this._lastInventoryNameDiagnostics || { generatedAt: '', unresolvedCount: 0, unresolved: [] };
+		const unresolved = Array.isArray(diag.unresolved) ? diag.unresolved : [];
+		const unresolvedCount = Number(diag.unresolvedCount || unresolved.length || 0);
+
+		if (unresolvedCount <= 0) {
+			return `
+				<div class="oj-section" style="margin-bottom:10px;">
+					<h4 style="margin:0 0 4px;">Name Resolution Diagnostics</h4>
+					<p class="oj-muted" style="margin:0;font-size:11px;">All inventory names resolved without placeholder fallbacks in the latest parse.</p>
+				</div>
+			`;
+		}
+
+		const rows = unresolved.slice(0, 30).map((entry) => {
+			const category = this._escapeHtml(String(entry.category || 'unknown'));
+			const itemId = this._escapeHtml(String(entry.itemId || ''));
+			const qty = Number(entry.quantity || 0).toLocaleString();
+			const renderedName = this._escapeHtml(String(entry.renderedName || ''));
+			const catalogHits = (entry.catalogHits || []).length > 0
+				? (entry.catalogHits || []).map((value) => this._escapeHtml(String(value || ''))).join(' | ')
+				: '<span class="oj-muted">none</span>';
+			const tokenAttempts = (entry.tokenAttempts || []).slice(0, 6)
+				.map((value) => this._escapeHtml(String(value || '')))
+				.join(', ') || '—';
+
+			return `
+				<tr>
+					<td>${category}</td>
+					<td>${itemId}</td>
+					<td class="oj-num">${qty}</td>
+					<td>${renderedName}</td>
+					<td>${catalogHits}</td>
+					<td class="oj-mono" style="font-size:10px;">${tokenAttempts}</td>
+				</tr>
+			`;
+		}).join('');
+
+		const generatedAt = diag.generatedAt ? new Date(diag.generatedAt).toLocaleTimeString() : 'now';
+
+		return `
+			<div class="oj-section" style="margin-bottom:10px;">
+				<h4 style="margin:0 0 4px;">Name Resolution Diagnostics <span class="oj-muted">(${unresolvedCount} unresolved)</span></h4>
+				<p class="oj-muted" style="margin:0 0 6px;font-size:11px;">Latest parse at ${this._escapeHtml(generatedAt)}. Showing up to 30 unresolved rows.</p>
+				<details>
+					<summary style="cursor:pointer;font-size:12px;">Show unresolved IDs and attempted token paths</summary>
+					<div style="margin-top:8px;max-height:240px;overflow:auto;">
+						<table class="oj-table oj-table-compact">
+							<thead>
+								<tr><th>Category</th><th>ID</th><th>Qty</th><th>Rendered</th><th>Catalog Hits</th><th>Token Attempts</th></tr>
+							</thead>
+							<tbody>${rows}</tbody>
+						</table>
+					</div>
+				</details>
+			</div>
+		`;
 	}
 
 	_renderInventoryGroupSections(items) {

@@ -10,11 +10,13 @@
  * @param {HTMLElement} params.overlay - UI overlay root
  * @param {{ set: Function }} params.prefStorage - Preference storage
  * @param {object} params.gameTracker - GameTracker instance
+ * @param {(language: string) => void} [params.onUiLanguageChange] - Optional callback for UI language changes
  */
 export function bindSettingsDisplayTracking(params) {
 	const overlay = params?.overlay;
 	const prefStorage = params?.prefStorage;
 	const gameTracker = params?.gameTracker;
+	const onUiLanguageChange = params?.onUiLanguageChange;
 	if (!overlay || !prefStorage || !gameTracker) return;
 
 	const autoShowCb = overlay.querySelector('#oj-auto-show');
@@ -48,6 +50,17 @@ export function bindSettingsDisplayTracking(params) {
 	if (defaultTabSel) {
 		defaultTabSel.addEventListener('change', (e) => {
 			prefStorage.set('defaultTab', e.target.value);
+		});
+	}
+
+	const languageSel = overlay.querySelector('#oj-ui-language');
+	if (languageSel) {
+		languageSel.addEventListener('change', (e) => {
+			const language = String(e.target.value || 'en').trim().toLowerCase() || 'en';
+			prefStorage.set('uiLanguage', language);
+			if (typeof onUiLanguageChange === 'function') {
+				onUiLanguageChange(language);
+			}
 		});
 	}
 

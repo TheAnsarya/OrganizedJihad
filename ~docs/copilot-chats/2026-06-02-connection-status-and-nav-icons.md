@@ -31,6 +31,100 @@
 
 ## Session
 - Date: 2026-06-02
+- Session Number: 12
+- Scope: Header language dropdown finalization + inventory unresolved-name diagnostics panel
+
+## Summary
+- Replaced header language toggle behavior with dropdown-only workflow suitable for future language expansion.
+- Kept globe + two-letter label in header selector and synchronized header/settings language selectors.
+- Added inventory diagnostics section that shows unresolved item IDs, rendered fallback labels, available catalog hits, and attempted token paths.
+- Added parsing-time diagnostics capture for unresolved names so follow-up mapping work can target exact IDs quickly.
+- Hardened resolver fallback flow to reuse token candidate generation in both resolution and diagnostics.
+- Rebuilt userscript to `0.9.223` after diagnostics panel changes.
+
+## Files Modified
+- userscript/src/modules/uiManager.js
+- userscript/src/modules/binders/settingsDisplayTrackingBinder.js
+- userscript/src/styles/main.css
+- userscript/package.json
+- userscript/dist/organized-jihad.user.js
+- ~docs/copilot-chats/2026-06-02-userscript-build-auto.md
+- ~docs/copilot-chats/2026-06-02-connection-status-and-nav-icons.md
+
+## Validation
+- get_errors userscript/src/modules/uiManager.js (no errors)
+- yarn test --runInBand (37/37 suites, 843/843 tests passed)
+- yarn build (version 0.9.223)
+
+---
+
+## Session
+- Date: 2026-06-02
+- Session Number: 11
+- Scope: Userscript language dropdown UX + inventory placeholder-name reduction
+
+## Summary
+- Replaced the header language quick-toggle button with a wider dropdown selector designed for more than two languages.
+- Added multi-language selector options (EN/RU/DE/FR/ES/IT/PT/TR) and synchronized header/settings selectors with persisted preference.
+- Updated settings language binder to pass through selected language codes instead of forcing EN/RU only.
+- Added stronger placeholder detection and filtering for item/entity labels (e.g., `consumable_53`, `Hero_4044`, and generic `... #123` forms).
+- Added token-family resolution fallback for inventory IDs using locale key patterns (`LIB_*_NAME_{id}`) to prefer real translated labels over placeholders.
+- Expanded descriptor label extraction to check locale-specific fields and English-focused fields before accepting fallback labels.
+- Rebuilt userscript to `0.9.221`, republished installer payload, and launched installer executable.
+
+## Files Modified
+- userscript/src/modules/uiManager.js
+- userscript/src/modules/binders/settingsDisplayTrackingBinder.js
+- userscript/src/styles/main.css
+- userscript/package.json
+- userscript/dist/organized-jihad.user.js
+- installer-ui/bundle-payload/organized-jihad.user.js
+- ~docs/copilot-chats/2026-06-02-userscript-build-auto.md
+- ~docs/copilot-chats/2026-06-02-connection-status-and-nav-icons.md
+
+## Validation
+- get_errors userscript/src/modules/uiManager.js (no errors)
+- get_errors userscript/src/modules/binders/settingsDisplayTrackingBinder.js (no errors)
+- get_errors userscript/src/styles/main.css (existing cross-browser advisory warnings only)
+- yarn test --runInBand (37/37 suites, 843/843 tests passed)
+- yarn build (version 0.9.221)
+- pwsh -ExecutionPolicy Bypass -File ./Publish-InstallerUI.ps1
+
+---
+
+## Session
+- Date: 2026-06-02
+- Session Number: 10
+- Scope: Userscript global language selector + English-default naming + quick globe toggle
+
+## Summary
+- Added a global UI language preference (`en`/`ru`) with English default and persistence in preferences.
+- Added a header quick-toggle globe button (`🌐 EN` / `🌐 RU`) to switch language instantly.
+- Localized tab labels for EN/RU and wired live relabeling when language changes.
+- Added Settings dropdown for language selection and wired binder callback flow to apply/re-render immediately.
+- Updated locale-token translation resolution to prefer selected language and avoid Russian strings when English is selected.
+- Rebuilt userscript to `0.9.220`, republished installer payload, and launched installer executable.
+
+## Files Modified
+- userscript/src/modules/uiManager.js
+- userscript/src/modules/binders/settingsDisplayTrackingBinder.js
+- userscript/package.json
+- userscript/dist/organized-jihad.user.js
+- installer-ui/bundle-payload/organized-jihad.user.js
+- ~docs/copilot-chats/2026-06-02-userscript-build-auto.md
+- ~docs/copilot-chats/2026-06-02-connection-status-and-nav-icons.md
+
+## Validation
+- get_errors userscript/src/modules/uiManager.js (no errors)
+- get_errors userscript/src/modules/binders/settingsDisplayTrackingBinder.js (no errors)
+- yarn test --runInBand (37/37 suites, 843/843 tests passed)
+- yarn build (version 0.9.220)
+- pwsh -ExecutionPolicy Bypass -File ./Publish-InstallerUI.ps1
+
+---
+
+## Session
+- Date: 2026-06-02
 - Session Number: 8
 - Scope: Userscript connection-status false negative + duplicate nav regression + API transport hardening
 

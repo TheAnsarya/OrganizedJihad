@@ -173,3 +173,75 @@
 
 ## Generated
 - Timestamp UTC: 2026-06-02T19:41:37.089Z
+---
+
+## Session
+- Date: 2026-06-02
+- Session Number: 8
+- Scope: Automated userscript build session logging
+
+## Summary
+- Auto-generated entry from userscript build pipeline.
+- Captures a timestamp and a git working-tree snapshot for traceability.
+
+## Files Modified
+- serscript/package.json
+- userscript/src/modules/binders/settingsDisplayTrackingBinder.js
+- userscript/src/modules/uiManager.js
+- ~docs/oj-manual-prompts-log.txt
+
+## Validation
+- yarn build
+
+## Generated
+- Timestamp UTC: 2026-06-02T20:20:16.958Z
+---
+
+## Session
+- Date: 2026-06-02
+- Session Number: 9
+- Scope: Automated userscript build session logging
+
+## Summary
+- Auto-generated entry from userscript build pipeline.
+- Captures a timestamp and a git working-tree snapshot for traceability.
+
+## Files Modified
+- serscript/package.json
+- userscript/src/modules/binders/settingsDisplayTrackingBinder.js
+- userscript/src/modules/uiManager.js
+- userscript/src/styles/main.css
+- ~docs/copilot-chats/2026-06-02-connection-status-and-nav-icons.md
+- ~docs/copilot-chats/2026-06-02-userscript-build-auto.md
+- ~docs/oj-manual-prompts-log.txt
+
+## Validation
+- yarn build
+
+## Generated
+- Timestamp UTC: 2026-06-02T20:37:35.802Z
+---
+
+## Session
+- Date: 2026-06-02
+- Session Number: 10
+- Scope: Automated userscript build session logging
+
+## Summary
+- Auto-generated entry from userscript build pipeline.
+- Captures a timestamp and a git working-tree snapshot for traceability.
+
+## Files Modified
+- serscript/package.json
+- userscript/src/modules/binders/settingsDisplayTrackingBinder.js
+- userscript/src/modules/uiManager.js
+- userscript/src/styles/main.css
+- ~docs/copilot-chats/2026-06-02-connection-status-and-nav-icons.md
+- ~docs/copilot-chats/2026-06-02-userscript-build-auto.md
+- ~docs/oj-manual-prompts-log.txt
+
+## Validation
+- yarn build
+
+## Generated
+- Timestamp UTC: 2026-06-02T20:49:36.817Z
