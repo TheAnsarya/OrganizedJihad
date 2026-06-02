@@ -1,17 +1,120 @@
 param(
 	[string]$Runtime = 'win-x64',
 	[string]$Configuration = 'Release',
-	[string]$OutputDir = '.\installer-ui\publish\win-x64'
+	[string]$OutputDir = '.\installer-ui\publish\win-x64',
+	[switch]$SkipPayloadRefresh
 )
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
 $repoRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
+$bundleRoot = Join-Path $repoRoot 'installer-ui\bundle-payload'
+$bundledRoot = Join-Path $bundleRoot 'bundled'
 $projectPath = Join-Path $repoRoot 'installer-ui\OrganizedJihad.Installer.csproj'
 $resolvedOutput = Resolve-Path -Path (Join-Path $repoRoot $OutputDir) -ErrorAction SilentlyContinue
 if (-not $resolvedOutput) {
 	New-Item -Path (Join-Path $repoRoot $OutputDir) -ItemType Directory -Force | Out-Null
+}
+
+function Invoke-DotnetPublish {
+	param(
+		[Parameter(Mandatory = $true)][string]$ProjectPath,
+		[Parameter(Mandatory = $true)][string[]]$Arguments
+	)
+
+		Write-Host "[OJ Installer UI] dotnet publish $ProjectPath $($Arguments -join ' ')" -ForegroundColor DarkCyan
+		dotnet publish $ProjectPath @Arguments
+	if ($LASTEXITCODE -ne 0) {
+		throw "dotnet publish failed for '$ProjectPath'"
+	}
+}
+
+if (-not $SkipPayloadRefresh) {
+	Write-Host '[OJ Installer UI] Refreshing bundle payload with latest binaries/assets...' -ForegroundColor Cyan
+
+	if (Test-Path $bundleRoot) {
+		Remove-Item -Recurse -Force $bundleRoot
+	}
+
+	New-Item -ItemType Directory -Force -Path $bundleRoot | Out-Null
+	New-Item -ItemType Directory -Force -Path $bundledRoot | Out-Null
+
+	$apiProject = Join-Path $repoRoot 'api\OrganizedJihad.Api.csproj'
+	$runtimeHostProject = Join-Path $repoRoot 'api\OrganizedJihad.Api.TrayHost\OrganizedJihad.Api.TrayHost.csproj'
+	$desktopProject = Join-Path $repoRoot 'desktop-app\OrganizedJihad.Desktop.csproj'
+	$installerCliProject = Join-Path $repoRoot 'installer-core\OrganizedJihad.Installer.Cli\OrganizedJihad.Installer.Cli.csproj'
+
+	$apiOut = Join-Path $bundledRoot 'api'
+	$runtimeHostOut = Join-Path $bundledRoot 'runtime-host'
+	$apiTrayOut = Join-Path $bundledRoot 'api-tray'
+	$desktopOut = Join-Path $bundledRoot 'desktop-app'
+	$installerCliOut = Join-Path $bundleRoot 'installer-cli'
+
+		Invoke-DotnetPublish -ProjectPath $apiProject -Arguments @(
+			'-c', $Configuration,
+			'-r', $Runtime,
+			'--self-contained', 'true',
+			'-p:PublishSingleFile=true',
+			'-p:IncludeNativeLibrariesForSelfExtract=true',
+			'-o', $apiOut
+		)
+
+	$runtimeHostTfm = if ($Runtime -like 'win-*') { 'net10.0-windows10.0.19041.0' } else { 'net10.0' }
+		Invoke-DotnetPublish -ProjectPath $runtimeHostProject -Arguments @(
+			'-f', $runtimeHostTfm,
+			'-c', $Configuration,
+			'-r', $Runtime,
+			'--self-contained', 'true',
+			'-o', $runtimeHostOut
+		)
+
+	New-Item -ItemType Directory -Force -Path $apiTrayOut | Out-Null
+	Copy-Item -Path (Join-Path $runtimeHostOut '*') -Destination $apiTrayOut -Recurse -Force
+
+	if ($Runtime -like 'win-*') {
+				Invoke-DotnetPublish -ProjectPath $desktopProject -Arguments @(
+					'-f', 'net10.0-windows10.0.19041.0',
+					'-c', $Configuration,
+					'-p:WindowsPackageType=None',
+					'-o', $desktopOut
+				)
+	}
+
+		Invoke-DotnetPublish -ProjectPath $installerCliProject -Arguments @(
+			'-c', $Configuration,
+			'-r', $Runtime,
+			'--self-contained', 'true',
+			'-o', $installerCliOut
+		)
+
+	$userscriptFile = Join-Path $repoRoot 'userscript\dist\organized-jihad.user.js'
+	$healthCheckFile = Join-Path $repoRoot 'userscript\scripts\install-health-check.mjs'
+	$guideHtml = Join-Path $repoRoot '~docs\installer-guide\tampermonkey-setup.html'
+	$guideScreenshots = Join-Path $repoRoot '~docs\installer-guide\screenshots'
+
+	if (-not (Test-Path $userscriptFile)) {
+		throw "Userscript payload missing: $userscriptFile"
+	}
+	if (-not (Test-Path $healthCheckFile)) {
+		throw "Install health-check payload missing: $healthCheckFile"
+	}
+	if (-not (Test-Path $guideHtml)) {
+		throw "Tampermonkey setup guide missing: $guideHtml"
+	}
+	if (-not (Test-Path $guideScreenshots)) {
+		throw "Tampermonkey guide screenshots missing: $guideScreenshots"
+	}
+
+	Copy-Item -Path $userscriptFile -Destination (Join-Path $bundleRoot 'organized-jihad.user.js') -Force
+	Copy-Item -Path $healthCheckFile -Destination (Join-Path $bundleRoot 'install-health-check.mjs') -Force
+	Copy-Item -Path $guideHtml -Destination (Join-Path $bundleRoot 'tampermonkey-setup.html') -Force
+
+	$guideScreenshotsOut = Join-Path $bundleRoot 'guide-screenshots'
+	New-Item -ItemType Directory -Force -Path $guideScreenshotsOut | Out-Null
+	Copy-Item -Path (Join-Path $guideScreenshots '*') -Destination $guideScreenshotsOut -Recurse -Force
+
+	Write-Host '[OJ Installer UI] Bundle payload refresh complete.' -ForegroundColor Green
 }
 
 Write-Host '[OJ Installer UI] Publishing Avalonia installer executable...' -ForegroundColor Cyan

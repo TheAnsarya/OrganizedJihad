@@ -12,6 +12,11 @@ internal static class Program {
 			return 0;
 		} catch (Exception ex) {
 			Console.WriteLine($"[OJ Installer.Cli] ERROR: {ex.Message}");
+			foreach (var line in ex.ToString().Split(new[] { "\r\n", "\n" }, StringSplitOptions.None)) {
+				if (!string.IsNullOrWhiteSpace(line)) {
+					Console.WriteLine($"[DEBUG] [OJ Installer.Cli] Exception: {line}");
+				}
+			}
 			return 1;
 		}
 	}
@@ -88,6 +93,8 @@ internal sealed class InstallerWorkflow {
 
 	public void Run() {
 		Console.WriteLine("[OJ Installer.Cli] Starting cross-platform install workflow.");
+		Console.WriteLine($"[DEBUG] [OJ Installer.Cli] Base directory: {_baseDir}");
+		Console.WriteLine($"[DEBUG] [OJ Installer.Cli] Install root: {_options.InstallRoot}");
 
 		if (_options.SkipApiInstall && _options.SkipDesktopAppInstall && _options.SkipUserscriptInstall) {
 			throw new InvalidOperationException("At least one install component must be enabled.");
@@ -119,6 +126,7 @@ internal sealed class InstallerWorkflow {
 
 		if (_options.FirstRunDiagnostics || _options.RunInstallHealthCheck) {
 			WaitApiHealth();
+			ProbeApiUiDiagnosticsEndpoints();
 		}
 
 		if (!_options.SkipUserscriptInstall && !_options.SkipTampermonkeyBootstrap) {
@@ -132,6 +140,9 @@ internal sealed class InstallerWorkflow {
 		if (!OperatingSystem.IsWindows()) {
 			return;
 		}
+
+		StopScheduledTask("OrganizedJihad.Api.Service");
+		StopScheduledTask("OrganizedJihad.Api.Tray");
 
 		var prefixes = new[] {
 			"OrganizedJihad.Api",
@@ -150,11 +161,34 @@ internal sealed class InstallerWorkflow {
 				}
 
 				process.Kill(true);
-				process.WaitForExit(3000);
+				process.WaitForExit(10000);
 				Console.WriteLine($"[OJ Installer.Cli] Stopped legacy process: {name} (PID {process.Id})");
 			} catch {
 				// Best effort cleanup only.
 			}
+		}
+
+		WaitForFileUnlock(Path.Combine(_options.InstallRoot, "api", "OrganizedJihad.Api.exe"), timeoutMs: 12000);
+		WaitForFileUnlock(Path.Combine(_options.InstallRoot, "runtime-host", "OrganizedJihad.Api.TrayHost.exe"), timeoutMs: 12000);
+	}
+
+	private static void StopScheduledTask(string taskName) {
+		if (!OperatingSystem.IsWindows() || string.IsNullOrWhiteSpace(taskName)) {
+			return;
+		}
+
+		try {
+			using var process = Process.Start(new ProcessStartInfo {
+				FileName = "schtasks.exe",
+				Arguments = $"/End /TN \"{taskName}\"",
+				UseShellExecute = false,
+				CreateNoWindow = true,
+				RedirectStandardOutput = true,
+				RedirectStandardError = true,
+			});
+			process?.WaitForExit(3000);
+		} catch {
+			// Best effort cleanup only.
 		}
 	}
 
@@ -186,50 +220,122 @@ internal sealed class InstallerWorkflow {
 	}
 
 	private void InstallApiPayload() {
-		var source = ResolveDirectoryCandidate(
+		var sourceCandidates = new[] {
 			Path.Combine(_baseDir, "bundled", "api"),
-			Path.GetFullPath(Path.Combine(_baseDir, "..", "..", "..", "api", "bin", "Release", "net10.0", "win-x64", "publish")));
+			Path.Combine(_baseDir, "api"),
+			Path.GetFullPath(Path.Combine(_baseDir, "..", "..", "..", "api", "bin", "Release", "net10.0", "win-x64", "publish")),
+		};
+
+		LogDirectoryCandidates("API payload source", sourceCandidates);
+
+		var source = ResolveDirectoryCandidate(sourceCandidates);
 		var destination = Path.Combine(_options.InstallRoot, "api");
 		CopyDirectory(source, destination);
+		LogDirectorySnapshot("API payload destination", destination, maxEntries: 12);
 
 		var runtimeHostSource = ResolveOptionalDirectoryCandidate(
 			Path.Combine(_baseDir, "bundled", "runtime-host"),
-			Path.Combine(_baseDir, "bundled", "api-tray"));
+			Path.Combine(_baseDir, "bundled", "api-tray"),
+			Path.Combine(_baseDir, "runtime-host"),
+			Path.Combine(_baseDir, "api-tray"));
+		if (string.IsNullOrWhiteSpace(runtimeHostSource)) {
+			Console.WriteLine("[OJ Installer.Cli] Runtime host payload not found in known bundle locations.");
+		}
 		if (!string.IsNullOrWhiteSpace(runtimeHostSource)) {
 			var runtimeHostDestination = Path.Combine(_options.InstallRoot, "runtime-host");
 			CopyDirectory(runtimeHostSource, runtimeHostDestination);
+			LogDirectorySnapshot("Runtime host destination", runtimeHostDestination, maxEntries: 8);
 		}
 
 		Console.WriteLine($"[OJ Installer.Cli] API payload installed to: {destination}");
 	}
 
 	private void InstallDesktopPayload() {
-		var source = ResolveOptionalDirectoryCandidate(
+		var sourceCandidates = new[] {
 			Path.Combine(_baseDir, "bundled", "desktop-app"),
+			Path.Combine(_baseDir, "desktop-app"),
 			Path.GetFullPath(Path.Combine(_baseDir, "..", "..", "..", "desktop-app", "bin", "Release", "net10.0-windows10.0.19041.0", "win-x64", "publish")),
 			Path.GetFullPath(Path.Combine(_baseDir, "..", "..", "..", "..", "desktop-app", "bin", "Release", "net10.0-windows10.0.19041.0", "win-x64", "publish")),
 			Path.GetFullPath(Path.Combine(_baseDir, "..", "..", "..", "desktop-app", "bin", "Debug", "net10.0-windows10.0.19041.0", "win-x64", "publish")),
-			Path.GetFullPath(Path.Combine(_baseDir, "..", "..", "..", "..", "desktop-app", "bin", "Debug", "net10.0-windows10.0.19041.0", "win-x64", "publish")));
+			Path.GetFullPath(Path.Combine(_baseDir, "..", "..", "..", "..", "desktop-app", "bin", "Debug", "net10.0-windows10.0.19041.0", "win-x64", "publish")),
+		};
+
+		LogDirectoryCandidates("Desktop payload source", sourceCandidates);
+
+		var source = ResolveOptionalDirectoryCandidate(sourceCandidates);
 		if (string.IsNullOrWhiteSpace(source)) {
-			Console.WriteLine("[OJ Installer.Cli] Desktop payload not found in bundle. Skipping desktop install.");
+			Console.WriteLine("[OJ Installer.Cli] Desktop payload not found in bundle candidates. Skipping desktop install.");
 			return;
 		}
 
 		var destination = Path.Combine(_options.InstallRoot, "desktop-app");
 		CopyDirectory(source, destination);
+		CreateDesktopStartMenuShortcut(destination);
+		LogDirectorySnapshot("Desktop payload destination", destination, maxEntries: 10);
 		Console.WriteLine($"[OJ Installer.Cli] Desktop payload installed to: {destination}");
+	}
+
+	private void CreateDesktopStartMenuShortcut(string desktopInstallDirectory) {
+		if (!OperatingSystem.IsWindows()) {
+			return;
+		}
+
+		var desktopExe = ResolveExecutable(Path.Combine(desktopInstallDirectory, "OrganizedJihad.Desktop"));
+		if (string.IsNullOrWhiteSpace(desktopExe) || !File.Exists(desktopExe)) {
+			Console.WriteLine("[OJ Installer.Cli] Desktop shortcut skipped: desktop executable not found.");
+			return;
+		}
+
+		try {
+			var startMenuPrograms = Path.Combine(
+				Environment.GetFolderPath(Environment.SpecialFolder.StartMenu),
+				"Programs",
+				"OrganizedJihad");
+			Directory.CreateDirectory(startMenuPrograms);
+
+			var shortcutPath = Path.Combine(startMenuPrograms, "OrganizedJihad Desktop.lnk");
+			var iconPath = ResolveOptionalFileCandidate(
+				Path.Combine(_options.InstallRoot, "runtime-host", "Assets", "Icons", "oj-tray-alt-steel.ico"),
+				Path.Combine(_options.InstallRoot, "runtime-host", "Assets", "Icons", "oj-tray-primary.ico"));
+
+			var shellType = Type.GetTypeFromProgID("WScript.Shell");
+			if (shellType is null) {
+				Console.WriteLine("[OJ Installer.Cli] Desktop shortcut skipped: WScript.Shell unavailable.");
+				return;
+			}
+
+			dynamic shell = Activator.CreateInstance(shellType)!;
+			dynamic shortcut = shell.CreateShortcut(shortcutPath);
+			shortcut.TargetPath = desktopExe;
+			shortcut.WorkingDirectory = desktopInstallDirectory;
+			shortcut.Description = "Launch OrganizedJihad Desktop";
+			if (!string.IsNullOrWhiteSpace(iconPath) && File.Exists(iconPath)) {
+				shortcut.IconLocation = iconPath;
+			}
+			shortcut.Save();
+
+			Console.WriteLine($"[OJ Installer.Cli] Desktop Start Menu shortcut created: {shortcutPath}");
+		} catch (Exception ex) {
+			Console.WriteLine($"[OJ Installer.Cli] Desktop shortcut creation skipped: {ex.Message}");
+		}
 	}
 
 	private void InstallUserscriptPayload() {
 		var userscriptDir = Path.Combine(_options.InstallRoot, "userscript");
 		Directory.CreateDirectory(userscriptDir);
+		var extractionRoot = Directory.GetParent(_baseDir)?.FullName ?? _baseDir;
 
 		var sourceUserscript = ResolveFileCandidate(
 			Path.Combine(_baseDir, "organized-jihad.user.js"),
+			Path.Combine(extractionRoot, "organized-jihad.user.js"),
+			Path.GetFullPath(Path.Combine(_baseDir, "..", "organized-jihad.user.js")),
 			Path.GetFullPath(Path.Combine(_baseDir, "..", "..", "..", "userscript", "dist", "organized-jihad.user.js")));
 		File.Copy(sourceUserscript, Path.Combine(userscriptDir, "organized-jihad.user.js"), overwrite: true);
 
-		var guide = ResolveOptionalFileCandidate(Path.Combine(_baseDir, "tampermonkey-setup.html"));
+		var guide = ResolveOptionalFileCandidate(
+			Path.Combine(_baseDir, "tampermonkey-setup.html"),
+			Path.Combine(extractionRoot, "tampermonkey-setup.html"),
+			Path.GetFullPath(Path.Combine(_baseDir, "..", "tampermonkey-setup.html")));
 		if (!string.IsNullOrWhiteSpace(guide)) {
 			File.Copy(guide, Path.Combine(userscriptDir, "tampermonkey-setup.html"), overwrite: true);
 		}
@@ -245,20 +351,36 @@ internal sealed class InstallerWorkflow {
 	private void StartApiRuntime() {
 		var apiDir = Path.Combine(_options.InstallRoot, "api");
 		var apiExecutable = ResolveExecutable(Path.Combine(apiDir, "OrganizedJihad.Api"));
-		if (string.IsNullOrWhiteSpace(apiExecutable)) {
-			throw new InvalidOperationException("Could not locate installed API executable.");
-		}
+		var apiAssembly = ResolveOptionalFileCandidate(Path.Combine(apiDir, "OrganizedJihad.Api.dll"));
+
+		Console.WriteLine($"[DEBUG] [OJ Installer.Cli] API launch probe executable: {(string.IsNullOrWhiteSpace(apiExecutable) ? "(missing)" : apiExecutable)}");
+		Console.WriteLine($"[DEBUG] [OJ Installer.Cli] API launch probe assembly: {(string.IsNullOrWhiteSpace(apiAssembly) ? "(missing)" : apiAssembly)}");
+		LogDirectorySnapshot("Installed API directory", apiDir, maxEntries: 16);
 
 		var runtimeHostDir = Path.Combine(_options.InstallRoot, "runtime-host");
 		var runtimeHostExe = ResolveExecutable(Path.Combine(runtimeHostDir, "OrganizedJihad.Api.TrayHost"));
-		if (!string.IsNullOrWhiteSpace(runtimeHostExe)) {
+		if (!string.IsNullOrWhiteSpace(runtimeHostExe) && !string.IsNullOrWhiteSpace(apiExecutable)) {
 			StartBackgroundProcess(runtimeHostExe, $"--api-executable \"{apiExecutable}\" --api-url \"{_options.ApiUrl}\" --working-directory \"{apiDir}\"", runtimeHostDir);
 			Console.WriteLine("[OJ Installer.Cli] Runtime host started.");
 			return;
 		}
+		if (!string.IsNullOrWhiteSpace(runtimeHostExe) && string.IsNullOrWhiteSpace(apiExecutable)) {
+			Console.WriteLine("[OJ Installer.Cli] Runtime host payload found, but API executable is missing. Falling back to direct launch mode.");
+		}
 
-		StartBackgroundProcess(apiExecutable, $"--urls {_options.ApiUrl}", apiDir);
-		Console.WriteLine("[OJ Installer.Cli] API started directly (runtime host not found).");
+		if (!string.IsNullOrWhiteSpace(apiExecutable)) {
+			StartBackgroundProcess(apiExecutable, $"--urls {_options.ApiUrl}", apiDir);
+			Console.WriteLine("[OJ Installer.Cli] API started directly (runtime host not found).");
+			return;
+		}
+
+		if (!string.IsNullOrWhiteSpace(apiAssembly)) {
+			StartBackgroundProcess("dotnet", $"\"{apiAssembly}\" --urls {_options.ApiUrl}", apiDir);
+			Console.WriteLine("[OJ Installer.Cli] API started via dotnet OrganizedJihad.Api.dll fallback.");
+			return;
+		}
+
+		throw new InvalidOperationException($"Could not locate installed API executable or assembly. Install root: {_options.InstallRoot}");
 	}
 
 	private void WaitApiHealth() {
@@ -283,6 +405,30 @@ internal sealed class InstallerWorkflow {
 		Console.WriteLine($"[OJ Installer.Cli] API health probe timed out: {healthUrl}");
 	}
 
+	private void ProbeApiUiDiagnosticsEndpoints() {
+		var endpoints = new[] {
+			"/ui/repair-status",
+			"/ui/userscript-handshake",
+			"/ui/tray-health",
+		};
+
+		using var client = new HttpClient { Timeout = TimeSpan.FromSeconds(4) };
+		foreach (var endpoint in endpoints) {
+			var url = _options.ApiUrl.TrimEnd('/') + endpoint;
+			try {
+				var response = client.GetAsync(url).GetAwaiter().GetResult();
+				if (response.IsSuccessStatusCode) {
+					Console.WriteLine($"[OJ Installer.Cli] API UI probe OK: {url} ({(int)response.StatusCode})");
+				} else {
+					Console.WriteLine($"[OJ Installer.Cli] API UI probe returned non-success: {url} ({(int)response.StatusCode})");
+				}
+			} catch (Exception ex) {
+				Console.WriteLine($"[OJ Installer.Cli] API UI probe failed: {url}");
+				Console.WriteLine($"[DEBUG] [OJ Installer.Cli] API UI probe exception for {url}: {ex}");
+			}
+		}
+	}
+
 	private void OpenDiagnosticsLinks() {
 		var browser = _options.TampermonkeyBrowsers.FirstOrDefault() ?? "edge";
 		var links = new[] {
@@ -297,6 +443,36 @@ internal sealed class InstallerWorkflow {
 	}
 
 	private void OpenTampermonkeyBootstrap() {
+		var browser = _options.TampermonkeyBrowsers.FirstOrDefault() ?? "edge";
+		var userscriptPath = Path.Combine(_options.InstallRoot, "userscript", "organized-jihad.user.js");
+		var apiUserscriptUrl = _options.ApiUrl.TrimEnd('/') + "/ui/organized-jihad.user.js";
+
+		var utilitiesLinks = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) {
+			["chrome"] = "chrome-extension://dhdgffkkebhmkfjojejmpbldmpobfkfo/options.html#nav=utils",
+			["edge"] = "chrome-extension://iikmkjmpaadaobahmlepeloendndfphd/options.html#nav=utils",
+			["firefox"] = "about:addons",
+			["opera"] = "chrome-extension://dhdgffkkebhmkfjojejmpbldmpobfkfo/options.html#nav=utils",
+			["operaGX"] = "chrome-extension://dhdgffkkebhmkfjojejmpbldmpobfkfo/options.html#nav=utils",
+		};
+
+		if (utilitiesLinks.TryGetValue(browser, out var utilitiesLink)) {
+			Console.WriteLine($"[OJ Installer.Cli] Opening Tampermonkey import utilities for {browser}.");
+			OpenExternal(utilitiesLink, browser);
+		}
+
+		if (CanReachUrl(apiUserscriptUrl)) {
+			Console.WriteLine($"[OJ Installer.Cli] Opening API-hosted userscript install URL: {apiUserscriptUrl}");
+			OpenExternal(apiUserscriptUrl, browser);
+			return;
+		}
+
+		if (File.Exists(userscriptPath)) {
+			var fileUri = new Uri(userscriptPath).AbsoluteUri;
+			Console.WriteLine($"[OJ Installer.Cli] Opening userscript file URI: {fileUri}");
+			OpenExternal(fileUri, browser);
+			return;
+		}
+
 		var links = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) {
 			["chrome"] = "https://chromewebstore.google.com/detail/tampermonkey/dhdgffkkebhmkfjojejmpbldmpobfkfo",
 			["edge"] = "https://microsoftedge.microsoft.com/addons/detail/tampermonkey/iikmkjmpaadaobahmlepeloendndfphd",
@@ -305,9 +481,19 @@ internal sealed class InstallerWorkflow {
 			["operaGX"] = "https://addons.opera.com/en/extensions/details/tampermonkey-beta/",
 		};
 
-		var browser = _options.TampermonkeyBrowsers.FirstOrDefault() ?? "edge";
 		if (links.TryGetValue(browser, out var link)) {
+			Console.WriteLine($"[OJ Installer.Cli] Userscript install target unavailable; opening Tampermonkey page instead: {link}");
 			OpenExternal(link, browser);
+		}
+	}
+
+	private static bool CanReachUrl(string url) {
+		try {
+			using var client = new HttpClient { Timeout = TimeSpan.FromSeconds(2) };
+			using var response = client.GetAsync(url).GetAwaiter().GetResult();
+			return response.IsSuccessStatusCode;
+		} catch {
+			return false;
 		}
 	}
 
@@ -466,7 +652,7 @@ internal sealed class InstallerWorkflow {
 		}
 
 		if (Directory.Exists(destination)) {
-			Directory.Delete(destination, recursive: true);
+			RetryIoOperation(() => Directory.Delete(destination, recursive: true), destination);
 		}
 		Directory.CreateDirectory(destination);
 
@@ -482,8 +668,43 @@ internal sealed class InstallerWorkflow {
 			if (!string.IsNullOrWhiteSpace(parent)) {
 				Directory.CreateDirectory(parent);
 			}
-			File.Copy(file, target, overwrite: true);
+			RetryIoOperation(() => File.Copy(file, target, overwrite: true), target);
 		}
+	}
+
+	private static void WaitForFileUnlock(string path, int timeoutMs) {
+		if (string.IsNullOrWhiteSpace(path) || !File.Exists(path)) {
+			return;
+		}
+
+		var deadline = DateTime.UtcNow.AddMilliseconds(timeoutMs);
+		while (DateTime.UtcNow < deadline) {
+			try {
+				using var stream = new FileStream(path, FileMode.Open, FileAccess.ReadWrite, FileShare.None);
+				return;
+			} catch (IOException) {
+				Thread.Sleep(250);
+			} catch (UnauthorizedAccessException) {
+				Thread.Sleep(250);
+			}
+		}
+
+		throw new UnauthorizedAccessException($"Access to the path '{Path.GetFileName(path)}' is denied. A legacy process still has the file locked.");
+	}
+
+	private static void RetryIoOperation(Action action, string pathForError) {
+		Exception? lastError = null;
+		for (var attempt = 1; attempt <= 8; attempt++) {
+			try {
+				action();
+				return;
+			} catch (Exception ex) when (ex is IOException || ex is UnauthorizedAccessException) {
+				lastError = ex;
+				Thread.Sleep(250 * attempt);
+			}
+		}
+
+		throw new IOException($"I/O operation failed for '{pathForError}': {lastError?.Message}", lastError);
 	}
 
 	private static string ResolveDirectoryCandidate(params string[] candidates) {
@@ -499,6 +720,16 @@ internal sealed class InstallerWorkflow {
 		return candidates.FirstOrDefault(path => !string.IsNullOrWhiteSpace(path) && Directory.Exists(path));
 	}
 
+	private static void LogDirectoryCandidates(string label, IEnumerable<string> candidates) {
+		foreach (var candidate in candidates) {
+			if (string.IsNullOrWhiteSpace(candidate)) {
+				continue;
+			}
+
+			Console.WriteLine($"[DEBUG] [OJ Installer.Cli] {label} candidate: {candidate} (exists={Directory.Exists(candidate)})");
+		}
+	}
+
 	private static string ResolveFileCandidate(params string[] candidates) {
 		var found = ResolveOptionalFileCandidate(candidates);
 		if (string.IsNullOrWhiteSpace(found)) {
@@ -510,5 +741,23 @@ internal sealed class InstallerWorkflow {
 
 	private static string? ResolveOptionalFileCandidate(params string[] candidates) {
 		return candidates.FirstOrDefault(path => !string.IsNullOrWhiteSpace(path) && File.Exists(path));
+	}
+
+	private static void LogDirectorySnapshot(string label, string directory, int maxEntries) {
+		if (!Directory.Exists(directory)) {
+			Console.WriteLine($"[DEBUG] [OJ Installer.Cli] {label}: missing directory: {directory}");
+			return;
+		}
+
+		Console.WriteLine($"[DEBUG] [OJ Installer.Cli] {label}: {directory}");
+		var entries = Directory.GetFileSystemEntries(directory).Take(maxEntries).ToArray();
+		foreach (var entry in entries) {
+			Console.WriteLine($"[DEBUG] [OJ Installer.Cli]   -> {Path.GetFileName(entry)}");
+		}
+
+		var totalEntries = Directory.GetFileSystemEntries(directory).Length;
+		if (totalEntries > entries.Length) {
+			Console.WriteLine($"[DEBUG] [OJ Installer.Cli]   ... and {totalEntries - entries.Length} more.");
+		}
 	}
 }

@@ -100,4 +100,32 @@ public sealed class ApiUiDiagnosticsEndpointHandler {
 		var response = _responseBuilder.BuildUserscriptHandshake(handshake);
 		return Results.Ok(response);
 	}
+
+	/// <summary>
+	/// Handles GET /ui/userscript-file.
+	/// </summary>
+	public IResult GetUserscriptFileAsync(HttpContext context) {
+		return GetUserscriptInstallScriptAsync(context);
+	}
+
+	/// <summary>
+	/// Handles GET /ui/organized-jihad.user.js.
+	/// </summary>
+	public IResult GetUserscriptInstallScriptAsync(HttpContext context) {
+		if (!_accessPolicy.IsLocalRequest(context)) {
+			return Results.StatusCode(StatusCodes.Status403Forbidden);
+		}
+
+		var userscriptPath = Path.Combine(_runtimePaths.InstallRoot, "userscript", "organized-jihad.user.js");
+		if (!File.Exists(userscriptPath)) {
+			_logger.LogWarning("Userscript file endpoint requested but file missing: {Path}", userscriptPath);
+			return Results.NotFound(new {
+				message = "Userscript file is not installed yet.",
+				path = userscriptPath,
+			});
+		}
+
+		_logger.LogInformation("Userscript install endpoint requested. Serving file from {Path}", userscriptPath);
+		return Results.File(userscriptPath, "application/javascript; charset=utf-8", enableRangeProcessing: false);
+	}
 }

@@ -564,10 +564,10 @@ internal sealed class ReleasePipeline {
 		var runtimeHostTfm = runtime.StartsWith("win-", StringComparison.OrdinalIgnoreCase)
 			? "net10.0-windows10.0.19041.0"
 			: "net10.0";
-		RunDotnetPublish(runtimeHostProject, $"-f {runtimeHostTfm} -c {_options.Configuration} -r {runtime} --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -o \"{runtimeHostOut}\"");
+		RunDotnetPublish(runtimeHostProject, $"-f {runtimeHostTfm} -c {_options.Configuration} -r {runtime} --self-contained true -o \"{runtimeHostOut}\"");
 		PrunePublishPayload(runtimeHostOut);
 
-		RunDotnetPublish(installerCliProject, $"-c {_options.Configuration} -r {runtime} --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -o \"{installerCliOut}\"");
+		RunDotnetPublish(installerCliProject, $"-c {_options.Configuration} -r {runtime} --self-contained true -o \"{installerCliOut}\"");
 		PrunePublishPayload(installerCliOut);
 
 		if (runtime.Equals("win-x64", StringComparison.OrdinalIgnoreCase) && !string.IsNullOrWhiteSpace(desktopPublishDir) && Directory.Exists(desktopPublishDir)) {

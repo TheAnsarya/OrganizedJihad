@@ -9,5 +9,11 @@ public static partial class ApiUiEndpoints {
 
 		endpoints.MapGet("/ui/userscript-handshake", (HttpContext context, ApiUiDiagnosticsEndpointHandler handler) =>
 			handler.GetUserscriptHandshakeAsync(context));
+
+		endpoints.MapGet("/ui/userscript-file", (HttpContext context, ApiUiDiagnosticsEndpointHandler handler) =>
+			handler.GetUserscriptFileAsync(context));
+
+		endpoints.MapGet("/ui/organized-jihad.user.js", (HttpContext context, ApiUiDiagnosticsEndpointHandler handler) =>
+			handler.GetUserscriptInstallScriptAsync(context));
 	}
 }
