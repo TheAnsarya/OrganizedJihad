@@ -335,11 +335,10 @@ internal sealed class ReleasePipeline {
 			WriteStep($"Published API smoke test will run for runtime '{_smokeRuntime}'.");
 		}
 
-		var desktopPublishDir = TryPublishDesktopPayload();
 		var manifestEntries = new List<ManifestRuntime>();
 
 		foreach (var runtime in _options.Runtimes) {
-			PublishRuntime(runtime, desktopPublishDir, manifestEntries);
+			PublishRuntime(runtime, manifestEntries);
 		}
 
 		CopyReleaseNotesDraft();
@@ -517,36 +516,17 @@ internal sealed class ReleasePipeline {
 		Directory.CreateDirectory(_artifactRoot);
 	}
 
-	private string? TryPublishDesktopPayload() {
-		if (!_options.Runtimes.Contains("win-x64", StringComparer.OrdinalIgnoreCase)) {
-			return null;
-		}
-
-		WriteStep("Publishing desktop payload for win-x64.");
-		var desktopProject = Path.Combine(_repoRoot, "desktop-app", "OrganizedJihad.Desktop.csproj");
-		RunDotnetPublish(desktopProject, "-f net10.0-windows10.0.19041.0 -c " + _options.Configuration + " -p:WindowsPackageType=None");
-
-		var candidates = new[] {
-			Path.Combine(_repoRoot, "desktop-app", "bin", "Release", "net10.0-windows10.0.19041.0", "win-x64", "publish"),
-			Path.Combine(_repoRoot, "desktop-app", "bin", "Release", "net10.0-windows10.0.19041.0", "publish"),
-		};
-
-		return candidates.FirstOrDefault(Directory.Exists);
-	}
-
-	private void PublishRuntime(string runtime, string? desktopPublishDir, List<ManifestRuntime> manifestEntries) {
+	private void PublishRuntime(string runtime, List<ManifestRuntime> manifestEntries) {
 		WriteStep($"Publishing runtime: {runtime}");
 
 		var bundledRoot = Path.Combine(_bundlePayloadDir, "bundled");
 		var apiOut = Path.Combine(bundledRoot, "api");
 		var runtimeHostOut = Path.Combine(bundledRoot, "runtime-host");
 		var installerCliOut = Path.Combine(_bundlePayloadDir, "installer-cli");
-		var desktopOut = Path.Combine(bundledRoot, "desktop-app");
 
 		ResetDirectory(apiOut);
 		ResetDirectory(runtimeHostOut);
 		ResetDirectory(installerCliOut);
-		DeleteIfExists(desktopOut);
 
 		var apiProject = Path.Combine(_repoRoot, "api", "OrganizedJihad.Api.csproj");
 		var runtimeHostProject = Path.Combine(_repoRoot, "api", "OrganizedJihad.Api.TrayHost", "OrganizedJihad.Api.TrayHost.csproj");
@@ -569,12 +549,6 @@ internal sealed class ReleasePipeline {
 
 		RunDotnetPublish(installerCliProject, $"-c {_options.Configuration} -r {runtime} --self-contained true -o \"{installerCliOut}\"");
 		PrunePublishPayload(installerCliOut);
-
-		if (runtime.Equals("win-x64", StringComparison.OrdinalIgnoreCase) && !string.IsNullOrWhiteSpace(desktopPublishDir) && Directory.Exists(desktopPublishDir)) {
-			ResetDirectory(desktopOut);
-			CopyDirectory(desktopPublishDir, desktopOut);
-			PrunePublishPayload(desktopOut);
-		}
 
 		CopyBundleSupportAssets();
 

@@ -4,13 +4,12 @@ A multi-tier game tracking solution for [Hero Wars](https://hero-wars.com) that 
 
 ## Architecture
 
-OJ is a three-tier system:
+OJ is a two-tier system:
 
 | Tier | Technology | Purpose |
 |------|-----------|---------|
 | **1 - Browser Userscript** | TamperMonkey + Webpack 5 | Intercepts game API traffic in real time |
-| **2 - Desktop App** | .NET MAUI Blazor Hybrid | View, analyze, and explore tracked data |
-| **3 - API Backend** | ASP.NET Core Web API | Receives sync payloads, persists to SQLite via EF Core |
+| **2 - API Backend** | ASP.NET Core Web API | Receives sync payloads, persists to SQLite via EF Core |
 
 See [Architecture Details](~docs/plans/architecture.md) for the full design.
 
@@ -37,7 +36,7 @@ See [Tracking Reference](~docs/plans/tracking-reference.md) for the complete dat
 - GitHub Release: <https://github.com/TheAnsarya/OrganizedJihad/releases/tag/v0.2.2>
 - Recommended asset: `OrganizedJihad.Installer.exe`
 - Verify integrity using bundled `SHA256SUMS.txt`
-- The EXE is self-contained (API + desktop + userscript payloads included); source repository files are not required.
+- The EXE is self-contained (API + userscript payloads included); source repository files are not required.
 
 Windows download safety prompt guidance:
 
@@ -89,10 +88,8 @@ For release/live testing, use the Avalonia GUI installer executable and avoid co
 2. Pick your userscript browser target (Opera GX supported).
 3. Click `Step 1: Install / Verify Tampermonkey`.
 4. Click `Step 2: Install API Server` (starts with tray-host in hidden icons, Plex-style, and opens API UI from the tray icon).
-5. Click `Step 3: Install Desktop App`.
-6. Click `Step 4: Install Userscript`.
-7. If Step 4 is locked because Tampermonkey is not detected, use `Step 4b: Install Userscript (Bypass)`.
-8. Wait for `Status: Install complete` in the installer window.
+5. Click `Step 3: Install Userscript`.
+6. Wait for `Status: Install complete` in the installer window.
 
 For manual userscript setup, open this guide after install:
 
@@ -102,10 +99,8 @@ The installer UI provides explicit buttons for each install step:
 
 - Step 1: Install / Verify Tampermonkey
 - Step 2: Install API Server
-- Step 3: Install Desktop App
-- Step 4: Install Userscript (enabled only when Tampermonkey is detected)
-- Step 4b: Install Userscript (Bypass)
-- Run Full Install (runs API + desktop + userscript in sequence)
+- Step 3: Install Userscript
+- Run Full Install (runs API + userscript in sequence)
 
 When API install is enabled, the installer deploys an API tray host so startup runs with a Windows notification area icon (background apps menu). Double-clicking the tray icon opens the API UI URL.
 
@@ -118,7 +113,6 @@ GUI-first behavior guarantee:
 The GUI installer orchestrates:
 
 - API install/startup setup
-- Desktop app install
 - userscript build/install artifact copy
 - browser bootstrap links for Tampermonkey + userscript import
 - first-run diagnostics and health checks
@@ -165,7 +159,6 @@ Optional flags:
 
 - `--skip-tampermonkey-bootstrap` to skip opening extension/script pages
 - `--tampermonkey-browsers chrome,operaGX` to target specific browser bootstrap pages
-- `--skip-desktop-app-install` to skip desktop payload install
 - `--skip-userscript-install` to skip userscript payload install
 - `--install-root "D:\Apps\OrganizedJihad"` to customize install location
 - `--api-url "http://localhost:5124"` to customize runtime API URL
@@ -197,9 +190,6 @@ cd userscript
 yarn install
 yarn build
 # Install dist/organized-jihad.user.js in TamperMonkey
-
-# Run the desktop app
-dotnet run --project desktop-app
 ```
 
 ### Release Validation Automation
@@ -259,12 +249,6 @@ OrganizedJihad/
 │   ├── Migrations/         #   Database migrations
 │   └── GameDatabaseContext.cs
 │
-├── desktop-app/            # .NET MAUI Blazor Hybrid (Tier 2)
-│   ├── Components/Pages/   #   Dashboard, Battles, Chests, Resources,
-│   │                       #   ShopPurchases, Inventory, Hero/Titan Rosters,
-│   │                       #   Hero/Titan Upgrades, Daily Activity
-│   └── Services/           #   DataService, SyncService
-│
 ├── userscript/             # TamperMonkey Userscript (Tier 1)
 │   └── src/modules/        #   apiMonitor, gameTracker, syncClient,
 │                           #   storageManager, heroNames, etc.
@@ -277,22 +261,6 @@ OrganizedJihad/
     ├── plans/              #   Architecture, tracking reference, roadmap
     └── copilot-chats/      #   AI session logs
 ```
-
-## Desktop App Pages
-
-| Page | Route | Description |
-|------|-------|-------------|
-| Dashboard | `/` | Overview with latest snapshot, quick stats, recent activity |
-| Hero Roster | `/heroes` | All heroes with level, stars, color, power, progress bars |
-| Hero Upgrades | `/hero-upgrades` | Every hero upgrade event (level, star, color, skill, artifact) |
-| Titan Roster | `/titans` | All titans with level, stars, element, power, progress bars |
-| Titan Upgrades | `/titan-upgrades` | Every titan upgrade event |
-| Battles | `/battles` | All battle types grouped: Arena, Grand Arena, Titan Arena, Guild War, Raid Boss, Expedition |
-| Resources | `/resources` | Clickable resource balances with earn/spend transaction log |
-| Chests | `/chests` | Chest openings with individual drops, percentages, rarity breakdown |
-| Shop Purchases | `/shop-purchases` | All shop/merchant purchases with currency analysis |
-| Inventory | `/inventory-usage` | Current inventory grouped by type + consumable usage log |
-| Daily Activity | `/daily-activity` | Daily quests, guild quests, login rewards |
 
 ## Development Guidelines
 

@@ -2,7 +2,6 @@ param(
 	[string]$InstallRoot = "$env:LOCALAPPDATA\OrganizedJihad",
 	[string]$ApiUrl = 'http://localhost:5124',
 	[switch]$SkipApiInstall,
-	[switch]$SkipDesktopAppInstall,
 	[switch]$SkipUserscriptInstall,
 	[switch]$SkipTampermonkeyBootstrap,
 	[switch]$SkipYarnInstall,
@@ -816,7 +815,6 @@ if ($RunTaskModuleSelfTest) {
 $repoRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
 $apiProject = Join-Path $repoRoot 'api\OrganizedJihad.Api.csproj'
 $apiTrayProject = Join-Path $repoRoot 'api\OrganizedJihad.Api.TrayHost\OrganizedJihad.Api.TrayHost.csproj'
-$desktopProject = Join-Path $repoRoot 'desktop-app\OrganizedJihad.Desktop.csproj'
 $userscriptDir = Join-Path $repoRoot 'userscript'
 $userscriptDist = Join-Path $userscriptDir 'dist'
 $userscriptFile = Join-Path $userscriptDist 'organized-jihad.user.js'
@@ -825,7 +823,6 @@ $userscriptGuideScreenshotsSource = Join-Path $repoRoot '~docs\installer-guide\s
 $bundledRoot = Join-Path $repoRoot 'bundled'
 $bundledApiPublishDir = Join-Path $bundledRoot 'api'
 $bundledApiTrayPublishDir = Join-Path $bundledRoot 'api-tray'
-$bundledDesktopPublishDir = Join-Path $bundledRoot 'desktop-app'
 $bundledUserscriptFile = Join-Path $repoRoot 'organized-jihad.user.js'
 $bundledUserscriptGuide = Join-Path $repoRoot 'tampermonkey-setup.html'
 $bundledUserscriptGuideScreenshots = Join-Path $repoRoot 'guide-screenshots'
@@ -835,25 +832,18 @@ $apiTrayPublishCandidates = @(
 	(Join-Path $repoRoot 'api\OrganizedJihad.Api.TrayHost\bin\Release\net10.0-windows10.0.19041.0\win-x64\publish'),
 	(Join-Path $repoRoot 'api\OrganizedJihad.Api.TrayHost\bin\Release\net10.0-windows10.0.19041.0\publish')
 )
-$desktopPublishCandidates = @(
-	(Join-Path $repoRoot 'desktop-app\bin\Release\net10.0-windows10.0.19041.0\win-x64\publish'),
-	(Join-Path $repoRoot 'desktop-app\bin\Release\net10.0-windows10.0.19041.0\publish')
-)
 
 $apiInstallDir = Join-Path $InstallRoot 'api'
 $apiTrayInstallDir = Join-Path $InstallRoot 'api-tray'
-$desktopInstallDir = Join-Path $InstallRoot 'desktop-app'
 $userscriptInstallDir = Join-Path $InstallRoot 'userscript'
 $apiExecutablePath = Join-Path $apiInstallDir 'OrganizedJihad.Api.exe'
 $apiTrayExecutablePath = Join-Path $apiTrayInstallDir 'OrganizedJihad.Api.TrayHost.exe'
-$desktopExecutablePath = Join-Path $desktopInstallDir 'OrganizedJihad.Desktop.exe'
 $apiServiceTaskName = 'OrganizedJihad.Api.Service'
 $apiTrayTaskName = 'OrganizedJihad.Api.Tray'
 
 $effectiveRunInstallHealthCheck = $RunInstallHealthCheck
 $effectiveOpenUserscriptDiagnostics = $OpenUserscriptDiagnostics
 $effectiveInstallHealthCheckOpen = $InstallHealthCheckOpen
-$desktopPublishDir = $null
 $apiPublishDir = $null
 $apiTrayPublishDir = $null
 $userscriptArtifactPath = $null
@@ -862,8 +852,8 @@ $userscriptGuideScreenshotsPath = $null
 $autostartVerification = $null
 $isBundledPayloadMode = (Test-Path -Path $bundledApiPublishDir) -or (Test-Path -Path $bundledUserscriptFile) -or (Test-Path -Path $bundledApiTrayPublishDir)
 
-if ($SkipApiInstall -and $SkipDesktopAppInstall -and $SkipUserscriptInstall) {
-	throw 'At least one install component must be enabled. Remove one of: -SkipApiInstall, -SkipDesktopAppInstall, -SkipUserscriptInstall.'
+if ($SkipApiInstall -and $SkipUserscriptInstall) {
+	throw 'At least one install component must be enabled. Remove one of: -SkipApiInstall or -SkipUserscriptInstall.'
 }
 
 Ensure-InstallerElevation -BoundParameters $PSBoundParameters -ScriptPath $PSCommandPath
@@ -885,7 +875,7 @@ if ($SkipApiInstall) {
 
 Write-Step "Validating prerequisites"
 if ((Test-Path -Path $userscriptDir) -and (Test-Path -Path $apiProject)) {
-	if ((-not $SkipApiInstall) -or (-not $SkipDesktopAppInstall)) {
+	if (-not $SkipApiInstall) {
 		Assert-Command -Name 'dotnet' -HelpText 'Install .NET SDK 10 preview or later.'
 	}
 
@@ -941,21 +931,6 @@ if ((Test-Path -Path $userscriptDir) -and (Test-Path -Path $apiProject)) {
 		}
 	}
 
-	if (-not $SkipDesktopAppInstall) {
-		Write-Step 'Publishing desktop app (Windows) from source repository.'
-		dotnet publish $desktopProject -f net10.0-windows10.0.19041.0 -c Release -p:WindowsPackageType=None
-
-		foreach ($candidate in $desktopPublishCandidates) {
-			if (Test-Path -Path $candidate) {
-				$desktopPublishDir = $candidate
-				break
-			}
-		}
-
-		if ((-not $desktopPublishDir) -or (-not (Test-Path -Path $desktopPublishDir))) {
-			throw "Desktop publish output not found at any expected path: $($desktopPublishCandidates -join '; ')."
-		}
-	}
 } elseif ($isBundledPayloadMode) {
 	Write-Step 'Source project structure not found. Using bundled release payloads.'
 
@@ -968,13 +943,6 @@ if ((Test-Path -Path $userscriptDir) -and (Test-Path -Path $apiProject)) {
 		if (Test-Path -Path $bundledApiTrayPublishDir) {
 			$apiTrayPublishDir = $bundledApiTrayPublishDir
 		}
-	}
-
-	if (-not $SkipDesktopAppInstall) {
-		if (-not (Test-Path -Path $bundledDesktopPublishDir)) {
-			throw "Bundled desktop payload not found at '$bundledDesktopPublishDir'."
-		}
-		$desktopPublishDir = $bundledDesktopPublishDir
 	}
 
 	if (-not $SkipUserscriptInstall) {
@@ -1005,9 +973,6 @@ $installTransactionalSuccess = $false
 try {
 	if (-not $SkipApiInstall) {
 		$rollbackRecords += New-InstallBackupRecord -TargetPath $apiInstallDir -BackupRoot $rollbackSnapshotPath -Label 'api'
-	}
-	if (-not $SkipDesktopAppInstall) {
-		$rollbackRecords += New-InstallBackupRecord -TargetPath $desktopInstallDir -BackupRoot $rollbackSnapshotPath -Label 'desktop-app'
 	}
 	if ((-not $SkipApiInstall) -and $apiTrayPublishDir -and (Test-Path -Path $apiTrayPublishDir)) {
 		$rollbackRecords += New-InstallBackupRecord -TargetPath $apiTrayInstallDir -BackupRoot $rollbackSnapshotPath -Label 'api-tray'
@@ -1057,10 +1022,6 @@ try {
 		}
 	}
 
-	if (-not $SkipDesktopAppInstall) {
-		Copy-BuildArtifacts -Source $desktopPublishDir -Destination $desktopInstallDir
-	}
-
 	if ((-not $SkipApiInstall) -and $apiTrayPublishDir -and (Test-Path -Path $apiTrayPublishDir)) {
 		Stop-ProcessByExecutablePath -ExecutablePath $apiTrayExecutablePath -DisplayName 'running API tray host process'
 		$fileUnlocked = Wait-FileUnlocked -Path $apiTrayExecutablePath -TimeoutSeconds 10
@@ -1106,10 +1067,6 @@ try {
 
 	if ((-not $SkipApiInstall) -and (-not (Test-Path -Path $apiExecutablePath))) {
 		throw "Expected API executable missing at '$apiExecutablePath'."
-	}
-
-	if ((-not $SkipDesktopAppInstall) -and (-not (Test-Path -Path $desktopExecutablePath))) {
-		throw "Expected desktop executable missing at '$desktopExecutablePath'."
 	}
 
 	if (-not $SkipApiInstall) {
@@ -1207,9 +1164,6 @@ Write-Host 'What was configured:' -ForegroundColor Green
 if (-not $SkipApiInstall) {
 	Write-Host "- API installed to: $apiInstallDir"
 }
-if (-not $SkipDesktopAppInstall) {
-	Write-Host "- Desktop app installed to: $desktopInstallDir"
-}
 if (-not $SkipUserscriptInstall) {
 	Write-Host "- Userscript installed to: $userscriptInstallDir"
 	Write-Host "- Userscript import file: $(Join-Path $userscriptInstallDir 'organized-jihad.user.js')"
@@ -1246,9 +1200,6 @@ if (-not $SkipApiInstall) {
 	if (Test-Path -Path $apiTrayExecutablePath) {
 		Write-Host '- Verify the OrganizedJihad API tray icon appears in Windows notification area (background apps) and opens API UI on double-click.'
 	}
-}
-if (-not $SkipDesktopAppInstall) {
-	Write-Host '- Launch OrganizedJihad.Desktop.exe and confirm data views load'
 }
 Write-Host '- Optional: rerun check with browser-open failures: yarn install:check --open failed'
 Write-Host '- Optional: open diagnostics entry points automatically: -OpenUserscriptDiagnostics'

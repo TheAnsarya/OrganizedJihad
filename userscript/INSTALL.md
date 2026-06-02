@@ -56,7 +56,6 @@ Install-OrganizedJihad.cmd
 This installer will:
 
 - install bundled API/runtime-host payloads
-- install bundled desktop app payload when included
 - install userscript + setup guide assets
 - open Tampermonkey extension install pages (including Opera GX bootstrap links)
 - run optional health checks and diagnostics links
@@ -67,12 +66,6 @@ Target specific browser bootstrap pages (example with Opera GX):
 
 ```bash
 dotnet run --project installer-core/OrganizedJihad.Installer.Cli -- --tampermonkey-browsers operaGX,chrome
-```
-
-Skip desktop app publish/install if needed:
-
-```bash
-dotnet run --project installer-core/OrganizedJihad.Installer.Cli -- --skip-desktop-app-install
 ```
 
 Optional post-install health-check run from installer:

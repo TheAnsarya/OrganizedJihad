@@ -26,7 +26,6 @@ internal sealed class InstallOptions {
 	public string InstallRoot { get; init; } = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "OrganizedJihad");
 	public string ApiUrl { get; init; } = "http://localhost:5124";
 	public bool SkipApiInstall { get; init; }
-	public bool SkipDesktopAppInstall { get; init; }
 	public bool SkipUserscriptInstall { get; init; }
 	public bool SkipTampermonkeyBootstrap { get; init; }
 	public bool RunInstallHealthCheck { get; init; }
@@ -71,7 +70,6 @@ internal sealed class InstallOptions {
 				? apiUrl
 				: "http://localhost:5124",
 			SkipApiInstall = flags.Contains("skip-api-install"),
-			SkipDesktopAppInstall = flags.Contains("skip-desktop-app-install"),
 			SkipUserscriptInstall = flags.Contains("skip-userscript-install"),
 			SkipTampermonkeyBootstrap = flags.Contains("skip-tampermonkey-bootstrap"),
 			RunInstallHealthCheck = flags.Contains("run-install-health-check"),
@@ -96,7 +94,7 @@ internal sealed class InstallerWorkflow {
 		Console.WriteLine($"[DEBUG] [OJ Installer.Cli] Base directory: {_baseDir}");
 		Console.WriteLine($"[DEBUG] [OJ Installer.Cli] Install root: {_options.InstallRoot}");
 
-		if (_options.SkipApiInstall && _options.SkipDesktopAppInstall && _options.SkipUserscriptInstall) {
+		if (_options.SkipApiInstall && _options.SkipUserscriptInstall) {
 			throw new InvalidOperationException("At least one install component must be enabled.");
 		}
 
@@ -106,10 +104,6 @@ internal sealed class InstallerWorkflow {
 			StopLegacyApiProcesses();
 			InstallApiPayload();
 			CleanupLegacyApiExecutableVariants();
-		}
-
-		if (!_options.SkipDesktopAppInstall) {
-			InstallDesktopPayload();
 		}
 
 		if (!_options.SkipUserscriptInstall) {
@@ -248,76 +242,6 @@ internal sealed class InstallerWorkflow {
 		}
 
 		Console.WriteLine($"[OJ Installer.Cli] API payload installed to: {destination}");
-	}
-
-	private void InstallDesktopPayload() {
-		var sourceCandidates = new[] {
-			Path.Combine(_baseDir, "bundled", "desktop-app"),
-			Path.Combine(_baseDir, "desktop-app"),
-			Path.GetFullPath(Path.Combine(_baseDir, "..", "..", "..", "desktop-app", "bin", "Release", "net10.0-windows10.0.19041.0", "win-x64", "publish")),
-			Path.GetFullPath(Path.Combine(_baseDir, "..", "..", "..", "..", "desktop-app", "bin", "Release", "net10.0-windows10.0.19041.0", "win-x64", "publish")),
-			Path.GetFullPath(Path.Combine(_baseDir, "..", "..", "..", "desktop-app", "bin", "Debug", "net10.0-windows10.0.19041.0", "win-x64", "publish")),
-			Path.GetFullPath(Path.Combine(_baseDir, "..", "..", "..", "..", "desktop-app", "bin", "Debug", "net10.0-windows10.0.19041.0", "win-x64", "publish")),
-		};
-
-		LogDirectoryCandidates("Desktop payload source", sourceCandidates);
-
-		var source = ResolveOptionalDirectoryCandidate(sourceCandidates);
-		if (string.IsNullOrWhiteSpace(source)) {
-			Console.WriteLine("[OJ Installer.Cli] Desktop payload not found in bundle candidates. Skipping desktop install.");
-			return;
-		}
-
-		var destination = Path.Combine(_options.InstallRoot, "desktop-app");
-		CopyDirectory(source, destination);
-		CreateDesktopStartMenuShortcut(destination);
-		LogDirectorySnapshot("Desktop payload destination", destination, maxEntries: 10);
-		Console.WriteLine($"[OJ Installer.Cli] Desktop payload installed to: {destination}");
-	}
-
-	private void CreateDesktopStartMenuShortcut(string desktopInstallDirectory) {
-		if (!OperatingSystem.IsWindows()) {
-			return;
-		}
-
-		var desktopExe = ResolveExecutable(Path.Combine(desktopInstallDirectory, "OrganizedJihad.Desktop"));
-		if (string.IsNullOrWhiteSpace(desktopExe) || !File.Exists(desktopExe)) {
-			Console.WriteLine("[OJ Installer.Cli] Desktop shortcut skipped: desktop executable not found.");
-			return;
-		}
-
-		try {
-			var startMenuPrograms = Path.Combine(
-				Environment.GetFolderPath(Environment.SpecialFolder.StartMenu),
-				"Programs",
-				"OrganizedJihad");
-			Directory.CreateDirectory(startMenuPrograms);
-
-			var shortcutPath = Path.Combine(startMenuPrograms, "OrganizedJihad Desktop.lnk");
-			var iconPath = ResolveOptionalFileCandidate(
-				Path.Combine(_options.InstallRoot, "runtime-host", "Assets", "Icons", "oj-tray-alt-steel.ico"),
-				Path.Combine(_options.InstallRoot, "runtime-host", "Assets", "Icons", "oj-tray-primary.ico"));
-
-			var shellType = Type.GetTypeFromProgID("WScript.Shell");
-			if (shellType is null) {
-				Console.WriteLine("[OJ Installer.Cli] Desktop shortcut skipped: WScript.Shell unavailable.");
-				return;
-			}
-
-			dynamic shell = Activator.CreateInstance(shellType)!;
-			dynamic shortcut = shell.CreateShortcut(shortcutPath);
-			shortcut.TargetPath = desktopExe;
-			shortcut.WorkingDirectory = desktopInstallDirectory;
-			shortcut.Description = "Launch OrganizedJihad Desktop";
-			if (!string.IsNullOrWhiteSpace(iconPath) && File.Exists(iconPath)) {
-				shortcut.IconLocation = iconPath;
-			}
-			shortcut.Save();
-
-			Console.WriteLine($"[OJ Installer.Cli] Desktop Start Menu shortcut created: {shortcutPath}");
-		} catch (Exception ex) {
-			Console.WriteLine($"[OJ Installer.Cli] Desktop shortcut creation skipped: {ex.Message}");
-		}
 	}
 
 	private void InstallUserscriptPayload() {

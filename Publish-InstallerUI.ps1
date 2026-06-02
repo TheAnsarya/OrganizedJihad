@@ -42,13 +42,11 @@ if (-not $SkipPayloadRefresh) {
 
 	$apiProject = Join-Path $repoRoot 'api\OrganizedJihad.Api.csproj'
 	$runtimeHostProject = Join-Path $repoRoot 'api\OrganizedJihad.Api.TrayHost\OrganizedJihad.Api.TrayHost.csproj'
-	$desktopProject = Join-Path $repoRoot 'desktop-app\OrganizedJihad.Desktop.csproj'
 	$installerCliProject = Join-Path $repoRoot 'installer-core\OrganizedJihad.Installer.Cli\OrganizedJihad.Installer.Cli.csproj'
 
 	$apiOut = Join-Path $bundledRoot 'api'
 	$runtimeHostOut = Join-Path $bundledRoot 'runtime-host'
 	$apiTrayOut = Join-Path $bundledRoot 'api-tray'
-	$desktopOut = Join-Path $bundledRoot 'desktop-app'
 	$installerCliOut = Join-Path $bundleRoot 'installer-cli'
 
 		Invoke-DotnetPublish -ProjectPath $apiProject -Arguments @(
@@ -71,15 +69,6 @@ if (-not $SkipPayloadRefresh) {
 
 	New-Item -ItemType Directory -Force -Path $apiTrayOut | Out-Null
 	Copy-Item -Path (Join-Path $runtimeHostOut '*') -Destination $apiTrayOut -Recurse -Force
-
-	if ($Runtime -like 'win-*') {
-				Invoke-DotnetPublish -ProjectPath $desktopProject -Arguments @(
-					'-f', 'net10.0-windows10.0.19041.0',
-					'-c', $Configuration,
-					'-p:WindowsPackageType=None',
-					'-o', $desktopOut
-				)
-	}
 
 		Invoke-DotnetPublish -ProjectPath $installerCliProject -Arguments @(
 			'-c', $Configuration,
