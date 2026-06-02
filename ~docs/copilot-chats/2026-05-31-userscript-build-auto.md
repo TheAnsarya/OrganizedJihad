@@ -1014,3 +1014,621 @@
 
 ## Validation
 - dotnet test tests/OrganizedJihad.Api.Tests/OrganizedJihad.Api.Tests.csproj (pass, 102/102)
+---
+
+## Session
+- Date: 2026-05-31
+- Session Number: 27
+- Scope: Automated userscript build session logging
+
+## Summary
+- Auto-generated entry from userscript build pipeline.
+- Captures a timestamp and a git working-tree snapshot for traceability.
+
+## Files Modified
+- serscript/package.json
+- ~docs/oj-manual-prompts-log.txt
+
+## Validation
+- yarn build
+
+## Generated
+- Timestamp UTC: 2026-05-31T18:02:08.448Z
+
+---
+
+## Session
+- Date: 2026-05-31
+- Session Number: 28
+- Scope: stable release packaging + installer UI publish and launch
+
+## Summary
+- Executed the managed release pipeline (`Publish-ReleaseArtifacts.ps1`) to produce a full stable `v0.2.3` artifact set including installer binary and checksums.
+- Verified release outputs under `artifacts/v0.2.3` and confirmed generated SHA256 manifest for installer integrity checks.
+- Re-published installer UI executable via `Publish-InstallerUI.ps1` and launched `OrganizedJihad.Installer.exe` for interactive testing.
+
+## Files Modified
+- userscript/package.json
+- ~docs/copilot-chats/2026-05-31-userscript-build-auto.md
+
+## Issues
+- PR tracking: #209
+
+## Validation
+- pwsh -ExecutionPolicy Bypass -File .\Publish-ReleaseArtifacts.ps1 (pass)
+- pwsh -ExecutionPolicy Bypass -File .\Publish-InstallerUI.ps1 (pass)
+- Artifact verification: `artifacts/v0.2.3/win-x64/OrganizedJihad.Installer.exe` + `SHA256SUMS.txt`
+- Installer launch: `installer-ui/publish/win-x64/OrganizedJihad.Installer.exe` (started)
+
+---
+
+## Session
+- Date: 2026-05-31
+- Session Number: 29
+- Scope: installer step 2/3/4 remediation (OperaGX userscript install behavior + API/Desktop diagnostics hardening)
+
+## Summary
+- Updated installer UI managed-engine resolution to prioritize bundled CLI paths so release installer executions use the packaged installer core instead of fallback repo paths.
+- Added detailed installer diagnostics for payload candidate discovery and destination snapshots to debug API and desktop bundle resolution failures in the field.
+- Updated userscript bootstrap behavior to open the local installed `organized-jihad.user.js` file (including OperaGX) so Step 4 performs direct import intent instead of only redirecting to Tampermonkey store pages.
+- Added API runtime startup fallback to launch `OrganizedJihad.Api.dll` via `dotnet` when an executable apphost is unavailable, with explicit launch-probe logging.
+
+## Files Modified
+- installer-core/OrganizedJihad.Installer.Cli/Program.cs
+- installer-ui/MainWindow.axaml.cs
+- ~docs/copilot-chats/2026-05-31-userscript-build-auto.md
+
+## Issues
+- PR tracking: #209
+
+## Validation
+- dotnet build installer-core/OrganizedJihad.Installer.Cli/OrganizedJihad.Installer.Cli.csproj -c Release (pass)
+- dotnet build installer-ui/OrganizedJihad.Installer.csproj -c Release (pass)
+
+---
+
+## Session
+- Date: 2026-05-31
+- Session Number: 30
+- Scope: fresh installer publish pass and launch for immediate post-fix manual validation
+
+## Summary
+- Ran installer UI publish pipeline from current patched branch to package a fresh win-x64 installer build.
+- Verified generated installer executable path in publish output.
+- Launched the freshly published installer so user can immediately run Step 1/2/3/4 tests with the new diagnostics and userscript import behavior.
+
+## Files Modified
+- ~docs/copilot-chats/2026-05-31-userscript-build-auto.md
+
+## Issues
+- PR tracking: #209
+
+## Validation
+- pwsh -ExecutionPolicy Bypass -File Publish-InstallerUI.ps1 (pass)
+- Installer launch: installer-ui/publish/win-x64/OrganizedJihad.Installer.exe (started)
+
+---
+
+## Session
+- Date: 2026-05-31
+- Session Number: 31
+- Scope: installer reliability hardening for step 2/3/4 + UI accessibility and file-only debug logging
+
+## Summary
+- Reworked installer publish pipeline so each Publish-InstallerUI run now refreshes installer-ui/bundle-payload with fresh API, runtime-host, desktop app, installer-cli, and userscript assets before publishing UI.
+- Fixed payload stripping issue by publishing bundled installer-cli as non-single-file output so nested bundled executables (OrganizedJihad.Api.exe and OrganizedJihad.Api.TrayHost.exe) are preserved.
+- Updated userscript bootstrap flow to open Tampermonkey utilities/import navigation and setup guide instead of opening the raw userscript file in browser.
+- Added file-only debug logging flow: CLI emits [DEBUG] diagnostics, UI captures them into installer log files while suppressing them in visible UI log textbox.
+- Improved installer button readability by adding explicit pointer-over, pressed, and disabled styles with visible borders and high-contrast text.
+
+## Files Modified
+- Publish-InstallerUI.ps1
+- installer-core/OrganizedJihad.Installer.Cli/Program.cs
+- installer-ui/MainWindow.axaml
+- installer-ui/MainWindow.axaml.cs
+- ~docs/copilot-chats/2026-05-31-userscript-build-auto.md
+
+## Issues
+- PR tracking: #209
+
+## Validation
+- dotnet build installer-core/OrganizedJihad.Installer.Cli/OrganizedJihad.Installer.Cli.csproj -c Release (pass)
+- dotnet build installer-ui/OrganizedJihad.Installer.csproj -c Release (pass)
+- pwsh -ExecutionPolicy Bypass -File Publish-InstallerUI.ps1 (pass, payload refresh + publish)
+- bundled installer-cli step validation:
+	- Step 2 equivalent (API install/start) pass
+	- Step 3 equivalent (desktop install) pass
+	- Step 4 equivalent (operaGX bootstrap) pass with Tampermonkey utilities open message
+
+---
+
+## Session
+- Date: 2026-05-31
+- Session Number: 32
+- Scope: post-log verification + template-level button state readability and build-marker diagnostics
+
+## Summary
+- Verified newest runtime logs show Step 2 success in installer UI flow: API executable present, runtime host started, and health endpoint probe succeeded.
+- Added template-level button state foreground styles to prevent Avalonia theme overrides causing unreadable black text on hover/pressed/disabled states.
+- Added installer build marker diagnostics (assembly version + file version + extraction base directory) written to installer log files as `[DEBUG]` lines only.
+- Re-published and re-launched installer after these changes.
+
+## Files Modified
+- installer-ui/MainWindow.axaml
+- installer-ui/MainWindow.axaml.cs
+- ~docs/copilot-chats/2026-05-31-userscript-build-auto.md
+
+## Issues
+- PR tracking: #209
+
+## Validation
+- dotnet build installer-ui/OrganizedJihad.Installer.csproj -c Release (pass)
+- pwsh -ExecutionPolicy Bypass -File Publish-InstallerUI.ps1 (pass)
+- Installer launch: installer-ui/publish/win-x64/OrganizedJihad.Installer.exe (started)
+- Installer log verification: newest run (`installer-20260531-150711.log`) confirms Step 2 API install/start and health-check success.
+
+---
+
+## Session
+- Date: 2026-05-31
+- Session Number: 33
+- Scope: tray icon asset reliability + API UI endpoint probe telemetry + installer readability overhaul
+
+## Summary
+- Fixed tray icon loading reliability by prioritizing primary custom icon and adding PNG-to-Icon fallback conversion when ICO files are unavailable.
+- Updated installer publish flow so runtime-host is published non-single-file, ensuring icon assets are preserved in payload and available at runtime.
+- Added explicit post-health probes for `/ui/repair-status`, `/ui/userscript-handshake`, and `/ui/tray-health` in installer CLI logs to diagnose endpoint issues immediately.
+- Refreshed installer UI visual language for readability with orange border states across normal/disabled/hover/pressed controls.
+- Improved browser picker readability with ComboBox and ComboBoxItem state styles so dropdown text remains visible.
+- Replaced checkbox controls with toggle-button controls and check/X labels to improve state clarity.
+
+## Files Modified
+- Publish-InstallerUI.ps1
+- api/OrganizedJihad.Api.TrayHost/TrayIconLoader.cs
+- installer-core/OrganizedJihad.Installer.Cli/Program.cs
+- installer-core/OrganizedJihad.Release.Cli/Program.cs
+- installer-ui/MainWindow.axaml
+- installer-ui/MainWindow.axaml.cs
+- ~docs/copilot-chats/2026-05-31-userscript-build-auto.md
+
+## Issues
+- PR tracking: #209
+
+## Validation
+- dotnet build api/OrganizedJihad.Api.TrayHost/OrganizedJihad.Api.TrayHost.csproj -c Release (pass)
+- dotnet build installer-ui/OrganizedJihad.Installer.csproj -c Release (pass)
+- dotnet build installer-core/OrganizedJihad.Installer.Cli/OrganizedJihad.Installer.Cli.csproj -c Release (pass)
+- dotnet build installer-core/OrganizedJihad.Release.Cli/OrganizedJihad.Release.Cli.csproj -c Release (pass)
+- pwsh -ExecutionPolicy Bypass -File Publish-InstallerUI.ps1 (pass)
+- runtime payload verification: bundled runtime-host contains `.ico` assets and tray icon set.
+- bundled installer-cli validation: `/ui/repair-status`, `/ui/userscript-handshake`, `/ui/tray-health` probes all returned 200.
+
+---
+
+## Session
+- Date: 2026-05-31
+- Session Number: 34
+- Scope: log-driven userscript install fix, stale-guide removal, and hotfix publish path fallback
+
+## Summary
+- Used provided installer logs/screenshots to diagnose that userscript install failures were caused by missing top-level payload files in extracted installer runtime, plus stale guide auto-open behavior in Step 4 flow.
+- Updated installer UI and installer CLI project content rules to explicitly include top-level `bundle-payload` files during publish, preventing missing `organized-jihad.user.js` in packaged runs.
+- Removed automatic stale guide opening from userscript flow and switched install-open behavior to Tampermonkey utilities + API-hosted userscript URL (`/ui/userscript-file`) fallbacking to file URI.
+- Added new API endpoint `/ui/userscript-file` to serve the installed userscript for browser/Tampermonkey import workflows.
+- Hardened installer UI flow to avoid post-install endpoint probes after failed installs and increased probe timeout to reduce false timeouts under startup load.
+- Added installer icon branding via OJ icon asset and improved toggle/button layout/readability to reduce clipping and spacing issues.
+- Published hotfix installer to alternate output folder when the default publish binary was locked by a running installer process.
+
+## Files Modified
+- installer-core/OrganizedJihad.Installer.Cli/OrganizedJihad.Installer.Cli.csproj
+- installer-ui/OrganizedJihad.Installer.csproj
+- installer-core/OrganizedJihad.Installer.Cli/Program.cs
+- api/Endpoints/ApiUiEndpoints.Diagnostics.cs
+- api/Services/Ui/ApiUiDiagnosticsEndpointHandler.cs
+- installer-ui/MainWindow.axaml
+- installer-ui/MainWindow.axaml.cs
+- installer-ui/Assets/oj-installer.ico
+- ~docs/copilot-chats/2026-05-31-userscript-build-auto.md
+
+## Issues
+- PR tracking: #209
+
+## Validation
+- dotnet build api/OrganizedJihad.Api.csproj -c Release (pass)
+- dotnet build installer-core/OrganizedJihad.Installer.Cli/OrganizedJihad.Installer.Cli.csproj -c Release (pass)
+- dotnet build installer-ui/OrganizedJihad.Installer.csproj -c Release (pass)
+- bundled installer-cli full-flow validation (pass):
+	- API install/start pass
+	- desktop install pass
+	- userscript payload install pass
+	- `/ui/repair-status`, `/ui/userscript-handshake`, `/ui/tray-health` probes all 200
+	- userscript open path now uses API-hosted `/ui/userscript-file`
+- publish lock workaround: `Publish-InstallerUI.ps1 -OutputDir .\\installer-ui\\publish\\win-x64-hotfix` (pass)
+
+---
+
+## Session
+- Date: 2026-05-31
+- Session Number: 35
+- Scope: follow-up from user logs/screenshot for userscript payload extraction path + hotfix2 publish
+
+## Summary
+- Used attached logs to confirm userscript step failure source: packaged runtime looked for `installer-cli\\organized-jihad.user.js` in temp extraction and failed when top-level payload layout differed.
+- Added extraction-root and parent-path userscript candidate resolution in installer CLI so packaged runs can locate userscript payload regardless of exact extraction layout.
+- Updated installer CLI and installer UI publish content rules to include top-level `bundle-payload` files explicitly.
+- Removed stale guide dependency from automatic userscript flow and kept direct install target opening (Tampermonkey utilities + API-hosted userscript URL / file URI fallback).
+- Added installer icon branding through local OJ icon asset and published a new hotfix binary to an unlocked output path.
+
+## Files Modified
+- installer-core/OrganizedJihad.Installer.Cli/OrganizedJihad.Installer.Cli.csproj
+- installer-core/OrganizedJihad.Installer.Cli/Program.cs
+- installer-ui/OrganizedJihad.Installer.csproj
+- installer-ui/MainWindow.axaml
+- installer-ui/MainWindow.axaml.cs
+- installer-ui/Assets/oj-installer.ico
+- ~docs/copilot-chats/2026-05-31-userscript-build-auto.md
+
+## Issues
+- PR tracking: #209
+
+## Validation
+- dotnet build installer-core/OrganizedJihad.Installer.Cli/OrganizedJihad.Installer.Cli.csproj -c Release (pass)
+- pwsh -ExecutionPolicy Bypass -File Publish-InstallerUI.ps1 -OutputDir .\\installer-ui\\publish\\win-x64-hotfix2 (pass)
+- Installer launch: installer-ui/publish/win-x64-hotfix2/OrganizedJihad.Installer.exe (started)
+
+---
+
+## Session
+- Date: 2026-05-31
+- Session Number: 36
+- Scope: installer visual polish + requested OJ icon restoration
+
+## Summary
+- Addressed button hover regression from screenshot by introducing a dedicated `step-button` style with a brighter orange hover border, brighter hover background, and brighter hover text.
+- Increased step button dimensions and spacing to reduce label clipping and improve readability across DPI scales.
+- Reworked toggle-button styling to remove the red-X visual treatment and replaced toggle labels with neutral `[ON]` / `[OFF]` prefixes.
+- Increased toggle button min width/padding/margins to restore spacing between option buttons and reduce text truncation.
+- Switched installer icon usage to the requested steel variant and restored full icon set into installer assets for packaging.
+- Updated tray icon selection order to prefer `oj-tray-alt-steel` first while preserving all prior icon fallback candidates.
+- Published and launched `win-x64-hotfix3` for retest.
+
+## Files Modified
+- installer-ui/MainWindow.axaml
+- installer-ui/MainWindow.axaml.cs
+- installer-ui/OrganizedJihad.Installer.csproj
+- installer-ui/Assets/Icons/oj-tray-alt-gold.ico
+- installer-ui/Assets/Icons/oj-tray-alt-gold.png
+- installer-ui/Assets/Icons/oj-tray-alt-steel-glyph.ico
+- installer-ui/Assets/Icons/oj-tray-alt-steel-glyph.png
+- installer-ui/Assets/Icons/oj-tray-alt-steel.ico
+- installer-ui/Assets/Icons/oj-tray-alt-steel.png
+- installer-ui/Assets/Icons/oj-tray-fun-orb.ico
+- installer-ui/Assets/Icons/oj-tray-fun-orb.png
+- installer-ui/Assets/Icons/oj-tray-fun-shield.ico
+- installer-ui/Assets/Icons/oj-tray-fun-shield.png
+- installer-ui/Assets/Icons/oj-tray-primary.ico
+- installer-ui/Assets/Icons/oj-tray-primary.png
+- api/OrganizedJihad.Api.TrayHost/TrayIconLoader.cs
+- ~docs/copilot-chats/2026-05-31-userscript-build-auto.md
+
+## Issues
+- PR tracking: #209
+
+## Validation
+- dotnet build api/OrganizedJihad.Api.TrayHost/OrganizedJihad.Api.TrayHost.csproj -c Release (pass)
+- dotnet build installer-ui/OrganizedJihad.Installer.csproj -c Release (pass)
+- pwsh -ExecutionPolicy Bypass -File Publish-InstallerUI.ps1 -OutputDir .\\installer-ui\\publish\\win-x64-hotfix3 (pass)
+- installer launch: installer-ui/publish/win-x64-hotfix3/OrganizedJihad.Installer.exe (started)
+
+---
+
+## Session
+- Date: 2026-05-31
+- Session Number: 37
+- Scope: installer did not appear after launch request; diagnose crash and force visible run
+
+## Summary
+- Re-ran installer launch and found process exiting without visible window.
+- Queried Windows Application/.NET Runtime events and identified startup exception: `System.IO.FileNotFoundException` for window icon resources (`Assets/Icons/oj-tray-alt-steel.*` then `Assets/oj-installer.ico`) during Avalonia XAML initialization.
+- Fixed by embedding installer icon assets as Avalonia resources in project file and restoring stable window icon binding path.
+- Re-published installer to `win-x64-hotfix6`, launched it, confirmed running process with window title and non-zero window handle, then forced foreground focus.
+
+## Files Modified
+- installer-ui/MainWindow.axaml
+- installer-ui/OrganizedJihad.Installer.csproj
+- installer-ui/Assets/oj-installer.ico
+- ~docs/copilot-chats/2026-05-31-userscript-build-auto.md
+
+## Validation
+- dotnet build installer-ui/OrganizedJihad.Installer.csproj -c Release (pass)
+- pwsh -ExecutionPolicy Bypass -File Publish-InstallerUI.ps1 -OutputDir .\\installer-ui\\publish\\win-x64-hotfix6 (pass)
+- launch verification: process running with title `OrganizedJihad Installer` and window handle present (pid 19808, hwnd 984300)
+- foreground action executed via Win32 `ShowWindowAsync` + `SetForegroundWindow` (pass)
+
+---
+
+## Session
+- Date: 2026-05-31
+- Session Number: 38
+- Scope: repeated installer complaints - style/hover state fixes, Step 2 access-denied hardening, Step 3 shortcut creation, Step 4 Tampermonkey install flow
+
+## Summary
+- Updated installer UI visual state model for step buttons and option toggles:
+	- brighter highlighted step-button hover state with stronger orange border/background
+	- responsive button sizing (removed hard-coded widths on step buttons and action buttons)
+	- toggle controls switched from `[ON]/[OFF]` text to icon labels with state-driven colors (green checked, red unchecked)
+	- tightened checked/pointerover selectors to avoid fallback blue accent styling
+- Hardened API install workflow against file-lock timing/race conditions:
+	- added scheduled task stop attempts before process kill
+	- increased process wait and explicit file-unlock waits for API/runtime-host executables
+	- wrapped directory delete/file copy operations in retry loops for transient lock/AV timing conditions
+- Added Start Menu shortcut creation for desktop app install:
+	- creates `Start Menu -> Programs -> OrganizedJihad -> OrganizedJihad Desktop.lnk`
+	- sets working directory and best-available OJ icon
+- Reworked userscript install flow to better trigger Tampermonkey install behavior:
+	- added API endpoint `GET /ui/organized-jihad.user.js`
+	- switched UI/CLI open flow from `/ui/userscript-file` to `.user.js` endpoint
+	- logs now explicitly state that browser/Tampermonkey install confirmation and permissions can require user action
+	- updated Edge utilities URL to direct Tampermonkey options/import page route
+- Added and opened a dedicated documentation note explaining what can be automated vs what requires browser user consent.
+
+## Files Modified
+- installer-core/OrganizedJihad.Installer.Cli/Program.cs
+- api/Services/Ui/ApiUiDiagnosticsEndpointHandler.cs
+- api/Endpoints/ApiUiEndpoints.Diagnostics.cs
+- installer-ui/MainWindow.axaml
+- installer-ui/MainWindow.axaml.cs
+- ~docs/installer-guide/tampermonkey-install-automation-notes.md
+- ~docs/copilot-chats/2026-05-31-userscript-build-auto.md
+
+## Validation
+- dotnet build api/OrganizedJihad.Api.csproj -c Release (pass)
+- dotnet build installer-core/OrganizedJihad.Installer.Cli/OrganizedJihad.Installer.Cli.csproj -c Release (pass)
+- dotnet build installer-ui/OrganizedJihad.Installer.csproj -c Release (pass)
+- API-only installer CLI run (Step 2 equivalent) pass; no `Access to ... OrganizedJihad.Api.exe is denied` failure observed
+- pwsh -ExecutionPolicy Bypass -File Publish-InstallerUI.ps1 -OutputDir .\\installer-ui\\publish\\win-x64-hotfix8 (pass)
+- launcher verification: installer process running with window title `OrganizedJihad Installer` and visible top-level window handle
+
+---
+
+## Session
+- Date: 2026-05-31
+- Session Number: 39
+- Scope: user still seeing old behavior; force latest default build run and verify live fixes
+
+## Summary
+- Found that the latest user log was from an older run (`installer-20260531-180153.log`) and no active installer process was running from latest output.
+- Published the newest installer to the default path (`installer-ui/publish/win-x64`) to remove build-path confusion.
+- Launched and focused the default-path installer, confirmed active window handle and title.
+- Re-validated core user-reported outcomes using current payload CLI:
+	- Step 3 desktop install now creates Start Menu shortcut.
+	- Step 4 `.user.js` endpoint returns HTTP 200 with JavaScript content type.
+
+## Validation
+- default publish: `Publish-InstallerUI.ps1 -OutputDir .\\installer-ui\\publish\\win-x64` (pass)
+- running window verified: process `OrganizedJihad.Installer` with non-zero HWND and title
+- desktop shortcut check: `%AppData%\\Microsoft\\Windows\\Start Menu\\Programs\\OrganizedJihad\\OrganizedJihad Desktop.lnk` exists
+- userscript endpoint check: `GET http://localhost:5124/ui/organized-jihad.user.js` => `200`, content type `application/javascript; charset=utf-8`
+
+---
+
+## Session
+- Date: 2026-05-31
+- Session Number: 40
+- Scope: fix Step #2 leaving remaining installer buttons unclickable
+
+## Summary
+- Added a UI-level fail-safe timeout for hidden installer CLI execution (`RunInstallProcessAsync`):
+	- if process exceeds 4 minutes, installer kills it, reports timeout, and returns control to UI.
+- Reduced long-running API-only Step #2 post-work by gating health-check/probe execution:
+	- API-only step now skips heavy health/probe waits unless diagnostics/full-workflow conditions request them.
+- Republished to default output path and relaunched focused instance for immediate retest.
+
+## Files Modified
+- installer-ui/MainWindow.axaml.cs
+- ~docs/copilot-chats/2026-05-31-userscript-build-auto.md
+
+## Validation
+- dotnet build installer-ui/OrganizedJihad.Installer.csproj -c Release (pass)
+- pwsh -ExecutionPolicy Bypass -File Publish-InstallerUI.ps1 -OutputDir .\\installer-ui\\publish\\win-x64 (pass)
+- launched installer verification: window running/responding with non-zero HWND
+
+---
+
+## Session
+- Date: 2026-05-31
+- Session Number: 41
+- Scope: Step #2 still leaves other installer buttons unclickable after CLI completion log
+
+## Summary
+- Used attached logs to confirm the pattern: CLI reaches `Installation complete` but UI does not always reach post-exit re-enable path.
+- Replaced fragile `WaitForExitAsync` completion path with explicit watchdog polling in installer UI process runner.
+- Added completion-marker fallback:
+	- if CLI prints `Installation complete` but process remains alive for 3+ seconds, UI force-finalizes process and immediately restores controls.
+- Kept existing hard timeout fallback for hung installs.
+- Republished latest installer to default path and relaunched focused instance.
+
+## Files Modified
+- installer-ui/MainWindow.axaml.cs
+- ~docs/copilot-chats/2026-05-31-userscript-build-auto.md
+
+## Validation
+- direct extracted CLI run from temp runtime path exits cleanly (`EXIT=0`) after `Installation complete`
+- dotnet build installer-ui/OrganizedJihad.Installer.csproj -c Release (pass)
+- pwsh -ExecutionPolicy Bypass -File Publish-InstallerUI.ps1 -OutputDir .\\installer-ui\\publish\\win-x64 (pass)
+- launched installer verified running/responding with non-zero HWND
+
+---
+
+## Session
+- Date: 2026-06-01
+- Session Number: 42
+- Scope: additional Step #2 hardening after repeated unclickable buttons report
+
+## Summary
+- Added API-only runtime cap in installer UI process runner call path:
+	- Step #2 now uses a shorter max runtime (90s) instead of the generic 4-minute cap.
+	- Full install/other paths keep longer timeout window.
+- Timeout message now reflects actual configured cap in seconds for easier diagnostics.
+- Republished default-path installer and relaunched focused window for immediate retest.
+
+## Files Modified
+- installer-ui/MainWindow.axaml.cs
+- ~docs/copilot-chats/2026-05-31-userscript-build-auto.md
+
+## Validation
+- dotnet build installer-ui/OrganizedJihad.Installer.csproj -c Release (pass)
+- pwsh -ExecutionPolicy Bypass -File Publish-InstallerUI.ps1 -OutputDir .\\installer-ui\\publish\\win-x64 (pass)
+- launched installer verified running/responding with non-zero HWND (pid 7676)
+
+---
+
+## Session
+- Date: 2026-06-02
+- Session Number: 43
+- Scope: button styling still not matching expectations and log-derived userscript flow friction
+
+## Summary
+- Added code-driven visual state enforcement for step buttons and option toggles so Fluent/default theme fallback cannot override expected colors/borders.
+- Step buttons now use explicit runtime-applied states for default/hover/pressed/disabled.
+- Toggle buttons now use explicit runtime-applied checked/unchecked palettes (green vs red) with icon labels and hover variants.
+- Updated unchecked toggle icon to hollow circle and retained check icon when enabled.
+- Removed strict userscript-step lock on Tampermonkey detection failures:
+	- userscript step no longer hard-blocks when detection is false-negative.
+	- userscript install button remains enabled (except while a run is active).
+- Republished default-path installer and launched focused instance for immediate retest.
+
+## Files Modified
+- installer-ui/MainWindow.axaml.cs
+- ~docs/copilot-chats/2026-05-31-userscript-build-auto.md
+
+## Validation
+- dotnet build installer-ui/OrganizedJihad.Installer.csproj -c Release (pass)
+- pwsh -ExecutionPolicy Bypass -File Publish-InstallerUI.ps1 -OutputDir .\\installer-ui\\publish\\win-x64 (pass)
+- launched installer verified running/responding with non-zero HWND (pid 15472)
+
+---
+
+## Session
+- Date: 2026-06-02
+- Session Number: 44
+- Scope: continue pass for userscript detection reliability and UI status consistency
+
+## Summary
+- Hardened Windows Tampermonkey detection for Chromium browsers by adding:
+	- enterprise policy forcelist checks (`ExtensionInstallForcelist`) for Chrome and Edge.
+	- profile `Preferences` and `Secure Preferences` content checks for extension IDs and Tampermonkey markers.
+	- global extension folder checks under Chrome/Edge program directories.
+- Updated installer step status copy to match current behavior where Step 4 is allowed even when auto-detection is inconclusive.
+- Rebuilt and republished installer, then launched verified running instance for validation.
+
+## Files Modified
+- installer-ui/MainWindow.axaml.cs
+- installer-ui/MainWindow.axaml
+- ~docs/copilot-chats/2026-05-31-userscript-build-auto.md
+
+## Validation
+- dotnet build installer-ui/OrganizedJihad.Installer.csproj -c Release (pass)
+- pwsh -ExecutionPolicy Bypass -File Publish-InstallerUI.ps1 -OutputDir .\\installer-ui\\publish\\win-x64 (pass)
+- launched installer verified running/responding with non-zero HWND (pid 28420)
+
+---
+
+## Session
+- Date: 2026-06-02
+- Session Number: 45
+- Scope: remove extra userscript tabs and enforce explicit toggle selected visuals
+
+## Summary
+- Eliminated duplicate userscript browser tabs by forcing CLI bootstrap skip from installer UI argument construction.
+- Simplified UI userscript import flow to open one install-source tab only (API route when reachable, file URI fallback otherwise).
+- Strengthened toggle selected-state visuals by adding explicit template-border selectors and disabling focus adorner to avoid blue default accent bleed-through.
+- Updated quick-start instructional copy to reflect advisory detection behavior.
+
+## Files Modified
+- installer-ui/MainWindow.axaml.cs
+- installer-ui/MainWindow.axaml
+- ~docs/copilot-chats/2026-05-31-userscript-build-auto.md
+
+## Validation
+- dotnet build installer-ui/OrganizedJihad.Installer.csproj -c Release (pass)
+- pwsh -ExecutionPolicy Bypass -File Publish-InstallerUI.ps1 -OutputDir .\\installer-ui\\publish\\win-x64 (pass)
+- launched installer verified running/responding with non-zero HWND (pid 1008)
+
+---
+
+## Session
+- Date: 2026-06-02
+- Session Number: 46
+- Scope: hard fix for toggle selected colors, disabled borders, and hover layout stability
+
+## Summary
+- Implemented an explicit custom template for `option-toggle` controls so checked state no longer falls back to blue theme accent.
+- Enforced green checked-state background/border palette and retained explicit red unchecked palette.
+- Standardized border thickness to 2 across normal/hover/pressed/disabled button states to eliminate hover-induced layout movement.
+- Increased disabled-state border contrast so disabled buttons remain clearly outlined.
+- Tuned hover colors to remain visually close to normal state but brighter/highlighted and distinct from disabled state.
+- Mirrored the same palette and thickness updates in code-behind visual enforcement constants/methods.
+
+## Files Modified
+- installer-ui/MainWindow.axaml
+- installer-ui/MainWindow.axaml.cs
+- ~docs/copilot-chats/2026-05-31-userscript-build-auto.md
+
+## Validation
+- dotnet build installer-ui/OrganizedJihad.Installer.csproj -c Release (pass)
+- pwsh -ExecutionPolicy Bypass -File Publish-InstallerUI.ps1 -OutputDir .\\installer-ui\\publish\\win-x64 (pass)
+- launched installer verified running/responding with non-zero HWND (pid 18724)
+
+---
+
+## Session
+- Date: 2026-06-02
+- Session Number: 47
+- Scope: screenshot-driven UI correction pass for clipping, borders, focus palette, and hover clarity
+
+## Summary
+- Fixed button text clipping by removing hardcoded small heights on lower action buttons and introducing compact button style with sufficient padding/min-height.
+- Corrected unchecked toggle focus border from green to red, while keeping checked focus border green.
+- Locked toggle widths to a fixed width so checked/unchecked text/icon changes no longer shift layout.
+- Replaced text box focus blue with palette-compliant orange focus border and disabled focus adorner fallback.
+- Increased hover brightness and contrast for buttons so hover no longer resembles disabled state.
+- Updated code-behind hover colors to match XAML state colors used for step-button runtime enforcement.
+
+## Files Modified
+- installer-ui/MainWindow.axaml
+- installer-ui/MainWindow.axaml.cs
+- ~docs/copilot-chats/2026-05-31-userscript-build-auto.md
+
+## Validation
+- dotnet build installer-ui/OrganizedJihad.Installer.csproj -c Release (pass)
+- pwsh -ExecutionPolicy Bypass -File Publish-InstallerUI.ps1 -OutputDir .\\installer-ui\\publish\\win-x64 (pass)
+- launched installer verified running/responding with non-zero HWND (pid 19624)
+
+---
+
+## Session
+- Date: 2026-06-02
+- Session Number: 48
+- Scope: eliminate remaining layout-shift and hover/readability defects from screenshot feedback
+
+## Summary
+- Added runtime visual handling for lower action buttons (`Run Full Install`, `Open Install Folder`, `Open Setup Guide`, `Open Log Folder`) so hover/disabled states are enforced consistently instead of falling back to theme rendering.
+- Stabilized toggle label metrics by using same-family circle glyphs for both states (`●` checked, `○` unchecked) to avoid vertical size changes when any toggle switches state.
+- Fixed input focus layout jitter by making ComboBox border thickness constant (2px) across normal/focus states and applying orange focus border with adorner suppression.
+- Refined log textbox behavior:
+	- horizontal scrollbar disabled to avoid overlap with last line content,
+	- extra bottom padding to preserve readability near bottom edge,
+	- initial view reset to top-left,
+	- removed forced caret-to-end on each append so view no longer jumps to bottom-right.
+- Kept toggle width flexible via `MinWidth` instead of hard fixed `Width` to stay localization-friendly while preserving stable layout baseline.
+
+## Files Modified
+- installer-ui/MainWindow.axaml
+- installer-ui/MainWindow.axaml.cs
+- ~docs/copilot-chats/2026-05-31-userscript-build-auto.md
+
+## Validation
+- dotnet build installer-ui/OrganizedJihad.Installer.csproj -c Release (pass)
+- pwsh -ExecutionPolicy Bypass -File Publish-InstallerUI.ps1 -OutputDir .\\installer-ui\\publish\\win-x64 (pass)
+- launched installer verified running/responding with non-zero HWND (pid 10000)
