@@ -15,65 +15,148 @@
 			<Setter Property="Background" Value="#2f1f13" />
 			<Setter Property="Foreground" Value="#FFF1DA" />
 			<Setter Property="BorderBrush" Value="#d67d1e" />
-			<Setter Property="BorderThickness" Value="2" />
+			<Setter Property="BorderThickness" Value="1" />
 			<Setter Property="FocusAdorner" Value="{x:Null}" />
+		</Style>
+		<Style Selector="TextBox /template/ Border">
+			<Setter Property="BorderBrush" Value="#d67d1e" />
+			<Setter Property="BorderThickness" Value="1" />
 		</Style>
 		<Style Selector="TextBox:pointerover">
 			<Setter Property="BorderBrush" Value="#ffb347" />
 		</Style>
+		<Style Selector="TextBox:pointerover /template/ Border">
+			<Setter Property="BorderBrush" Value="#ffb347" />
+			<Setter Property="BorderThickness" Value="1" />
+		</Style>
 		<Style Selector="TextBox:focus">
 			<Setter Property="BorderBrush" Value="#ffbf66" />
-			<Setter Property="BorderThickness" Value="2" />
 		</Style>
 		<Style Selector="TextBox:focus-within">
 			<Setter Property="BorderBrush" Value="#ffbf66" />
-			<Setter Property="BorderThickness" Value="2" />
 		</Style>
 		<Style Selector="TextBox:focus /template/ Border">
 			<Setter Property="BorderBrush" Value="#ffbf66" />
-			<Setter Property="BorderThickness" Value="2" />
+			<Setter Property="BorderThickness" Value="1" />
 		</Style>
 		<Style Selector="TextBox:focus-within /template/ Border">
 			<Setter Property="BorderBrush" Value="#ffbf66" />
-			<Setter Property="BorderThickness" Value="2" />
+			<Setter Property="BorderThickness" Value="1" />
 		</Style>
 		<Style Selector="ComboBox">
 			<Setter Property="Background" Value="#2f1f13" />
 			<Setter Property="Foreground" Value="#FFF1DA" />
 			<Setter Property="BorderBrush" Value="#d67d1e" />
-			<Setter Property="BorderThickness" Value="2" />
+			<Setter Property="BorderThickness" Value="1" />
 			<Setter Property="FocusAdorner" Value="{x:Null}" />
+		</Style>
+		<Style Selector="ComboBox /template/ Border">
+			<Setter Property="Background" Value="#2f1f13" />
+			<Setter Property="BorderBrush" Value="#d67d1e" />
+			<Setter Property="BorderThickness" Value="1" />
 		</Style>
 		<Style Selector="ComboBox:pointerover">
 			<Setter Property="BorderBrush" Value="#ffb347" />
 		</Style>
+		<Style Selector="ComboBox:pointerover /template/ Border">
+			<Setter Property="BorderBrush" Value="#ffb347" />
+			<Setter Property="BorderThickness" Value="1" />
+		</Style>
 		<Style Selector="ComboBox:focus">
 			<Setter Property="BorderBrush" Value="#ffbf66" />
-			<Setter Property="BorderThickness" Value="2" />
 		</Style>
 		<Style Selector="ComboBox:focus-within">
 			<Setter Property="BorderBrush" Value="#ffbf66" />
-			<Setter Property="BorderThickness" Value="2" />
 		</Style>
 		<Style Selector="ComboBox:focus /template/ Border">
 			<Setter Property="BorderBrush" Value="#ffbf66" />
-			<Setter Property="BorderThickness" Value="2" />
+			<Setter Property="BorderThickness" Value="1" />
 		</Style>
 		<Style Selector="ComboBox:focus-within /template/ Border">
 			<Setter Property="BorderBrush" Value="#ffbf66" />
-			<Setter Property="BorderThickness" Value="2" />
+			<Setter Property="BorderThickness" Value="1" />
+		</Style>
+		<Style Selector="PopupRoot">
+			<Setter Property="Background" Value="#28170f" />
+		</Style>
+		<Style Selector="PopupRoot ScrollViewer">
+			<Setter Property="Background" Value="#28170f" />
+		</Style>
+		<Style Selector="PopupRoot ListBox">
+			<Setter Property="Background" Value="#28170f" />
+			<Setter Property="BorderThickness" Value="0" />
+		</Style>
+		<Style Selector="PopupRoot ListBox /template/ Border">
+			<Setter Property="Background" Value="#28170f" />
+			<Setter Property="BorderBrush" Value="#28170f" />
+			<Setter Property="BorderThickness" Value="0" />
+		</Style>
+		<Style Selector="PopupRoot Border">
+			<Setter Property="Background" Value="#28170f" />
+			<Setter Property="BorderBrush" Value="#28170f" />
+			<Setter Property="BorderThickness" Value="0" />
 		</Style>
 		<Style Selector="ComboBoxItem">
 			<Setter Property="Background" Value="#28170f" />
 			<Setter Property="Foreground" Value="#FFF1DA" />
 		</Style>
+		<Style Selector="ComboBoxItem /template/ Border">
+			<Setter Property="Background" Value="#28170f" />
+			<Setter Property="BorderBrush" Value="#28170f" />
+			<Setter Property="BorderThickness" Value="0" />
+		</Style>
 		<Style Selector="ComboBoxItem:pointerover">
 			<Setter Property="Background" Value="#4b2b1a" />
 			<Setter Property="Foreground" Value="#FFFFFF" />
 		</Style>
+		<Style Selector="ComboBoxItem:pointerover /template/ Border">
+			<Setter Property="Background" Value="#4b2b1a" />
+			<Setter Property="BorderBrush" Value="#4b2b1a" />
+			<Setter Property="BorderThickness" Value="0" />
+		</Style>
 		<Style Selector="ComboBoxItem:selected">
 			<Setter Property="Background" Value="#6a3a1d" />
 			<Setter Property="Foreground" Value="#FFFFFF" />
+		</Style>
+		<Style Selector="ComboBoxItem:selected /template/ Border">
+			<Setter Property="Background" Value="#6a3a1d" />
+			<Setter Property="BorderBrush" Value="#6a3a1d" />
+			<Setter Property="BorderThickness" Value="0" />
+		</Style>
+		<Style Selector="ComboBoxItem:selected /template/ ContentPresenter">
+			<Setter Property="Background" Value="#6a3a1d" />
+			<Setter Property="TextElement.Foreground" Value="#FFFFFF" />
+		</Style>
+		<Style Selector="ComboBoxItem:pointerover /template/ ContentPresenter">
+			<Setter Property="Background" Value="#4b2b1a" />
+			<Setter Property="TextElement.Foreground" Value="#FFFFFF" />
+		</Style>
+		<Style Selector="ListBoxItem">
+			<Setter Property="Background" Value="#28170f" />
+			<Setter Property="Foreground" Value="#FFF1DA" />
+		</Style>
+		<Style Selector="ListBoxItem:selected">
+			<Setter Property="Background" Value="#6a3a1d" />
+			<Setter Property="Foreground" Value="#FFFFFF" />
+		</Style>
+		<Style Selector="ListBoxItem:pointerover">
+			<Setter Property="Background" Value="#4b2b1a" />
+			<Setter Property="Foreground" Value="#FFFFFF" />
+		</Style>
+		<Style Selector="ListBoxItem /template/ Border">
+			<Setter Property="Background" Value="#28170f" />
+			<Setter Property="BorderBrush" Value="#28170f" />
+			<Setter Property="BorderThickness" Value="0" />
+		</Style>
+		<Style Selector="ListBoxItem:selected /template/ Border">
+			<Setter Property="Background" Value="#6a3a1d" />
+			<Setter Property="BorderBrush" Value="#6a3a1d" />
+			<Setter Property="BorderThickness" Value="0" />
+		</Style>
+		<Style Selector="ListBoxItem:pointerover /template/ Border">
+			<Setter Property="Background" Value="#4b2b1a" />
+			<Setter Property="BorderBrush" Value="#4b2b1a" />
+			<Setter Property="BorderThickness" Value="0" />
 		</Style>
 		<Style Selector="Button">
 			<Setter Property="Background" Value="#4a2c1a" />
@@ -267,14 +350,14 @@
 	<ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
 		<StackPanel Margin="18" Spacing="10">
 			<TextBlock Text="OrganizedJihad One-Click Installer" FontSize="24" FontWeight="SemiBold" />
-			<TextBlock Text="Guided setup for API server, desktop app, and userscript. No command prompt required." Opacity="0.85" />
+			<TextBlock Text="Guided setup for API server and userscript. No command prompt required." Opacity="0.85" />
 
 			<Border BorderThickness="1" CornerRadius="6" Padding="10" Background="#3a143c">
 				<StackPanel Spacing="4">
 					<TextBlock Text="Quick Start" FontWeight="SemiBold" />
 					<TextBlock Text="1. Step 1 checks/installs Tampermonkey for the selected browser." Opacity="0.85" />
 					<TextBlock Text="2. Step 2 installs API server with tray icon startup (Plex-style hidden icon behavior)." Opacity="0.85" />
-					<TextBlock Text="3. Step 3 installs desktop app, then Step 4 installs userscript (detection is advisory; bypass remains available)." Opacity="0.85" />
+					<TextBlock Text="3. Step 3 installs userscript (detection is advisory)." Opacity="0.85" />
 				</StackPanel>
 			</Border>
 
@@ -294,7 +377,7 @@
 			</Grid>
 
 			<Border BorderThickness="1" CornerRadius="6" Padding="10" Background="#3a143c">
-				<Grid ColumnDefinitions="*,*" RowDefinitions="Auto,Auto,Auto,Auto,Auto">
+				<Grid ColumnDefinitions="*,*" RowDefinitions="Auto,Auto,Auto">
 					<Border Grid.Row="0" Grid.Column="0">
 						<Border.ContextMenu>
 							<ContextMenu>
@@ -304,15 +387,13 @@
 						<Button x:Name="InstallTampermonkeyButton" Classes="step-button" Margin="0" Content="Step 1: Install / Verify Tampermonkey" Click="OnInstallTampermonkeyClick" />
 					</Border>
 					<Button x:Name="InstallApiStepButton" Classes="step-button" Grid.Row="1" Grid.Column="0" Margin="0,10,0,0" Content="Step 2: Install API Server" Click="OnInstallApiStepClick" />
-					<Button x:Name="InstallDesktopStepButton" Classes="step-button" Grid.Row="2" Grid.Column="0" Margin="0,10,0,0" Content="Step 3: Install Desktop App" Click="OnInstallDesktopStepClick" />
-					<Button x:Name="InstallUserscriptStepButton" Classes="step-button" Grid.Row="3" Grid.Column="0" Margin="0,10,0,0" Content="Step 4: Install Userscript" Click="OnInstallUserscriptStepClick" />
-					<Button x:Name="InstallUserscriptBypassButton" Classes="step-button" Grid.Row="4" Grid.Column="0" Margin="0,10,0,0" Content="Step 4b: Install Userscript (Bypass)" Click="OnInstallUserscriptBypassStepClick" />
+						<Button x:Name="InstallUserscriptStepButton" Classes="step-button" Grid.Row="2" Grid.Column="0" Margin="0,10,0,0" Content="Step 3: Install Userscript" Click="OnInstallUserscriptStepClick" />
 
-					<StackPanel Grid.Row="0" Grid.Column="1" Grid.RowSpan="5" Margin="12,0,0,0" Spacing="6">
+						<StackPanel Grid.Row="0" Grid.Column="1" Grid.RowSpan="3" Margin="12,0,0,0" Spacing="6">
 						<TextBlock Text="Step Status" FontWeight="SemiBold" />
 						<TextBlock x:Name="TampermonkeyStatusTextBlock" Text="Tampermonkey status: checking..." Opacity="0.92" />
-						<TextBlock Text="Step 4 installs the userscript even if auto-detection cannot confirm Tampermonkey." Opacity="0.82" TextWrapping="Wrap" />
-						<TextBlock Text="If detection misses your setup, continue with Step 4 or Step 4b and follow the setup guide screenshots." Opacity="0.82" TextWrapping="Wrap" />
+						<TextBlock Text="Step 3 installs the userscript even if auto-detection cannot confirm Tampermonkey." Opacity="0.82" TextWrapping="Wrap" />
+							<TextBlock Text="If detection misses your setup, continue with Step 3 and follow the setup guide screenshots." Opacity="0.82" TextWrapping="Wrap" />
 					</StackPanel>
 				</Grid>
 			</Border>

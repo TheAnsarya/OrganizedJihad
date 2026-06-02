@@ -2,6 +2,7 @@ using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.Input;
 using Avalonia.Interactivity;
+using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia;
 using Avalonia.Threading;
@@ -46,6 +47,8 @@ public partial class MainWindow : Window {
 	private static readonly IBrush ToggleDisabledBackground = Brush.Parse("#33241a");
 	private static readonly IBrush ToggleDisabledForeground = Brush.Parse("#CBB8A2");
 	private static readonly IBrush ToggleDisabledBorder = Brush.Parse("#9f6f44");
+	private static readonly IBrush ToggleCheckedIconBrush = Brush.Parse("#45e06b");
+	private static readonly IBrush ToggleUncheckedIconBrush = Brush.Parse("#FFE3E3");
 
 	private sealed class BrowserOption {
 		public BrowserOption(string label, string argument, bool installed, string? executablePath) {
@@ -123,51 +126,25 @@ public partial class MainWindow : Window {
 	private async void OnInstallClick(object? sender, RoutedEventArgs e) {
 		await RunInstallWorkflowAsync(
 			installApi: true,
-			installDesktop: true,
 			installUserscript: true,
 			openTampermonkeySetup: OpenTampermonkeySetupCheckBox.IsChecked == true,
-			allowUserscriptBypass: false,
 			stepLabel: "full install");
 	}
 
 	private async void OnInstallApiStepClick(object? sender, RoutedEventArgs e) {
 		await RunInstallWorkflowAsync(
 			installApi: true,
-			installDesktop: false,
 			installUserscript: false,
 			openTampermonkeySetup: false,
-			allowUserscriptBypass: false,
 			stepLabel: "API server step");
-	}
-
-	private async void OnInstallDesktopStepClick(object? sender, RoutedEventArgs e) {
-		await RunInstallWorkflowAsync(
-			installApi: false,
-			installDesktop: true,
-			installUserscript: false,
-			openTampermonkeySetup: false,
-			allowUserscriptBypass: false,
-			stepLabel: "desktop app step");
 	}
 
 	private async void OnInstallUserscriptStepClick(object? sender, RoutedEventArgs e) {
 		await RunInstallWorkflowAsync(
 			installApi: false,
-			installDesktop: false,
 			installUserscript: true,
 			openTampermonkeySetup: OpenTampermonkeySetupCheckBox.IsChecked == true,
-			allowUserscriptBypass: false,
 			stepLabel: "userscript step");
-	}
-
-	private async void OnInstallUserscriptBypassStepClick(object? sender, RoutedEventArgs e) {
-		await RunInstallWorkflowAsync(
-			installApi: false,
-			installDesktop: false,
-			installUserscript: true,
-			openTampermonkeySetup: OpenTampermonkeySetupCheckBox.IsChecked == true,
-			allowUserscriptBypass: true,
-			stepLabel: "userscript bypass step");
 	}
 
 	private void OnInstallTampermonkeyClick(object? sender, RoutedEventArgs e) {
@@ -210,7 +187,7 @@ public partial class MainWindow : Window {
 		OpenTampermonkeyStore(selectedBrowser.Argument);
 	}
 
-	private async Task RunInstallWorkflowAsync(bool installApi, bool installDesktop, bool installUserscript, bool openTampermonkeySetup, bool allowUserscriptBypass, string stepLabel) {
+	private async Task RunInstallWorkflowAsync(bool installApi, bool installUserscript, bool openTampermonkeySetup, string stepLabel) {
 		if (_isInstalling) {
 			return;
 		}
@@ -222,7 +199,7 @@ public partial class MainWindow : Window {
 
 		RefreshTampermonkeyStatus(logResult: false);
 
-		if (installUserscript && !allowUserscriptBypass && !_tampermonkeyInstalledForSelection && OperatingSystem.IsWindows()) {
+		if (installUserscript && !_tampermonkeyInstalledForSelection && OperatingSystem.IsWindows()) {
 			SetStatus("Status: Tampermonkey not detected. Continuing with guided userscript flow.");
 			AppendLog("[Installer UI] Tampermonkey was not auto-detected for the selected browser. Continuing userscript step anyway; browser may prompt to install/enable Tampermonkey.");
 		}
@@ -238,9 +215,6 @@ public partial class MainWindow : Window {
 		var selectedComponents = new List<string>();
 		if (installApi) {
 			selectedComponents.Add("API server");
-		}
-		if (installDesktop) {
-			selectedComponents.Add("desktop app");
 		}
 		if (installUserscript) {
 			selectedComponents.Add("userscript");
@@ -265,15 +239,14 @@ public partial class MainWindow : Window {
 
 		AppendLog($"[Installer UI] Installer UI base directory: {AppContext.BaseDirectory}");
 		AppendLog($"[Installer UI] Using managed installer CLI: {installerCliPath}");
-		var runInstallHealthCheck = installApi && (installDesktop || installUserscript || FirstRunDiagnosticsCheckBox.IsChecked == true || OpenDiagnosticsCheckBox.IsChecked == true);
-		var maxRuntime = installApi && !installDesktop && !installUserscript
+		var runInstallHealthCheck = installApi && (installUserscript || FirstRunDiagnosticsCheckBox.IsChecked == true || OpenDiagnosticsCheckBox.IsChecked == true);
+		var maxRuntime = installApi && !installUserscript
 			? TimeSpan.FromSeconds(90)
 			: TimeSpan.FromMinutes(4);
 		var cliArgs = BuildInstallerCliArguments(
 			installRoot,
 			apiUrl,
 			installApi,
-			installDesktop,
 			installUserscript,
 			openTampermonkeySetup,
 			browserArg,
@@ -292,9 +265,6 @@ public partial class MainWindow : Window {
 			AppendLog("[Installer UI] Userscript next steps:");
 			AppendLog($"[Installer UI] - Import this file in Tampermonkey Utilities: {userscriptPath}");
 			AppendLog("[Installer UI] - Confirm script is Enabled, then refresh Hero Wars.");
-			if (allowUserscriptBypass) {
-				AppendLog("[Installer UI] - Bypass mode was used; if Tampermonkey is not installed yet, complete Step 1 now.");
-			}
 			if (openTampermonkeySetup) {
 				OpenTampermonkeyImportFlow(userscriptPath, apiUrl, browserArg);
 			}
@@ -303,7 +273,7 @@ public partial class MainWindow : Window {
 		RefreshTampermonkeyStatus(logResult: false);
 	}
 
-	private static string BuildInstallerCliArguments(string installRoot, string apiUrl, bool installApi, bool installDesktop, bool installUserscript, bool openTampermonkeySetup, string? browserArg, bool runInstallHealthCheck, bool firstRunDiagnostics, bool openUserscriptDiagnostics) {
+	private static string BuildInstallerCliArguments(string installRoot, string apiUrl, bool installApi, bool installUserscript, bool openTampermonkeySetup, string? browserArg, bool runInstallHealthCheck, bool firstRunDiagnostics, bool openUserscriptDiagnostics) {
 		var args = new List<string> {
 			"--install-root", Quote(installRoot),
 			"--api-url", Quote(apiUrl),
@@ -311,10 +281,6 @@ public partial class MainWindow : Window {
 
 		if (!installApi) {
 			args.Add("--skip-api-install");
-		}
-
-		if (!installDesktop) {
-			args.Add("--skip-desktop-app-install");
 		}
 
 		if (!installUserscript) {
@@ -372,7 +338,7 @@ public partial class MainWindow : Window {
 		if (logResult) {
 			AppendLog(_tampermonkeyInstalledForSelection
 				? $"[Installer UI] Tampermonkey detected for {browserLabel}."
-				: $"[Installer UI] Tampermonkey not detected for {browserLabel}. Use Step 1 to install/verify or Step 4b to bypass.");
+				: $"[Installer UI] Tampermonkey not detected for {browserLabel}. Use Step 1 to install/verify, then continue with Step 3.");
 		}
 
 		UpdateQuickActionState();
@@ -1049,16 +1015,44 @@ public partial class MainWindow : Window {
 			return;
 		}
 
-		button.Content = label;
+		var isChecked = button.IsChecked == true;
+		var iconText = isChecked ? "\u2714" : "\u25CB";
+		var iconBrush = isChecked ? ToggleCheckedIconBrush : ToggleUncheckedIconBrush;
+
+		var contentGrid = new Grid {
+			ColumnDefinitions = new ColumnDefinitions("20,*"),
+			VerticalAlignment = VerticalAlignment.Center,
+		};
+
+		var iconBlock = new TextBlock {
+			Text = iconText,
+			Foreground = iconBrush,
+			FontFamily = FontFamily.Parse("Segoe UI Symbol"),
+			FontSize = 14,
+			LineHeight = 16,
+			TextAlignment = TextAlignment.Center,
+			HorizontalAlignment = HorizontalAlignment.Stretch,
+			VerticalAlignment = VerticalAlignment.Center,
+		};
+
+		var labelBlock = new TextBlock {
+			Text = label,
+			VerticalAlignment = VerticalAlignment.Center,
+		};
+
+		Grid.SetColumn(iconBlock, 0);
+		Grid.SetColumn(labelBlock, 1);
+		contentGrid.Children.Add(iconBlock);
+		contentGrid.Children.Add(labelBlock);
+
+		button.Content = contentGrid;
 	}
 
 	private void InitializeInteractiveButtonVisuals() {
 		var stepButtons = new[] {
 			InstallTampermonkeyButton,
 			InstallApiStepButton,
-			InstallDesktopStepButton,
 			InstallUserscriptStepButton,
-			InstallUserscriptBypassButton,
 			InstallButton,
 			OpenInstallRootButton,
 			OpenSetupGuideButton,
@@ -1437,8 +1431,6 @@ public partial class MainWindow : Window {
 		InstallButton.IsEnabled = !_isInstalling;
 		InstallTampermonkeyButton.IsEnabled = !_isInstalling && !_tampermonkeyInstalledForSelection;
 		InstallApiStepButton.IsEnabled = !_isInstalling;
-		InstallDesktopStepButton.IsEnabled = !_isInstalling;
-		InstallUserscriptBypassButton.IsEnabled = !_isInstalling;
 		InstallUserscriptStepButton.IsEnabled = !_isInstalling;
 		OpenInstallRootButton.IsEnabled = !_isInstalling;
 		OpenSetupGuideButton.IsEnabled = !_isInstalling;
@@ -1452,9 +1444,7 @@ public partial class MainWindow : Window {
 
 		ApplyStepButtonVisual(InstallTampermonkeyButton);
 		ApplyStepButtonVisual(InstallApiStepButton);
-		ApplyStepButtonVisual(InstallDesktopStepButton);
 		ApplyStepButtonVisual(InstallUserscriptStepButton);
-		ApplyStepButtonVisual(InstallUserscriptBypassButton);
 		ApplyStepButtonVisual(InstallButton);
 		ApplyStepButtonVisual(OpenInstallRootButton);
 		ApplyStepButtonVisual(OpenSetupGuideButton);
