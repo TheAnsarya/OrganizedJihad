@@ -240,6 +240,8 @@ public partial class MainWindow : Window {
 		AppendLog($"[Installer UI] Installer UI base directory: {AppContext.BaseDirectory}");
 		AppendLog($"[Installer UI] Using managed installer CLI: {installerCliPath}");
 		var runInstallHealthCheck = installApi && (installUserscript || FirstRunDiagnosticsCheckBox.IsChecked == true || OpenDiagnosticsCheckBox.IsChecked == true);
+		var firstRunDiagnostics = installApi && FirstRunDiagnosticsCheckBox.IsChecked == true;
+		var openUserscriptDiagnostics = installApi && OpenDiagnosticsCheckBox.IsChecked == true;
 		var maxRuntime = installApi && !installUserscript
 			? TimeSpan.FromSeconds(90)
 			: TimeSpan.FromMinutes(4);
@@ -251,8 +253,8 @@ public partial class MainWindow : Window {
 			openTampermonkeySetup,
 			browserArg,
 			runInstallHealthCheck,
-			FirstRunDiagnosticsCheckBox.IsChecked == true,
-			OpenDiagnosticsCheckBox.IsChecked == true);
+			firstRunDiagnostics,
+			openUserscriptDiagnostics);
 		var installSucceeded = await RunInstallProcessAsync(installerCliPath, cliArgs, maxRuntime);
 
 		if (installApi && installSucceeded && runInstallHealthCheck) {
