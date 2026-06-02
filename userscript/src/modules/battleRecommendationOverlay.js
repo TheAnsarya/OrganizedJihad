@@ -11,8 +11,10 @@
  * @module battleRecommendationOverlay
  */
 
-const BATTLE_RECOMMENDATIONS_URL = 'http://localhost:5124/api/sync/battles/recommendations';
-const TEAM_RECOMMENDATIONS_URL = 'http://localhost:5124/api/sync/teams/recommendations';
+import { buildConfiguredApiUrl } from './helpers/apiConfig.js';
+
+const BATTLE_RECOMMENDATIONS_PATH = '/api/sync/battles/recommendations';
+const TEAM_RECOMMENDATIONS_PATH = '/api/sync/teams/recommendations';
 const AUTO_REFRESH_MS = 20000;
 const MAX_BACKOFF_MS = 30000;
 const MIN_REFRESH_GAP_MS = 1200;
@@ -978,6 +980,17 @@ class BattleRecommendationOverlay {
 	}
 
 	/**
+	 * Build full local API URL from configured base URL.
+	 *
+	 * @param {string} path - API path
+	 * @returns {string} Absolute URL
+	 * @private
+	 */
+	_buildApiUrl(path) {
+		return buildConfiguredApiUrl(this.prefStorage, path);
+	}
+
+	/**
 	 * Sanitize candidate id to expected numeric range.
 	 *
 	 * @param {number} value - Raw id
@@ -1073,7 +1086,7 @@ class BattleRecommendationOverlay {
 	 * @private
 	 */
 	async _fetchBattleRecommendationsForTarget(sequence, mode, minSamples) {
-		const url = new URL(BATTLE_RECOMMENDATIONS_URL);
+		const url = new URL(this._buildApiUrl(BATTLE_RECOMMENDATIONS_PATH));
 		url.searchParams.set('battleType', mode);
 		url.searchParams.set('limit', '3');
 		url.searchParams.set('minSamples', String(minSamples));
@@ -1107,7 +1120,7 @@ class BattleRecommendationOverlay {
 	async _fetchGrandArenaSegmentedRecommendations(sequence, minSamples) {
 		const segments = [];
 		for (const team of this._context.opponentTeams.slice(0, 3)) {
-			const url = new URL(BATTLE_RECOMMENDATIONS_URL);
+			const url = new URL(this._buildApiUrl(BATTLE_RECOMMENDATIONS_PATH));
 			url.searchParams.set('battleType', 'grandarena');
 			url.searchParams.set('limit', '2');
 			url.searchParams.set('minSamples', String(minSamples));
@@ -1152,7 +1165,7 @@ class BattleRecommendationOverlay {
 	 * @private
 	 */
 	async _fetchModeEngineRecommendations(sequence, mode, objective, minSamples) {
-		const url = new URL(TEAM_RECOMMENDATIONS_URL);
+		const url = new URL(this._buildApiUrl(TEAM_RECOMMENDATIONS_PATH));
 		url.searchParams.set('mode', mode);
 		url.searchParams.set('objective', objective);
 		url.searchParams.set('limit', '3');

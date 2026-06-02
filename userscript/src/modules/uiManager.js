@@ -24,6 +24,7 @@ import {
 	buildWinRateCards,
 } from './helpers/dashboardInsightsBuilders.js';
 import { getCachedApiPayload } from './helpers/cachedApiPayloadHelper.js';
+import { DEFAULT_API_BASE_URL, buildConfiguredApiUrl, getConfiguredApiBaseUrl, normalizeApiBaseUrl } from './helpers/apiConfig.js';
 import { sortData, sortIndicator } from './helpers/dataBrowserSortHelpers.js';
 import { stalenessTag, timeAgo } from './helpers/stalenessHelpers.js';
 import { bindDataBrowserViewInteractions } from './binders/dataBrowserViewOrchestrationBinder.js';
@@ -85,32 +86,38 @@ const FETCH_LIMIT_TRANSACTIONS = 100;
 /** @const {number} Limit for API log entries */
 const FETCH_LIMIT_API_LOGS = 50;
 
-/** @const {string} Local API endpoint for battle recommendations */
-const BATTLE_RECOMMENDATIONS_URL = 'http://localhost:5124/api/sync/battles/recommendations?battleType=arena&limit=3&minSamples=2';
+/** @const {string} Local API path for battle recommendations */
+const BATTLE_RECOMMENDATIONS_PATH = '/api/sync/battles/recommendations';
 
-/** @const {string} Local API endpoint for mode-aware team recommendation engine */
-const TEAM_RECOMMENDATIONS_URL = 'http://localhost:5124/api/sync/teams/recommendations';
+/** @const {string} Local API path for mode-aware team recommendation engine */
+const TEAM_RECOMMENDATIONS_PATH = '/api/sync/teams/recommendations';
 
-/** @const {string} Local API endpoint for team recommendation profile metadata */
-const TEAM_RECOMMENDATION_PROFILES_URL = 'http://localhost:5124/api/sync/teams/recommendations/profiles';
+/** @const {string} Local API path for team recommendation profile metadata */
+const TEAM_RECOMMENDATION_PROFILES_PATH = '/api/sync/teams/recommendations/profiles';
 
-/** @const {string} Local API endpoint for team recommendation backtest calibration */
-const TEAM_RECOMMENDATION_BACKTEST_URL = 'http://localhost:5124/api/sync/teams/recommendations/backtest';
+/** @const {string} Local API path for team recommendation backtest calibration */
+const TEAM_RECOMMENDATION_BACKTEST_PATH = '/api/sync/teams/recommendations/backtest';
 
-/** @const {string} Local API endpoint for persisted team recommendation calibration metadata */
-const TEAM_RECOMMENDATION_CALIBRATION_URL = 'http://localhost:5124/api/sync/teams/recommendations/calibration';
-/** @const {string} Local API endpoint for persisted team recommendation trend preferences */
-const TEAM_RECOMMENDATION_PREFERENCES_URL = 'http://localhost:5124/api/sync/teams/recommendations/preferences';
-/** @const {string} Local API endpoint for quick install health checks */
-const SYNC_HEALTH_URL = 'http://localhost:5124/api/sync/health';
-/** @const {string} Local API docs endpoint for quick setup diagnostics */
-const SYNC_DOCS_URL = 'http://localhost:5124/api/sync';
+/** @const {string} Local API path for persisted team recommendation calibration metadata */
+const TEAM_RECOMMENDATION_CALIBRATION_PATH = '/api/sync/teams/recommendations/calibration';
+/** @const {string} Local API path for persisted team recommendation trend preferences */
+const TEAM_RECOMMENDATION_PREFERENCES_PATH = '/api/sync/teams/recommendations/preferences';
+/** @const {string} Local API path for quick install health checks */
+const SYNC_HEALTH_PATH = '/api/sync/health';
+/** @const {string} Local API path for quick setup diagnostics */
+const SYNC_DOCS_PATH = '/api/sync';
+/** @const {string} Local API path for UI runtime settings endpoint */
+const UI_SETTINGS_PATH = '/ui/settings';
+/** @const {string} Local API path for UI repair status endpoint */
+const UI_REPAIR_STATUS_PATH = '/ui/repair-status';
+/** @const {string} Local API path for userscript handshake diagnostics */
+const UI_HANDSHAKE_PATH = '/ui/userscript-handshake';
 
-/** @const {string} Local API endpoint for curated external tools catalog */
-const TOOLS_CATALOG_URL = 'http://localhost:5124/api/sync/tools/catalog';
+/** @const {string} Local API path for curated external tools catalog */
+const TOOLS_CATALOG_PATH = '/api/sync/tools/catalog';
 
-/** @const {string} Local API endpoint for external tools catalog filter metadata */
-const TOOLS_CATALOG_FILTERS_URL = 'http://localhost:5124/api/sync/tools/catalog/filters';
+/** @const {string} Local API path for external tools catalog filter metadata */
+const TOOLS_CATALOG_FILTERS_PATH = '/api/sync/tools/catalog/filters';
 
 /** @const {number} Recommendation cache TTL in ms */
 const RECOMMENDATIONS_CACHE_TTL_MS = 5 * 60 * 1000;
@@ -141,6 +148,8 @@ class UIManager {
 		this.isVisible = this.prefStorage.get('uiVisible', false);
 		this.currentView = this.prefStorage.get('defaultTab', 'dashboard');
 		this.overlay = null;
+		/** @type {'unknown'|'online'|'degraded'|'offline'} */
+		this._connectionNavStatus = 'unknown';
 
 		// Saved position/size from last session (null = use CSS default)
 		this._savedPos = this.prefStorage.get('overlayPosition', null);
@@ -255,11 +264,11 @@ class UIManager {
 			// Auto-refresh API Log tab when new calls arrive (debounced)
 			let apiLogTimer = null;
 			this.gameTracker.on('apiLog', () => {
-				if (this.isVisible && this.currentView === 'apilog') {
+				if (this.isVisible && (this.currentView === 'apilog' || this.currentView === 'connection')) {
 					if (apiLogTimer) clearTimeout(apiLogTimer);
 					apiLogTimer = setTimeout(() => {
 						apiLogTimer = null;
-						this.renderView('apilog');
+						this.renderView(this.currentView);
 					}, 500);
 				}
 			});
@@ -319,6 +328,7 @@ class UIManager {
 					<button class="oj-nav-btn" data-view="inventory">Inventory</button>
 					<button class="oj-nav-btn" data-view="mail">Mail</button>
 					<button class="oj-nav-btn" data-view="apilog">API Log</button>
+					<button class="oj-nav-btn" data-view="connection">Connection</button>
 					<button class="oj-nav-btn" data-view="resources">Resources</button>
 					<button class="oj-nav-btn" data-view="settings">Settings</button>
 				</div>
@@ -332,6 +342,7 @@ class UIManager {
 		`;
 
 		document.body.appendChild(this.overlay);
+		this._updateNavButtonLabels();
 
 		// Restore saved position if any, clamped to current viewport (#49)
 		if (this._savedPos) {
@@ -456,6 +467,68 @@ class UIManager {
 	}
 
 	/**
+	 * Build navigation label with icon for each view.
+	 *
+	 * @param {string} view - View key
+	 * @returns {string} Tab label
+	 * @private
+	 */
+	_getNavLabel(view) {
+		const connectionIcon = this._connectionNavStatus === 'online'
+			? '🟢'
+			: this._connectionNavStatus === 'degraded'
+				? '🟡'
+				: this._connectionNavStatus === 'offline'
+					? '🔴'
+					: '⚪';
+
+		const labels = {
+			dashboard: '📊 Dashboard',
+			activity: '⚡ Activity',
+			heroes: '🛡️ Heroes',
+			titans: '🗿 Titans',
+			pets: '🐾 Pets',
+			upgrades: '📈 Upgrades',
+			battles: '⚔️ Battles',
+			chests: '🎁 Chests',
+			inventory: '🎒 Inventory',
+			mail: '✉️ Mail',
+			apilog: '📡 API Log',
+			connection: `${connectionIcon} Connection`,
+			resources: '💰 Resources',
+			settings: '⚙️ Settings',
+		};
+
+		return labels[view] || view;
+	}
+
+	/**
+	 * Refresh nav button labels/icons to reflect current status state.
+	 *
+	 * @private
+	 */
+	_updateNavButtonLabels() {
+		if (!this.overlay) return;
+		this.overlay.querySelectorAll('.oj-nav-btn').forEach((button) => {
+			const view = button?.dataset?.view || '';
+			button.textContent = this._getNavLabel(view);
+		});
+	}
+
+	/**
+	 * Update connection tab status icon color/state.
+	 *
+	 * @param {'unknown'|'online'|'degraded'|'offline'} status - Connection state
+	 * @private
+	 */
+	_setConnectionNavStatus(status) {
+		const next = ['unknown', 'online', 'degraded', 'offline'].includes(status) ? status : 'unknown';
+		if (this._connectionNavStatus === next) return;
+		this._connectionNavStatus = next;
+		this._updateNavButtonLabels();
+	}
+
+	/**
 	 * Render the content for a given view.
 	 * All render methods are async and wrapped in try/catch.
 	 *
@@ -505,6 +578,9 @@ class UIManager {
 				case 'apilog':
 					html = this.renderApiLog();
 					break;
+				case 'connection':
+					html = await this.renderConnection();
+					break;
 				case 'resources':
 					html = await this.renderResources();
 					break;
@@ -537,6 +613,9 @@ class UIManager {
 					break;
 				case 'settings':
 					this.attachSettingsEventListeners();
+					break;
+				case 'connection':
+					this.attachConnectionEventListeners();
 					break;
 			}
 		} catch (err) {
@@ -628,6 +707,7 @@ class UIManager {
 		const todayISO = todayStart.toISOString();
 
 		const dashboardMetadata = await this._loadDashboardMetadataBundle();
+		const dashboardConnectionProbe = await this._probeConnectionEndpoint(SYNC_HEALTH_PATH);
 		const {
 			questSummary,
 			gwBrief,
@@ -648,6 +728,15 @@ class UIManager {
 			invasionData,
 			syncStatus,
 		} = dashboardMetadata;
+
+		const dashboardConnectionResolved = (!dashboardConnectionProbe.ok && syncStatus?.ok)
+			? {
+				...dashboardConnectionProbe,
+				ok: true,
+				statusText: dashboardConnectionProbe.statusText || 'Recent sync indicates API is reachable',
+				error: '',
+			}
+			: dashboardConnectionProbe;
 
 		const dailyQuestsCompleted = questSummary.dailyCompleted || 0;
 		const dailyQuestsTotal = questSummary.dailyTotal || 0;
@@ -777,6 +866,7 @@ class UIManager {
 					isTracking: this.gameTracker?.isTracking,
 					lastSnapshotTime,
 					syncStatus,
+					apiConnection: dashboardConnectionResolved,
 					errorCount,
 					version: __OJ_VERSION__,
 					escapeHtml: (value) => this._escapeHtml(value),
@@ -1050,11 +1140,16 @@ class UIManager {
 	 * @private
 	 */
 	async _getBattleRecommendationsPayload() {
+		const url = new URL(this._buildApiUrl(BATTLE_RECOMMENDATIONS_PATH));
+		url.searchParams.set('battleType', 'arena');
+		url.searchParams.set('limit', '3');
+		url.searchParams.set('minSamples', '2');
+
 		return getCachedApiPayload({
 			idbStorage: this.idbStorage,
 			cacheKey: 'battleRecommendations:arena',
 			ttlMs: RECOMMENDATIONS_CACHE_TTL_MS,
-			requestUrl: BATTLE_RECOMMENDATIONS_URL,
+			requestUrl: url.toString(),
 			fallbackPayload: null,
 		});
 	}
@@ -1176,7 +1271,7 @@ class UIManager {
 		}
 
 		try {
-			const response = await fetch(TEAM_RECOMMENDATION_PREFERENCES_URL, {
+			const response = await fetch(this._buildApiUrl(TEAM_RECOMMENDATION_PREFERENCES_PATH), {
 				method: 'PUT',
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({
@@ -1210,7 +1305,7 @@ class UIManager {
 			idbStorage: this.idbStorage,
 			cacheKey: 'teamRecommendationProfiles:metadata',
 			ttlMs: TOOLS_CATALOG_CACHE_TTL_MS,
-			requestUrl: TEAM_RECOMMENDATION_PROFILES_URL,
+			requestUrl: this._buildApiUrl(TEAM_RECOMMENDATION_PROFILES_PATH),
 			fallbackPayload: null,
 		});
 	}
@@ -1226,7 +1321,7 @@ class UIManager {
 	 */
 	async _getTeamRecommendationEnginePayload(mode, objective, trendWindowDays = 30) {
 		const cacheKey = `teamRecommendations:${mode}:${objective}:${trendWindowDays}`;
-		const url = new URL(TEAM_RECOMMENDATIONS_URL);
+		const url = new URL(this._buildApiUrl(TEAM_RECOMMENDATIONS_PATH));
 		url.searchParams.set('mode', mode || 'arena');
 		url.searchParams.set('objective', objective || 'balanced');
 		url.searchParams.set('limit', '3');
@@ -1252,7 +1347,7 @@ class UIManager {
 	 */
 	async _getTeamRecommendationBacktestPayload(mode, objective) {
 		const cacheKey = `teamRecommendationBacktest:${mode}:${objective}`;
-		const url = new URL(TEAM_RECOMMENDATION_BACKTEST_URL);
+		const url = new URL(this._buildApiUrl(TEAM_RECOMMENDATION_BACKTEST_PATH));
 		url.searchParams.set('mode', mode || 'arena');
 		url.searchParams.set('objective', objective || 'balanced');
 		url.searchParams.set('lookbackDays', '30');
@@ -1278,7 +1373,7 @@ class UIManager {
 	 */
 	async _getTeamRecommendationCalibrationPayload(mode, trendWindowDays = 30) {
 		const cacheKey = `teamRecommendationCalibration:${mode}:${trendWindowDays}`;
-		const url = new URL(TEAM_RECOMMENDATION_CALIBRATION_URL);
+		const url = new URL(this._buildApiUrl(TEAM_RECOMMENDATION_CALIBRATION_PATH));
 		url.searchParams.set('mode', mode || 'arena');
 		url.searchParams.set('preferredTrendWindowDays', String(Math.max(1, Number(trendWindowDays || 30))));
 
@@ -1327,7 +1422,7 @@ class UIManager {
 		const selectedStatus = this.prefStorage.get('toolsCatalogStatusFilter', '');
 		const cacheKey = `toolsCatalog:external:${selectedStatus || 'all'}`;
 
-		const url = new URL(TOOLS_CATALOG_URL);
+		const url = new URL(this._buildApiUrl(TOOLS_CATALOG_PATH));
 		const defaultMinConfidence = Number(metadata?.defaultMinConfidence);
 		const normalizedMinConfidence = Number.isFinite(defaultMinConfidence)
 			? Math.max(0, Math.min(1, defaultMinConfidence))
@@ -1359,7 +1454,7 @@ class UIManager {
 			idbStorage: this.idbStorage,
 			cacheKey: 'toolsCatalog:filters',
 			ttlMs: TOOLS_CATALOG_CACHE_TTL_MS,
-			requestUrl: TOOLS_CATALOG_FILTERS_URL,
+			requestUrl: this._buildApiUrl(TOOLS_CATALOG_FILTERS_PATH),
 			fallbackPayload: {
 				verificationStatuses: ['verified', 'partial', 'unverified', 'stale'],
 				defaultMinConfidence: 0.65,
@@ -2521,6 +2616,352 @@ class UIManager {
 	}
 
 	/**
+	 * Resolve normalized API base URL from preferences.
+	 *
+	 * @returns {string} API base URL
+	 * @private
+	 */
+	_getApiBaseUrl() {
+		return getConfiguredApiBaseUrl(this.prefStorage);
+	}
+
+	/**
+	 * Build absolute API URL from configured base and path.
+	 *
+	 * @param {string} path - API path
+	 * @returns {string} Absolute URL
+	 * @private
+	 */
+	_buildApiUrl(path) {
+		return buildConfiguredApiUrl(this.prefStorage, path);
+	}
+
+	/**
+	 * Probe a configured API endpoint and return status metadata.
+	 *
+	 * @param {string} path - API path
+	 * @returns {Promise<object>} Probe result
+	 * @private
+	 */
+	async _probeConnectionEndpoint(path) {
+		const url = this._buildApiUrl(path);
+		return this._probeConnectionAbsoluteUrl(url);
+	}
+
+	/**
+	 * Probe an absolute endpoint URL and return status metadata.
+	 *
+	 * @param {string} url - Absolute URL
+	 * @returns {Promise<object>} Probe result
+	 * @private
+	 */
+	async _probeConnectionAbsoluteUrl(url) {
+		const startedAt = performance.now();
+		try {
+			const response = await fetch(url, {
+				method: 'GET',
+				headers: { 'Accept': 'application/json' },
+				cache: 'no-store',
+			});
+			let data = null;
+			try {
+				data = await response.json();
+			} catch {
+				data = null;
+			}
+			return {
+				ok: response.ok,
+				status: response.status,
+				statusText: response.statusText || '',
+				latencyMs: Math.max(0, Math.round(performance.now() - startedAt)),
+				url,
+				data,
+				error: '',
+			};
+		} catch (err) {
+			return {
+				ok: false,
+				status: 0,
+				statusText: '',
+				latencyMs: Math.max(0, Math.round(performance.now() - startedAt)),
+				url,
+				data: null,
+				error: String(err?.message || err || 'Request failed'),
+			};
+		}
+	}
+
+	/**
+	 * Render connection and server diagnostics view.
+	 *
+	 * @returns {Promise<string>} HTML content
+	 */
+	async renderConnection() {
+		const apiBaseUrl = this._getApiBaseUrl();
+		let [apiHealth, uiSettings, repairStatus, handshake] = await Promise.all([
+			this._probeConnectionEndpoint(SYNC_HEALTH_PATH),
+			this._probeConnectionEndpoint(UI_SETTINGS_PATH),
+			this._probeConnectionEndpoint(UI_REPAIR_STATUS_PATH),
+			this._probeConnectionEndpoint(UI_HANDSHAKE_PATH),
+		]);
+
+		let healthFallbackNote = '';
+		if (!apiHealth.ok && apiBaseUrl !== DEFAULT_API_BASE_URL) {
+			const fallbackProbe = await this._probeConnectionAbsoluteUrl(`${DEFAULT_API_BASE_URL}${SYNC_HEALTH_PATH}`);
+			if (fallbackProbe.ok) {
+				healthFallbackNote = `Configured API URL is not reachable from userscript context, but default ${DEFAULT_API_BASE_URL} is reachable.`;
+				apiHealth = {
+					...fallbackProbe,
+					note: healthFallbackNote,
+				};
+			}
+		}
+
+		this._setConnectionNavStatus(apiHealth.ok ? 'online' : (apiHealth.status > 0 ? 'degraded' : 'offline'));
+
+		const recentCalls = Array.isArray(this.gameTracker?._apiCallLog)
+			? this.gameTracker._apiCallLog.slice(-100).reverse()
+			: [];
+		const recentCallsHtml = recentCalls.length === 0
+			? '<div class="oj-muted" style="font-size:11px;">No recent API calls captured yet.</div>'
+			: recentCalls.map((entry) => {
+				const status = String(entry?.status || 'unknown');
+				const statusClass = status === 'ok'
+					? 'oj-status-ok'
+					: (status === 'error' ? 'oj-status-err' : 'oj-muted');
+				const names = Array.isArray(entry?.callNames) && entry.callNames.length > 0
+					? entry.callNames.join(', ')
+					: '(unknown)';
+				const time = entry?.ts
+					? new Date(entry.ts).toLocaleTimeString()
+					: '--:--:--';
+				return `
+					<div style="padding:6px 0;border-bottom:1px solid #2f2f2f;">
+						<div style="display:flex;justify-content:space-between;gap:8px;align-items:center;">
+							<span class="oj-mono" style="font-size:10px;">${this._escapeHtml(time)}</span>
+							<span class="${statusClass}" style="font-size:10px;text-transform:uppercase;">${this._escapeHtml(status)}</span>
+						</div>
+						<div style="font-size:11px;margin-top:2px;">${this._escapeHtml(names)}</div>
+						<div class="oj-muted" style="font-size:10px;margin-top:1px;">${this._escapeHtml(String(entry?.detail || ''))}</div>
+					</div>`;
+			}).join('');
+
+		const classifyEndpointState = (probe, isCoreHealth = false) => {
+			if (probe?.ok) return 'ok';
+			if (isCoreHealth) {
+				return probe?.status > 0 ? 'degraded' : 'down';
+			}
+			if (probe?.status > 0 || apiHealth.ok) {
+				return 'warn';
+			}
+			return 'down';
+		};
+
+		const statusRows = [
+			{
+				label: 'API health',
+				probe: apiHealth,
+				detail: apiHealth.ok ? 'Sync API reachable' : 'Cannot reach sync API health endpoint',
+				state: classifyEndpointState(apiHealth, true),
+			},
+			{
+				label: 'Tray/API UI settings endpoint',
+				probe: uiSettings,
+				detail: uiSettings.ok ? 'UI settings endpoint reachable' : 'UI settings endpoint unavailable or access-restricted',
+				state: classifyEndpointState(uiSettings, false),
+			},
+			{
+				label: 'Tray/API repair-status endpoint',
+				probe: repairStatus,
+				detail: repairStatus.ok ? 'Repair diagnostics endpoint reachable' : 'Repair diagnostics endpoint unavailable or access-restricted',
+				state: classifyEndpointState(repairStatus, false),
+			},
+			{
+				label: 'Userscript handshake endpoint',
+				probe: handshake,
+				detail: handshake.ok
+					? `Status: ${this._escapeHtml(String(handshake.data?.status || 'unknown'))}`
+					: 'Handshake endpoint unavailable or access-restricted',
+				state: classifyEndpointState(handshake, false),
+			},
+		];
+
+		const rowsHtml = statusRows.map((row) => {
+			const badge = row.state === 'ok' ? 'OK' : row.state === 'warn' ? 'WARN' : row.state === 'degraded' ? 'DEGRADED' : 'DOWN';
+			const badgeStyle = row.state === 'ok'
+				? 'background:#1e4d2b;color:#8ef1b0;border:1px solid #2f8f4a;'
+				: row.state === 'warn' || row.state === 'degraded'
+					? 'background:#4a4520;color:#ffe39a;border:1px solid #9b8e2f;'
+					: 'background:#4d1e1e;color:#ffc0c0;border:1px solid #9f3a3a;';
+			const statusLine = row.probe.status
+				? `HTTP ${row.probe.status} ${this._escapeHtml(row.probe.statusText || '')}`
+				: this._escapeHtml(row.probe.error || 'no response');
+			return `
+				<div style="padding:8px 0;border-bottom:1px solid #3a3a3a;">
+					<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;">
+						<strong>${this._escapeHtml(row.label)}</strong>
+						<span style="font-size:10px;padding:2px 8px;border-radius:999px;${badgeStyle}">${badge}</span>
+					</div>
+					<div class="oj-muted" style="font-size:11px;margin-top:2px;">${row.detail}</div>
+					<div class="oj-muted" style="font-size:10px;margin-top:2px;">${statusLine} • ${row.probe.latencyMs}ms</div>
+					<div class="oj-muted" style="font-size:10px;margin-top:2px;word-break:break-all;">${this._escapeHtml(row.probe.url)}</div>
+				</div>`;
+		}).join('');
+
+		const settingsPayload = uiSettings.data && typeof uiSettings.data === 'object'
+			? JSON.stringify(uiSettings.data, null, 2)
+			: '';
+
+		return `
+			<div class="oj-settings">
+				<h3>Connection</h3>
+
+				<div class="oj-settings-group">
+					<h4>Connection Configuration</h4>
+					<label style="display:flex;flex-direction:column;gap:4px;font-size:12px;">
+						<span>API base URL</span>
+						<input id="oj-api-base-url" type="text" value="${this._escapeHtml(apiBaseUrl)}"
+							style="background:#2a2a2e;color:#ddd;border:1px solid #555;border-radius:3px;padding:6px 8px;">
+					</label>
+					<p class="oj-muted" style="margin:6px 0 0;font-size:11px;">Used for recommendations, dashboard API cards, and health probes.</p>
+					<div class="oj-btn-row" style="margin-top:8px;">
+						<button class="oj-btn" id="oj-connection-save">Save URL</button>
+						<button class="oj-btn" id="oj-connection-test">Test</button>
+						<button class="oj-btn" id="oj-connection-reset">Reset Default</button>
+					</div>
+					<div id="oj-connection-feedback" class="oj-muted" style="margin-top:8px;font-size:11px;"></div>
+				</div>
+
+				${healthFallbackNote ? `<div class="oj-settings-group"><p class="oj-muted" style="margin:0;font-size:11px;">⚠️ ${this._escapeHtml(healthFallbackNote)}</p></div>` : ''}
+
+				<div class="oj-settings-group">
+					<h4>Server Status</h4>
+					${rowsHtml}
+					<div class="oj-btn-row" style="margin-top:8px;">
+						<button class="oj-btn" id="oj-connection-refresh">Refresh Status</button>
+						<button class="oj-btn" id="oj-connection-open-apilog">Open API Log</button>
+						<button class="oj-btn" id="oj-connection-open-health">Open Health</button>
+						<button class="oj-btn" id="oj-connection-open-settings">Open UI Settings</button>
+						<button class="oj-btn" id="oj-connection-open-repair">Open Repair Status</button>
+						<button class="oj-btn" id="oj-connection-open-handshake">Open Handshake</button>
+					</div>
+				</div>
+
+				<div class="oj-settings-group">
+					<h4>Recent API Calls (Last 100)</h4>
+					<div style="max-height:260px;overflow:auto;background:#16161a;border:1px solid #333;padding:8px;border-radius:4px;">
+						${recentCallsHtml}
+					</div>
+				</div>
+
+				<div class="oj-settings-group">
+					<h4>UI Settings Payload</h4>
+					<pre style="max-height:180px;overflow:auto;background:#16161a;border:1px solid #333;padding:8px;border-radius:4px;font-size:11px;color:#bfc7d5;">${this._escapeHtml(settingsPayload || 'No payload available.')}</pre>
+				</div>
+			</div>
+		`;
+	}
+
+	/**
+	 * Attach event listeners for connection view controls.
+	 */
+	attachConnectionEventListeners() {
+		const overlay = this.overlay;
+		if (!overlay) return;
+
+		const baseInput = overlay.querySelector('#oj-api-base-url');
+		const feedback = overlay.querySelector('#oj-connection-feedback');
+
+		const setFeedback = (message, isError = false) => {
+			if (!feedback) return;
+			feedback.textContent = message;
+			feedback.style.color = isError ? '#ffb4b4' : '#9fd6ff';
+		};
+
+		const persistBaseUrl = async (runProbe) => {
+			const normalized = normalizeApiBaseUrl(baseInput?.value || '');
+			this.prefStorage.set('apiBaseUrl', normalized);
+			if (baseInput) {
+				baseInput.value = normalized;
+			}
+
+			// Invalidate recommendation/tool metadata caches that are API-backed.
+			await Promise.allSettled([
+				this.idbStorage.setMetadata('battleRecommendations:arena', { timestamp: 0, payload: null }),
+				this.idbStorage.setMetadata('teamRecommendationProfiles:metadata', { timestamp: 0, payload: null }),
+				this.idbStorage.setMetadata('toolsCatalog:filters', { timestamp: 0, payload: null }),
+			]);
+
+			if (runProbe) {
+				const probe = await this._probeConnectionEndpoint(SYNC_HEALTH_PATH);
+				if (probe.ok) {
+					setFeedback(`Saved ${normalized}. Health check OK (${probe.latencyMs}ms).`, false);
+					this._setConnectionNavStatus('online');
+				} else {
+					setFeedback(`Saved ${normalized}, but health probe failed (${probe.error || `HTTP ${probe.status}`}).`, true);
+					this._setConnectionNavStatus(probe.status > 0 ? 'degraded' : 'offline');
+				}
+			} else {
+				setFeedback(`Saved ${normalized}.`, false);
+			}
+		};
+
+		const testCurrentUrl = async () => {
+			const normalized = normalizeApiBaseUrl(baseInput?.value || '');
+			if (baseInput) {
+				baseInput.value = normalized;
+			}
+			const probe = await this._probeConnectionAbsoluteUrl(`${normalized}${SYNC_HEALTH_PATH}`);
+			if (probe.ok) {
+				setFeedback(`Test OK for ${normalized} (${probe.latencyMs}ms).`, false);
+				this._setConnectionNavStatus('online');
+			} else {
+				setFeedback(`Test failed for ${normalized} (${probe.error || `HTTP ${probe.status}`}).`, true);
+				this._setConnectionNavStatus(probe.status > 0 ? 'degraded' : 'offline');
+			}
+		};
+
+		overlay.querySelector('#oj-connection-save')?.addEventListener('click', () => {
+			persistBaseUrl(false);
+		});
+
+		overlay.querySelector('#oj-connection-test')?.addEventListener('click', () => {
+			testCurrentUrl();
+		});
+
+		overlay.querySelector('#oj-connection-reset')?.addEventListener('click', () => {
+			if (baseInput) {
+				baseInput.value = 'http://localhost:5124';
+			}
+			persistBaseUrl(true);
+		});
+
+		overlay.querySelector('#oj-connection-refresh')?.addEventListener('click', () => {
+			this.renderView('connection');
+		});
+
+		overlay.querySelector('#oj-connection-open-apilog')?.addEventListener('click', () => {
+			this.switchView('apilog');
+		});
+
+		overlay.querySelector('#oj-connection-open-health')?.addEventListener('click', () => {
+			this._openExternalUrl(this._buildApiUrl(SYNC_HEALTH_PATH));
+		});
+
+		overlay.querySelector('#oj-connection-open-settings')?.addEventListener('click', () => {
+			this._openExternalUrl(this._buildApiUrl(UI_SETTINGS_PATH));
+		});
+
+		overlay.querySelector('#oj-connection-open-repair')?.addEventListener('click', () => {
+			this._openExternalUrl(this._buildApiUrl(UI_REPAIR_STATUS_PATH));
+		});
+
+		overlay.querySelector('#oj-connection-open-handshake')?.addEventListener('click', () => {
+			this._openExternalUrl(this._buildApiUrl(UI_HANDSHAKE_PATH));
+		});
+	}
+
+	/**
 	 * Settings — sync render (no async data needed).
 	 * @returns {string} HTML content
 	 */
@@ -2571,6 +3012,7 @@ class UIManager {
 			['inventory', 'Inventory'],
 			['mail', 'Mail'],
 			['resources', 'Resources'],
+			['connection', 'Connection'],
 			['apilog', 'API Log'],
 		].map(([val, label]) => {
 			const sel = val === defaultTab ? 'selected' : '';
@@ -2733,8 +3175,8 @@ class UIManager {
 			overlay: this.overlay,
 			runInstallHealthCheck: () => this._runInstallHealthCheck(),
 			openApiLog: () => this.switchView('apilog'),
-			openApiHealth: () => this._openExternalUrl(SYNC_HEALTH_URL),
-			openApiDocs: () => this._openExternalUrl(SYNC_DOCS_URL),
+			openApiHealth: () => this._openExternalUrl(this._buildApiUrl(SYNC_HEALTH_PATH)),
+			openApiDocs: () => this._openExternalUrl(this._buildApiUrl(SYNC_DOCS_PATH)),
 		});
 	}
 
@@ -2831,7 +3273,7 @@ class UIManager {
 	 */
 	async _checkLocalApiHealth() {
 		try {
-			const response = await fetch(SYNC_HEALTH_URL, {
+			const response = await fetch(this._buildApiUrl(SYNC_HEALTH_PATH), {
 				method: 'GET',
 				headers: { 'Accept': 'application/json' },
 				cache: 'no-store',

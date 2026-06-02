@@ -1632,3 +1632,91 @@
 - dotnet build installer-ui/OrganizedJihad.Installer.csproj -c Release (pass)
 - pwsh -ExecutionPolicy Bypass -File Publish-InstallerUI.ps1 -OutputDir .\\installer-ui\\publish\\win-x64 (pass)
 - launched installer verified running/responding with non-zero HWND (pid 10000)
+
+---
+
+## Session
+- Date: 2026-06-02
+- Session Number: 49
+- Scope: restore toggle icons after state-label simplification
+
+## Summary
+- Re-added toggle icon indicators in option labels.
+- Checked state now uses filled circle (`●`) and unchecked uses hollow circle (`○`) before label text.
+- Preserved recent layout-stability work while restoring visual state affordances requested by user.
+
+## Files Modified
+- installer-ui/MainWindow.axaml.cs
+- ~docs/copilot-chats/2026-05-31-userscript-build-auto.md
+
+## Validation
+- dotnet build installer-ui/OrganizedJihad.Installer.csproj -c Release (pass)
+- pwsh -ExecutionPolicy Bypass -File Publish-InstallerUI.ps1 -OutputDir .\\installer-ui\\publish\\win-x64 (pass)
+- launched installer verified running/responding with non-zero HWND (pid 4860)
+
+---
+
+## Session
+- Date: 2026-06-02
+- Session Number: 50
+- Scope: restore correct checked toggle icon from earlier commit behavior
+
+## Summary
+- Reviewed recent installer-ui commit history for the previous preferred toggle icon behavior.
+- Replaced the temporary dot checked-state symbol with green checkmark icon semantics.
+- Implemented structured toggle content with fixed icon slot width to preserve layout stability while showing icon indicators.
+- Checked state now displays a green checkmark (`✔`); unchecked remains hollow circle (`○`).
+
+## Files Modified
+- installer-ui/MainWindow.axaml.cs
+- ~docs/copilot-chats/2026-05-31-userscript-build-auto.md
+
+## Validation
+- dotnet build installer-ui/OrganizedJihad.Installer.csproj -c Release (pass)
+- pwsh -ExecutionPolicy Bypass -File Publish-InstallerUI.ps1 -OutputDir .\\installer-ui\\publish\\win-x64 (pass)
+- launched installer verified running/responding with non-zero HWND (pid 28088)
+
+---
+
+## Session
+- Date: 2026-06-02
+- Session Number: 51
+- Scope: fix checked-icon clipping and eliminate toggle-row vertical shift caused by icon state changes
+
+## Summary
+- Reworked toggle label content rendering to use a fixed icon column in a `Grid` (`20,*`) instead of variable-width inline icon text.
+- Applied stable icon typography and alignment settings so checked/unchecked icon swaps no longer alter measured button height.
+- Prevented right-side clipping of the check icon by giving icon glyphs a dedicated centered slot.
+- Preserved requested green check icon for checked state and hollow circle for unchecked state.
+
+## Files Modified
+- installer-ui/MainWindow.axaml.cs
+- ~docs/copilot-chats/2026-05-31-userscript-build-auto.md
+
+## Validation
+- dotnet build installer-ui/OrganizedJihad.Installer.csproj -c Release (pass)
+- pwsh -ExecutionPolicy Bypass -File Publish-InstallerUI.ps1 -OutputDir .\\installer-ui\\publish\\win-x64 (pass)
+- launched installer verified running/responding with non-zero HWND (pid 13688)
+
+---
+
+## Session
+- Date: 2026-06-02
+- Session Number: 52
+- Scope: remove remaining focus-driven layout movement, eliminate combo blue/beige fallback visuals, and increase OJ icon occupancy
+
+## Summary
+- Hardened `TextBox` template-level border styles for base/hover/focus states with constant 2px thickness to prevent focus size jumps.
+- Hardened `ComboBox` template-level border styles for base/hover/focus states with constant 2px thickness and palette-compliant orange focus.
+- Added explicit `ComboBoxItem` and `ListBoxItem` template border/background state overrides to suppress default Fluent blue/beige popup visuals.
+- Replaced installer window icon file with `oj-tray-alt-steel.ico` to increase visible OJ glyph occupancy in icon area.
+
+## Files Modified
+- installer-ui/MainWindow.axaml
+- installer-ui/Assets/oj-installer.ico
+- ~docs/copilot-chats/2026-05-31-userscript-build-auto.md
+
+## Validation
+- dotnet build installer-ui/OrganizedJihad.Installer.csproj -c Release (pass)
+- pwsh -ExecutionPolicy Bypass -File Publish-InstallerUI.ps1 -OutputDir .\\installer-ui\\publish\\win-x64 (pass)
+- launched installer verified running/responding with non-zero HWND (pid 12624)

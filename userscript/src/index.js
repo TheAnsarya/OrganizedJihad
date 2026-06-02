@@ -35,6 +35,7 @@ import APIMonitor from './modules/apiMonitor.js';
 import GameOverlay from './modules/gameOverlay.js';
 import BattleRecommendationOverlay from './modules/battleRecommendationOverlay.js';
 import DomTargeting from './modules/domTargeting.js';
+import { getConfiguredApiBaseUrl } from './modules/helpers/apiConfig.js';
 import NotificationManager from './modules/notificationManager.js';
 import './styles/main.css';
 
@@ -355,12 +356,13 @@ import './styles/main.css';
 		window._ojGlobalRejectionHandler = _onUnhandledRejection;
 
 		// ─── Initialize sync client (optional) ──────────────────────
-		const syncClient = new SyncClient('http://localhost:5124');
+		const configuredApiBaseUrl = getConfiguredApiBaseUrl(prefStorage);
+		const syncClient = new SyncClient(configuredApiBaseUrl);
 		let apiAvailable = false;
 		try {
 			apiAvailable = await syncClient.checkHealth();
 			if (apiAvailable) {
-				console.log('[OrganizedJihad] ✅ API server connected at http://localhost:5124');
+				console.log(`[OrganizedJihad] ✅ API server connected at ${configuredApiBaseUrl}`);
 			}
 		} catch {
 			// Silently continue — API server is optional

@@ -45,6 +45,7 @@ export function renderDashboardTrackedDataSection(params) {
  * @param {boolean} params.isTracking - API interception active flag
  * @param {string} params.lastSnapshotTime - Last snapshot display string
  * @param {object} params.syncStatus - Sync status metadata
+ * @param {object} params.apiConnection - API connection probe metadata
  * @param {number} params.errorCount - Tracker error count
  * @param {string} params.version - UI version
  * @param {(value: string) => string} params.escapeHtml - HTML escape callback
@@ -55,11 +56,16 @@ export function renderDashboardStatusSection(params) {
 	if (typeof escapeHtml !== 'function') return '';
 	const isTracking = !!params?.isTracking;
 	const syncStatus = params?.syncStatus || {};
+	const apiConnection = params?.apiConnection || {};
 	const errorCount = Number(params?.errorCount || 0);
 
 	const syncHtml = syncStatus.timestamp
 		? `<span class="${syncStatus.ok ? 'oj-status-ok' : 'oj-status-err'}" title="${escapeHtml(syncStatus.message || '')}">${syncStatus.ok ? '\u2705' : '\u274C'} ${new Date(syncStatus.timestamp).toLocaleTimeString()}${!syncStatus.ok ? ` \u2014 ${escapeHtml(syncStatus.message || 'Error')}` : ''}</span>`
 		: '<span style="color:#888">Not synced</span>';
+
+	const apiConnectionHtml = apiConnection.ok
+		? `<span class="oj-status-ok" title="${escapeHtml(String(apiConnection.url || ''))}">Online${Number.isFinite(apiConnection.latencyMs) ? ` (${apiConnection.latencyMs}ms)` : ''}</span>`
+		: `<span class="oj-status-err" title="${escapeHtml(String(apiConnection.error || apiConnection.statusText || 'Unavailable'))}">Offline</span>`;
 
 	return `
 		<div class="oj-section">
@@ -80,6 +86,10 @@ export function renderDashboardStatusSection(params) {
 				<div class="oj-status-row">
 					<span>API Sync</span>
 					${syncHtml}
+				</div>
+				<div class="oj-status-row">
+					<span>API Server</span>
+					${apiConnectionHtml}
 				</div>
 				${errorCount > 0 ? `<div class="oj-status-row"><span>Errors</span><span class="oj-status-err">${errorCount}</span></div>` : ''}
 				<div class="oj-status-row">
