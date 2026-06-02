@@ -542,12 +542,19 @@ have you updated the version number on the userscript lately?
 
 [OJ] (Installer) You fucked something up, go back to the previous code version, "Install User Script" now opens three tabs in the default browser instead of actually running the userscript installation like it did 30 minutes ago; fix it fix it fix it!!!!; continue;
 
+excellent well done, commit these changes; continue;
+
 do both; continue; [OJ] (apiserver) the `/ui` page is using three columns, but this is a bad layout, vertically stack these sections instead; 
 
+[OJ] (Userscript) The connection tab is saying the server is down, but it's not, `http://localhost:5124/api/sync/health` is returning valid data, and instead of just a "Save + Test" button add a "Test" button; I do not see the "connection status badge" anywhere, Add it to the Connection tab button as its icon; Add icons to the other tab buttons as well; open installer after finishing code changes and republishing the userscript package so we can install it; continue;
 
+[OJ] (Userscript) The apiserver connection is still showing as bad, while the connection and server are healthy, fix it; you added the tabs buttons a second time, remove those duplicates you added; after that, focus on making the userscript/apiserver connection work so we can start collecting real data and fixing the rest of the UI with actual item names and such; continue;
 
+commit as one
 
+[OJ] (Userscript) On the inventory tab we don't have names just placeholders like `Consumable #1`, research where we can get the display names for these types of things, like from the game scripts or an api call or something and fetch and use the actual names; continue;
 
+yes do both
 
 
 
