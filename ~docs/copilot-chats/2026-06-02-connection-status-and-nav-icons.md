@@ -63,3 +63,26 @@
 ## Key Decisions
 - Diagnostics flags (`--first-run-diagnostics`, `--open-userscript-diagnostics`) are now gated to API-install workflows only.
 - Userscript installation path remains controlled by the installer UI Tampermonkey import flow to avoid duplicate or unrelated browser launches.
+
+---
+
+## Session
+- Date: 2026-06-02
+- Session Number: 6
+- Scope: Push + PR update + API /ui vertical stack layout change
+
+## Summary
+- Pushed previously committed userscript and installer hotfix commits to `feature/204-architecture-modernization`.
+- Posted a concise status update comment on PR #209 summarizing the delivered fixes.
+- Updated API `/ui` page template layout to stack sections vertically (single column) instead of multi-column grid.
+
+## Files Modified
+- api/Resources/UiTemplates/api-control.html
+- ~docs/copilot-chats/2026-06-02-connection-status-and-nav-icons.md
+
+## Validation
+- dotnet build api/OrganizedJihad.Api.csproj -c Release
+- git push
+
+## Commits
+- `a4bfc88` Fix #204: stack API /ui sections vertically
