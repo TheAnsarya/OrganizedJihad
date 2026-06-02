@@ -59,6 +59,35 @@
 - yarn build (version 0.9.218)
 - pwsh -ExecutionPolicy Bypass -File ./Publish-InstallerUI.ps1
 
+---
+
+## Session
+- Date: 2026-06-02
+- Session Number: 9
+- Scope: Inventory tab item-name resolution research + runtime name catalog integration
+
+## Summary
+- Confirmed `inventoryGet` API returns category maps of `itemId -> quantity` and does not include direct display names.
+- Implemented inventory name resolution that merges multiple sources:
+	- persisted `itemNameCatalog` metadata
+	- captured metadata blobs (`gameSettings`, `billingCatalog`)
+	- runtime game client libs (`unsafeWindow/window` via `lib` and `nxg.*.lib`)
+- Added locale-token resolution attempts through runtime translators (`nxg.i18n.*`, `i18n.t`, `gettext`) with readable fallback formatting.
+- Expanded inventory category mapping coverage for additional inventory sections (`fragmentGear`, `fragmentScroll`, `ascensionGear`, `fragmentTitanArtifact`, `bannerStone`, `petGear`, `fragmentArtifact`).
+- Persisted newly discovered item names back into `itemNameCatalog` metadata for progressive enrichment over future sessions.
+
+## Files Modified
+- userscript/src/modules/uiManager.js
+- userscript/package.json
+- userscript/dist/organized-jihad.user.js
+- ~docs/copilot-chats/2026-06-02-userscript-build-auto.md
+- ~docs/copilot-chats/2026-06-02-connection-status-and-nav-icons.md
+
+## Validation
+- get_errors userscript/src/modules/uiManager.js (no errors)
+- yarn test --runInBand (37/37 suites, 843/843 tests passed)
+- yarn build (version 0.9.219)
+
 ## GitHub Issues
 - Referenced: not specified in-session
 - Closed: none in-session

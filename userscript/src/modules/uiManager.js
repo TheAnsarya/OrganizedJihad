@@ -65,6 +65,9 @@ import { decompressHeroStore, decompressTitanStore } from './heroCompression.js'
 import { resolveHeroName } from './heroNames.js';
 import { NOTIFICATION_TYPES } from './notificationManager.js';
 
+// eslint-disable-next-line no-undef
+const PAGE_WINDOW = (typeof unsafeWindow !== 'undefined') ? unsafeWindow : window;
+
 // ─── Fetch & Display Limits ──────────────────────────────────────────
 // Named constants for IndexedDB getAll() limits and display caps (#128).
 
@@ -200,6 +203,13 @@ class UIManager {
 		this._completionCache = {};
 		/** @type {number} Cache TTL in ms for completion averages */
 		this._completionCacheTTL = 60_000;
+
+		/** @type {Record<string, string>} Cached runtime item-name map for inventory display */
+		this._runtimeItemNameCatalog = {};
+		/** @type {number} Last refresh timestamp for runtime item-name catalog */
+		this._runtimeItemNameCatalogTs = 0;
+		/** @type {number} Cache TTL in ms for runtime item-name catalog */
+		this._runtimeItemNameCatalogTtl = 5 * 60_000;
 	}
 
 	/**
@@ -2366,7 +2376,7 @@ class UIManager {
 	 * @returns {Array<{itemId: string, name: string, category: string, count: number}>}
 	 * @private
 	 */
-	_parseRawInventory(rawData) {
+	_parseRawInventory(rawData, itemNameCatalog = {}) {
 		const items = [];
 
 		// Category mapping: API key → display category + name resolver
@@ -2377,6 +2387,13 @@ class UIManager {
 			consumable: { category: 'consumable', prefix: 'Consumable' },
 			gear: { category: 'equipment', prefix: 'Gear' },
 			craftItem: { category: 'fragment', prefix: 'Craft' },
+			fragmentGear: { category: 'fragment', prefix: 'Gear Fragment' },
+			fragmentScroll: { category: 'fragment', prefix: 'Scroll Fragment' },
+			ascensionGear: { category: 'fragment', prefix: 'Ascension Item' },
+			fragmentTitanArtifact: { category: 'artifact', prefix: 'Titan Artifact Fragment' },
+			fragmentArtifact: { category: 'artifact', prefix: 'Artifact Fragment' },
+			bannerStone: { category: 'resource', prefix: 'Banner Stone' },
+			petGear: { category: 'equipment', prefix: 'Pet Gear' },
 			scroll: { category: 'scroll', prefix: 'Scroll' },
 			artifact: { category: 'artifact', prefix: 'Artifact' },
 			experience: { category: 'resource', prefix: 'XP Item' },
@@ -2392,14 +2409,7 @@ class UIManager {
 			for (const [itemId, qty] of Object.entries(entries)) {
 				if (qty <= 0) continue;
 
-				// Try to resolve name via heroNames dictionary for soul stones
-				let name;
-				if (apiKey === 'fragmentHero' || apiKey === 'fragmentTitan' || apiKey === 'fragmentPet') {
-					const resolvedName = this._resolveEntityName(Number(itemId));
-					name = resolvedName !== `Hero_${itemId}` ? `${resolvedName} Stones` : `${catInfo.prefix} #${itemId} Stones`;
-				} else {
-					name = `${catInfo.prefix} #${itemId}`;
-				}
+				const name = this._resolveInventoryItemName(apiKey, itemId, catInfo, itemNameCatalog);
 
 				items.push({
 					itemId,
@@ -2413,6 +2423,34 @@ class UIManager {
 		// Sort by category then by count descending
 		items.sort((a, b) => a.category.localeCompare(b.category) || b.count - a.count);
 		return items;
+	}
+
+	/**
+	 * Resolve a display name for an inventory item.
+	 * Prefers localized runtime/catalog names and falls back to deterministic placeholders.
+	 *
+	 * @param {string} apiKey - Inventory category key from API payload
+	 * @param {string} itemId - Item ID
+	 * @param {{prefix: string}} catInfo - Category metadata
+	 * @param {Record<string, string>} itemNameCatalog - Name lookup map
+	 * @returns {string} Display name
+	 * @private
+	 */
+	_resolveInventoryItemName(apiKey, itemId, catInfo, itemNameCatalog) {
+		if (apiKey === 'fragmentHero' || apiKey === 'fragmentTitan' || apiKey === 'fragmentPet') {
+			const resolvedName = this._resolveEntityName(Number(itemId));
+			return resolvedName !== `Hero_${itemId}` ? `${resolvedName} Stones` : `${catInfo.prefix} #${itemId} Stones`;
+		}
+
+		const tokenKey = `${apiKey}${itemId}`;
+		const scopedKey = `${apiKey}:${itemId}`;
+		const directKey = `item:${itemId}`;
+		const resolved = itemNameCatalog[scopedKey] || itemNameCatalog[tokenKey] || itemNameCatalog[directKey] || '';
+		if (resolved) {
+			return resolved;
+		}
+
+		return `${catInfo.prefix} #${itemId}`;
 	}
 
 	/**
@@ -4239,10 +4277,11 @@ class UIManager {
 
 	async _loadInventoryItems() {
 		let items = [];
+		const itemNameCatalog = await this._buildItemNameCatalog();
 		try {
 			const rawData = await this.idbStorage.getMetadata('inventoryData', null);
 			if (rawData && typeof rawData === 'object') {
-				items = this._parseRawInventory(rawData);
+				items = this._parseRawInventory(rawData, itemNameCatalog);
 			}
 		} catch { /* empty */ }
 
@@ -4253,12 +4292,245 @@ class UIManager {
 					const rawData = typeof snapshots[0].inventoryData === 'string'
 						? JSON.parse(snapshots[0].inventoryData)
 						: snapshots[0].inventoryData;
-					items = this._parseRawInventory(rawData);
+					items = this._parseRawInventory(rawData, itemNameCatalog);
 				}
 			} catch { /* empty */ }
 		}
 
 		return items;
+	}
+
+	/**
+	 * Build merged inventory name catalog from captured metadata and game client runtime libs.
+	 *
+	 * @returns {Promise<Record<string, string>>} Name map keyed by category/id tokens
+	 * @private
+	 */
+	async _buildItemNameCatalog() {
+		const now = Date.now();
+		if (now - this._runtimeItemNameCatalogTs < this._runtimeItemNameCatalogTtl && Object.keys(this._runtimeItemNameCatalog).length > 0) {
+			return this._runtimeItemNameCatalog;
+		}
+
+		const catalog = {};
+		const seen = new WeakSet();
+		let storedCatalog = {};
+		const mergeCatalog = (source) => {
+			for (const [key, value] of Object.entries(source || {})) {
+				const label = String(value || '').trim();
+				if (!label) continue;
+				catalog[key] = label;
+			}
+		};
+
+		try {
+			const stored = await this.idbStorage.getMetadata('itemNameCatalog', null);
+			storedCatalog = stored?.items || stored || {};
+			mergeCatalog(storedCatalog);
+		} catch { /* empty */ }
+
+		try {
+			const gameSettings = await this.idbStorage.getMetadata('gameSettings', null);
+			if (gameSettings) {
+				this._collectItemNamesFromAnySource(gameSettings, catalog, 0, seen);
+			}
+		} catch { /* empty */ }
+
+		try {
+			const billingCatalog = await this.idbStorage.getMetadata('billingCatalog', null);
+			if (billingCatalog) {
+				this._collectItemNamesFromAnySource(billingCatalog, catalog, 0, seen);
+			}
+		} catch { /* empty */ }
+
+		this._collectItemNamesFromAnySource(PAGE_WINDOW?.lib || null, catalog, 0, seen);
+		this._collectItemNamesFromAnySource(PAGE_WINDOW?.nxg?.lib || null, catalog, 0, seen);
+		this._collectItemNamesFromAnySource(PAGE_WINDOW?.nxg?.data?.lib || null, catalog, 0, seen);
+		this._collectItemNamesFromAnySource(PAGE_WINDOW?.nxg?.config?.lib || null, catalog, 0, seen);
+
+		this._runtimeItemNameCatalog = catalog;
+		this._runtimeItemNameCatalogTs = now;
+
+		try {
+			if (Object.keys(catalog).length > Object.keys(storedCatalog || {}).length) {
+				await this.idbStorage.setMetadata('itemNameCatalog', {
+					items: catalog,
+					updatedAt: new Date(now).toISOString(),
+					count: Object.keys(catalog).length,
+				});
+			}
+		} catch { /* non-critical */ }
+
+		return catalog;
+	}
+
+	/**
+	 * Collect inventory item names recursively from candidate source trees.
+	 *
+	 * @param {any} source - Candidate source object
+	 * @param {Record<string, string>} outCatalog - Mutable output catalog
+	 * @param {number} depth - Current recursion depth
+	 * @param {WeakSet<object>} seen - Visited node tracker
+	 * @private
+	 */
+	_collectItemNamesFromAnySource(source, outCatalog, depth, seen) {
+		if (!source || typeof source !== 'object') return;
+		if (depth > 3) return;
+		if (seen.has(source)) return;
+		seen.add(source);
+
+		const inventoryCategoryKeys = [
+			'consumable', 'gear', 'scroll', 'coin', 'fragmentGear', 'fragmentScroll',
+			'ascensionGear', 'fragmentTitanArtifact', 'bannerStone', 'petGear',
+			'fragmentArtifact', 'fragmentHero', 'fragmentTitan', 'fragmentPet',
+		];
+
+		for (const key of inventoryCategoryKeys) {
+			const categoryMap = source?.[key];
+			if (categoryMap && typeof categoryMap === 'object') {
+				this._collectItemNamesFromCategoryMap(key, categoryMap, outCatalog);
+			}
+		}
+
+		this._collectItemNamesFromTokenMap(source, outCatalog);
+
+		for (const child of Object.values(source)) {
+			if (child && typeof child === 'object') {
+				this._collectItemNamesFromAnySource(child, outCatalog, depth + 1, seen);
+			}
+		}
+	}
+
+	/**
+	 * Collect names from a category map (`category -> { id -> descriptor }`).
+	 *
+	 * @param {string} categoryKey - Inventory category key
+	 * @param {Record<string, any>} categoryMap - Category map
+	 * @param {Record<string, string>} outCatalog - Output catalog
+	 * @private
+	 */
+	_collectItemNamesFromCategoryMap(categoryKey, categoryMap, outCatalog) {
+		for (const [itemId, descriptor] of Object.entries(categoryMap || {})) {
+			if (!/^\d+$/.test(String(itemId))) continue;
+			const label = this._extractPotentialItemLabel(descriptor);
+			if (!label) continue;
+			outCatalog[`${categoryKey}:${itemId}`] = label;
+			outCatalog[`${categoryKey}${itemId}`] = label;
+			outCatalog[`item:${itemId}`] = label;
+		}
+	}
+
+	/**
+	 * Collect names from flattened token maps (`consumable173: { name: ... }`).
+	 *
+	 * @param {Record<string, any>} source - Candidate map
+	 * @param {Record<string, string>} outCatalog - Output catalog
+	 * @private
+	 */
+	_collectItemNamesFromTokenMap(source, outCatalog) {
+		const tokenPattern = /^(consumable|gear|scroll|coin|fragmentGear|fragmentScroll|ascensionGear|fragmentTitanArtifact|bannerStone|petGear|fragmentArtifact|fragmentHero|fragmentTitan|fragmentPet)(\d+)$/;
+		for (const [key, value] of Object.entries(source || {})) {
+			const match = key.match(tokenPattern);
+			if (!match) continue;
+			const label = this._extractPotentialItemLabel(value);
+			if (!label) continue;
+			const categoryKey = match[1];
+			const itemId = match[2];
+			outCatalog[`${categoryKey}:${itemId}`] = label;
+			outCatalog[`${categoryKey}${itemId}`] = label;
+			outCatalog[`item:${itemId}`] = label;
+		}
+	}
+
+	/**
+	 * Extract a potential human-readable item label from varied descriptor structures.
+	 *
+	 * @param {any} descriptor - Candidate descriptor payload
+	 * @returns {string} Resolved label or empty string
+	 * @private
+	 */
+	_extractPotentialItemLabel(descriptor) {
+		if (!descriptor) return '';
+		if (typeof descriptor === 'string') {
+			return this._resolveLocaleToken(descriptor);
+		}
+		if (typeof descriptor !== 'object') return '';
+
+		const candidates = [
+			descriptor.name,
+			descriptor.title,
+			descriptor.label,
+			descriptor.caption,
+			descriptor.localeId,
+			descriptor.nameLocaleId,
+			descriptor.titleLocaleId,
+			descriptor.translationKey,
+			descriptor.locale?.title,
+			descriptor.locale?.name,
+			descriptor.clientData?.locale?.title,
+			descriptor.clientData?.locale?.name,
+		];
+
+		for (const candidate of candidates) {
+			if (!candidate || typeof candidate !== 'string') continue;
+			const resolved = this._resolveLocaleToken(candidate);
+			if (resolved) return resolved;
+		}
+
+		return '';
+	}
+
+	/**
+	 * Resolve locale token to display label using available game translation functions.
+	 *
+	 * @param {string} token - Raw token or plain text
+	 * @returns {string} Resolved label
+	 * @private
+	 */
+	_resolveLocaleToken(token) {
+		const raw = String(token || '').trim();
+		if (!raw) return '';
+
+		const translators = [
+			PAGE_WINDOW?.nxg?.i18n?.t,
+			PAGE_WINDOW?.nxg?.i18n?.translate,
+			PAGE_WINDOW?.nxg?.translate,
+			PAGE_WINDOW?.i18n?.t,
+			PAGE_WINDOW?.gettext,
+		].filter((fn) => typeof fn === 'function');
+
+		for (const translate of translators) {
+			try {
+				const translated = String(translate(raw) || '').trim();
+				if (translated && translated !== raw && !/^[A-Z0-9_]+$/.test(translated)) {
+					return translated;
+				}
+			} catch { /* ignore translator failures */ }
+		}
+
+		if (/^[A-Z0-9_]+$/.test(raw)) {
+			return this._prettifyLocaleToken(raw);
+		}
+
+		return raw;
+	}
+
+	/**
+	 * Prettify unresolved locale token into readable fallback text.
+	 *
+	 * @param {string} token - Locale token
+	 * @returns {string} Human-readable label
+	 * @private
+	 */
+	_prettifyLocaleToken(token) {
+		return token
+			.replace(/^(UI|LIB|BUNDLE)_/i, '')
+			.replace(/_NAME_/gi, '_')
+			.replace(/_DESC(RIPTION)?_/gi, '_')
+			.replace(/_/g, ' ')
+			.toLowerCase()
+			.replace(/\b\w/g, (char) => char.toUpperCase())
+			.trim();
 	}
 
 	_renderInventoryGroupSections(items) {

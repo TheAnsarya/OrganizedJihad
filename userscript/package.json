@@ -1,6 +1,6 @@
 {
 	"name": "organized-jihad",
-	"version": "0.9.218",
+	"version": "0.9.219",
 	"description": "TamperMonkey userscript for tracking Hero Wars game data with UI overlay",
 	"main": "dist/organized-jihad.user.js",
 	"type": "module",
