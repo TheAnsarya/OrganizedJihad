@@ -2,15 +2,13 @@
 
 ## Project: OrganizedJihad (OJ) - Hero Wars Comprehensive Tracker
 
-A multi-tier game tracking solution for Hero Wars that captures, stores, and analyzes ALL gameplay data including account state, battles, hero/titan upgrades, inventory usage, daily/guild quests, and more.
+A two-tier game tracking solution for Hero Wars that captures, stores, and analyzes ALL gameplay data including account state, battles, hero/titan upgrades, inventory usage, daily/guild quests, and more.
 
 ### Architecture Overview
 
 **Tier 1 - Browser Userscript** (`userscript/`): TamperMonkey userscript that intercepts Hero Wars API requests/responses in the browser and syncs captured data to the local API.
 
-**Tier 2 - Desktop App** (`desktop-app/`): .NET MAUI Blazor Hybrid desktop application for viewing, analyzing, and managing tracked data with rich UI.
-
-**Tier 3 - API Backend** (`api/`): ASP.NET Core Web API that receives sync data from the browser userscript and persists it to the database.
+**Tier 2 - API Backend** (`api/`): ASP.NET Core Web API that receives sync data from the browser userscript and persists it to the database.
 
 **Data Layer** (`data/`): Entity Framework Core with SQLite, containing all game entity models, migrations, audit interceptors, and database context.
 
@@ -125,10 +123,6 @@ OrganizedJihad/
 │   │   ├── DailyActivityModels.cs   # Daily quests, guild quests, login rewards
 │   │   └── InventoryModels.cs       # Inventory item usage, equipment changes
 │   └── Migrations/
-│
-├── desktop-app/                     # .NET MAUI Blazor Hybrid (Tier 2)
-│   ├── OrganizedJihad.Desktop.csproj
-│   └── ...
 │
 ├── userscript/                      # TamperMonkey Userscript (Tier 1)
 │   ├── package.json
@@ -272,5 +266,5 @@ OrganizedJihad/
 13. 🔄 Comprehensive test coverage (569/16 — heroNames, syncClient, apiMonitor added)
 14. 🔄 Performance benchmarking
 15. 🔄 Refactor: Extract gameTracker.js handler groups into tracker modules (#102)
-16. ⬜ Desktop app data visualization
+16. ⬜ Additional API/UI reporting visualizations
 17. ⬜ Automated daily report generation
