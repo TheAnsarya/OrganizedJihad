@@ -308,11 +308,11 @@ class UIManager {
 		this.overlay.innerHTML = `
 			<div class="oj-container">
 				<div class="oj-header">
-					<h2 class="oj-title">\u2694\uFE0F OrganizedJihad</h2>
+					<h2 class="oj-title">⚔️ OrganizedJihad</h2>
 					<div class="oj-header-actions">
-						<button class="oj-btn oj-btn-icon" id="oj-reset-pos" title="Reset Position">\u21BA</button>
-						<button class="oj-btn oj-btn-icon" id="oj-minimize" title="Minimize">\u2212</button>
-						<button class="oj-btn oj-btn-icon" id="oj-close" title="Close">\u00D7</button>
+						<button class="oj-btn oj-btn-icon" id="oj-reset-pos" title="Reset Position">↺</button>
+						<button class="oj-btn oj-btn-icon" id="oj-minimize" title="Minimize">−</button>
+						<button class="oj-btn oj-btn-icon" id="oj-close" title="Close">×</button>
 					</div>
 				</div>
 
@@ -321,7 +321,7 @@ class UIManager {
 					<button class="oj-nav-btn" data-view="activity">Activity</button>
 					<button class="oj-nav-btn" data-view="heroes">Heroes</button>
 					<button class="oj-nav-btn" data-view="titans">Titans</button>
-					<button class="oj-nav-btn" data-view="pets">\uD83D\uDC3E Pets</button>
+					<button class="oj-nav-btn" data-view="pets">Pets</button>
 					<button class="oj-nav-btn" data-view="upgrades">Upgrades</button>
 					<button class="oj-nav-btn" data-view="battles">Battles</button>
 					<button class="oj-nav-btn" data-view="chests">Chests</button>
@@ -737,6 +737,12 @@ class UIManager {
 				error: '',
 			}
 			: dashboardConnectionProbe;
+
+		this._setConnectionNavStatus(
+			dashboardConnectionResolved.ok
+				? 'online'
+				: (dashboardConnectionResolved.status > 0 || syncStatus?.ok ? 'degraded' : 'offline')
+		);
 
 		const dailyQuestsCompleted = questSummary.dailyCompleted || 0;
 		const dailyQuestsTotal = questSummary.dailyTotal || 0;
@@ -2679,6 +2685,11 @@ class UIManager {
 				error: '',
 			};
 		} catch (err) {
+			const gmResult = await this._probeConnectionWithTampermonkey(url, startedAt);
+			if (gmResult) {
+				return gmResult;
+			}
+
 			return {
 				ok: false,
 				status: 0,
@@ -2689,6 +2700,75 @@ class UIManager {
 				error: String(err?.message || err || 'Request failed'),
 			};
 		}
+	}
+
+	/**
+	 * Probe endpoint using Tampermonkey request API when fetch is blocked by page-context restrictions.
+	 *
+	 * @param {string} url - Absolute URL
+	 * @param {number} startedAt - Performance timestamp when probe started
+	 * @returns {Promise<object|null>} Probe result or null when GM API is unavailable
+	 * @private
+	 */
+	async _probeConnectionWithTampermonkey(url, startedAt) {
+		const gmRequest = globalThis.GM_xmlhttpRequest || globalThis?.GM?.xmlHttpRequest;
+		if (typeof gmRequest !== 'function') {
+			return null;
+		}
+
+		return await new Promise((resolve) => {
+			try {
+				gmRequest({
+					method: 'GET',
+					url,
+					headers: { 'Accept': 'application/json' },
+					timeout: 5000,
+					onload: (response) => {
+						let data = null;
+						try {
+							data = response?.responseText ? JSON.parse(response.responseText) : null;
+						} catch {
+							data = null;
+						}
+
+						const status = Number(response?.status || 0);
+						resolve({
+							ok: status >= 200 && status < 300,
+							status,
+							statusText: String(response?.statusText || ''),
+							latencyMs: Math.max(0, Math.round(performance.now() - startedAt)),
+							url,
+							data,
+							error: '',
+						});
+					},
+					onerror: (error) => {
+						resolve({
+							ok: false,
+							status: 0,
+							statusText: '',
+							latencyMs: Math.max(0, Math.round(performance.now() - startedAt)),
+							url,
+							data: null,
+							error: String(error?.error || error?.message || 'GM probe failed'),
+						});
+					},
+					ontimeout: () => {
+						resolve({
+							ok: false,
+							status: 0,
+							statusText: 'Timeout',
+							latencyMs: Math.max(0, Math.round(performance.now() - startedAt)),
+							url,
+							data: null,
+							error: 'GM probe timed out',
+						});
+					},
+				});
+			} catch {
+				resolve(null);
+			}
+		});
 	}
 
 	/**
@@ -2705,6 +2785,13 @@ class UIManager {
 			this._probeConnectionEndpoint(UI_HANDSHAKE_PATH),
 		]);
 
+		let syncStatus = {};
+		try {
+			syncStatus = (await this.idbStorage.getMetadata('syncStatus', null)) || {};
+		} catch {
+			syncStatus = {};
+		}
+
 		let healthFallbackNote = '';
 		if (!apiHealth.ok && apiBaseUrl !== DEFAULT_API_BASE_URL) {
 			const fallbackProbe = await this._probeConnectionAbsoluteUrl(`${DEFAULT_API_BASE_URL}${SYNC_HEALTH_PATH}`);
@@ -2717,7 +2804,18 @@ class UIManager {
 			}
 		}
 
-		this._setConnectionNavStatus(apiHealth.ok ? 'online' : (apiHealth.status > 0 ? 'degraded' : 'offline'));
+		if (!apiHealth.ok && syncStatus?.ok) {
+			healthFallbackNote = healthFallbackNote || 'Direct health probe failed, but recent sync metadata indicates API is reachable.';
+			apiHealth = {
+				...apiHealth,
+				ok: true,
+				statusText: apiHealth.statusText || 'Recent sync indicates API is reachable',
+				error: '',
+				note: healthFallbackNote,
+			};
+		}
+
+		this._setConnectionNavStatus(apiHealth.ok ? 'online' : (apiHealth.status > 0 || syncStatus?.ok ? 'degraded' : 'offline'));
 
 		const recentCalls = Array.isArray(this.gameTracker?._apiCallLog)
 			? this.gameTracker._apiCallLog.slice(-100).reverse()

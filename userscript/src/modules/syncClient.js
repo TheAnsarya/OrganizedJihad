@@ -27,7 +27,7 @@ class SyncClient {
 	 */
 	async checkHealth() {
 		try {
-			const response = await fetch(this.healthEndpoint, {
+			const response = await this._request(this.healthEndpoint, {
 				method: 'GET',
 				headers: {
 					'Content-Type': 'application/json',
@@ -46,7 +46,7 @@ class SyncClient {
 	 */
 	async getLastSync() {
 		try {
-			const response = await fetch(this.lastSyncEndpoint, {
+			const response = await this._request(this.lastSyncEndpoint, {
 				method: 'GET',
 				headers: {
 					'Content-Type': 'application/json',
@@ -71,7 +71,7 @@ class SyncClient {
 	 */
 	async getStats() {
 		try {
-			const response = await fetch(this.statsEndpoint, {
+			const response = await this._request(this.statsEndpoint, {
 				method: 'GET',
 				headers: {
 					'Content-Type': 'application/json',
@@ -351,7 +351,7 @@ class SyncClient {
 			});
 
 			// Send to API
-			const response = await fetch(this.syncEndpoint, {
+			const response = await this._request(this.syncEndpoint, {
 				method: 'POST',
 				headers: {
 					'Content-Type': 'application/json',
@@ -454,6 +454,76 @@ class SyncClient {
 			},
 			intervalMinutes * 60 * 1000
 		);
+	}
+
+	/**
+	 * Execute HTTP request with fetch-first strategy and Tampermonkey fallback.
+	 *
+	 * @param {string} url - Absolute URL
+	 * @param {{method?: string, headers?: object, body?: string}} options - Request options
+	 * @returns {Promise<{ok:boolean,status:number,statusText:string,json:Function,text:Function}>}
+	 * @private
+	 */
+	async _request(url, options = {}) {
+		try {
+			return await fetch(url, options);
+		} catch (fetchError) {
+			try {
+				return await this._requestWithTampermonkey(url, options);
+			} catch (gmError) {
+				if (String(gmError?.message || '').includes('unavailable')) {
+					throw fetchError;
+				}
+				throw gmError;
+			}
+		}
+	}
+
+	/**
+	 * Execute HTTP request through Tampermonkey cross-origin API.
+	 *
+	 * @param {string} url - Absolute URL
+	 * @param {{method?: string, headers?: object, body?: string}} options - Request options
+	 * @returns {Promise<{ok:boolean,status:number,statusText:string,json:Function,text:Function}>}
+	 * @private
+	 */
+	async _requestWithTampermonkey(url, options = {}) {
+		const gmRequest = globalThis.GM_xmlhttpRequest || globalThis?.GM?.xmlHttpRequest;
+		if (typeof gmRequest !== 'function') {
+			throw new Error('Fetch failed and GM_xmlhttpRequest is unavailable');
+		}
+
+		return await new Promise((resolve, reject) => {
+			try {
+				gmRequest({
+					method: options.method || 'GET',
+					url,
+					headers: options.headers || {},
+					data: options.body,
+					timeout: 15000,
+					onload: (response) => {
+						const status = Number(response?.status || 0);
+						const statusText = String(response?.statusText || '');
+						const responseText = String(response?.responseText || '');
+						resolve({
+							ok: status >= 200 && status < 300,
+							status,
+							statusText,
+							json: async () => JSON.parse(responseText || '{}'),
+							text: async () => responseText,
+						});
+					},
+					onerror: (error) => {
+						reject(new Error(String(error?.error || error?.message || 'GM request failed')));
+					},
+					ontimeout: () => {
+						reject(new Error('GM request timed out'));
+					},
+				});
+			} catch (error) {
+				reject(error);
+			}
+		});
 	}
 }
 

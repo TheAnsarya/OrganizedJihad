@@ -27,6 +27,38 @@
 - yarn build
 - pwsh -ExecutionPolicy Bypass -File ./Publish-InstallerUI.ps1
 
+---
+
+## Session
+- Date: 2026-06-02
+- Session Number: 8
+- Scope: Userscript connection-status false negative + duplicate nav regression + API transport hardening
+
+## Summary
+- Removed accidental duplicate tab button rows introduced in overlay template and restored the original single header + single nav structure.
+- Added Tampermonkey fallback probe path in Connection diagnostics when page-context `fetch` is blocked.
+- Added Tampermonkey fallback transport in `SyncClient` so health checks and sync imports can still run under browser-origin restrictions.
+- Added userscript metadata directives for TM transport (`GM_xmlhttpRequest`, `@connect localhost`, `@connect 127.0.0.1`).
+- Rebuilt userscript and republished installer with bundle version `0.9.218`, then launched installer.
+
+## Files Modified
+- userscript/src/modules/uiManager.js
+- userscript/src/modules/syncClient.js
+- userscript/src/index.js
+- userscript/webpack.config.cjs
+- userscript/package.json
+- userscript/dist/organized-jihad.user.js
+- installer-ui/bundle-payload/organized-jihad.user.js
+- ~docs/copilot-chats/2026-06-02-userscript-build-auto.md
+- ~docs/copilot-chats/2026-06-02-connection-status-and-nav-icons.md
+
+## Validation
+- get_errors userscript/src/modules/uiManager.js (no errors)
+- get_errors userscript/src/modules/syncClient.js (no errors)
+- yarn test --runInBand (37/37 suites, 843/843 tests passed)
+- yarn build (version 0.9.218)
+- pwsh -ExecutionPolicy Bypass -File ./Publish-InstallerUI.ps1
+
 ## GitHub Issues
 - Referenced: not specified in-session
 - Closed: none in-session
@@ -86,3 +118,30 @@
 
 ## Commits
 - `a4bfc88` Fix #204: stack API /ui sections vertically
+
+---
+
+## Session
+- Date: 2026-06-02
+- Session Number: 7
+- Scope: Userscript connection tab false-down mitigation + nav icon visibility + installer republish
+
+## Summary
+- Added stronger fallback logic for Connection tab API health so it no longer hard-reports down when direct probing fails but recent sync metadata confirms reachability.
+- Kept separate Connection actions with explicit `Save URL` and `Test` buttons.
+- Ensured tab icons are visible immediately from initial nav markup and kept dynamic connection icon state updates.
+- Rebuilt userscript package (`0.9.216`), republished installer payload, and launched installer executable.
+
+## Files Modified
+- userscript/src/modules/uiManager.js
+- userscript/package.json
+- userscript/dist/organized-jihad.user.js
+- installer-ui/bundle-payload/organized-jihad.user.js
+- ~docs/copilot-chats/2026-06-02-userscript-build-auto.md
+- ~docs/copilot-chats/2026-06-02-connection-status-and-nav-icons.md
+
+## Validation
+- get_errors userscript/src/modules/uiManager.js (no errors)
+- yarn test --runInBand
+- yarn build
+- pwsh -ExecutionPolicy Bypass -File ./Publish-InstallerUI.ps1
