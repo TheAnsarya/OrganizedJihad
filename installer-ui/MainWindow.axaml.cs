@@ -1,5 +1,9 @@
 using Avalonia.Controls;
+using Avalonia.Controls.Primitives;
+using Avalonia.Input;
 using Avalonia.Interactivity;
+using Avalonia.Media;
+using Avalonia;
 using Avalonia.Threading;
 using System;
 using System.Collections.Generic;
@@ -10,10 +14,39 @@ using Microsoft.Win32;
 using System.Runtime.Versioning;
 using System.Text;
 using System.Threading.Tasks;
+using System.Reflection;
 
 namespace OrganizedJihad.Installer;
 
 public partial class MainWindow : Window {
+	private const string DebugPrefix = "[DEBUG]";
+	private static readonly IBrush StepDefaultBackground = Brush.Parse("#4a2c1a");
+	private static readonly IBrush StepDefaultForeground = Brush.Parse("#FFF1DA");
+	private static readonly IBrush StepDefaultBorder = Brush.Parse("#df8320");
+	private static readonly IBrush StepHoverBackground = Brush.Parse("#a56535");
+	private static readonly IBrush StepHoverForeground = Brush.Parse("#FFFFFF");
+	private static readonly IBrush StepHoverBorder = Brush.Parse("#fff0c9");
+	private static readonly IBrush StepPressedBackground = Brush.Parse("#93562c");
+	private static readonly IBrush StepPressedForeground = Brush.Parse("#FFFFFF");
+	private static readonly IBrush StepPressedBorder = Brush.Parse("#ffe4b0");
+	private static readonly IBrush StepDisabledBackground = Brush.Parse("#33241a");
+	private static readonly IBrush StepDisabledForeground = Brush.Parse("#CBB8A2");
+	private static readonly IBrush StepDisabledBorder = Brush.Parse("#9f6f44");
+
+	private static readonly IBrush ToggleOnBackground = Brush.Parse("#1f5a2a");
+	private static readonly IBrush ToggleOnForeground = Brush.Parse("#E7FFE8");
+	private static readonly IBrush ToggleOnBorder = Brush.Parse("#45e06b");
+	private static readonly IBrush ToggleOnHoverBackground = Brush.Parse("#2b7a3a");
+	private static readonly IBrush ToggleOnHoverBorder = Brush.Parse("#96f3af");
+	private static readonly IBrush ToggleOffBackground = Brush.Parse("#4a1f1f");
+	private static readonly IBrush ToggleOffForeground = Brush.Parse("#FFE3E3");
+	private static readonly IBrush ToggleOffBorder = Brush.Parse("#d84545");
+	private static readonly IBrush ToggleOffHoverBackground = Brush.Parse("#703131");
+	private static readonly IBrush ToggleOffHoverBorder = Brush.Parse("#ff7f7f");
+	private static readonly IBrush ToggleDisabledBackground = Brush.Parse("#33241a");
+	private static readonly IBrush ToggleDisabledForeground = Brush.Parse("#CBB8A2");
+	private static readonly IBrush ToggleDisabledBorder = Brush.Parse("#9f6f44");
+
 	private sealed class BrowserOption {
 		public BrowserOption(string label, string argument, bool installed, string? executablePath) {
 			Label = label;
@@ -37,9 +70,16 @@ public partial class MainWindow : Window {
 	private string? _currentLogFilePath;
 	private string? _userscriptGuidePath;
 	private readonly List<BrowserOption> _availableBrowsers;
+	private readonly string _buildMarker;
+	private readonly HashSet<Control> _hoveredControls = new();
+	private readonly HashSet<Control> _pressedControls = new();
 
 	public MainWindow() {
 		InitializeComponent();
+
+		var assemblyVersion = Assembly.GetExecutingAssembly().GetName().Version?.ToString() ?? "unknown";
+		var fileVersion = FileVersionInfo.GetVersionInfo(Environment.ProcessPath ?? string.Empty).FileVersion ?? "unknown";
+		_buildMarker = $"{assemblyVersion}|{fileVersion}|{AppContext.BaseDirectory}";
 
 		InstallRootTextBox.Text = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "OrganizedJihad");
 		ApiUrlTextBox.Text = "http://localhost:5124";
@@ -47,6 +87,10 @@ public partial class MainWindow : Window {
 		_availableBrowsers = DetectBrowsers();
 		BrowserComboBox.ItemsSource = _availableBrowsers;
 		BrowserComboBox.SelectedItem = _availableBrowsers.FirstOrDefault(browser => browser.Installed) ?? _availableBrowsers.FirstOrDefault();
+		AppendDebugLog($"{DebugPrefix} Browser options count={_availableBrowsers.Count}");
+		foreach (var browser in _availableBrowsers) {
+			AppendDebugLog($"{DebugPrefix} Browser option: {browser.Label} arg={browser.Argument} installed={browser.Installed} exe={browser.ExecutablePath ?? "(none)"}");
+		}
 
 		var installedBrowsers = _availableBrowsers.Where(browser => browser.Installed).ToList();
 
@@ -59,6 +103,10 @@ public partial class MainWindow : Window {
 			AppendLog($"[Installer UI] Userscript setup guide detected: {_userscriptGuidePath}");
 		}
 
+		UpdateOptionToggleLabels();
+		InitializeInteractiveButtonVisuals();
+		ResetLogViewToTopLeft();
+
 		RefreshTampermonkeyStatus(logResult: true);
 
 		UpdateQuickActionState();
@@ -66,6 +114,10 @@ public partial class MainWindow : Window {
 
 	private void OnBrowserSelectionChanged(object? sender, SelectionChangedEventArgs e) {
 		RefreshTampermonkeyStatus(logResult: true);
+	}
+
+	private void OnOptionToggleChanged(object? sender, RoutedEventArgs e) {
+		UpdateOptionToggleLabels();
 	}
 
 	private async void OnInstallClick(object? sender, RoutedEventArgs e) {
@@ -171,9 +223,8 @@ public partial class MainWindow : Window {
 		RefreshTampermonkeyStatus(logResult: false);
 
 		if (installUserscript && !allowUserscriptBypass && !_tampermonkeyInstalledForSelection && OperatingSystem.IsWindows()) {
-			SetStatus("Status: Tampermonkey required for userscript step.");
-			AppendLog("[Installer UI] Userscript step is locked until Tampermonkey is detected for the selected browser. Use Step 1 or run the bypass step.");
-			return;
+			SetStatus("Status: Tampermonkey not detected. Continuing with guided userscript flow.");
+			AppendLog("[Installer UI] Tampermonkey was not auto-detected for the selected browser. Continuing userscript step anyway; browser may prompt to install/enable Tampermonkey.");
 		}
 
 		if (!ValidatePreflight(installApi, out var installRoot, out var apiUrl, out var preflightMessage)) {
@@ -206,10 +257,18 @@ public partial class MainWindow : Window {
 		if (string.IsNullOrWhiteSpace(installerCliPath)) {
 			SetStatus("Status: Could not locate managed installer engine.");
 			AppendLog("[Installer UI] OrganizedJihad.Installer.Cli is required but was not found.");
+			foreach (var candidate in GetInstallerCliCandidates()) {
+				AppendLog($"[Installer UI] Installer CLI candidate: {candidate} (exists={File.Exists(candidate)})");
+			}
 			return;
 		}
 
+		AppendLog($"[Installer UI] Installer UI base directory: {AppContext.BaseDirectory}");
 		AppendLog($"[Installer UI] Using managed installer CLI: {installerCliPath}");
+		var runInstallHealthCheck = installApi && (installDesktop || installUserscript || FirstRunDiagnosticsCheckBox.IsChecked == true || OpenDiagnosticsCheckBox.IsChecked == true);
+		var maxRuntime = installApi && !installDesktop && !installUserscript
+			? TimeSpan.FromSeconds(90)
+			: TimeSpan.FromMinutes(4);
 		var cliArgs = BuildInstallerCliArguments(
 			installRoot,
 			apiUrl,
@@ -218,11 +277,16 @@ public partial class MainWindow : Window {
 			installUserscript,
 			openTampermonkeySetup,
 			browserArg,
+			runInstallHealthCheck,
 			FirstRunDiagnosticsCheckBox.IsChecked == true,
 			OpenDiagnosticsCheckBox.IsChecked == true);
-		await RunInstallProcessAsync(installerCliPath, cliArgs);
+		var installSucceeded = await RunInstallProcessAsync(installerCliPath, cliArgs, maxRuntime);
 
-		if (installUserscript) {
+		if (installApi && installSucceeded && runInstallHealthCheck) {
+			await ProbeApiUiEndpointsAsync(apiUrl);
+		}
+
+		if (installUserscript && installSucceeded) {
 			var userscriptPath = Path.Combine(installRoot, "userscript", "organized-jihad.user.js");
 			var guidePath = Path.Combine(installRoot, "userscript", "tampermonkey-setup.html");
 			AppendLog("[Installer UI] Userscript next steps:");
@@ -231,15 +295,15 @@ public partial class MainWindow : Window {
 			if (allowUserscriptBypass) {
 				AppendLog("[Installer UI] - Bypass mode was used; if Tampermonkey is not installed yet, complete Step 1 now.");
 			}
-			if (File.Exists(guidePath)) {
-				AppendLog($"[Installer UI] - Detailed setup guide: {guidePath}");
+			if (openTampermonkeySetup) {
+				OpenTampermonkeyImportFlow(userscriptPath, apiUrl, browserArg);
 			}
 		}
 
 		RefreshTampermonkeyStatus(logResult: false);
 	}
 
-	private static string BuildInstallerCliArguments(string installRoot, string apiUrl, bool installApi, bool installDesktop, bool installUserscript, bool openTampermonkeySetup, string? browserArg, bool firstRunDiagnostics, bool openUserscriptDiagnostics) {
+	private static string BuildInstallerCliArguments(string installRoot, string apiUrl, bool installApi, bool installDesktop, bool installUserscript, bool openTampermonkeySetup, string? browserArg, bool runInstallHealthCheck, bool firstRunDiagnostics, bool openUserscriptDiagnostics) {
 		var args = new List<string> {
 			"--install-root", Quote(installRoot),
 			"--api-url", Quote(apiUrl),
@@ -257,14 +321,10 @@ public partial class MainWindow : Window {
 			args.Add("--skip-userscript-install");
 		}
 
-		if (!openTampermonkeySetup || !installUserscript || string.IsNullOrWhiteSpace(browserArg)) {
-			args.Add("--skip-tampermonkey-bootstrap");
-		} else {
-			args.Add("--tampermonkey-browsers");
-			args.Add(browserArg);
-		}
+		// UI controls userscript tab opening to avoid duplicate browser tabs from both CLI and UI bootstrap paths.
+		args.Add("--skip-tampermonkey-bootstrap");
 
-		if (installApi) {
+		if (runInstallHealthCheck) {
 			args.Add("--run-install-health-check");
 		}
 
@@ -328,28 +388,50 @@ public partial class MainWindow : Window {
 			"iikmkjmpaadaobahmlepeloendndfphd", // Edge Add-ons
 		};
 
+		if (PolicyForcesTampermonkeyInstall(browserArg, tampermonkeyExtensionIds)) {
+			return true;
+		}
+
 		return browserArg switch {
 			"chrome" => ChromiumTampermonkeyInstalled(new[] {
 				Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Google", "Chrome", "User Data"),
-			}, tampermonkeyExtensionIds),
+			}, tampermonkeyExtensionIds, new[] {
+				Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "Google", "Chrome", "Application", "Extensions"),
+				Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86), "Google", "Chrome", "Application", "Extensions"),
+			}),
 			"edge" => ChromiumTampermonkeyInstalled(new[] {
 				Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Microsoft", "Edge", "User Data"),
-			}, tampermonkeyExtensionIds),
+			}, tampermonkeyExtensionIds, new[] {
+				Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86), "Microsoft", "Edge", "Application", "Extensions"),
+				Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "Microsoft", "Edge", "Application", "Extensions"),
+			}),
 			"opera" => ChromiumTampermonkeyInstalled(new[] {
 				Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Opera Software", "Opera Stable"),
 				Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Opera Software", "Opera Stable"),
-			}, tampermonkeyExtensionIds),
+			}, tampermonkeyExtensionIds, Array.Empty<string>()),
 			"operaGX" => ChromiumTampermonkeyInstalled(new[] {
 				Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Opera Software", "Opera GX Stable"),
 				Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Opera Software", "Opera GX Stable"),
-			}, tampermonkeyExtensionIds),
+			}, tampermonkeyExtensionIds, Array.Empty<string>()),
 			"firefox" => FirefoxTampermonkeyInstalled(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Mozilla", "Firefox", "Profiles")),
 			_ => false,
 		};
 	}
 
-	private static bool ChromiumTampermonkeyInstalled(IEnumerable<string> browserRoots, IEnumerable<string> extensionIds) {
+	private static bool ChromiumTampermonkeyInstalled(IEnumerable<string> browserRoots, IEnumerable<string> extensionIds, IEnumerable<string> globalExtensionDirs) {
 		var idSet = new HashSet<string>(extensionIds.Where(id => !string.IsNullOrWhiteSpace(id)), StringComparer.OrdinalIgnoreCase);
+
+		foreach (var globalDir in globalExtensionDirs.Where(path => !string.IsNullOrWhiteSpace(path)).Distinct(StringComparer.OrdinalIgnoreCase)) {
+			if (!Directory.Exists(globalDir)) {
+				continue;
+			}
+
+			foreach (var extensionId in idSet) {
+				if (Directory.Exists(Path.Combine(globalDir, extensionId))) {
+					return true;
+				}
+			}
+		}
 
 		foreach (var browserRoot in browserRoots.Where(path => !string.IsNullOrWhiteSpace(path)).Distinct(StringComparer.OrdinalIgnoreCase)) {
 			if (!Directory.Exists(browserRoot)) {
@@ -381,6 +463,10 @@ public partial class MainWindow : Window {
 		}
 
 		foreach (var profile in profileCandidates.Distinct(StringComparer.OrdinalIgnoreCase)) {
+			if (ContainsTampermonkeyPreferences(profile, extensionIds)) {
+				return true;
+			}
+
 			foreach (var extensionId in extensionIds) {
 				var extensionPath = Path.Combine(profile, "Extensions", extensionId);
 				if (Directory.Exists(extensionPath)) {
@@ -395,6 +481,72 @@ public partial class MainWindow : Window {
 
 			if (ContainsTampermonkeyManifest(profile)) {
 				return true;
+			}
+		}
+
+		return false;
+	}
+
+	private static bool ContainsTampermonkeyPreferences(string profilePath, ISet<string> extensionIds) {
+		var preferenceFiles = new[] {
+			Path.Combine(profilePath, "Preferences"),
+			Path.Combine(profilePath, "Secure Preferences"),
+		};
+
+		foreach (var preferenceFile in preferenceFiles) {
+			if (!File.Exists(preferenceFile)) {
+				continue;
+			}
+
+			try {
+				var content = File.ReadAllText(preferenceFile);
+				foreach (var extensionId in extensionIds) {
+					if (content.Contains(extensionId, StringComparison.OrdinalIgnoreCase)) {
+						return true;
+					}
+				}
+
+				if (content.Contains("tampermonkey", StringComparison.OrdinalIgnoreCase)) {
+					return true;
+				}
+			} catch {
+				// Ignore preference parsing errors.
+			}
+		}
+
+		return false;
+	}
+
+	private static bool PolicyForcesTampermonkeyInstall(string browserArg, IEnumerable<string> extensionIds) {
+		if (!OperatingSystem.IsWindows()) {
+			return false;
+		}
+
+		var policyKey = browserArg switch {
+			"chrome" => "Software\\Policies\\Google\\Chrome\\ExtensionInstallForcelist",
+			"edge" => "Software\\Policies\\Microsoft\\Edge\\ExtensionInstallForcelist",
+			_ => null,
+		};
+
+		if (string.IsNullOrWhiteSpace(policyKey)) {
+			return false;
+		}
+
+		var idSet = new HashSet<string>(extensionIds.Where(id => !string.IsNullOrWhiteSpace(id)), StringComparer.OrdinalIgnoreCase);
+		foreach (var hive in new[] { Registry.CurrentUser, Registry.LocalMachine }) {
+			using var key = hive.OpenSubKey(policyKey);
+			if (key is null) {
+				continue;
+			}
+
+			foreach (var valueName in key.GetValueNames()) {
+				if (key.GetValue(valueName) is not string value || string.IsNullOrWhiteSpace(value)) {
+					continue;
+				}
+
+				if (idSet.Any(id => value.Contains(id, StringComparison.OrdinalIgnoreCase))) {
+					return true;
+				}
 			}
 		}
 
@@ -466,6 +618,71 @@ public partial class MainWindow : Window {
 		}
 
 		OpenUrlInPreferredBrowser(url, browserArg);
+	}
+
+	private void OpenTampermonkeyImportFlow(string userscriptPath, string apiUrl, string? browserArg) {
+		try {
+			if (!string.IsNullOrWhiteSpace(userscriptPath) && File.Exists(userscriptPath)) {
+				AppendLog($"[Installer UI] Userscript staged at: {userscriptPath}");
+			}
+
+			var apiUserscriptUrl = apiUrl.TrimEnd('/') + "/ui/organized-jihad.user.js";
+			if (CanReachUrl(apiUserscriptUrl)) {
+				AppendLog($"[Installer UI] Opening userscript install source: {apiUserscriptUrl}");
+				AppendLog("[Installer UI] Opening a single userscript install tab.");
+				AppendLog("[Installer UI] Tampermonkey should show an install confirmation in the opened tab.");
+				AppendLog("[Installer UI] If prompted by browser policy, grant Tampermonkey script execution permission first.");
+				if (!string.IsNullOrWhiteSpace(browserArg)) {
+					OpenUrlInPreferredBrowser(apiUserscriptUrl, browserArg);
+				} else {
+					OpenUrlInPreferredBrowser(apiUserscriptUrl, "edge");
+				}
+				return;
+			}
+
+			if (!string.IsNullOrWhiteSpace(userscriptPath) && File.Exists(userscriptPath)) {
+				var userscriptUri = new Uri(userscriptPath).AbsoluteUri;
+				AppendLog($"[Installer UI] Opening userscript file URI: {userscriptUri}");
+				if (!string.IsNullOrWhiteSpace(browserArg)) {
+					OpenUrlInPreferredBrowser(userscriptUri, browserArg);
+				} else {
+					Process.Start(new ProcessStartInfo {
+						FileName = userscriptUri,
+						UseShellExecute = true,
+					});
+				}
+				return;
+			}
+
+			AppendLog("[Installer UI] Could not open userscript install source automatically. Use Step 1 utilities import and select organized-jihad.user.js from install folder.");
+		} catch (Exception ex) {
+			AppendLog($"[Installer UI] Failed to open Tampermonkey import flow: {ex.Message}");
+		}
+	}
+
+	private static bool CanReachUrl(string url) {
+		try {
+			using var client = new HttpClient { Timeout = TimeSpan.FromSeconds(3) };
+			using var response = client.GetAsync(url).GetAwaiter().GetResult();
+			return response.IsSuccessStatusCode;
+		} catch {
+			return false;
+		}
+	}
+
+	private static string? GetTampermonkeyUtilitiesUrl(string? browserArg) {
+		if (string.IsNullOrWhiteSpace(browserArg)) {
+			return null;
+		}
+
+		return browserArg switch {
+			"chrome" => "chrome-extension://dhdgffkkebhmkfjojejmpbldmpobfkfo/options.html#nav=utils",
+			"edge" => "chrome-extension://iikmkjmpaadaobahmlepeloendndfphd/options.html#nav=utils",
+			"opera" => "chrome-extension://dhdgffkkebhmkfjojejmpbldmpobfkfo/options.html#nav=utils",
+			"operaGX" => "chrome-extension://dhdgffkkebhmkfjojejmpbldmpobfkfo/options.html#nav=utils",
+			"firefox" => "about:addons",
+			_ => null,
+		};
 	}
 
 	private static List<BrowserOption> DetectBrowsers() {
@@ -584,13 +801,16 @@ public partial class MainWindow : Window {
 		return candidates.FirstOrDefault(File.Exists);
 	}
 
-	private async Task RunInstallProcessAsync(string shell, string args) {
+	private async Task<bool> RunInstallProcessAsync(string shell, string args, TimeSpan maxRuntime) {
 		_isInstalling = true;
 		UpdateQuickActionState();
 
 		_currentLogFilePath = CreateInstallLogFilePath();
 		LogPathTextBlock.Text = $"Log: {_currentLogFilePath}";
 		PersistLogLine("[Installer UI] Log initialized.");
+		AppendDebugLog($"{DebugPrefix} Installer build marker={_buildMarker}");
+		AppendDebugLog($"{DebugPrefix} Shell={shell}");
+		AppendDebugLog($"{DebugPrefix} Args={args}");
 
 		SetStatus("Status: Installing...");
 		AppendLog("[Installer UI] Running installer engine in hidden-process mode (GUI-only experience).");
@@ -606,38 +826,83 @@ public partial class MainWindow : Window {
 
 		try {
 			using var process = new Process { StartInfo = startInfo };
+			var completionMarkerSeen = false;
+			DateTime? completionMarkerAtUtc = null;
 
 			process.OutputDataReceived += (_, eventArgs) => {
 				if (!string.IsNullOrWhiteSpace(eventArgs.Data)) {
-					AppendLog(eventArgs.Data);
+					if (eventArgs.Data.Contains("[OJ Installer.Cli] Installation complete.", StringComparison.Ordinal)) {
+						completionMarkerSeen = true;
+						completionMarkerAtUtc = DateTime.UtcNow;
+					}
+
+					if (eventArgs.Data.StartsWith(DebugPrefix, StringComparison.Ordinal)) {
+						AppendDebugLog(eventArgs.Data);
+					} else {
+						AppendLog(eventArgs.Data);
+					}
 				}
 			};
 			process.ErrorDataReceived += (_, eventArgs) => {
 				if (!string.IsNullOrWhiteSpace(eventArgs.Data)) {
-					AppendLog($"[stderr] {eventArgs.Data}");
+					if (eventArgs.Data.StartsWith(DebugPrefix, StringComparison.Ordinal)) {
+						AppendDebugLog(eventArgs.Data);
+					} else {
+						AppendLog($"[stderr] {eventArgs.Data}");
+					}
 				}
 			};
 
 			if (!process.Start()) {
 				AppendLog("[Installer UI] Failed to start installer process.");
 				SetStatus("Status: Failed to start installer.");
-				return;
+				return false;
 			}
 
 			process.BeginOutputReadLine();
 			process.BeginErrorReadLine();
-			await process.WaitForExitAsync();
+
+			var timeoutAtUtc = DateTime.UtcNow.Add(maxRuntime);
+			while (!process.HasExited) {
+				if (completionMarkerSeen && completionMarkerAtUtc.HasValue && DateTime.UtcNow >= completionMarkerAtUtc.Value.AddSeconds(3)) {
+					try {
+						process.Kill(true);
+					} catch {
+						// Best effort only.
+					}
+
+					SetStatus("Status: Install complete.");
+					AppendLog("[Installer UI] CLI reported completion; forcing process finalization and restoring controls.");
+					return true;
+				}
+
+				if (DateTime.UtcNow >= timeoutAtUtc) {
+					try {
+						process.Kill(true);
+					} catch {
+						// Best effort only.
+					}
+					SetStatus("Status: Installer timed out.");
+					AppendLog($"[Installer UI] Installer timed out after {Math.Ceiling(maxRuntime.TotalSeconds)} seconds and was stopped to restore UI control.");
+					return false;
+				}
+
+				await Task.Delay(150);
+			}
 
 			if (process.ExitCode == 0) {
 				SetStatus("Status: Install complete.");
 				AppendLog("[Installer UI] Installation succeeded.");
+				return true;
 			} else {
 				SetStatus($"Status: Installer failed (exit {process.ExitCode}).");
 				AppendLog($"[Installer UI] Installation failed with exit code {process.ExitCode}.");
+				return false;
 			}
 		} catch (Exception ex) {
 			SetStatus("Status: Installer crashed.");
 			AppendLog($"[Installer UI] Exception: {ex.Message}");
+			return false;
 		} finally {
 			_isInstalling = false;
 			UpdateQuickActionState();
@@ -746,7 +1011,14 @@ public partial class MainWindow : Window {
 
 		Dispatcher.UIThread.Post(() => {
 			LogTextBox.Text = string.Concat(LogTextBox.Text ?? string.Empty, Environment.NewLine, line);
-			LogTextBox.CaretIndex = (LogTextBox.Text ?? string.Empty).Length;
+		});
+	}
+
+	private void ResetLogViewToTopLeft() {
+		Dispatcher.UIThread.Post(() => {
+			LogTextBox.CaretIndex = 0;
+			LogTextBox.SelectionStart = 0;
+			LogTextBox.SelectionEnd = 0;
 		});
 	}
 
@@ -754,6 +1026,188 @@ public partial class MainWindow : Window {
 		Dispatcher.UIThread.Post(() => {
 			StatusTextBlock.Text = value;
 		});
+	}
+
+	private void UpdateOptionToggleLabels() {
+		SetOptionToggleContent(
+			OpenTampermonkeySetupCheckBox,
+			"Tampermonkey import flow");
+		SetOptionToggleContent(
+			FirstRunDiagnosticsCheckBox,
+			"First-run diagnostics");
+		SetOptionToggleContent(
+			OpenDiagnosticsCheckBox,
+			"Open diagnostics pages");
+
+		ApplyToggleButtonVisual(OpenTampermonkeySetupCheckBox);
+		ApplyToggleButtonVisual(FirstRunDiagnosticsCheckBox);
+		ApplyToggleButtonVisual(OpenDiagnosticsCheckBox);
+	}
+
+	private static void SetOptionToggleContent(ToggleButton? button, string label) {
+		if (button is null) {
+			return;
+		}
+
+		button.Content = label;
+	}
+
+	private void InitializeInteractiveButtonVisuals() {
+		var stepButtons = new[] {
+			InstallTampermonkeyButton,
+			InstallApiStepButton,
+			InstallDesktopStepButton,
+			InstallUserscriptStepButton,
+			InstallUserscriptBypassButton,
+			InstallButton,
+			OpenInstallRootButton,
+			OpenSetupGuideButton,
+			OpenLogFolderButton,
+		};
+
+		foreach (var button in stepButtons) {
+			AttachInteractiveVisualHandlers(button, isToggle: false);
+			ApplyStepButtonVisual(button);
+		}
+
+		var toggleButtons = new[] {
+			OpenTampermonkeySetupCheckBox,
+			FirstRunDiagnosticsCheckBox,
+			OpenDiagnosticsCheckBox,
+		};
+
+		foreach (var toggle in toggleButtons) {
+			AttachInteractiveVisualHandlers(toggle, isToggle: true);
+			ApplyToggleButtonVisual(toggle);
+		}
+	}
+
+	private void AttachInteractiveVisualHandlers(Control control, bool isToggle) {
+		control.PointerEntered += (_, _) => {
+			_hoveredControls.Add(control);
+			if (isToggle) {
+				ApplyToggleButtonVisual(control as ToggleButton);
+			} else {
+				ApplyStepButtonVisual(control as Button);
+			}
+		};
+
+		control.PointerExited += (_, _) => {
+			_hoveredControls.Remove(control);
+			_pressedControls.Remove(control);
+			if (isToggle) {
+				ApplyToggleButtonVisual(control as ToggleButton);
+			} else {
+				ApplyStepButtonVisual(control as Button);
+			}
+		};
+
+		control.PointerPressed += (_, _) => {
+			_pressedControls.Add(control);
+			if (isToggle) {
+				ApplyToggleButtonVisual(control as ToggleButton);
+			} else {
+				ApplyStepButtonVisual(control as Button);
+			}
+		};
+
+		control.PointerReleased += (_, _) => {
+			_pressedControls.Remove(control);
+			if (isToggle) {
+				ApplyToggleButtonVisual(control as ToggleButton);
+			} else {
+				ApplyStepButtonVisual(control as Button);
+			}
+		};
+	}
+
+	private void ApplyStepButtonVisual(Button? button) {
+		if (button is null) {
+			return;
+		}
+
+		if (!button.IsEnabled) {
+			button.Background = StepDisabledBackground;
+			button.Foreground = StepDisabledForeground;
+			button.BorderBrush = StepDisabledBorder;
+			button.BorderThickness = new Thickness(2);
+			return;
+		}
+
+		if (_pressedControls.Contains(button)) {
+			button.Background = StepPressedBackground;
+			button.Foreground = StepPressedForeground;
+			button.BorderBrush = StepPressedBorder;
+			button.BorderThickness = new Thickness(2);
+			return;
+		}
+
+		if (_hoveredControls.Contains(button)) {
+			button.Background = StepHoverBackground;
+			button.Foreground = StepHoverForeground;
+			button.BorderBrush = StepHoverBorder;
+			button.BorderThickness = new Thickness(2);
+			return;
+		}
+
+		button.Background = StepDefaultBackground;
+		button.Foreground = StepDefaultForeground;
+		button.BorderBrush = StepDefaultBorder;
+		button.BorderThickness = new Thickness(2);
+	}
+
+	private void ApplyToggleButtonVisual(ToggleButton? button) {
+		if (button is null) {
+			return;
+		}
+
+		if (!button.IsEnabled) {
+			button.Background = ToggleDisabledBackground;
+			button.Foreground = ToggleDisabledForeground;
+			button.BorderBrush = ToggleDisabledBorder;
+			button.BorderThickness = new Thickness(2);
+			return;
+		}
+
+		var isChecked = button.IsChecked == true;
+		var isHovered = _hoveredControls.Contains(button);
+
+		if (isChecked) {
+			button.Background = isHovered ? ToggleOnHoverBackground : ToggleOnBackground;
+			button.Foreground = ToggleOnForeground;
+			button.BorderBrush = isHovered ? ToggleOnHoverBorder : ToggleOnBorder;
+			button.BorderThickness = new Thickness(2);
+			return;
+		}
+
+		button.Background = isHovered ? ToggleOffHoverBackground : ToggleOffBackground;
+		button.Foreground = ToggleOffForeground;
+		button.BorderBrush = isHovered ? ToggleOffHoverBorder : ToggleOffBorder;
+		button.BorderThickness = new Thickness(2);
+	}
+
+	private async Task ProbeApiUiEndpointsAsync(string apiUrl) {
+		var endpoints = new[] {
+			"/ui/repair-status",
+			"/ui/userscript-handshake",
+			"/ui/tray-health",
+		};
+
+		using var client = new HttpClient { Timeout = TimeSpan.FromSeconds(10) };
+		foreach (var endpoint in endpoints) {
+			var url = apiUrl.TrimEnd('/') + endpoint;
+			try {
+				using var response = await client.GetAsync(url);
+				if (response.IsSuccessStatusCode) {
+					AppendLog($"[Installer UI] API UI endpoint OK: {url} ({(int)response.StatusCode})");
+				} else {
+					AppendLog($"[Installer UI] API UI endpoint returned non-success: {url} ({(int)response.StatusCode})");
+				}
+			} catch (Exception ex) {
+				AppendLog($"[Installer UI] API UI endpoint probe failed: {url}");
+				AppendDebugLog($"{DebugPrefix} API UI endpoint probe exception for {url}: {ex}");
+			}
+		}
 	}
 
 	private static string Quote(string value) {
@@ -773,6 +1227,10 @@ public partial class MainWindow : Window {
 
 		var stampedLine = $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] {line}";
 		File.AppendAllText(_currentLogFilePath, stampedLine + Environment.NewLine, Encoding.UTF8);
+	}
+
+	private void AppendDebugLog(string line) {
+		PersistLogLine(line);
 	}
 
 	private void OnOpenInstallRootClick(object? sender, RoutedEventArgs e) {
@@ -957,18 +1415,22 @@ public partial class MainWindow : Window {
 	}
 
 	private static string? ResolveInstallerCliPath() {
+		return GetInstallerCliCandidates().FirstOrDefault(File.Exists);
+	}
+
+	private static string[] GetInstallerCliCandidates() {
 		var baseDir = AppContext.BaseDirectory;
 		var cliName = OperatingSystem.IsWindows() ? "OrganizedJihad.Installer.Cli.exe" : "OrganizedJihad.Installer.Cli";
-		var candidates = new[] {
+		return new[] {
 			Path.Combine(baseDir, cliName),
+			Path.Combine(baseDir, "bundled", "installer-cli", cliName),
 			Path.Combine(baseDir, "installer-cli", cliName),
+			Path.GetFullPath(Path.Combine(baseDir, "..", "bundle-payload", "installer-cli", cliName)),
 			Path.GetFullPath(Path.Combine(baseDir, "..", "..", "..", "installer-core", "OrganizedJihad.Installer.Cli", "bin", "Release", "net10.0", cliName)),
 			Path.GetFullPath(Path.Combine(baseDir, "..", "..", "..", "..", "installer-core", "OrganizedJihad.Installer.Cli", "bin", "Release", "net10.0", cliName)),
 			Path.GetFullPath(Path.Combine(baseDir, "..", "..", "..", "installer-core", "OrganizedJihad.Installer.Cli", "bin", "Debug", "net10.0", cliName)),
 			Path.GetFullPath(Path.Combine(baseDir, "..", "..", "..", "..", "installer-core", "OrganizedJihad.Installer.Cli", "bin", "Debug", "net10.0", cliName)),
 		};
-
-		return candidates.FirstOrDefault(File.Exists);
 	}
 
 	private void UpdateQuickActionState() {
@@ -977,7 +1439,7 @@ public partial class MainWindow : Window {
 		InstallApiStepButton.IsEnabled = !_isInstalling;
 		InstallDesktopStepButton.IsEnabled = !_isInstalling;
 		InstallUserscriptBypassButton.IsEnabled = !_isInstalling;
-		InstallUserscriptStepButton.IsEnabled = !_isInstalling && _tampermonkeyInstalledForSelection;
+		InstallUserscriptStepButton.IsEnabled = !_isInstalling;
 		OpenInstallRootButton.IsEnabled = !_isInstalling;
 		OpenSetupGuideButton.IsEnabled = !_isInstalling;
 		OpenLogFolderButton.IsEnabled = !_isInstalling;
@@ -987,6 +1449,19 @@ public partial class MainWindow : Window {
 		OpenTampermonkeySetupCheckBox.IsEnabled = !_isInstalling;
 		FirstRunDiagnosticsCheckBox.IsEnabled = !_isInstalling;
 		OpenDiagnosticsCheckBox.IsEnabled = !_isInstalling;
+
+		ApplyStepButtonVisual(InstallTampermonkeyButton);
+		ApplyStepButtonVisual(InstallApiStepButton);
+		ApplyStepButtonVisual(InstallDesktopStepButton);
+		ApplyStepButtonVisual(InstallUserscriptStepButton);
+		ApplyStepButtonVisual(InstallUserscriptBypassButton);
+		ApplyStepButtonVisual(InstallButton);
+		ApplyStepButtonVisual(OpenInstallRootButton);
+		ApplyStepButtonVisual(OpenSetupGuideButton);
+		ApplyStepButtonVisual(OpenLogFolderButton);
+		ApplyToggleButtonVisual(OpenTampermonkeySetupCheckBox);
+		ApplyToggleButtonVisual(FirstRunDiagnosticsCheckBox);
+		ApplyToggleButtonVisual(OpenDiagnosticsCheckBox);
 
 		if (ReinstallTampermonkeyMenuItem is not null) {
 			ReinstallTampermonkeyMenuItem.IsVisible = !_isInstalling && _tampermonkeyInstalledForSelection;

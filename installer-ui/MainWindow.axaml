@@ -1,7 +1,9 @@
 <Window xmlns="https://github.com/avaloniaui"
 	xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+	xmlns:primitives="clr-namespace:Avalonia.Controls.Primitives;assembly=Avalonia.Controls"
 	x:Class="OrganizedJihad.Installer.MainWindow"
 	Title="OrganizedJihad Installer"
+	Icon="Assets/oj-installer.ico"
 	Width="980"
 	Height="820"
 	MinWidth="820"
@@ -10,21 +12,256 @@
 	Foreground="#F7E8CE">
 	<Window.Styles>
 		<Style Selector="TextBox">
-			<Setter Property="Background" Value="#3a143c" />
-			<Setter Property="Foreground" Value="#F7E8CE" />
-			<Setter Property="BorderBrush" Value="#90590d" />
+			<Setter Property="Background" Value="#2f1f13" />
+			<Setter Property="Foreground" Value="#FFF1DA" />
+			<Setter Property="BorderBrush" Value="#d67d1e" />
+			<Setter Property="BorderThickness" Value="2" />
+			<Setter Property="FocusAdorner" Value="{x:Null}" />
+		</Style>
+		<Style Selector="TextBox:pointerover">
+			<Setter Property="BorderBrush" Value="#ffb347" />
+		</Style>
+		<Style Selector="TextBox:focus">
+			<Setter Property="BorderBrush" Value="#ffbf66" />
+			<Setter Property="BorderThickness" Value="2" />
+		</Style>
+		<Style Selector="TextBox:focus-within">
+			<Setter Property="BorderBrush" Value="#ffbf66" />
+			<Setter Property="BorderThickness" Value="2" />
+		</Style>
+		<Style Selector="TextBox:focus /template/ Border">
+			<Setter Property="BorderBrush" Value="#ffbf66" />
+			<Setter Property="BorderThickness" Value="2" />
+		</Style>
+		<Style Selector="TextBox:focus-within /template/ Border">
+			<Setter Property="BorderBrush" Value="#ffbf66" />
+			<Setter Property="BorderThickness" Value="2" />
 		</Style>
 		<Style Selector="ComboBox">
-			<Setter Property="Background" Value="#3a143c" />
-			<Setter Property="Foreground" Value="#F7E8CE" />
+			<Setter Property="Background" Value="#2f1f13" />
+			<Setter Property="Foreground" Value="#FFF1DA" />
+			<Setter Property="BorderBrush" Value="#d67d1e" />
+			<Setter Property="BorderThickness" Value="2" />
+			<Setter Property="FocusAdorner" Value="{x:Null}" />
+		</Style>
+		<Style Selector="ComboBox:pointerover">
+			<Setter Property="BorderBrush" Value="#ffb347" />
+		</Style>
+		<Style Selector="ComboBox:focus">
+			<Setter Property="BorderBrush" Value="#ffbf66" />
+			<Setter Property="BorderThickness" Value="2" />
+		</Style>
+		<Style Selector="ComboBox:focus-within">
+			<Setter Property="BorderBrush" Value="#ffbf66" />
+			<Setter Property="BorderThickness" Value="2" />
+		</Style>
+		<Style Selector="ComboBox:focus /template/ Border">
+			<Setter Property="BorderBrush" Value="#ffbf66" />
+			<Setter Property="BorderThickness" Value="2" />
+		</Style>
+		<Style Selector="ComboBox:focus-within /template/ Border">
+			<Setter Property="BorderBrush" Value="#ffbf66" />
+			<Setter Property="BorderThickness" Value="2" />
+		</Style>
+		<Style Selector="ComboBoxItem">
+			<Setter Property="Background" Value="#28170f" />
+			<Setter Property="Foreground" Value="#FFF1DA" />
+		</Style>
+		<Style Selector="ComboBoxItem:pointerover">
+			<Setter Property="Background" Value="#4b2b1a" />
+			<Setter Property="Foreground" Value="#FFFFFF" />
+		</Style>
+		<Style Selector="ComboBoxItem:selected">
+			<Setter Property="Background" Value="#6a3a1d" />
+			<Setter Property="Foreground" Value="#FFFFFF" />
 		</Style>
 		<Style Selector="Button">
-			<Setter Property="Background" Value="#3a143c" />
-			<Setter Property="Foreground" Value="#F7E8CE" />
-			<Setter Property="BorderBrush" Value="#90590d" />
+			<Setter Property="Background" Value="#4a2c1a" />
+			<Setter Property="Foreground" Value="#FFF1DA" />
+			<Setter Property="BorderBrush" Value="#d67d1e" />
+			<Setter Property="BorderThickness" Value="2" />
+			<Setter Property="Padding" Value="14,8" />
+			<Setter Property="FocusAdorner" Value="{x:Null}" />
+			<Setter Property="Template">
+				<ControlTemplate>
+					<Border
+						Background="{TemplateBinding Background}"
+						BorderBrush="{TemplateBinding BorderBrush}"
+						BorderThickness="{TemplateBinding BorderThickness}"
+						CornerRadius="4"
+						Padding="{TemplateBinding Padding}">
+						<ContentPresenter
+							Content="{TemplateBinding Content}"
+							HorizontalAlignment="Center"
+							VerticalAlignment="Center" />
+					</Border>
+				</ControlTemplate>
+			</Setter>
+		</Style>
+		<Style Selector="Button:pointerover">
+			<Setter Property="Background" Value="#a56535" />
+			<Setter Property="Foreground" Value="#FFFFFF" />
+			<Setter Property="BorderBrush" Value="#fff0c9" />
+			<Setter Property="BorderThickness" Value="2" />
+		</Style>
+		<Style Selector="Button:pointerover /template/ Border">
+			<Setter Property="BorderBrush" Value="#fff0c9" />
+			<Setter Property="BorderThickness" Value="2" />
+		</Style>
+		<Style Selector="Button:pointerover /template/ ContentPresenter">
+			<Setter Property="TextElement.Foreground" Value="#FFFFFF" />
+		</Style>
+		<Style Selector="Button:pressed">
+			<Setter Property="Background" Value="#93562c" />
+			<Setter Property="Foreground" Value="#FFFFFF" />
+			<Setter Property="BorderBrush" Value="#ffe4b0" />
+			<Setter Property="BorderThickness" Value="2" />
+		</Style>
+		<Style Selector="Button:pressed /template/ ContentPresenter">
+			<Setter Property="TextElement.Foreground" Value="#FFFFFF" />
+		</Style>
+		<Style Selector="Button:disabled">
+			<Setter Property="Background" Value="#33241a" />
+			<Setter Property="Foreground" Value="#CBB8A2" />
+			<Setter Property="BorderBrush" Value="#9f6f44" />
+			<Setter Property="BorderThickness" Value="2" />
+		</Style>
+		<Style Selector="Button:disabled /template/ Border">
+			<Setter Property="BorderBrush" Value="#9f6f44" />
+			<Setter Property="BorderThickness" Value="2" />
+		</Style>
+		<Style Selector="Button:disabled /template/ ContentPresenter">
+			<Setter Property="TextElement.Foreground" Value="#E5D4C2" />
+		</Style>
+		<Style Selector="Button.step-button">
+			<Setter Property="Background" Value="#4a2c1a" />
+			<Setter Property="Foreground" Value="#FFF1DA" />
+			<Setter Property="BorderBrush" Value="#df8320" />
+			<Setter Property="BorderThickness" Value="2" />
+			<Setter Property="FontWeight" Value="SemiBold" />
+			<Setter Property="Padding" Value="20,10" />
+			<Setter Property="MinHeight" Value="40" />
+			<Setter Property="HorizontalAlignment" Value="Stretch" />
+		</Style>
+		<Style Selector="Button.step-button:pointerover">
+			<Setter Property="Background" Value="#a56535" />
+			<Setter Property="Foreground" Value="#FFF8EA" />
+			<Setter Property="BorderBrush" Value="#fff0c9" />
+			<Setter Property="BorderThickness" Value="2" />
+		</Style>
+		<Style Selector="Button.step-button:pointerover /template/ ContentPresenter">
+			<Setter Property="TextElement.Foreground" Value="#FFF8EA" />
+		</Style>
+		<Style Selector="Button.step-button:pressed">
+			<Setter Property="Background" Value="#93562c" />
+			<Setter Property="Foreground" Value="#FFFFFF" />
+			<Setter Property="BorderBrush" Value="#ffe4b0" />
+			<Setter Property="BorderThickness" Value="2" />
+		</Style>
+		<Style Selector="Button.step-button:disabled">
+			<Setter Property="Background" Value="#33241a" />
+			<Setter Property="Foreground" Value="#CBB8A2" />
+			<Setter Property="BorderBrush" Value="#9f6f44" />
+			<Setter Property="BorderThickness" Value="2" />
+		</Style>
+		<Style Selector="primitives|ToggleButton.option-toggle">
+			<Setter Property="Background" Value="#4a1f1f" />
+			<Setter Property="Foreground" Value="#FFE3E3" />
+			<Setter Property="BorderBrush" Value="#d84545" />
+			<Setter Property="BorderThickness" Value="2" />
+			<Setter Property="FocusAdorner" Value="{x:Null}" />
+			<Setter Property="FontWeight" Value="Normal" />
+			<Setter Property="CornerRadius" Value="4" />
+			<Setter Property="Padding" Value="16,9" />
+			<Setter Property="MinHeight" Value="38" />
+			<Setter Property="MinWidth" Value="230" />
+			<Setter Property="HorizontalAlignment" Value="Left" />
+			<Setter Property="Template">
+				<ControlTemplate>
+					<Border
+						Background="{TemplateBinding Background}"
+						BorderBrush="{TemplateBinding BorderBrush}"
+						BorderThickness="{TemplateBinding BorderThickness}"
+						CornerRadius="{TemplateBinding CornerRadius}"
+						Padding="{TemplateBinding Padding}">
+						<ContentPresenter
+							Content="{TemplateBinding Content}"
+							HorizontalAlignment="Center"
+							VerticalAlignment="Center" />
+					</Border>
+				</ControlTemplate>
+			</Setter>
+		</Style>
+		<Style Selector="primitives|ToggleButton.option-toggle /template/ Border">
+			<Setter Property="BorderBrush" Value="#d84545" />
+			<Setter Property="BorderThickness" Value="2" />
+		</Style>
+		<Style Selector="primitives|ToggleButton.option-toggle:checked /template/ Border">
+			<Setter Property="BorderBrush" Value="#45e06b" />
+			<Setter Property="BorderThickness" Value="2" />
+		</Style>
+		<Style Selector="primitives|ToggleButton.option-toggle:pointerover /template/ Border">
+			<Setter Property="BorderBrush" Value="#ff6f6f" />
+			<Setter Property="BorderThickness" Value="2" />
+		</Style>
+		<Style Selector="primitives|ToggleButton.option-toggle:checked:pointerover /template/ Border">
+			<Setter Property="BorderBrush" Value="#77eb8f" />
+			<Setter Property="BorderThickness" Value="2" />
+		</Style>
+		<Style Selector="primitives|ToggleButton.option-toggle:focus /template/ Border">
+			<Setter Property="BorderBrush" Value="#d84545" />
+			<Setter Property="BorderThickness" Value="2" />
+		</Style>
+		<Style Selector="primitives|ToggleButton.option-toggle:checked:focus /template/ Border">
+			<Setter Property="BorderBrush" Value="#45e06b" />
+			<Setter Property="BorderThickness" Value="2" />
+		</Style>
+		<Style Selector="primitives|ToggleButton.option-toggle /template/ ContentPresenter">
+			<Setter Property="TextElement.Foreground" Value="#FFE3E3" />
+		</Style>
+		<Style Selector="primitives|ToggleButton.option-toggle:pointerover">
+			<Setter Property="Background" Value="#6a2d2d" />
+			<Setter Property="Foreground" Value="#FFF0F0" />
+			<Setter Property="BorderBrush" Value="#ff6f6f" />
+			<Setter Property="BorderThickness" Value="2" />
+		</Style>
+		<Style Selector="primitives|ToggleButton.option-toggle:pointerover /template/ ContentPresenter">
+			<Setter Property="TextElement.Foreground" Value="#FFF0F0" />
+		</Style>
+		<Style Selector="primitives|ToggleButton.option-toggle:checked">
+			<Setter Property="Background" Value="#1f5a2a" />
+			<Setter Property="Foreground" Value="#E7FFE8" />
+			<Setter Property="BorderBrush" Value="#45e06b" />
+			<Setter Property="BorderThickness" Value="2" />
+			<Setter Property="FontWeight" Value="Normal" />
+		</Style>
+		<Style Selector="primitives|ToggleButton.option-toggle:checked /template/ ContentPresenter">
+			<Setter Property="TextElement.Foreground" Value="#E7FFE8" />
+		</Style>
+		<Style Selector="primitives|ToggleButton.option-toggle:checked:pointerover">
+			<Setter Property="Background" Value="#2b7a3a" />
+			<Setter Property="Foreground" Value="#F2FFF2" />
+			<Setter Property="BorderBrush" Value="#96f3af" />
+			<Setter Property="BorderThickness" Value="2" />
+		</Style>
+		<Style Selector="primitives|ToggleButton.option-toggle:checked:pointerover /template/ ContentPresenter">
+			<Setter Property="TextElement.Foreground" Value="#F2FFF2" />
+		</Style>
+		<Style Selector="primitives|ToggleButton.option-toggle:disabled">
+			<Setter Property="Background" Value="#33241a" />
+			<Setter Property="Foreground" Value="#CBB8A2" />
+			<Setter Property="BorderBrush" Value="#9f6f44" />
+			<Setter Property="BorderThickness" Value="2" />
+		</Style>
+		<Style Selector="primitives|ToggleButton.option-toggle:disabled /template/ ContentPresenter">
+			<Setter Property="TextElement.Foreground" Value="#D5C2B0" />
+		</Style>
+		<Style Selector="Button.compact-button">
+			<Setter Property="Padding" Value="12,6" />
+			<Setter Property="MinHeight" Value="36" />
 		</Style>
 		<Style Selector="Border">
-			<Setter Property="BorderBrush" Value="#90590d" />
+			<Setter Property="BorderBrush" Value="#d67d1e" />
 		</Style>
 	</Window.Styles>
 	<ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
@@ -37,7 +274,7 @@
 					<TextBlock Text="Quick Start" FontWeight="SemiBold" />
 					<TextBlock Text="1. Step 1 checks/installs Tampermonkey for the selected browser." Opacity="0.85" />
 					<TextBlock Text="2. Step 2 installs API server with tray icon startup (Plex-style hidden icon behavior)." Opacity="0.85" />
-					<TextBlock Text="3. Step 3 installs desktop app, then Step 4 installs userscript (enabled only when Tampermonkey is detected, bypass available)." Opacity="0.85" />
+					<TextBlock Text="3. Step 3 installs desktop app, then Step 4 installs userscript (detection is advisory; bypass remains available)." Opacity="0.85" />
 				</StackPanel>
 			</Border>
 
@@ -57,57 +294,58 @@
 			</Grid>
 
 			<Border BorderThickness="1" CornerRadius="6" Padding="10" Background="#3a143c">
-				<Grid ColumnDefinitions="320,*" RowDefinitions="Auto,Auto,Auto,Auto,Auto">
+				<Grid ColumnDefinitions="*,*" RowDefinitions="Auto,Auto,Auto,Auto,Auto">
 					<Border Grid.Row="0" Grid.Column="0">
 						<Border.ContextMenu>
 							<ContextMenu>
 								<MenuItem x:Name="ReinstallTampermonkeyMenuItem" Header="Reinstall" Click="OnReinstallTampermonkeyClick" />
 							</ContextMenu>
 						</Border.ContextMenu>
-						<Button x:Name="InstallTampermonkeyButton" Width="300" Height="34" HorizontalAlignment="Left" Content="Step 1: Install / Verify Tampermonkey" Click="OnInstallTampermonkeyClick" />
+						<Button x:Name="InstallTampermonkeyButton" Classes="step-button" Margin="0" Content="Step 1: Install / Verify Tampermonkey" Click="OnInstallTampermonkeyClick" />
 					</Border>
-					<Button x:Name="InstallApiStepButton" Grid.Row="1" Grid.Column="0" Margin="0,8,0,0" Width="300" Height="34" HorizontalAlignment="Left" Content="Step 2: Install API Server" Click="OnInstallApiStepClick" />
-					<Button x:Name="InstallDesktopStepButton" Grid.Row="2" Grid.Column="0" Margin="0,8,0,0" Width="300" Height="34" HorizontalAlignment="Left" Content="Step 3: Install Desktop App" Click="OnInstallDesktopStepClick" />
-					<Button x:Name="InstallUserscriptStepButton" Grid.Row="3" Grid.Column="0" Margin="0,8,0,0" Width="300" Height="34" HorizontalAlignment="Left" Content="Step 4: Install Userscript" Click="OnInstallUserscriptStepClick" />
-					<Button x:Name="InstallUserscriptBypassButton" Grid.Row="4" Grid.Column="0" Margin="0,8,0,0" Width="300" Height="34" HorizontalAlignment="Left" Content="Step 4b: Install Userscript (Bypass)" Click="OnInstallUserscriptBypassStepClick" />
+					<Button x:Name="InstallApiStepButton" Classes="step-button" Grid.Row="1" Grid.Column="0" Margin="0,10,0,0" Content="Step 2: Install API Server" Click="OnInstallApiStepClick" />
+					<Button x:Name="InstallDesktopStepButton" Classes="step-button" Grid.Row="2" Grid.Column="0" Margin="0,10,0,0" Content="Step 3: Install Desktop App" Click="OnInstallDesktopStepClick" />
+					<Button x:Name="InstallUserscriptStepButton" Classes="step-button" Grid.Row="3" Grid.Column="0" Margin="0,10,0,0" Content="Step 4: Install Userscript" Click="OnInstallUserscriptStepClick" />
+					<Button x:Name="InstallUserscriptBypassButton" Classes="step-button" Grid.Row="4" Grid.Column="0" Margin="0,10,0,0" Content="Step 4b: Install Userscript (Bypass)" Click="OnInstallUserscriptBypassStepClick" />
 
 					<StackPanel Grid.Row="0" Grid.Column="1" Grid.RowSpan="5" Margin="12,0,0,0" Spacing="6">
 						<TextBlock Text="Step Status" FontWeight="SemiBold" />
 						<TextBlock x:Name="TampermonkeyStatusTextBlock" Text="Tampermonkey status: checking..." Opacity="0.92" />
-						<TextBlock Text="Userscript install button is enabled only when Tampermonkey is detected in the selected browser." Opacity="0.82" TextWrapping="Wrap" />
-						<TextBlock Text="If detection misses your setup, use the bypass step and follow the setup guide screenshots." Opacity="0.82" TextWrapping="Wrap" />
+						<TextBlock Text="Step 4 installs the userscript even if auto-detection cannot confirm Tampermonkey." Opacity="0.82" TextWrapping="Wrap" />
+						<TextBlock Text="If detection misses your setup, continue with Step 4 or Step 4b and follow the setup guide screenshots." Opacity="0.82" TextWrapping="Wrap" />
 					</StackPanel>
 				</Grid>
 			</Border>
 
-			<WrapPanel Orientation="Horizontal" ItemWidth="300" ItemHeight="32">
-				<CheckBox x:Name="OpenTampermonkeySetupCheckBox" Content="Open Tampermonkey setup page during userscript step" IsChecked="True" />
-				<CheckBox x:Name="FirstRunDiagnosticsCheckBox" Content="Run first-run diagnostics" IsChecked="False" />
-				<CheckBox x:Name="OpenDiagnosticsCheckBox" Content="Open diagnostics pages after install" IsChecked="False" />
+			<WrapPanel Orientation="Horizontal" Margin="0,8,0,2">
+				<primitives:ToggleButton Classes="option-toggle" x:Name="OpenTampermonkeySetupCheckBox" Margin="0,0,16,14" IsChecked="True" Checked="OnOptionToggleChanged" Unchecked="OnOptionToggleChanged" />
+				<primitives:ToggleButton Classes="option-toggle" x:Name="FirstRunDiagnosticsCheckBox" Margin="0,0,16,14" IsChecked="False" Checked="OnOptionToggleChanged" Unchecked="OnOptionToggleChanged" />
+				<primitives:ToggleButton Classes="option-toggle" x:Name="OpenDiagnosticsCheckBox" Margin="0,0,16,14" IsChecked="False" Checked="OnOptionToggleChanged" Unchecked="OnOptionToggleChanged" />
 			</WrapPanel>
 
 			<Border BorderThickness="1" CornerRadius="6" Padding="8" Background="#3a143c">
 				<TextBox x:Name="LogTextBox"
 					Height="260"
+					Padding="6,6,6,20"
 					IsReadOnly="True"
 					AcceptsReturn="True"
 					TextWrapping="Wrap"
 					ScrollViewer.VerticalScrollBarVisibility="Auto"
-					ScrollViewer.HorizontalScrollBarVisibility="Auto"
+					ScrollViewer.HorizontalScrollBarVisibility="Disabled"
 					FontFamily="Consolas"
 					Text="Ready. Choose components, then click Install Ecosystem." />
 			</Border>
 
 			<Grid ColumnDefinitions="*,Auto,Auto" RowDefinitions="Auto">
 				<TextBlock x:Name="StatusTextBlock" VerticalAlignment="Center" Text="Status: Idle" />
-				<Button x:Name="InstallButton" Grid.Column="1" Margin="10,0,0,0" Content="Run Full Install" Width="200" Height="36" Click="OnInstallClick" />
-				<Button x:Name="OpenInstallRootButton" Grid.Column="2" Margin="10,0,0,0" Content="Open Install Folder" Width="170" Height="36" Click="OnOpenInstallRootClick" />
+				<Button x:Name="InstallButton" Classes="compact-button" Grid.Column="1" Margin="10,0,0,0" Content="Run Full Install" MinWidth="200" Click="OnInstallClick" />
+				<Button x:Name="OpenInstallRootButton" Classes="compact-button" Grid.Column="2" Margin="10,0,0,0" Content="Open Install Folder" MinWidth="170" Click="OnOpenInstallRootClick" />
 			</Grid>
 
 			<Grid ColumnDefinitions="*,Auto,Auto" RowDefinitions="Auto">
 				<TextBlock x:Name="LogPathTextBlock" VerticalAlignment="Center" Opacity="0.85" Text="Log: pending" />
-				<Button x:Name="OpenSetupGuideButton" Grid.Column="1" Margin="10,0,0,0" Content="Open Setup Guide" Width="150" Height="32" Click="OnOpenSetupGuideClick" />
-				<Button x:Name="OpenLogFolderButton" Grid.Column="2" Margin="10,0,0,0" Content="Open Log Folder" Width="170" Height="32" Click="OnOpenLogFolderClick" />
+				<Button x:Name="OpenSetupGuideButton" Classes="compact-button" Grid.Column="1" Margin="10,0,0,0" Content="Open Setup Guide" MinWidth="170" Click="OnOpenSetupGuideClick" />
+				<Button x:Name="OpenLogFolderButton" Classes="compact-button" Grid.Column="2" Margin="10,0,0,0" Content="Open Log Folder" MinWidth="170" Click="OnOpenLogFolderClick" />
 			</Grid>
 		</StackPanel>
 	</ScrollViewer>
