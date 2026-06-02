@@ -4921,9 +4921,9 @@ class UIManager {
 			return '';
 		}
 
- 		// For all non-Russian UI languages, never return Cyrillic labels.
+		// Prefer English/Latin labels first, but keep Cyrillic as fallback.
 		if (nonCyrillic.length > 0) return nonCyrillic[0];
-
+		if (cyrillic.length > 0) return cyrillic[0];
 		return '';
 	}
 
@@ -5062,6 +5062,7 @@ class UIManager {
 		if (!raw) return '';
 		const preferredLanguage = this._normalizeUiLanguage(this._uiLanguage || this.prefStorage.get('uiLanguage', 'en'));
 		const lookupTokens = this._buildLocaleTokenCandidates(raw);
+		let cyrillicFallback = '';
 
 		for (const localeToken of lookupTokens) {
 			const preferredLookup = this._resolveTokenFromTranslationMaps(localeToken, preferredLanguage);
@@ -5094,6 +5095,7 @@ class UIManager {
 						if (this._isPlaceholderItemLabel(translated)) continue;
 
 						if (preferredLanguage !== 'ru' && this._isCyrillicText(translated)) {
+							if (!cyrillicFallback) cyrillicFallback = translated;
 							continue;
 						}
 
@@ -5149,8 +5151,8 @@ class UIManager {
 			return this._isPlaceholderItemLabel(fallback) ? '' : fallback;
 		}
 
-		if (preferredLanguage !== 'ru' && this._isCyrillicText(raw)) {
-			return '';
+		if (cyrillicFallback) {
+			return cyrillicFallback;
 		}
 
 		return this._isPlaceholderItemLabel(raw) ? '' : raw;

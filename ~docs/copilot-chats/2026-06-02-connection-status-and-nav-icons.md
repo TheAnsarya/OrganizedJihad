@@ -2,6 +2,29 @@
 
 ## Session
 - Date: 2026-06-02
+- Session Number: 17
+- Scope: Userscript localization adjustment — prefer English labels without hard Cyrillic exclusion
+
+## Summary
+- Reworked the hotfix behavior so label resolution now prefers English/non-Cyrillic candidates first for non-Russian UI languages.
+- Removed hard rejection of Cyrillic labels; Cyrillic now acts as a fallback only when no better locale candidate is available.
+- Updated locale-token translator flow to retain first Cyrillic translation as fallback while continuing to search for preferred-language/non-Cyrillic results.
+- Rebuilt userscript bundle to `0.9.228`.
+
+## Files Modified
+- userscript/src/modules/uiManager.js
+- userscript/package.json
+- ~docs/copilot-chats/2026-06-02-userscript-build-auto.md
+- ~docs/copilot-chats/2026-06-02-connection-status-and-nav-icons.md
+
+## Validation
+- get_errors userscript/src/modules/uiManager.js (no errors)
+- yarn build (version 0.9.228)
+
+---
+
+## Session
+- Date: 2026-06-02
 - Session Number: 16
 - Scope: Userscript localization hotfix — block Cyrillic labels for non-Russian UI languages
 
