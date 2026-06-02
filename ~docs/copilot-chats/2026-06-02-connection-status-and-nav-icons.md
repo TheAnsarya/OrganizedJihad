@@ -2,6 +2,33 @@
 
 ## Session
 - Date: 2026-06-02
+- Session Number: 14
+- Scope: Userscript Mail tab informativeness overhaul (sender, subject, message, expected rewards)
+
+## Summary
+- Reworked `mailGetAll` normalization in tracker logic to support `{ letters, users }` payloads and preserve sender metadata.
+- Added richer mail row fields in metadata (`senderName`, `senderId`, `messageText`, `rewardSummaryText`, `rawMail`) for UI rendering.
+- Upgraded Mail tab table to show From, Subject, Type, Message preview/full body, Received timestamp, and Expected Rewards summary.
+- Expanded Mail tab search to include sender names, message body, and reward summary text.
+- Rebuilt userscript bundle to `0.9.225`.
+
+## Files Modified
+- userscript/src/modules/gameTracker.js
+- userscript/src/modules/uiManager.js
+- userscript/package.json
+- ~docs/copilot-chats/2026-06-02-userscript-build-auto.md
+- ~docs/copilot-chats/2026-06-02-connection-status-and-nav-icons.md
+
+## Validation
+- get_errors userscript/src/modules/uiManager.js (no errors)
+- get_errors userscript/src/modules/gameTracker.js (no errors)
+- yarn test --runInBand (37/37 suites, 843/843 tests passed)
+- yarn build (version 0.9.225)
+
+---
+
+## Session
+- Date: 2026-06-02
 - Session Number: 4
 - Scope: Userscript connection diagnostics reliability and tab icon UX refinement
 

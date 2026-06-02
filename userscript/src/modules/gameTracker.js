@@ -1812,19 +1812,45 @@ class GameTracker {
 		const playerId = (await this.storage.getMetadata('currentPlayerId')) || 'unknown';
 		const timestamp = new Date().toISOString();
 
-		// Normalize: API may return array or object keyed by mail ID
-		const mailArray = Array.isArray(data) ? data : Object.values(data || {});
+		// Normalize across known shapes:
+		// - { letters: [...], users: [...] } (mailGetAll)
+		// - [{...}] direct list
+		// - { id: {...} } keyed object
+		const letters = Array.isArray(data?.letters)
+			? data.letters
+			: (Array.isArray(data) ? data : Object.values(data || {}));
+		const users = Array.isArray(data?.users) ? data.users : [];
+		const userById = {};
+		for (const user of users) {
+			const uid = String(user?.id ?? user?.userId ?? '');
+			if (!uid) continue;
+			userById[uid] = user;
+		}
+
+		const mailArray = Array.isArray(letters) ? letters : [];
 		if (mailArray.length === 0) return;
 
-		const mailItems = mailArray.map((m) => ({
-			mailId: m.id || m.mailId,
-			mailType: m.type || 'unknown',
-			subject: m.subject || m.letter || '',
-			rewards: m.reward || m.rewards || null,
-			receivedAt: m.time ? new Date(m.time * 1000).toISOString() : timestamp,
-			isRead: !!m.isRead,
-			isCollected: !!m.isCollected,
-		}));
+		const mailItems = mailArray.map((m) => {
+			const senderId = m?.senderId ?? m?.fromId ?? m?.userId ?? m?.ownerId ?? null;
+			const sender = senderId !== null ? userById[String(senderId)] : null;
+
+			return {
+				mailId: m?.id ?? m?.mailId ?? null,
+				mailType: m?.type || 'unknown',
+				senderId: senderId !== null ? String(senderId) : '',
+				senderName: m?.senderName || m?.fromName || sender?.name || sender?.title || '',
+				subject: m?.subject || m?.subjectLocaleKey || m?.title || m?.titleLocaleKey || '',
+				messageText: m?.letter || m?.body || m?.text || m?.description || m?.content || '',
+				rewardSummaryText: m?.rewardText || m?.rewardDescription || '',
+				rewards: m?.reward || m?.rewards || null,
+				receivedAt: (m?.time || m?.ctime)
+					? new Date((m.time || m.ctime) * 1000).toISOString()
+					: timestamp,
+				isRead: !!(m?.isRead || m?.read || m?.opened),
+				isCollected: !!(m?.isCollected || m?.farmed || m?.claimed),
+				rawMail: m,
+			};
+		});
 
 		// Store in metadata for UI quick access
 		await this.storage.setMetadata('mailData', {

@@ -2776,15 +2776,17 @@ class UIManager {
 			mailListHtml = `
 				<div class="oj-mail-list" data-browser="mail">
 					<h4>\uD83D\uDCE5 Inbox <span class="oj-muted">(${totalCount} messages \u2022 ${mailData.unread || 0} unread \u2022 ${mailData.uncollected || 0} uncollected)</span></h4>
-					${this._renderSearchBar(vs.filter)}
+					${this._renderSearchBar(vs.filter, 'Search sender, subject, message, type...')}
 					<table class="oj-table oj-sortable">
 						<thead>
 							<tr>
 								<th style="width:30px">&nbsp;</th>
+								<th data-sort="senderName" class="oj-sort-header">From ${sortInd('senderName')}</th>
 								<th data-sort="subject" class="oj-sort-header">Subject ${sortInd('subject')}</th>
 								<th data-sort="mailType" class="oj-sort-header">Type ${sortInd('mailType')}</th>
+								<th>Message</th>
 								<th data-sort="receivedAt" class="oj-sort-header">Received ${sortInd('receivedAt')}</th>
-								<th>Rewards</th>
+								<th>Expected Rewards</th>
 							</tr>
 						</thead>
 						<tbody>${rows}</tbody>
@@ -5573,10 +5575,14 @@ class UIManager {
 		let filtered = [...items];
 		if (vs.filter) {
 			const q = vs.filter.toLowerCase();
-			filtered = filtered.filter((mail) =>
-				(mail.subject || '').toLowerCase().includes(q) ||
-				(mail.mailType || '').toLowerCase().includes(q)
-			);
+			filtered = filtered.filter((mail) => {
+				const rewardSummary = this._buildMailRewardSummary(mail).toLowerCase();
+				return (mail.subject || '').toLowerCase().includes(q)
+					|| (mail.mailType || '').toLowerCase().includes(q)
+					|| (mail.senderName || '').toLowerCase().includes(q)
+					|| (mail.messageText || '').toLowerCase().includes(q)
+					|| rewardSummary.includes(q);
+			});
 		}
 
 		filtered = this._sortData(filtered, vs.sortField, vs.sortDir);
@@ -5588,35 +5594,80 @@ class UIManager {
 	}
 
 	_buildMailRewardSummary(mail) {
+		if (!mail) return '\u2014';
+		if (mail.rewardSummaryText && String(mail.rewardSummaryText).trim()) {
+			return String(mail.rewardSummaryText).trim();
+		}
 		if (!mail.rewards || typeof mail.rewards !== 'object') return '\u2014';
 
 		const parts = [];
 		for (const [key, val] of Object.entries(mail.rewards)) {
 			if (typeof val === 'number' && val > 0) {
-				parts.push(`${key}: ${val.toLocaleString()}`);
+				parts.push(`${key}: ${Number(val).toLocaleString()}`);
 			} else if (typeof val === 'object' && val !== null) {
+				const rewardEntries = Object.entries(val)
+					.filter(([, qty]) => typeof qty === 'number' && qty > 0)
+					.slice(0, 3)
+					.map(([id, qty]) => `${id} x${Number(qty).toLocaleString()}`);
 				const count = Object.values(val).reduce((sum, v) => sum + (typeof v === 'number' ? v : 0), 0);
-				if (count > 0) parts.push(`${key}: ${count.toLocaleString()} items`);
+				if (count > 0) {
+					parts.push(rewardEntries.length > 0
+						? `${key}: ${rewardEntries.join(', ')}${Object.keys(val).length > rewardEntries.length ? '…' : ''}`
+						: `${key}: ${count.toLocaleString()} items`);
+				}
 			}
 		}
 
 		return parts.length > 0 ? parts.join(', ') : '\u2014';
 	}
 
+	_buildMailMessageText(mail) {
+		const raw = String(mail?.messageText || mail?.rawMail?.letter || mail?.rawMail?.body || mail?.rawMail?.text || '').trim();
+		if (!raw) return '';
+
+		const tokenResolved = this._resolveLocaleToken(raw);
+		return String(tokenResolved || raw).trim();
+	}
+
+	_buildMailSubjectText(mail) {
+		const raw = String(mail?.subject || mail?.rawMail?.subject || mail?.rawMail?.title || '').trim();
+		if (!raw) return '';
+
+		const tokenResolved = this._resolveLocaleToken(raw);
+		return String(tokenResolved || raw).trim();
+	}
+
 	_renderMailInboxRows(pageItems) {
 		return pageItems.map((mail) => {
 			const statusIcon = mail.isCollected ? '\u2705' : mail.isRead ? '\uD83D\uDCE8' : '\uD83D\uDCE9';
-			const subject = this._escapeHtml(mail.subject || '(no subject)');
+			const subject = this._escapeHtml(this._buildMailSubjectText(mail) || '(no subject)');
 			const type = this._escapeHtml(mail.mailType || 'unknown');
+			const sender = this._escapeHtml(mail.senderName || mail.senderId || 'System');
+			const messageText = this._buildMailMessageText(mail);
+			const messagePreview = this._escapeHtml(messageText ? (messageText.length > 140 ? `${messageText.slice(0, 140)}…` : messageText) : '—');
+			const messageFull = this._escapeHtml(messageText || 'No message body captured.');
 			const date = mail.receivedAt ? new Date(mail.receivedAt).toLocaleString() : '\u2014';
-			const rewardSummary = this._buildMailRewardSummary(mail);
+			const rewardSummary = this._escapeHtml(this._buildMailRewardSummary(mail));
+			const statusLabel = mail.isCollected ? 'Collected' : (mail.isRead ? 'Read' : 'Unread');
+			const mailId = this._escapeHtml(String(mail.mailId || ''));
 			return `
 				<tr>
-					<td>${statusIcon}</td>
-					<td>${subject}</td>
+					<td title="${statusLabel}">${statusIcon}</td>
+					<td>${sender}</td>
+					<td>
+						<div><strong>${subject}</strong></div>
+						<div class="oj-muted" style="font-size:10px;">ID: ${mailId || '—'}</div>
+					</td>
 					<td><span class="oj-badge">${type}</span></td>
+					<td>
+						<div class="oj-muted" style="font-size:11px;max-width:280px;">${messagePreview}</div>
+						<details>
+							<summary style="cursor:pointer;font-size:10px;">View full message</summary>
+							<div style="white-space:pre-wrap;margin-top:4px;font-size:11px;">${messageFull}</div>
+						</details>
+					</td>
 					<td class="oj-muted">${date}</td>
-					<td class="oj-muted">${rewardSummary}</td>
+					<td class="oj-muted" style="max-width:260px;">${rewardSummary}</td>
 				</tr>
 			`;
 		}).join('');
