@@ -2,6 +2,33 @@
 
 ## Session
 - Date: 2026-06-02
+- Session Number: 15
+- Scope: Userscript language-bound label fixes + header language button menu UX
+
+## Summary
+- Replaced header language `<select>` with a compact button (`🌐 XX ▾`) and popout menu listing all supported locales.
+- Hardened locale token resolution to prefer selected-language runtime translation maps and avoid Cyrillic fallback when non-Russian UI languages are selected.
+- Added language-key alias handling for translation dictionaries (`en`, `EN`, `en_US`, `en-US`, etc.) and English fallback lookup when selected locale is missing.
+- Expanded inventory token-family candidates for category-specific item names (banner stones, ascension gear, craft/experience/treasure/resource/item names).
+- Updated hero/titan/pet and soul-stone naming paths to use locale-aware entity resolution before static fallback names.
+- Rebuilt userscript bundle to `0.9.226`.
+
+## Files Modified
+- userscript/src/modules/uiManager.js
+- userscript/src/styles/main.css
+- userscript/package.json
+- ~docs/copilot-chats/2026-06-02-userscript-build-auto.md
+- ~docs/copilot-chats/2026-06-02-connection-status-and-nav-icons.md
+
+## Validation
+- get_errors userscript/src/modules/uiManager.js (no errors)
+- yarn test --runInBand (37/37 suites, 843/843 tests passed)
+- yarn build (version 0.9.226)
+
+---
+
+## Session
+- Date: 2026-06-02
 - Session Number: 14
 - Scope: Userscript Mail tab informativeness overhaul (sender, subject, message, expected rewards)
 

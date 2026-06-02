@@ -322,7 +322,7 @@ class UIManager {
 	 * Build the overlay container and inject it into the page.
 	 */
 	createOverlay() {
-		const headerLanguageOptions = this._renderLanguageOptionMarkup(this._uiLanguage, true);
+		const headerLanguageMenuItems = this._renderLanguageMenuMarkup(this._uiLanguage);
 
 		this.overlay = document.createElement('div');
 		this.overlay.id = 'organizedJihad-overlay';
@@ -338,11 +338,12 @@ class UIManager {
 				<div class="oj-header">
 					<h2 class="oj-title">⚔️ OrganizedJihad</h2>
 					<div class="oj-header-actions">
-						<label class="oj-lang-select-wrap" title="UI language">
-							<select class="oj-lang-select" id="oj-lang-select" aria-label="UI language">
-								${headerLanguageOptions}
-							</select>
-						</label>
+						<div class="oj-lang-menu-wrap" title="UI language">
+							<button class="oj-btn oj-lang-menu-toggle" id="oj-lang-menu-toggle" aria-label="UI language" aria-haspopup="true" aria-expanded="false"></button>
+							<div class="oj-lang-menu" id="oj-lang-menu" role="menu" aria-label="Select language">
+								${headerLanguageMenuItems}
+							</div>
+						</div>
 						<button class="oj-btn oj-btn-icon" id="oj-reset-pos" title="Reset Position">↺</button>
 						<button class="oj-btn oj-btn-icon" id="oj-minimize" title="Minimize">−</button>
 						<button class="oj-btn oj-btn-icon" id="oj-close" title="Close">×</button>
@@ -447,8 +448,43 @@ class UIManager {
 		// Resizable via bottom-right handle
 		this.makeResizable();
 
-		this.overlay.querySelector('#oj-lang-select')?.addEventListener('change', (event) => {
-			this._setUiLanguage(event?.target?.value || 'en');
+		const langToggle = this.overlay.querySelector('#oj-lang-menu-toggle');
+		const langMenu = this.overlay.querySelector('#oj-lang-menu');
+		const closeLanguageMenu = () => {
+			langMenu?.classList.remove('open');
+			if (langToggle) langToggle.setAttribute('aria-expanded', 'false');
+		};
+
+		langToggle?.addEventListener('click', (event) => {
+			event.preventDefault();
+			event.stopPropagation();
+			const willOpen = !langMenu?.classList.contains('open');
+			if (willOpen) {
+				langMenu?.classList.add('open');
+				langToggle?.setAttribute('aria-expanded', 'true');
+			} else {
+				closeLanguageMenu();
+			}
+		});
+
+		langMenu?.addEventListener('click', (event) => {
+			const target = event.target instanceof HTMLElement
+				? event.target.closest('[data-lang-code]')
+				: null;
+			if (!target) return;
+
+			event.preventDefault();
+			event.stopPropagation();
+			const code = String(target?.dataset?.langCode || 'en');
+			this._setUiLanguage(code);
+			closeLanguageMenu();
+		});
+
+		this._addDocListener('click', (event) => {
+			const target = event.target instanceof HTMLElement ? event.target : null;
+			if (!target) return;
+			if (target.closest('.oj-lang-menu-wrap')) return;
+			closeLanguageMenu();
 		});
 	}
 
@@ -590,6 +626,23 @@ class UIManager {
 	}
 
 	/**
+	 * Render language menu buttons for the header popout menu.
+	 *
+	 * @param {string} selectedLanguage - Selected language code
+	 * @returns {string} Button markup
+	 * @private
+	 */
+	_renderLanguageMenuMarkup(selectedLanguage) {
+		return UI_LANGUAGE_OPTIONS.map((entry) => {
+			const activeClass = entry.code === selectedLanguage ? ' oj-lang-menu-item-active' : '';
+			return `<button class="oj-lang-menu-item${activeClass}" data-lang-code="${entry.code}" role="menuitem" type="button">` +
+				`<span class="oj-lang-menu-item-code">${entry.short}</span>` +
+				`<span class="oj-lang-menu-item-label">${this._escapeHtml(entry.label)}</span>` +
+			`</button>`;
+		}).join('');
+	}
+
+	/**
 	 * Normalize requested UI language code.
 	 *
 	 * @param {string} value - Raw language code
@@ -628,12 +681,25 @@ class UIManager {
 	 * @private
 	 */
 	_updateLanguageHeaderControl() {
-		const headerSelect = this.overlay?.querySelector('#oj-lang-select');
-		if (headerSelect) {
-			headerSelect.innerHTML = this._renderLanguageOptionMarkup(this._uiLanguage, true);
-			headerSelect.value = this._uiLanguage;
-			headerSelect.title = `UI language (${this._uiLanguage.toUpperCase()})`;
+		const activeOption = UI_LANGUAGE_OPTIONS.find((entry) => entry.code === this._uiLanguage) || UI_LANGUAGE_OPTIONS[0];
+		const menuToggle = this.overlay?.querySelector('#oj-lang-menu-toggle');
+		const menu = this.overlay?.querySelector('#oj-lang-menu');
+
+		if (menuToggle) {
+			menuToggle.textContent = `🌐 ${activeOption.short} ▾`;
+			menuToggle.title = `UI language (${activeOption.label})`;
+			menuToggle.setAttribute('aria-expanded', 'false');
 		}
+
+		if (menu) {
+			menu.innerHTML = this._renderLanguageMenuMarkup(this._uiLanguage);
+			menu.classList.remove('open');
+		}
+
+		this.overlay?.querySelectorAll('[data-lang-code]').forEach((button) => {
+			const langCode = String(button?.dataset?.langCode || '');
+			button.classList.toggle('oj-lang-menu-item-active', langCode === this._uiLanguage);
+		});
 
 		const settingsSelect = this.overlay?.querySelector('#oj-ui-language');
 		if (settingsSelect) {
@@ -1719,7 +1785,9 @@ class UIManager {
 		if (vs.filter) {
 			const q = vs.filter.toLowerCase();
 			heroes = heroes.filter((h) => {
-				const name = (h.heroName || h.name || '').toLowerCase();
+				const heroId = Number(h.heroId || h.id || 0);
+				const localized = this._resolveEntityName(heroId);
+				const name = this._pickBestInventoryLabel([localized, h.heroName, h.name]).toLowerCase();
 				return name.includes(q);
 			});
 		}
@@ -1751,7 +1819,8 @@ class UIManager {
 
 		const rows = pageItems.map((h) => {
 			const hId = h.heroId || h.id;
-			const name = this._escapeHtml(h.heroName || h.name || `Hero #${hId}`);
+			const localizedName = this._resolveEntityName(Number(hId));
+			const name = this._escapeHtml(this._pickBestInventoryLabel([localizedName, h.heroName, h.name]) || `Hero #${hId}`);
 			const colorName = this._colorRankName(h.color);
 			const colorClass = this._colorRankClass(h.color);
 			const comp = completionMap[hId] || { overall: 0, systems: {} };
@@ -2130,7 +2199,9 @@ class UIManager {
 		if (vs.filter) {
 			const q = vs.filter.toLowerCase();
 			titans = titans.filter((t) => {
-				const name = (t.titanName || t.name || '').toLowerCase();
+				const titanId = Number(t.titanId || t.id || 0);
+				const localized = this._resolveEntityName(titanId);
+				const name = this._pickBestInventoryLabel([localized, t.titanName, t.name]).toLowerCase();
 				return name.includes(q);
 			});
 		}
@@ -2222,7 +2293,8 @@ class UIManager {
 			const q = vs.filter.toLowerCase();
 			pets = pets.filter((p) => {
 				const pId = p.petId || p.id;
-				const name = (resolveHeroName(pId) || p.petName || p.name || '').toLowerCase();
+				const localized = this._resolveEntityName(Number(pId));
+				const name = this._pickBestInventoryLabel([localized, p.petName, p.name]).toLowerCase();
 				return name.includes(q);
 			});
 		}
@@ -2531,6 +2603,8 @@ class UIManager {
 				const fallbackPatterns = [
 					`${catInfo.prefix} ${itemId}`,
 					`${catInfo.prefix} ${itemId} Stones`,
+					`${catInfo.prefix} ${itemId} Soul Stones`,
+					this._formatSoulStoneLabel(`${catInfo.prefix} ${itemId}`),
 				];
 
 				if (fallbackPatterns.includes(name) || this._isPlaceholderItemLabel(name)) {
@@ -2588,16 +2662,16 @@ class UIManager {
 	_resolveInventoryItemName(apiKey, itemId, catInfo, itemNameCatalog) {
 		if (apiKey === 'fragmentHero' || apiKey === 'fragmentTitan' || apiKey === 'fragmentPet') {
 			const resolvedName = this._resolveEntityName(Number(itemId));
-			if (resolvedName !== `Hero_${itemId}` && !this._isPlaceholderItemLabel(resolvedName)) {
-				return `${resolvedName} Stones`;
+			if (!this._isPlaceholderItemLabel(resolvedName)) {
+				return this._formatSoulStoneLabel(resolvedName);
 			}
 
 			const tokenResolved = this._resolveInventoryTokenName(apiKey, itemId);
 			if (tokenResolved && !this._isPlaceholderItemLabel(tokenResolved)) {
-				return tokenResolved.toLowerCase().includes('stone') ? tokenResolved : `${tokenResolved} Stones`;
+				return tokenResolved;
 			}
 
-			return `${catInfo.prefix} ${itemId} Stones`;
+			return `${catInfo.prefix} ${itemId}`;
 		}
 
 		const tokenKey = `${apiKey}${itemId}`;
@@ -2657,8 +2731,14 @@ class UIManager {
 			scroll: ['LIB_SCROLL_NAME_'],
 			coin: ['LIB_COIN_NAME_'],
 			artifact: ['LIB_ARTIFACT_NAME_'],
+			bannerStone: ['LIB_BANNER_STONE_NAME_', 'LIB_STONE_NAME_'],
+			craftItem: ['LIB_CRAFT_NAME_', 'LIB_ITEM_NAME_'],
+			experience: ['LIB_EXPERIENCE_NAME_', 'LIB_ITEM_NAME_'],
+			treasure: ['LIB_TREASURE_NAME_', 'LIB_ITEM_NAME_'],
+			ascensionGear: ['LIB_ASCENSION_GEAR_NAME_', 'LIB_GEAR_NAME_'],
 			petGear: ['LIB_PET_GEAR_NAME_', 'LIB_GEAR_NAME_'],
 			fragmentGear: ['LIB_GEAR_NAME_'],
+			fragmentScroll: ['LIB_SCROLL_NAME_'],
 			fragmentArtifact: ['LIB_ARTIFACT_NAME_'],
 			fragmentTitanArtifact: ['LIB_TITAN_ARTIFACT_NAME_', 'LIB_ARTIFACT_NAME_'],
 			fragmentHero: ['LIB_HERO_NAME_'],
@@ -2677,7 +2757,37 @@ class UIManager {
 			candidates.add(`${prefix}${id}`);
 		}
 
+		const categoryStem = String(apiKey || '')
+			.replace(/([a-z0-9])([A-Z])/g, '$1_$2')
+			.replace(/\s+/g, '_')
+			.toUpperCase();
+		if (categoryStem) {
+			candidates.add(`LIB_${categoryStem}_NAME_${id}`);
+			candidates.add(`LIB_${categoryStem}_${id}`);
+		}
+
+		candidates.add(`LIB_ITEM_NAME_${id}`);
+		candidates.add(`LIB_RESOURCE_NAME_${id}`);
+
 		return [...candidates];
+	}
+
+	/**
+	 * Format localized soul-stone labels.
+	 *
+	 * @param {string} entityName - Entity display name
+	 * @returns {string} Soul stone label
+	 * @private
+	 */
+	_formatSoulStoneLabel(entityName) {
+		const base = String(entityName || '').trim();
+		if (!base) return '';
+
+		if (this._uiLanguage === 'ru') {
+			return `${base} Камни Душ`;
+		}
+
+		return `${base} Soul Stones`;
 	}
 
 	/**
@@ -2689,11 +2799,6 @@ class UIManager {
 	 * @private
 	 */
 	_resolveEntityName(id) {
-		const mapped = resolveHeroName(id);
-		if (mapped && mapped !== `Hero_${id}`) {
-			return mapped;
-		}
-
 		const translated = this._pickBestInventoryLabel([
 			this._resolveLocaleToken(`LIB_HERO_NAME_${id}`),
 			this._resolveLocaleToken(`LIB_TITAN_NAME_${id}`),
@@ -2702,6 +2807,11 @@ class UIManager {
 
 		if (translated) {
 			return translated;
+		}
+
+		const mapped = resolveHeroName(id);
+		if (mapped && mapped !== `Hero_${id}`) {
+			return mapped;
 		}
 
 		return `Entity ${id}`;
@@ -3437,7 +3547,7 @@ class UIManager {
 								${languageOptions}
 							</select>
 						</label>
-						<p class="oj-muted" style="margin:2px 0 0;font-size:10px">Default is English. Header language dropdown supports additional locales.</p>
+						<p class="oj-muted" style="margin:2px 0 0;font-size:10px">Default is English. Use the header language button to quickly switch locales.</p>
 					</div>
 				</div>
 
@@ -4328,7 +4438,8 @@ class UIManager {
 	_renderTitanRows(pageItems, completionMap, TCalc) {
 		return pageItems.map((titan) => {
 			const titanId = titan.titanId || titan.id;
-			const name = this._escapeHtml(titan.titanName || titan.name || `Titan #${titanId}`);
+			const localizedName = this._resolveEntityName(Number(titanId));
+			const name = this._escapeHtml(this._pickBestInventoryLabel([localizedName, titan.titanName, titan.name]) || `Titan #${titanId}`);
 			const elementDisplay = TCalc.formatElement(titan.element);
 			const comp = completionMap[titanId] || { overall: 0, systems: {} };
 
@@ -4421,7 +4532,8 @@ class UIManager {
 	_renderPetRows(pageItems, completionMap, PCalc) {
 		return pageItems.map((pet) => {
 			const petId = pet.petId || pet.id;
-			const name = this._escapeHtml(resolveHeroName(petId) || pet.petName || pet.name || `Pet #${petId}`);
+			const localizedName = this._resolveEntityName(Number(petId));
+			const name = this._escapeHtml(this._pickBestInventoryLabel([localizedName, pet.petName, pet.name]) || `Pet #${petId}`);
 			const comp = completionMap[petId] || { overall: 0, systems: {} };
 			const patronageCount = PCalc.countPatronage(pet.patronageData);
 			const avatarUrl = `https://calc2.hw-assist.com/static/assets/images/hero_icons/${String(petId).padStart(4, '0')}.png`;
@@ -4486,7 +4598,8 @@ class UIManager {
 				totalUsable += usable;
 				totalNeeded += neededToMax;
 
-				const petName = this._escapeHtml(resolveHeroName(petId) || pet.petName || pet.name || `Pet #${petId}`);
+				const localizedName = this._resolveEntityName(Number(petId));
+				const petName = this._escapeHtml(this._pickBestInventoryLabel([localizedName, pet.petName, pet.name]) || `Pet #${petId}`);
 				petStoneSummary.push({ petName, curStars, stonesOwned, neededToMax, nextStarCost, usable });
 			}
 
@@ -4798,19 +4911,119 @@ class UIManager {
 		if (filtered.length === 0) return '';
 
 		const preferredLanguage = this._normalizeUiLanguage(this._uiLanguage || this.prefStorage.get('uiLanguage', 'en'));
-		const hasCyrillic = (value) => /[\u0400-\u04FF]/.test(String(value || ''));
-
-		if (preferredLanguage === 'en') {
-			const englishLabel = filtered.find((value) => !hasCyrillic(value));
-			if (englishLabel) return englishLabel;
-		}
+		const hasCyrillic = (value) => this._isCyrillicText(value);
 
 		if (preferredLanguage === 'ru') {
 			const cyrillicLabel = filtered.find((value) => hasCyrillic(value));
 			if (cyrillicLabel) return cyrillicLabel;
 		}
 
+		if (preferredLanguage !== 'ru') {
+			const englishLabel = filtered.find((value) => !hasCyrillic(value));
+			if (englishLabel) return englishLabel;
+		}
+
 		return filtered[0] || '';
+	}
+
+	/**
+	 * Determine whether text contains Cyrillic characters.
+	 *
+	 * @param {string} value - Candidate text
+	 * @returns {boolean} True when text contains Cyrillic letters
+	 * @private
+	 */
+	_isCyrillicText(value) {
+		return /[\u0400-\u04FF]/.test(String(value || ''));
+	}
+
+	/**
+	 * Build language key aliases for translation map lookups.
+	 *
+	 * @param {string} language - Language code
+	 * @returns {string[]} Language key candidates
+	 * @private
+	 */
+	_buildLanguageKeyCandidates(language) {
+		const normalized = this._normalizeUiLanguage(language || this._uiLanguage || 'en');
+		const upper = normalized.toUpperCase();
+		const keys = [
+			normalized,
+			upper,
+			`${normalized}_${upper}`,
+			`${normalized}-${upper}`,
+		];
+
+		if (normalized === 'en') keys.push('english');
+		if (normalized === 'ru') keys.push('russian');
+
+		return [...new Set(keys.filter(Boolean))];
+	}
+
+	/**
+	 * Resolve locale token from runtime translation dictionaries.
+	 *
+	 * @param {string} localeToken - Locale token key
+	 * @param {string} language - Requested language code
+	 * @returns {string} Resolved label or empty string
+	 * @private
+	 */
+	_resolveTokenFromTranslationMaps(localeToken, language) {
+		const token = String(localeToken || '').trim();
+		if (!token) return '';
+
+		const tryGetToken = (container) => {
+			if (!container || typeof container !== 'object') return '';
+
+			const direct = container[token];
+			if (typeof direct === 'string' && direct.trim()) {
+				return String(direct).trim();
+			}
+
+			const nestedKeys = ['messages', 'data', 'values', 'dictionary', 'dict', 'translations'];
+			for (const nestedKey of nestedKeys) {
+				const nested = container[nestedKey];
+				if (!nested || typeof nested !== 'object') continue;
+
+				const nestedValue = nested[token];
+				if (typeof nestedValue === 'string' && nestedValue.trim()) {
+					return String(nestedValue).trim();
+				}
+			}
+
+			return '';
+		};
+
+		const preferredLangKeys = this._buildLanguageKeyCandidates(language);
+		const fallbackLangKeys = this._buildLanguageKeyCandidates('en');
+		const sourceMaps = [
+			PAGE_WINDOW?.nxg?.i18n?.translations,
+			PAGE_WINDOW?.nxg?.i18n?.store?.translations,
+			PAGE_WINDOW?.i18n?.translations,
+			PAGE_WINDOW?.translations,
+			PAGE_WINDOW?.lib?.locale,
+			PAGE_WINDOW?.lib?.translations,
+			PAGE_WINDOW?.nxg?.lib?.locale,
+			PAGE_WINDOW?.nxg?.data?.lib?.locale,
+			PAGE_WINDOW?.nxg?.config?.lib?.locale,
+		].filter((source) => source && typeof source === 'object');
+
+		for (const source of sourceMaps) {
+			const direct = tryGetToken(source);
+			if (direct && !this._isPlaceholderItemLabel(direct) && (language === 'ru' || !this._isCyrillicText(direct))) {
+				return direct;
+			}
+
+			for (const langKey of [...preferredLangKeys, ...fallbackLangKeys]) {
+				const bucket = source?.[langKey];
+				const bucketValue = tryGetToken(bucket);
+				if (!bucketValue || this._isPlaceholderItemLabel(bucketValue)) continue;
+				if (language !== 'ru' && this._isCyrillicText(bucketValue)) continue;
+				return bucketValue;
+			}
+		}
+
+		return '';
 	}
 
 	/**
@@ -4847,14 +5060,29 @@ class UIManager {
 		const raw = String(token || '').trim();
 		if (!raw) return '';
 		const preferredLanguage = this._normalizeUiLanguage(this._uiLanguage || this.prefStorage.get('uiLanguage', 'en'));
-		const isCyrillic = (value) => /[\u0400-\u04FF]/.test(String(value || ''));
 		const lookupTokens = this._buildLocaleTokenCandidates(raw);
+
+		for (const localeToken of lookupTokens) {
+			const preferredLookup = this._resolveTokenFromTranslationMaps(localeToken, preferredLanguage);
+			if (preferredLookup) {
+				return preferredLookup;
+			}
+
+			if (preferredLanguage !== 'en') {
+				const englishFallbackLookup = this._resolveTokenFromTranslationMaps(localeToken, 'en');
+				if (englishFallbackLookup) {
+					return englishFallbackLookup;
+				}
+			}
+		}
+
 		const tryTranslate = (translate) => {
 			for (const localeToken of lookupTokens) {
 				const candidates = [
 					() => translate(localeToken),
 					() => translate(localeToken, preferredLanguage),
-					() => translate(localeToken, { lang: preferredLanguage, locale: preferredLanguage, lng: preferredLanguage }),
+					() => translate(localeToken, { lang: preferredLanguage, locale: preferredLanguage, lng: preferredLanguage, language: preferredLanguage }),
+					() => translate(localeToken, undefined, preferredLanguage),
 				];
 
 				for (const attempt of candidates) {
@@ -4864,11 +5092,11 @@ class UIManager {
 						if (/^[A-Z0-9_]+$/.test(translated)) continue;
 						if (this._isPlaceholderItemLabel(translated)) continue;
 
-						if (preferredLanguage === 'en' && isCyrillic(translated)) {
+						if (preferredLanguage !== 'ru' && this._isCyrillicText(translated)) {
 							continue;
 						}
 
-						if (preferredLanguage === 'ru' && !isCyrillic(translated) && /^[A-Za-z\s\-:'(),.]+$/.test(translated)) {
+						if (preferredLanguage === 'ru' && !this._isCyrillicText(translated) && /^[A-Za-z\s\-:'(),.]+$/.test(translated)) {
 							if (!/^[A-Z0-9_]+$/.test(localeToken)) {
 								return translated;
 							}
@@ -4918,6 +5146,10 @@ class UIManager {
 		if (/^[a-z]+_\d+$/i.test(raw)) {
 			const fallback = this._prettifyLocaleToken(raw.toUpperCase());
 			return this._isPlaceholderItemLabel(fallback) ? '' : fallback;
+		}
+
+		if (preferredLanguage !== 'ru' && this._isCyrillicText(raw)) {
+			return '';
 		}
 
 		return this._isPlaceholderItemLabel(raw) ? '' : raw;
@@ -5692,7 +5924,7 @@ class UIManager {
 				const topItems = Object.entries(info.items)
 					.sort((a, b) => b[1] - a[1])
 					.slice(0, 5)
-					.map(([id, qty]) => `${this._escapeHtml(resolveHeroName(id) || id)}: ${qty.toLocaleString()}`)
+					.map(([id, qty]) => `${this._escapeHtml(this._resolveEntityName(Number(id)) || id)}: ${qty.toLocaleString()}`)
 					.join(', ');
 
 				return `
@@ -5742,7 +5974,7 @@ class UIManager {
 			colorRankClass: (color) => this._colorRankClass(color),
 			colorRankName: (color) => this._colorRankName(color),
 			formatCompact: (value) => this._formatCompact(value),
-			resolveHeroName: (id) => resolveHeroName(id),
+			resolveHeroName: (id) => this._resolveEntityName(Number(id)),
 		});
 	}
 
