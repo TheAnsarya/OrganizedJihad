@@ -2,6 +2,28 @@
 
 ## Session
 - Date: 2026-06-02
+- Session Number: 16
+- Scope: Userscript localization hotfix — block Cyrillic labels for non-Russian UI languages
+
+## Summary
+- Applied a strict language guard in inventory/entity label selection to prevent Russian/Cyrillic text from being chosen when selected UI language is not Russian.
+- Updated `_pickBestInventoryLabel` behavior to return empty when only Cyrillic candidates exist in non-Russian modes, forcing downstream English/non-Cyrillic fallback paths.
+- Rebuilt userscript bundle to `0.9.227`.
+
+## Files Modified
+- userscript/src/modules/uiManager.js
+- userscript/package.json
+- ~docs/copilot-chats/2026-06-02-userscript-build-auto.md
+- ~docs/copilot-chats/2026-06-02-connection-status-and-nav-icons.md
+
+## Validation
+- get_errors userscript/src/modules/uiManager.js (no errors)
+- yarn build (version 0.9.227)
+
+---
+
+## Session
+- Date: 2026-06-02
 - Session Number: 15
 - Scope: Userscript language-bound label fixes + header language button menu UX
 

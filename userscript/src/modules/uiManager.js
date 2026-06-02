@@ -4912,18 +4912,19 @@ class UIManager {
 
 		const preferredLanguage = this._normalizeUiLanguage(this._uiLanguage || this.prefStorage.get('uiLanguage', 'en'));
 		const hasCyrillic = (value) => this._isCyrillicText(value);
+		const nonCyrillic = filtered.filter((value) => !hasCyrillic(value));
+		const cyrillic = filtered.filter((value) => hasCyrillic(value));
 
 		if (preferredLanguage === 'ru') {
-			const cyrillicLabel = filtered.find((value) => hasCyrillic(value));
-			if (cyrillicLabel) return cyrillicLabel;
+			if (cyrillic.length > 0) return cyrillic[0];
+			if (nonCyrillic.length > 0) return nonCyrillic[0];
+			return '';
 		}
 
-		if (preferredLanguage !== 'ru') {
-			const englishLabel = filtered.find((value) => !hasCyrillic(value));
-			if (englishLabel) return englishLabel;
-		}
+ 		// For all non-Russian UI languages, never return Cyrillic labels.
+		if (nonCyrillic.length > 0) return nonCyrillic[0];
 
-		return filtered[0] || '';
+		return '';
 	}
 
 	/**
