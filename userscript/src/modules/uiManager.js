@@ -4828,17 +4828,7 @@ class UIManager {
 		if (typeof descriptor !== 'object') return '';
 
 		const preferredLanguage = this._normalizeUiLanguage(this._uiLanguage || this.prefStorage.get('uiLanguage', 'en'));
-		const localeKeys = [
-			preferredLanguage,
-			preferredLanguage.toUpperCase(),
-			`${preferredLanguage}_${preferredLanguage.toUpperCase()}`,
-			`${preferredLanguage}-${preferredLanguage.toUpperCase()}`,
-			'en',
-			'EN',
-			'en_US',
-			'en-US',
-			'english',
-		];
+		const localeKeys = this._buildLanguageLookupOrder(preferredLanguage);
 
 		const localeCandidates = [];
 		const localeSources = [
@@ -4863,6 +4853,8 @@ class UIManager {
 
 		const candidates = [
 			...localeCandidates,
+			...this._buildDescriptorLanguageFieldCandidates(descriptor, preferredLanguage),
+			...this._buildDescriptorLanguageFieldCandidates(descriptor, 'en'),
 			descriptor.en,
 			descriptor.enUS,
 			descriptor.en_us,
@@ -4896,6 +4888,64 @@ class UIManager {
 	}
 
 	/**
+	 * Build ordered language key lookup list (selected language first, English fallback).
+	 *
+	 * @param {string} preferredLanguage - Preferred language code
+	 * @returns {string[]} Ordered language keys
+	 * @private
+	 */
+	_buildLanguageLookupOrder(preferredLanguage) {
+		const preferred = this._buildLanguageKeyCandidates(preferredLanguage);
+		const english = this._buildLanguageKeyCandidates('en');
+		return [...new Set([...preferred, ...english])];
+	}
+
+	/**
+	 * Collect language-specific descriptor fields (e.g. `nameDe`, `fr`, `title_tr`).
+	 *
+	 * @param {Record<string, any>} descriptor - Source descriptor object
+	 * @param {string} language - Language code
+	 * @returns {string[]} Candidate localized fields
+	 * @private
+	 */
+	_buildDescriptorLanguageFieldCandidates(descriptor, language) {
+		if (!descriptor || typeof descriptor !== 'object') return [];
+
+		const code = this._normalizeUiLanguage(language || 'en');
+		const upper = code.toUpperCase();
+		const titleCode = upper.charAt(0) + upper.slice(1).toLowerCase();
+		const regional = code === 'en' ? 'US' : upper;
+
+		const keys = [
+			code,
+			upper,
+			`${code}_${regional}`,
+			`${code}-${regional}`,
+			`${code}US`,
+			`name${titleCode}`,
+			`name_${code}`,
+			`name${upper}`,
+			`title${titleCode}`,
+			`title_${code}`,
+			`title${upper}`,
+			`displayName${titleCode}`,
+			`localizedName${titleCode}`,
+			`${code}Name`,
+			`${code}_name`,
+		].filter(Boolean);
+
+		const values = [];
+		for (const key of keys) {
+			const value = descriptor[key];
+			if (typeof value === 'string' && value.trim()) {
+				values.push(value);
+			}
+		}
+
+		return values;
+	}
+
+	/**
 	 * Choose best usable label for the current preferred UI language.
 	 *
 	 * @param {Array<any>} candidates - Candidate labels
@@ -4921,10 +4971,77 @@ class UIManager {
 			return '';
 		}
 
-		// Prefer English/Latin labels first, but keep Cyrillic as fallback.
-		if (nonCyrillic.length > 0) return nonCyrillic[0];
+		// Prefer language-scored non-Cyrillic labels first, then Cyrillic fallback.
+		if (nonCyrillic.length > 0) {
+			const ranked = [...nonCyrillic]
+				.map((value) => ({ value, score: this._scoreLabelForLanguage(value, preferredLanguage) }))
+				.sort((a, b) => b.score - a.score);
+			return ranked[0]?.value || nonCyrillic[0];
+		}
 		if (cyrillic.length > 0) return cyrillic[0];
 		return '';
+	}
+
+	/**
+	 * Score label fit for selected language based on script and language-specific glyphs.
+	 *
+	 * @param {string} value - Candidate label
+	 * @param {string} language - Preferred language code
+	 * @returns {number} Higher score is better
+	 * @private
+	 */
+	_scoreLabelForLanguage(value, language) {
+		const text = String(value || '').trim();
+		if (!text) return 0;
+
+		const normalized = this._normalizeUiLanguage(language || this._uiLanguage || 'en');
+		const lower = text.toLowerCase();
+
+		if (normalized === 'ru') {
+			return this._isCyrillicText(text) ? 100 : 10;
+		}
+
+		if (this._isCyrillicText(text)) {
+			return 1;
+		}
+
+		const accentsByLanguage = {
+			de: /[äöüß]/i,
+			fr: /[àâæçéèêëîïôœùûüÿ]/i,
+			es: /[áéíóúñ¿¡]/i,
+			it: /[àèéìíîòóù]/i,
+			pt: /[ãõáàâéêíóôúç]/i,
+			tr: /[çğıöşüİı]/i,
+		};
+
+		let score = 20;
+		if (/^[\x20-\x7E]+$/.test(text)) score += 10;
+
+		const accentPattern = accentsByLanguage[normalized];
+		if (accentPattern) {
+			if (accentPattern.test(text)) score += 50;
+			else score += 5;
+		}
+
+		if (normalized === 'en') {
+			if (/^[A-Za-z0-9\s'().,:\-/+&]+$/.test(text)) score += 30;
+			if (/[à-ž]/i.test(text)) score -= 5;
+		}
+
+		const articleHints = {
+			de: /\b(der|die|das|ein|eine)\b/i,
+			fr: /\b(le|la|les|de|du|des)\b/i,
+			es: /\b(el|la|los|las|de|del)\b/i,
+			it: /\b(il|lo|la|gli|le|di|del)\b/i,
+			pt: /\b(o|a|os|as|de|do|da)\b/i,
+			tr: /\b(ve|ile|bir)\b/i,
+		};
+
+		if (articleHints[normalized]?.test(lower)) {
+			score += 8;
+		}
+
+		return score;
 	}
 
 	/**
@@ -4948,15 +5065,25 @@ class UIManager {
 	_buildLanguageKeyCandidates(language) {
 		const normalized = this._normalizeUiLanguage(language || this._uiLanguage || 'en');
 		const upper = normalized.toUpperCase();
-		const keys = [
+		const baseKeys = [
 			normalized,
 			upper,
 			`${normalized}_${upper}`,
 			`${normalized}-${upper}`,
 		];
 
-		if (normalized === 'en') keys.push('english');
-		if (normalized === 'ru') keys.push('russian');
+		const languageAliases = {
+			en: ['english', 'en_us', 'en-US', 'en_gb', 'en-GB'],
+			ru: ['russian', 'ru_ru', 'ru-RU'],
+			de: ['german', 'de_de', 'de-DE'],
+			fr: ['french', 'fr_fr', 'fr-FR'],
+			es: ['spanish', 'es_es', 'es-ES', 'es_mx', 'es-MX'],
+			it: ['italian', 'it_it', 'it-IT'],
+			pt: ['portuguese', 'pt_pt', 'pt-PT', 'pt_br', 'pt-BR'],
+			tr: ['turkish', 'tr_tr', 'tr-TR'],
+		};
+
+		const keys = [...baseKeys, ...(languageAliases[normalized] || [])];
 
 		return [...new Set(keys.filter(Boolean))];
 	}
