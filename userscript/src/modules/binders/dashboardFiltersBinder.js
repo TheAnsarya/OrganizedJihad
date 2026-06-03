@@ -37,6 +37,14 @@ export function bindDashboardFilters(params) {
 		});
 	}
 
+	const teamOpsSummaryToggle = overlay.querySelector('#oj-team-ops-summary-toggle');
+	if (teamOpsSummaryToggle) {
+		teamOpsSummaryToggle.addEventListener('change', (e) => {
+			prefStorage.set('teamRecommendationsShowOperationsSummary', Boolean(e.target.checked));
+			renderView('dashboard');
+		});
+	}
+
 	const teamObjective = overlay.querySelector('#oj-team-objective-filter');
 	if (teamObjective) {
 		teamObjective.addEventListener('change', (e) => {

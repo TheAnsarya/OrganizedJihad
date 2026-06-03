@@ -15,9 +15,12 @@ import { buildConfiguredApiUrl } from './helpers/apiConfig.js';
 
 const BATTLE_RECOMMENDATIONS_PATH = '/api/sync/battles/recommendations';
 const TEAM_RECOMMENDATIONS_PATH = '/api/sync/teams/recommendations';
+const TEAM_RECOMMENDATION_OPERATIONS_SUMMARY_PATH = '/api/sync/teams/recommendations/operations-summary';
 const AUTO_REFRESH_MS = 20000;
 const MAX_BACKOFF_MS = 30000;
 const MIN_REFRESH_GAP_MS = 1200;
+const OPERATIONS_SUMMARY_REFRESH_MS = 90000;
+const OPERATIONS_SUMMARY_ERROR_BACKOFF_MS = 20000;
 const MAX_DEEP_SCAN_DEPTH = 4;
 const MAX_CANDIDATES = 30;
 const MODE_SWITCH_COOLDOWN_MS = 1500;
@@ -26,6 +29,7 @@ const MAX_VALID_POWER = 500000000;
 const CONTEXT_FRESHNESS_OVERRIDE_MS = 60000;
 const CONTEXT_CONFIDENCE_GUARD_DELTA = 0.15;
 const DEFAULT_CANDIDATE_MAX_AGE_MS = 15 * 60 * 1000;
+const DEFAULT_HINT_TTL_MS = 7000;
 const MODE_CANDIDATE_MAX_AGE_MS = Object.freeze({
 	arena: 8 * 60 * 1000,
 	grandarena: 8 * 60 * 1000,
@@ -36,6 +40,7 @@ const MODE_CANDIDATE_MAX_AGE_MS = Object.freeze({
 	dungeon: 10 * 60 * 1000,
 	toe: 15 * 60 * 1000,
 });
+const OVERLAY_MIN_VISIBLE_PX = 48;
 
 const ATTACK_CALL_TO_CONTEXT = Object.freeze({
 	arenaAttack: { mode: 'arena', enemyMetadataKey: 'arenaEnemies', sourceLabel: 'arena attack target' },
@@ -67,8 +72,11 @@ const ENEMY_LIST_CALL_TO_CONTEXT = Object.freeze({
 	arenaGetEnemies: { mode: 'arena', enemyMetadataKey: 'arenaEnemies', sourceLabel: 'arena enemy list' },
 	arenaFindEnemies: { mode: 'arena', enemyMetadataKey: 'arenaEnemies', sourceLabel: 'arena enemy list' },
 	grandArenaGetEnemies: { mode: 'grandarena', enemyMetadataKey: 'grandArenaEnemies', sourceLabel: 'grand arena enemy list' },
+	grandArenaFindEnemies: { mode: 'grandarena', enemyMetadataKey: 'grandArenaEnemies', sourceLabel: 'grand arena enemy list' },
 	titanArenaGetEnemies: { mode: 'titanarena', enemyMetadataKey: 'titanArenaEnemies', sourceLabel: 'titan arena enemy list' },
+	titanArenaFindEnemies: { mode: 'titanarena', enemyMetadataKey: 'titanArenaEnemies', sourceLabel: 'titan arena enemy list' },
 	clanWarGetDefence: { mode: 'guildwar', sourceLabel: 'guild war defence list' },
+	clanWarGetDefense: { mode: 'guildwar', sourceLabel: 'guild war defence list' },
 	clanWarGetBriefInfo: { mode: 'guildwar', sourceLabel: 'guild war brief state' },
 	adventureGetAll: { mode: 'adventure', sourceLabel: 'adventure active data' },
 	adventure_getActiveData: { mode: 'adventure', sourceLabel: 'adventure active data' },
@@ -151,6 +159,10 @@ class BattleRecommendationOverlay {
 		/** @type {boolean} */
 		this.isVisible = this.prefStorage.get('battleRecommendationOverlayVisible', true);
 		/** @type {boolean} */
+		this._autoShowOnCombatContext = this.prefStorage.get('battleRecommendationOverlayAutoShow', true);
+		/** @type {number} */
+		this._autoShowNoticeUntil = 0;
+		/** @type {boolean} */
 		this._isCollapsed = this.prefStorage.get('battleRecommendationOverlayCollapsed', false);
 
 		/**
@@ -197,6 +209,23 @@ class BattleRecommendationOverlay {
 		this._lastContextPriority = 0;
 		/** @type {number} */
 		this._lastModeSwitchAt = 0;
+		/** @type {{ message:string, level:'info'|'warning'|'error' }|null} */
+		this._activeHint = null;
+		/** @type {number|null} */
+		this._hintTimer = null;
+		/** @type {string} */
+		this._lastHintKey = '';
+		/** @type {number} */
+		this._lastHintAt = 0;
+
+		/** @type {boolean} */
+		this._showOperationsSummary = this.prefStorage.get('battleRecommendationOverlayShowOps', false);
+		/** @type {{ preferredTrendWindowDays:number, modes:Array<object>, generatedAtUtc?:string }|null} */
+		this._operationsSummary = null;
+		/** @type {number} */
+		this._operationsSummaryLastFetchedAt = 0;
+		/** @type {number} */
+		this._operationsSummaryErrorUntil = 0;
 
 		// Drag state
 		this._isDragging = false;
@@ -244,6 +273,10 @@ class BattleRecommendationOverlay {
 			this._activeFetchController.abort();
 			this._activeFetchController = null;
 		}
+		if (this._hintTimer) {
+			clearTimeout(this._hintTimer);
+			this._hintTimer = null;
+		}
 		if (this.panel?.parentNode) {
 			this.panel.parentNode.removeChild(this.panel);
 			this.panel = null;
@@ -257,8 +290,27 @@ class BattleRecommendationOverlay {
 	 * @returns {Promise<void>}
 	 */
 	async onApiProcessed(request) {
-		if (!this.isVisible || !Array.isArray(request?.calls) || request.calls.length === 0) {
+		if (!Array.isArray(request?.calls) || request.calls.length === 0) {
 			return;
+		}
+
+		if (!this.isVisible && this._autoShowOnCombatContext) {
+			const shouldAutoShow = request.calls.some((call) => {
+				const callName = typeof call?.name === 'string' ? call.name : '';
+				if (!callName) return false;
+				return Boolean(ATTACK_CALL_TO_CONTEXT[callName] || ENEMY_LIST_CALL_TO_CONTEXT[callName]);
+			});
+
+			if (shouldAutoShow) {
+				this.isVisible = true;
+				this._autoShowNoticeUntil = Date.now() + 8000;
+				this.prefStorage.set('battleRecommendationOverlayVisible', true);
+				if (this.panel) {
+					this.panel.style.display = 'block';
+					this._clampPanelToViewport();
+				}
+				this._showHint('Recommendations panel auto-opened for combat context.', 'info', 7000, 'auto-open');
+			}
 		}
 
 		let shouldRefresh = false;
@@ -295,7 +347,7 @@ class BattleRecommendationOverlay {
 			}
 		}
 
-		if (shouldRefresh) {
+		if (shouldRefresh && this.isVisible) {
 			this._scheduleRefresh(100);
 		}
 	}
@@ -321,8 +373,53 @@ class BattleRecommendationOverlay {
 		this._renderLoading();
 
 		const payload = await this._fetchRecommendations();
+		await this._refreshOperationsSummary(now);
 		this._renderPayload(payload);
 		this._scheduleRefresh(AUTO_REFRESH_MS);
+	}
+
+	/**
+	 * Refresh operations summary diagnostics with cache-aware throttling.
+	 *
+	 * @param {number} now - Current timestamp
+	 * @returns {Promise<void>}
+	 * @private
+	 */
+	async _refreshOperationsSummary(now) {
+		if (!this._showOperationsSummary) {
+			return;
+		}
+
+		if ((now - this._operationsSummaryLastFetchedAt) < OPERATIONS_SUMMARY_REFRESH_MS) {
+			return;
+		}
+
+		if (now < this._operationsSummaryErrorUntil) {
+			return;
+		}
+
+		try {
+			const preferredTrendWindowDays = this._resolvePreferredTrendWindowDays();
+			const url = new URL(this._buildApiUrl(TEAM_RECOMMENDATION_OPERATIONS_SUMMARY_PATH));
+			url.searchParams.set('preferredTrendWindowDays', String(preferredTrendWindowDays));
+
+			const response = await fetch(url.toString(), { signal: this._activeFetchController?.signal });
+			if (!response.ok) {
+				throw new Error(`HTTP ${response.status}`);
+			}
+
+			const payload = await response.json();
+			const modes = Array.isArray(payload?.modes) ? payload.modes : [];
+			this._operationsSummary = {
+				preferredTrendWindowDays: Number(payload?.preferredTrendWindowDays || preferredTrendWindowDays),
+				modes,
+				generatedAtUtc: typeof payload?.generatedAtUtc === 'string' ? payload.generatedAtUtc : '',
+			};
+			this._operationsSummaryLastFetchedAt = now;
+			this._operationsSummaryErrorUntil = 0;
+		} catch {
+			this._operationsSummaryErrorUntil = now + OPERATIONS_SUMMARY_ERROR_BACKOFF_MS;
+		}
 	}
 
 	/**
@@ -1025,6 +1122,7 @@ class BattleRecommendationOverlay {
 	 * @private
 	 */
 	async _fetchRecommendations() {
+		let usedEngineFallback = false;
 		const now = Date.now();
 		if (now < this._nextAllowedRequestAt) {
 			this._dataHealth = 'backoff';
@@ -1052,6 +1150,7 @@ class BattleRecommendationOverlay {
 			}
 
 			if (!this._hasRecommendations(payload)) {
+				usedEngineFallback = true;
 				payload = await this._fetchModeEngineRecommendations(sequence, mode, objective, minSamples);
 			}
 
@@ -1060,6 +1159,9 @@ class BattleRecommendationOverlay {
 			}
 
 			if (this._hasRecommendations(payload)) {
+				if (usedEngineFallback) {
+					this._showHint('Using engine fallback recommendations while battle history is sparse.', 'warning', DEFAULT_HINT_TTL_MS, `fallback:${contextMode}`);
+				}
 				this._recordFetchSuccess(payload);
 				return payload;
 			}
@@ -1207,10 +1309,14 @@ class BattleRecommendationOverlay {
 	 * @private
 	 */
 	_recordFetchSuccess(payload) {
+		const hadFailures = this._consecutiveFailures > 0;
 		this._consecutiveFailures = 0;
 		this._nextAllowedRequestAt = 0;
 		this._dataHealth = 'live';
 		this._lastSuccessfulPayload = payload;
+		if (hadFailures) {
+			this._showHint('Recommendation API connection recovered.', 'info', 4500, 'api-recovered');
+		}
 	}
 
 	/**
@@ -1223,6 +1329,12 @@ class BattleRecommendationOverlay {
 		const backoff = Math.min(MAX_BACKOFF_MS, 1000 * Math.pow(2, Math.min(5, this._consecutiveFailures - 1)));
 		this._nextAllowedRequestAt = Date.now() + backoff;
 		this._dataHealth = this._lastSuccessfulPayload ? 'cached' : 'backoff';
+		if (this._lastSuccessfulPayload) {
+			this._showHint('API fetch failed. Showing cached recommendations.', 'warning', DEFAULT_HINT_TTL_MS, 'api-cached');
+			return;
+		}
+
+		this._showHint('API temporarily unavailable. Retrying with backoff.', 'error', DEFAULT_HINT_TTL_MS, 'api-backoff');
 	}
 
 	/**
@@ -1342,6 +1454,7 @@ class BattleRecommendationOverlay {
 			<div class="oj-bro-header" id="oj-bro-header">
 				<div class="oj-bro-title">Battle Recommendations</div>
 				<div class="oj-bro-actions">
+					<button class="oj-bro-btn ${this._showOperationsSummary ? 'oj-bro-btn-active' : ''}" id="oj-bro-ops-toggle" title="Toggle operations diagnostics">◎</button>
 					<button class="oj-bro-btn" id="oj-bro-refresh" title="Refresh">↻</button>
 					<button class="oj-bro-btn" id="oj-bro-collapse" title="Collapse/Expand">▾</button>
 					<button class="oj-bro-btn" id="oj-bro-close" title="Hide (Alt+R)">✕</button>
@@ -1349,6 +1462,7 @@ class BattleRecommendationOverlay {
 			</div>
 			<div class="oj-bro-content" id="oj-bro-content">
 				<div class="oj-bro-subtitle" id="oj-bro-context">Waiting for battle context data...</div>
+				<div class="oj-bro-hints" id="oj-bro-hints" aria-live="polite"></div>
 				<div class="oj-bro-body" id="oj-bro-body"></div>
 			</div>
 		`;
@@ -1361,8 +1475,10 @@ class BattleRecommendationOverlay {
 			panel.style.left = `${Math.max(0, Number(pos.x))}px`;
 			panel.style.top = `${Math.max(0, Number(pos.y))}px`;
 		}
+		this._clampPanelToViewport();
 
 		panel.querySelector('#oj-bro-refresh')?.addEventListener('click', () => this._scheduleRefresh(0));
+		panel.querySelector('#oj-bro-ops-toggle')?.addEventListener('click', () => this._toggleOperationsSummary());
 		panel.querySelector('#oj-bro-close')?.addEventListener('click', () => this.toggle());
 		panel.querySelector('#oj-bro-collapse')?.addEventListener('click', () => this._toggleCollapsed());
 
@@ -1394,6 +1510,26 @@ class BattleRecommendationOverlay {
 		if (!this._isCollapsed) {
 			this._scheduleRefresh(0);
 		}
+	}
+
+	/**
+	 * Toggle operations diagnostics section visibility.
+	 *
+	 * @private
+	 */
+	_toggleOperationsSummary() {
+		this._showOperationsSummary = !this._showOperationsSummary;
+		this.prefStorage.set('battleRecommendationOverlayShowOps', this._showOperationsSummary);
+
+		if (this.panel) {
+			this.panel.querySelector('#oj-bro-ops-toggle')?.classList.toggle('oj-bro-btn-active', this._showOperationsSummary);
+		}
+
+		if (this._showOperationsSummary) {
+			this._operationsSummaryLastFetchedAt = 0;
+		}
+
+		this._scheduleRefresh(0);
 	}
 
 	/**
@@ -1430,6 +1566,30 @@ class BattleRecommendationOverlay {
 	}
 
 	/**
+	 * Clamp overlay position so at least part of the panel stays visible.
+	 *
+	 * @private
+	 */
+	_clampPanelToViewport() {
+		if (!this.panel) return;
+
+		const rect = this.panel.getBoundingClientRect();
+		const viewportWidth = window.innerWidth || document.documentElement.clientWidth || 0;
+		const viewportHeight = window.innerHeight || document.documentElement.clientHeight || 0;
+
+		const minX = -Math.max(0, rect.width - OVERLAY_MIN_VISIBLE_PX);
+		const maxX = Math.max(0, viewportWidth - OVERLAY_MIN_VISIBLE_PX);
+		const minY = 0;
+		const maxY = Math.max(0, viewportHeight - OVERLAY_MIN_VISIBLE_PX);
+
+		const nextX = Math.min(maxX, Math.max(minX, rect.left));
+		const nextY = Math.min(maxY, Math.max(minY, rect.top));
+
+		this.panel.style.left = `${Math.round(nextX)}px`;
+		this.panel.style.top = `${Math.round(nextY)}px`;
+	}
+
+	/**
 	 * Render loading state.
 	 *
 	 * @private
@@ -1442,11 +1602,13 @@ class BattleRecommendationOverlay {
 			const target = this._context.opponentName || (this._context.opponentId ? `opponent #${this._context.opponentId}` : 'mode context');
 			const source = this._escapeHtml(this._context.source || 'detected context');
 			const signal = this._escapeHtml(this._describeContextSignal());
-			contextEl.innerHTML = `${this._labelForMode(this._context.mode)} • ${this._escapeHtml(target)} • ${source} • ${signal}`;
+			const autoShowNotice = this._buildAutoShowNoticeLabel();
+			contextEl.innerHTML = `${this._labelForMode(this._context.mode)} • ${this._escapeHtml(target)} • ${source} • ${signal}${autoShowNotice ? ` • ${this._escapeHtml(autoShowNotice)}` : ''}`;
 		}
 		if (bodyEl) {
 			bodyEl.innerHTML = '<div class="oj-bro-empty">Loading recommendations...</div>';
 		}
+		this._renderHintArea();
 	}
 
 	/**
@@ -1470,12 +1632,14 @@ class BattleRecommendationOverlay {
 		}
 
 		const healthBadge = this._renderHealthBadge();
+		const operationsSummary = this._renderOperationsSummary(this._context.mode);
 		const rows = segmented.length > 0
 			? this._renderSegmentedRows(segmented)
 			: this._renderCardRows(cards.slice(0, 3));
 
 		bodyEl.innerHTML = `
 			<div class="oj-bro-health-row">${healthBadge}</div>
+			${operationsSummary}
 			${rows}
 		`;
 
@@ -1484,8 +1648,84 @@ class BattleRecommendationOverlay {
 			const target = this._context.opponentName || (this._context.opponentId ? `opponent #${this._context.opponentId}` : 'mode-level recommendations');
 			const source = this._escapeHtml(this._context.source || 'detected context');
 			const signal = this._escapeHtml(this._describeContextSignal());
-			contextEl.innerHTML = `${this._labelForMode(mode)} • ${this._escapeHtml(target)} • ${source} • ${signal}`;
+			const autoShowNotice = this._buildAutoShowNoticeLabel();
+			contextEl.innerHTML = `${this._labelForMode(mode)} • ${this._escapeHtml(target)} • ${source} • ${signal}${autoShowNotice ? ` • ${this._escapeHtml(autoShowNotice)}` : ''}`;
 		}
+		this._renderHintArea();
+	}
+
+	/**
+	 * Show a transient in-panel hint message.
+	 *
+	 * @param {string} message - Hint text
+	 * @param {'info'|'warning'|'error'} level - Visual severity
+	 * @param {number} ttlMs - Visibility duration in milliseconds
+	 * @param {string} key - Deduplication key
+	 * @private
+	 */
+	_showHint(message, level = 'info', ttlMs = DEFAULT_HINT_TTL_MS, key = '') {
+		const normalizedMessage = String(message || '').trim();
+		if (!normalizedMessage) return;
+
+		const now = Date.now();
+		const dedupeKey = String(key || normalizedMessage).toLowerCase();
+		if (dedupeKey && dedupeKey === this._lastHintKey && (now - this._lastHintAt) < 6000) {
+			return;
+		}
+
+		this._lastHintKey = dedupeKey;
+		this._lastHintAt = now;
+		this._activeHint = {
+			message: normalizedMessage,
+			level: level === 'error' ? 'error' : (level === 'warning' ? 'warning' : 'info'),
+		};
+		this._renderHintArea();
+
+		if (this._hintTimer) {
+			clearTimeout(this._hintTimer);
+		}
+		this._hintTimer = setTimeout(() => {
+			this._hintTimer = null;
+			this._activeHint = null;
+			this._renderHintArea();
+		}, Math.max(1200, Number(ttlMs || DEFAULT_HINT_TTL_MS)));
+	}
+
+	/**
+	 * Render current hint state in panel.
+	 *
+	 * @private
+	 */
+	_renderHintArea() {
+		if (!this.panel) return;
+		const hintEl = this.panel.querySelector('#oj-bro-hints');
+		if (!hintEl) return;
+
+		if (!this._activeHint) {
+			hintEl.innerHTML = '';
+			hintEl.style.display = 'none';
+			return;
+		}
+
+		const levelClass = this._activeHint.level === 'error'
+			? 'oj-bro-hint-error'
+			: (this._activeHint.level === 'warning' ? 'oj-bro-hint-warning' : 'oj-bro-hint-info');
+		hintEl.style.display = 'block';
+		hintEl.innerHTML = `<div class="oj-bro-hint ${levelClass}">${this._escapeHtml(this._activeHint.message)}</div>`;
+	}
+
+	/**
+	 * Builds a short context suffix after automatic panel opening.
+	 *
+	 * @returns {string}
+	 * @private
+	 */
+	_buildAutoShowNoticeLabel() {
+		if (Date.now() > this._autoShowNoticeUntil) {
+			return '';
+		}
+
+		return 'Auto-opened';
 	}
 
 	/**
@@ -1574,6 +1814,93 @@ class BattleRecommendationOverlay {
 	}
 
 	/**
+	 * Render per-mode operations diagnostics section.
+	 *
+	 * @param {string} mode - Current context mode
+	 * @returns {string} HTML
+	 * @private
+	 */
+	_renderOperationsSummary(mode) {
+		if (!this._showOperationsSummary) {
+			return '';
+		}
+
+		const modeSummary = this._resolveOperationsSummaryForMode(mode);
+		if (!modeSummary) {
+			return '<div class="oj-bro-ops"><div class="oj-bro-ops-title">Ops Metrics</div><div class="oj-bro-ops-empty">Waiting for operations summary data...</div></div>';
+		}
+
+		const mae = Number(modeSummary.meanAbsoluteError || 0);
+		const brier = Number(modeSummary.meanBrierScore || 0);
+		const bias = Number(modeSummary.predictionBias || 0);
+		const samples = Number(modeSummary.samples || 0);
+		const friction = Number(modeSummary.suggestedFrictionScale || 0);
+		const isStale = Boolean(modeSummary.isStale);
+		const qualityClass = this._resolveOperationsQualityClass(mae, brier, isStale);
+
+		return `<div class="oj-bro-ops">
+			<div class="oj-bro-ops-title">Ops Metrics <span class="oj-bro-ops-quality ${qualityClass}">${isStale ? 'Stale' : 'Fresh'}</span></div>
+			<div class="oj-bro-ops-grid">
+				<div class="oj-bro-ops-item"><span>MAE</span><strong>${mae.toFixed(3)}</strong></div>
+				<div class="oj-bro-ops-item"><span>Brier</span><strong>${brier.toFixed(3)}</strong></div>
+				<div class="oj-bro-ops-item"><span>Bias</span><strong>${bias.toFixed(3)}</strong></div>
+				<div class="oj-bro-ops-item"><span>Scale</span><strong>${friction.toFixed(2)}</strong></div>
+				<div class="oj-bro-ops-item"><span>Samples</span><strong>${samples.toLocaleString()}</strong></div>
+			</div>
+		</div>`;
+	}
+
+	/**
+	 * Resolve operations summary row for the current mode.
+	 *
+	 * @param {string} mode - Context mode
+	 * @returns {object|null} mode summary row
+	 * @private
+	 */
+	_resolveOperationsSummaryForMode(mode) {
+		const rows = Array.isArray(this._operationsSummary?.modes) ? this._operationsSummary.modes : [];
+		if (rows.length === 0) {
+			return null;
+		}
+
+		const contextMode = this._normalizeMode(mode);
+		const engineMode = this._resolveEngineMode(contextMode);
+		return rows.find((row) => this._normalizeMode(String(row?.mode || '')) === engineMode)
+			|| rows.find((row) => this._normalizeMode(String(row?.mode || '')) === contextMode)
+			|| null;
+	}
+
+	/**
+	 * Resolve css quality class based on operations thresholds.
+	 *
+	 * @param {number} mae - Mean absolute error
+	 * @param {number} brier - Mean Brier score
+	 * @param {boolean} isStale - Staleness flag
+	 * @returns {string} css class
+	 * @private
+	 */
+	_resolveOperationsQualityClass(mae, brier, isStale) {
+		if (isStale || mae > 0.22 || brier > 0.28) {
+			return 'oj-bro-ops-quality-warn';
+		}
+		return 'oj-bro-ops-quality-ok';
+	}
+
+	/**
+	 * Resolve preferred trend window for operations summary endpoint.
+	 *
+	 * @returns {number} preferred trend window days
+	 * @private
+	 */
+	_resolvePreferredTrendWindowDays() {
+		const value = Number(this.prefStorage.get('teamRecommendationsPreferredTrendWindowDays', 30));
+		if (value === 7 || value === 30 || value === 90) {
+			return value;
+		}
+		return 30;
+	}
+
+	/**
 	 * Render simple recommendation rows.
 	 *
 	 * @param {Array<object>} cards - Recommendation cards
@@ -1582,8 +1909,8 @@ class BattleRecommendationOverlay {
 	 */
 	_renderCardRows(cards) {
 		return cards.map((rec, index) => {
-			const teamPreview = this._escapeHtml(rec?.teamPreview || 'Unknown Team');
-			const battles = Number(rec?.battles || rec?.sampleSize || 0);
+			const teamPreview = this._escapeHtml(rec?.teamPreview || rec?.TeamPreview || rec?.team || 'Unknown Team');
+			const battles = Number(rec?.battles || rec?.sampleSize || rec?.totalBattles || rec?.sampleCount || 0);
 			const winRate = this._resolveWinRate(rec);
 			const confidence = this._resolveConfidence(rec);
 			const score = this._resolveScore(rec);
@@ -1627,7 +1954,14 @@ class BattleRecommendationOverlay {
 	 * @private
 	 */
 	_resolveWinRate(rec) {
-		const candidate = Number(rec?.weightedWinRate ?? rec?.estimatedWinProbability ?? rec?.winRate ?? 0);
+		const candidate = Number(
+			rec?.weightedWinRate
+			?? rec?.estimatedWinProbability
+			?? rec?.simulatedWinProbability
+			?? rec?.winRate
+			?? rec?.WinRate
+			?? 0
+		);
 		return `${(Math.max(0, Math.min(1, candidate)) * 100).toFixed(1)}%`;
 	}
 
@@ -1639,7 +1973,8 @@ class BattleRecommendationOverlay {
 	 * @private
 	 */
 	_resolveConfidence(rec) {
-		const candidate = Number(rec?.confidence ?? rec?.confidenceScore ?? 0);
+		const interval = Number(rec?.simulationConfidenceHigh ?? 0) - Number(rec?.simulationConfidenceLow ?? 0);
+		const candidate = Number(rec?.confidence ?? rec?.confidenceScore ?? (interval > 0 ? interval : 0));
 		return `${(Math.max(0, Math.min(1, candidate)) * 100).toFixed(0)}%`;
 	}
 
@@ -1651,7 +1986,14 @@ class BattleRecommendationOverlay {
 	 * @private
 	 */
 	_resolveScore(rec) {
-		const candidate = Number(rec?.score ?? rec?.finalScore ?? 0);
+		const candidate = Number(
+			rec?.score
+			?? rec?.finalScore
+			?? rec?.weightedWinRate
+			?? rec?.estimatedWinProbability
+			?? rec?.simulatedWinProbability
+			?? 0
+		);
 		return `${(Math.max(0, Math.min(1, candidate)) * 100).toFixed(1)}%`;
 	}
 

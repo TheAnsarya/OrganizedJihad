@@ -1,4 +1,6 @@
 using Microsoft.EntityFrameworkCore;
+using OrganizedJihad.Api.Configuration;
+using OrganizedJihad.Api.Filters;
 using OrganizedJihad.Api.Services;
 using OrganizedJihad.Api.Services.Diagnostics;
 using OrganizedJihad.Api.Services.ProjectedItemCatalog;
@@ -16,9 +18,17 @@ public static class ApiServiceCollectionExtensions {
 	/// <summary>
 	/// Registers core API services, database, and diagnostics dependencies.
 	/// </summary>
-	public static IServiceCollection AddApiComposition(this IServiceCollection services) {
-		services.AddControllers();
+	public static IServiceCollection AddApiComposition(this IServiceCollection services, IConfiguration configuration) {
+		services.Configure<ApiCallLoggingOptions>(configuration.GetSection("ApiCallLogging"));
+		services.Configure<SwaggerOptions>(configuration.GetSection("Swagger"));
+
+		services.AddScoped<ApiActionLoggingFilter>();
+
+		services.AddControllers(options => {
+			options.Filters.AddService<ApiActionLoggingFilter>();
+		});
 		services.AddEndpointsApiExplorer();
+		services.AddOpenApi();
 
 		services.AddCors(options => options.AddDefaultPolicy(policy => policy
 			.AllowAnyOrigin()

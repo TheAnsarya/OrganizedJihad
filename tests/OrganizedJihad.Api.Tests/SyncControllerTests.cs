@@ -178,6 +178,41 @@ public class SyncControllerTests : IClassFixture<WebApplicationFactory<Program>>
 	}
 
 	/// <summary>
+	/// Verifies OpenAPI JSON endpoint is available and exposes required document fields.
+	/// </summary>
+	[Fact]
+	public async Task OpenApi_Document_Should_Be_Available_At_Swagger_Json_Route() {
+		var response = await _client.GetAsync("/swagger/v1/swagger.json");
+		response.StatusCode.Should().Be(HttpStatusCode.OK);
+
+		var body = await response.Content.ReadAsStringAsync();
+		using var document = JsonDocument.Parse(body);
+		var root = document.RootElement;
+
+		root.TryGetProperty("openapi", out var openApiVersion).Should().BeTrue();
+		openApiVersion.GetString().Should().NotBeNullOrWhiteSpace();
+		root.TryGetProperty("info", out var info).Should().BeTrue();
+		info.TryGetProperty("title", out _).Should().BeTrue();
+		root.TryGetProperty("paths", out var paths).Should().BeTrue();
+		paths.ValueKind.Should().Be(JsonValueKind.Object);
+	}
+
+	/// <summary>
+	/// Verifies middleware preserves caller correlation id and echoes it in response headers.
+	/// </summary>
+	[Fact]
+	public async Task Api_Should_Echo_Correlation_Id_Header_On_Api_Calls() {
+		using var request = new HttpRequestMessage(HttpMethod.Get, "/api/sync/tools/catalog");
+		request.Headers.Add("X-Correlation-ID", "test-correlation-id-123");
+
+		var response = await _client.SendAsync(request);
+
+		response.StatusCode.Should().Be(HttpStatusCode.OK);
+		response.Headers.TryGetValues("X-Correlation-ID", out var values).Should().BeTrue();
+		values.Should().ContainSingle().Which.Should().Be("test-correlation-id-123");
+	}
+
+	/// <summary>
 	/// Verifies the API control UI route serves HTML content.
 	/// </summary>
 	[Fact]
@@ -1127,5 +1162,231 @@ public class SyncControllerTests : IClassFixture<WebApplicationFactory<Program>>
 		invalidWindowResponse.StatusCode.Should().Be(HttpStatusCode.BadRequest);
 		var invalidWindowBody = await invalidWindowResponse.Content.ReadAsStringAsync();
 		invalidWindowBody.Should().Contain("preferredTrendWindowDays must be one of: 7, 30, 90");
+	}
+
+	/// <summary>
+	/// Verifies battle recommendation endpoint preserves required contract fields and value types.
+	/// </summary>
+	[Fact]
+	public async Task BattleRecommendations_Should_Expose_Stable_Contract_Shape() {
+		// Arrange
+		var now = DateTime.UtcNow;
+		var syncData = new BrowserSyncData {
+			ArenaBattles = [
+				new ArenaBattle {
+					Timestamp = now.AddMinutes(-8),
+					OpponentId = 8701,
+					OpponentName = "Contract Opponent A",
+					OpponentPower = 820000,
+					IsWin = true,
+					RankBefore = 200,
+					RankAfter = 190,
+					OurTeam = "Astaroth,Keira,Sebastian,Jet,Martha",
+					CoinsEarned = 20,
+				},
+				new ArenaBattle {
+					Timestamp = now.AddMinutes(-5),
+					OpponentId = 8702,
+					OpponentName = "Contract Opponent B",
+					OpponentPower = 840000,
+					IsWin = false,
+					RankBefore = 190,
+					RankAfter = 194,
+					OurTeam = "Astaroth,Keira,Sebastian,Jet,Martha",
+					CoinsEarned = 10,
+				}
+			],
+			Heroes = [],
+			Titans = []
+		};
+
+		var importResponse = await _client.PostAsJsonAsync("/api/sync/import", syncData);
+		importResponse.StatusCode.Should().Be(HttpStatusCode.OK);
+
+		// Act
+		var response = await _client.GetAsync("/api/sync/battles/recommendations?battleType=arena&limit=3&minSamples=1");
+
+		// Assert
+		response.StatusCode.Should().Be(HttpStatusCode.OK);
+		using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+		var root = document.RootElement;
+
+		root.TryGetProperty("battleType", out var battleType).Should().BeTrue();
+		battleType.GetString().Should().Be("arena");
+
+		root.TryGetProperty("sampleCount", out var sampleCount).Should().BeTrue();
+		sampleCount.ValueKind.Should().Be(JsonValueKind.Number);
+
+		root.TryGetProperty("baselineWinRate", out var baselineWinRate).Should().BeTrue();
+		baselineWinRate.ValueKind.Should().Be(JsonValueKind.Number);
+
+		root.TryGetProperty("recommendations", out var recommendations).Should().BeTrue();
+		recommendations.ValueKind.Should().Be(JsonValueKind.Array);
+		recommendations.GetArrayLength().Should().BeGreaterThan(0);
+
+		var first = recommendations.EnumerateArray().First();
+		first.TryGetProperty("teamPreview", out _).Should().BeTrue();
+		first.TryGetProperty("simulatedWinProbability", out var simulatedWinProbability).Should().BeTrue();
+		simulatedWinProbability.ValueKind.Should().Be(JsonValueKind.Number);
+		first.TryGetProperty("confidence", out var confidence).Should().BeTrue();
+		confidence.ValueKind.Should().Be(JsonValueKind.Number);
+		first.TryGetProperty("simulationConfidenceLow", out var confidenceLow).Should().BeTrue();
+		confidenceLow.ValueKind.Should().Be(JsonValueKind.Number);
+		first.TryGetProperty("simulationConfidenceHigh", out var confidenceHigh).Should().BeTrue();
+		confidenceHigh.ValueKind.Should().Be(JsonValueKind.Number);
+	}
+
+	/// <summary>
+	/// Verifies team recommendation endpoint preserves required contract fields and value types.
+	/// </summary>
+	[Fact]
+	public async Task TeamRecommendations_Should_Expose_Stable_Contract_Shape() {
+		// Arrange
+		var now = DateTime.UtcNow;
+		var syncData = new BrowserSyncData {
+			CurrentSnapshot = new PlayerSnapshot {
+				PlayerId = 99001,
+				PlayerName = "ContractTeamTester",
+				Timestamp = now,
+				Level = 120,
+				TeamPower = 1400000,
+				Gold = 1000000,
+				Emeralds = 2000,
+			},
+			Heroes = [
+				new Hero { HeroId = 1, HeroName = "Astaroth", Level = 120, Stars = 6, Color = 12, Power = 110000, Timestamp = now, PlayerId = 99001 },
+				new Hero { HeroId = 2, HeroName = "Keira", Level = 120, Stars = 6, Color = 12, Power = 108000, Timestamp = now, PlayerId = 99001 },
+				new Hero { HeroId = 3, HeroName = "Sebastian", Level = 120, Stars = 6, Color = 12, Power = 106000, Timestamp = now, PlayerId = 99001 },
+				new Hero { HeroId = 4, HeroName = "Jet", Level = 120, Stars = 6, Color = 12, Power = 102000, Timestamp = now, PlayerId = 99001 },
+				new Hero { HeroId = 5, HeroName = "Martha", Level = 120, Stars = 6, Color = 12, Power = 100000, Timestamp = now, PlayerId = 99001 },
+			],
+			Titans = [],
+			ArenaBattles = [],
+			GrandArenaBattles = [],
+			TitanArenaBattles = [],
+		};
+
+		var importResponse = await _client.PostAsJsonAsync("/api/sync/import", syncData);
+		importResponse.StatusCode.Should().Be(HttpStatusCode.OK);
+
+		// Act
+		var response = await _client.GetAsync("/api/sync/teams/recommendations?mode=arena&objective=balanced&limit=3");
+
+		// Assert
+		response.StatusCode.Should().Be(HttpStatusCode.OK);
+		using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+		var root = document.RootElement;
+
+		root.TryGetProperty("mode", out var mode).Should().BeTrue();
+		mode.GetString().Should().Be("arena");
+
+		root.TryGetProperty("objective", out var objective).Should().BeTrue();
+		objective.GetString().Should().Be("balanced");
+
+		root.TryGetProperty("roster", out var roster).Should().BeTrue();
+		roster.ValueKind.Should().Be(JsonValueKind.Object);
+		roster.TryGetProperty("heroCount", out _).Should().BeTrue();
+		roster.TryGetProperty("teamPower", out _).Should().BeTrue();
+
+		root.TryGetProperty("recommendations", out var recommendations).Should().BeTrue();
+		recommendations.ValueKind.Should().Be(JsonValueKind.Array);
+		recommendations.GetArrayLength().Should().BeGreaterThan(0);
+
+		var first = recommendations.EnumerateArray().First();
+		first.TryGetProperty("source", out _).Should().BeTrue();
+		first.TryGetProperty("teamPreview", out _).Should().BeTrue();
+		first.TryGetProperty("estimatedWinProbability", out var estimatedWinProbability).Should().BeTrue();
+		estimatedWinProbability.ValueKind.Should().Be(JsonValueKind.Number);
+		first.TryGetProperty("readinessScore", out var readinessScore).Should().BeTrue();
+		readinessScore.ValueKind.Should().Be(JsonValueKind.Number);
+		first.TryGetProperty("confidenceScore", out var confidenceScore).Should().BeTrue();
+		confidenceScore.ValueKind.Should().Be(JsonValueKind.Number);
+		first.TryGetProperty("finalScore", out var finalScore).Should().BeTrue();
+		finalScore.ValueKind.Should().Be(JsonValueKind.Number);
+		first.TryGetProperty("provenance", out var provenance).Should().BeTrue();
+		provenance.ValueKind.Should().Be(JsonValueKind.Array);
+	}
+
+	/// <summary>
+	/// Verifies calibration endpoint preserves required contract fields and supported windows.
+	/// </summary>
+	[Fact]
+	public async Task TeamRecommendationCalibration_Should_Expose_Stable_Contract_Shape() {
+		// Act
+		var response = await _client.GetAsync("/api/sync/teams/recommendations/calibration?mode=arena");
+
+		// Assert
+		response.StatusCode.Should().Be(HttpStatusCode.OK);
+		using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+		var root = document.RootElement;
+
+		root.TryGetProperty("mode", out var mode).Should().BeTrue();
+		mode.GetString().Should().Be("arena");
+
+		root.TryGetProperty("preferredTrendWindowDays", out var preferredTrendWindowDays).Should().BeTrue();
+		preferredTrendWindowDays.ValueKind.Should().Be(JsonValueKind.Number);
+
+		root.TryGetProperty("supportedTrendWindowDays", out var supportedTrendWindowDays).Should().BeTrue();
+		supportedTrendWindowDays.ValueKind.Should().Be(JsonValueKind.Array);
+		supportedTrendWindowDays.EnumerateArray().Select(v => v.GetInt32()).Should().Contain([7, 30, 90]);
+
+		root.TryGetProperty("suggestedFrictionScale", out var suggestedFrictionScale).Should().BeTrue();
+		suggestedFrictionScale.ValueKind.Should().Be(JsonValueKind.Number);
+
+		root.TryGetProperty("trendWindows", out var trendWindows).Should().BeTrue();
+		trendWindows.ValueKind.Should().Be(JsonValueKind.Array);
+		trendWindows.GetArrayLength().Should().BeGreaterThan(0);
+
+		var first = trendWindows.EnumerateArray().First();
+		first.TryGetProperty("windowDays", out _).Should().BeTrue();
+		first.TryGetProperty("suggestedFrictionScale", out var trendSuggestedScale).Should().BeTrue();
+		trendSuggestedScale.ValueKind.Should().Be(JsonValueKind.Number);
+	}
+
+	/// <summary>
+	/// Verifies operations summary endpoint returns per-mode compact calibration projection.
+	/// </summary>
+	[Fact]
+	public async Task TeamRecommendationOperationsSummary_Should_Return_Per_Mode_Projection() {
+		var response = await _client.GetAsync("/api/sync/teams/recommendations/operations-summary?preferredTrendWindowDays=30");
+		response.StatusCode.Should().Be(HttpStatusCode.OK);
+
+		using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+		var root = document.RootElement;
+
+		root.TryGetProperty("preferredTrendWindowDays", out var preferredTrendWindowDays).Should().BeTrue();
+		preferredTrendWindowDays.GetInt32().Should().Be(30);
+
+		root.TryGetProperty("modes", out var modes).Should().BeTrue();
+		modes.ValueKind.Should().Be(JsonValueKind.Array);
+		modes.GetArrayLength().Should().BeGreaterThan(0);
+
+		var modeNames = modes.EnumerateArray()
+			.Select(m => m.GetProperty("mode").GetString())
+			.Where(v => !string.IsNullOrWhiteSpace(v))
+			.ToList();
+		modeNames.Should().Contain("arena");
+		modeNames.Should().Contain("grandarena");
+		modeNames.Should().Contain("guildwar");
+		modeNames.Should().Contain("cow");
+
+		var first = modes.EnumerateArray().First();
+		first.TryGetProperty("suggestedFrictionScale", out var suggestedFrictionScale).Should().BeTrue();
+		suggestedFrictionScale.ValueKind.Should().Be(JsonValueKind.Number);
+		first.TryGetProperty("meanAbsoluteError", out var meanAbsoluteError).Should().BeTrue();
+		meanAbsoluteError.ValueKind.Should().Be(JsonValueKind.Number);
+		first.TryGetProperty("meanBrierScore", out var meanBrierScore).Should().BeTrue();
+		meanBrierScore.ValueKind.Should().Be(JsonValueKind.Number);
+		first.TryGetProperty("predictionBias", out var predictionBias).Should().BeTrue();
+		predictionBias.ValueKind.Should().Be(JsonValueKind.Number);
+		first.TryGetProperty("samples", out var samples).Should().BeTrue();
+		samples.ValueKind.Should().Be(JsonValueKind.Number);
+		first.TryGetProperty("isStale", out var isStale).Should().BeTrue();
+		(new[] { JsonValueKind.True, JsonValueKind.False }).Should().Contain(isStale.ValueKind);
+
+		var invalidResponse = await _client.GetAsync("/api/sync/teams/recommendations/operations-summary?preferredTrendWindowDays=14");
+		invalidResponse.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+		var invalidBody = await invalidResponse.Content.ReadAsStringAsync();
+		invalidBody.Should().Contain("preferredTrendWindowDays must be one of: 7, 30, 90");
 	}
 }

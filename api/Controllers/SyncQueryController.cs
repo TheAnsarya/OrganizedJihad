@@ -242,6 +242,24 @@ public class SyncQueryController : ControllerBase {
 		}
 	}
 
+	[HttpGet("teams/recommendations/operations-summary")]
+	[ProducesResponseType(typeof(TeamRecommendationOperationsSummaryResponse), StatusCodes.Status200OK)]
+	[ProducesResponseType(typeof(object), StatusCodes.Status400BadRequest)]
+	[ProducesResponseType(typeof(object), StatusCodes.Status500InternalServerError)]
+	public async Task<IActionResult> GetTeamRecommendationOperationsSummary([FromQuery] int? preferredTrendWindowDays = null) {
+		if (preferredTrendWindowDays.HasValue && preferredTrendWindowDays.Value is not (7 or 30 or 90)) {
+			return BadRequest(new { error = "preferredTrendWindowDays must be one of: 7, 30, 90." });
+		}
+
+		try {
+			var result = await _syncService.GetTeamRecommendationOperationsSummaryAsync(preferredTrendWindowDays);
+			return Ok(result);
+		} catch (Exception ex) {
+			_logger.LogError(ex, "Error retrieving team recommendation operations summary");
+			return StatusCode(500, new { error = ex.Message });
+		}
+	}
+
 	[HttpGet("opponents")]
 	[ProducesResponseType(StatusCodes.Status200OK)]
 	[ProducesResponseType(typeof(object), StatusCodes.Status500InternalServerError)]

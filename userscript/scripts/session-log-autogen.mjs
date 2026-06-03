@@ -58,7 +58,7 @@ function appendSessionEntry() {
 	const datePart = formatDate(now);
 	const repoRoot = path.resolve(process.cwd(), '..');
 	const logDir = path.join(repoRoot, '~docs', 'copilot-chats');
-	const logPath = path.join(logDir, `${datePart}-userscript-build-auto.md`);
+	const logPath = path.join(logDir, `${datePart}.md`);
 
 	fs.mkdirSync(logDir, { recursive: true });
 
@@ -67,7 +67,7 @@ function appendSessionEntry() {
 		existing = fs.readFileSync(logPath, 'utf8');
 	}
 
-	const sessionCount = (existing.match(/^## Session$/gm) || []).length + 1;
+	const sessionCount = (existing.match(/^### Auto Build Session$/gm) || []).length + 1;
 	const changed = getModifiedFiles(repoRoot);
 	const changedLines = changed.length > 0
 		? changed.map((file) => `- ${file}`).join('\n')
@@ -75,12 +75,14 @@ function appendSessionEntry() {
 
 	const header = existing
 		? ''
-		: `# ${datePart} - Userscript Build Auto Session Log\n\n`;
+		: `# Copilot Session Log - ${datePart}\n\n`;
 
 	const section = [
+		existing ? '' : '## Source: userscript/scripts/session-log-autogen.mjs',
+		existing ? '' : '',
 		'---',
 		'',
-		'## Session',
+		'### Auto Build Session',
 		`- Date: ${datePart}`,
 		`- Session Number: ${sessionCount}`,
 		'- Scope: Automated userscript build session logging',
@@ -100,7 +102,8 @@ function appendSessionEntry() {
 		'',
 	].join('\n');
 
-	const next = `${existing}${header}${section}`;
+	const separator = existing && !existing.endsWith('\n') ? '\n' : '';
+	const next = `${existing}${separator}${header}${section}`;
 	fs.writeFileSync(logPath, next, 'utf8');
 	console.log(`[OJ] Session log updated: ${path.relative(repoRoot, logPath)}`);
 }

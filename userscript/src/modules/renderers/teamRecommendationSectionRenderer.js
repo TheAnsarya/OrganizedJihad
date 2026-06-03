@@ -15,6 +15,8 @@
  * @param {string} params.selectedObjective - Selected objective
  * @param {string} params.selectedTrendWindowPreference - Selected trend window pref
  * @param {number} params.defaultTrendWindowDays - Default trend window days
+ * @param {boolean} params.showOperationsSummary - Whether operations diagnostics are enabled
+ * @param {string} params.operationsSummaryHtml - Pre-rendered operations summary html
  * @param {string} params.rowsHtml - Pre-rendered card rows html
  * @param {(value: string) => string} params.escapeHtml - HTML escape callback
  * @returns {string} HTML section
@@ -29,6 +31,8 @@ export function renderTeamRecommendationEngineSection(params) {
 	const selectedObjective = params?.selectedObjective || 'balanced';
 	const selectedTrendWindowPreference = params?.selectedTrendWindowPreference || 'auto';
 	const defaultTrendWindowDays = Number(params?.defaultTrendWindowDays || 30);
+	const showOperationsSummary = params?.showOperationsSummary !== false;
+	const operationsSummaryHtml = params?.operationsSummaryHtml || '';
 	const rowsHtml = params?.rowsHtml || '';
 	const profileSummary = params?.profileSummary || '';
 	const calibrationSummary = params?.calibrationSummary || '';
@@ -38,6 +42,10 @@ export function renderTeamRecommendationEngineSection(params) {
 		<div style="font-size:10px;color:#7dbba0;margin:2px 0 6px 0">${escapeHtml(profileSummary)}</div>
 		<div style="font-size:10px;color:#8bc9b0;margin:2px 0 6px 0">${calibrationSummary}</div>
 		<div style="margin:4px 0 8px 0;display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+			<label style="font-size:11px;color:#a7b3bb;display:flex;align-items:center;gap:4px">
+				<input type="checkbox" id="oj-team-ops-summary-toggle" ${showOperationsSummary ? 'checked' : ''}>
+				<span>Ops</span>
+			</label>
 			<label for="oj-team-mode-filter" style="font-size:11px;color:#a7b3bb">Mode</label>
 			<select id="oj-team-mode-filter" style="background:#1f252b;border:1px solid #37474f;color:#cfd8dc;border-radius:6px;padding:3px 6px;font-size:11px">
 				${modeOptions.map((mode) => {
@@ -64,6 +72,7 @@ export function renderTeamRecommendationEngineSection(params) {
 				}).join('')}
 			</select>
 		</div>
+		${operationsSummaryHtml}
 		${rowsHtml}
 	</div>`;
 }

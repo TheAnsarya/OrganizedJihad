@@ -54,6 +54,52 @@ describe('BattleRecommendationOverlay', () => {
 		overlay.destroy();
 	});
 
+	it('should auto-show hidden overlay when arena combat context arrives', async () => {
+		const prefs = makePrefStorage({ battleRecommendationOverlayVisible: false });
+		const overlay = new BattleRecommendationOverlay(makeIdbStorage(), prefs);
+		overlay.init();
+
+		expect(overlay.isVisible).toBe(false);
+
+		global.fetch.mockResolvedValue({
+			ok: true,
+			json: async () => ({ recommendations: [{ teamPreview: 'Auto Team', weightedWinRate: 0.61, confidence: 0.5, score: 0.7, battles: 12 }] }),
+		});
+
+		await overlay.onApiProcessed({
+			calls: [{ name: 'arenaAttack', args: { enemyUserId: 123 } }],
+		});
+		const hintBeforeFlush = document.querySelector('#oj-bro-hints')?.textContent || '';
+		expect(hintBeforeFlush.toLowerCase()).toContain('auto-opened');
+		await flushScheduledRefresh();
+
+		expect(overlay.isVisible).toBe(true);
+		expect(prefs.set).toHaveBeenCalledWith('battleRecommendationOverlayVisible', true);
+		expect(global.fetch).toHaveBeenCalled();
+		const ctxText = document.querySelector('#oj-bro-context')?.textContent || '';
+		expect(ctxText).toContain('Auto-opened');
+
+		overlay.destroy();
+	});
+
+	it('should clamp off-screen saved overlay position into viewport on init', () => {
+		const prefs = makePrefStorage({
+			battleRecommendationOverlayPosition: { x: 100000, y: 100000 },
+		});
+		const overlay = new BattleRecommendationOverlay(makeIdbStorage(), prefs);
+		overlay.init();
+
+		const panel = document.querySelector('#oj-battle-reco-overlay');
+		expect(panel).toBeTruthy();
+
+		const left = parseInt(panel.style.left || '0', 10);
+		const top = parseInt(panel.style.top || '0', 10);
+		expect(left).toBeLessThanOrEqual(window.innerWidth);
+		expect(top).toBeLessThanOrEqual(window.innerHeight);
+
+		overlay.destroy();
+	});
+
 	it('should build arena query with opponent filters from attack context', async () => {
 		const idb = makeIdbStorage({
 			arenaEnemies: [{ userId: 123, name: 'Target', power: 450000 }],
@@ -103,6 +149,38 @@ describe('BattleRecommendationOverlay', () => {
 		overlay.destroy();
 	});
 
+	it('should render simulated win probability fields from battle payloads', async () => {
+		const idb = makeIdbStorage({
+			arenaEnemies: [{ userId: 45, name: 'Simulator Target', power: 390000 }],
+		});
+		const overlay = new BattleRecommendationOverlay(idb, makePrefStorage());
+		overlay.init();
+
+		global.fetch.mockResolvedValue({
+			ok: true,
+			json: async () => ({
+				recommendations: [{
+					TeamPreview: 'Sim Team',
+					simulatedWinProbability: 0.74,
+					simulationConfidenceLow: 0.58,
+					simulationConfidenceHigh: 0.80,
+					totalBattles: 9,
+				}],
+			}),
+		});
+
+		await overlay.onApiProcessed({
+			calls: [{ name: 'arenaAttack', args: { enemyUserId: 45 } }],
+		});
+		await flushScheduledRefresh();
+
+		const bodyText = document.querySelector('#oj-bro-body')?.textContent || '';
+		expect(bodyText).toContain('Sim Team');
+		expect(bodyText).toContain('74.0%');
+
+		overlay.destroy();
+	});
+
 	it('should create segmented grand arena requests for opponent teams', async () => {
 		const idb = makeIdbStorage({
 			grandArenaEnemies: [{ userId: 88, name: 'GrandTarget', teams: [{ power: 150000 }, { power: 160000 }, { power: 170000 }] }],
@@ -125,6 +203,103 @@ describe('BattleRecommendationOverlay', () => {
 		expect(global.fetch.mock.calls[0][0]).toContain('opponentPower=150000');
 		expect(global.fetch.mock.calls[1][0]).toContain('opponentPower=160000');
 		expect(global.fetch.mock.calls[2][0]).toContain('opponentPower=170000');
+
+		overlay.destroy();
+	});
+
+	it('should build segmented grand arena recommendations from enemy list trigger', async () => {
+		const idb = makeIdbStorage({
+			grandArenaEnemies: [
+				{ userId: 7, name: 'Lower GA', teams: [{ power: 110000 }, { power: 120000 }, { power: 130000 }] },
+				{ userId: 8, name: 'Higher GA', teams: [{ power: 210000 }, { power: 220000 }, { power: 230000 }] },
+			],
+		});
+		const overlay = new BattleRecommendationOverlay(idb, makePrefStorage());
+		overlay.init();
+
+		global.fetch.mockResolvedValue({
+			ok: true,
+			json: async () => ({ recommendations: [{ teamPreview: 'GA List Team', weightedWinRate: 0.57, confidence: 0.47, score: 0.56, battles: 7 }] }),
+		});
+
+		await overlay.onApiProcessed({ calls: [{ name: 'grandArenaGetEnemies', args: {} }] });
+		await flushScheduledRefresh();
+
+		expect(global.fetch).toHaveBeenCalledTimes(3);
+		expect(global.fetch.mock.calls[0][0]).toContain('battleType=grandarena');
+		expect(global.fetch.mock.calls[0][0]).toContain('opponentId=8');
+		expect(global.fetch.mock.calls[0][0]).toContain('opponentPower=210000');
+		expect(global.fetch.mock.calls[1][0]).toContain('opponentPower=220000');
+		expect(global.fetch.mock.calls[2][0]).toContain('opponentPower=230000');
+
+		overlay.destroy();
+	});
+
+	it('should build titan arena query from enemy list trigger', async () => {
+		const idb = makeIdbStorage({
+			titanArenaEnemies: [
+				{ userId: 91, name: 'Titan Lower', power: 150000 },
+				{ userId: 92, name: 'Titan Higher', power: 260000 },
+			],
+		});
+		const overlay = new BattleRecommendationOverlay(idb, makePrefStorage());
+		overlay.init();
+
+		global.fetch.mockResolvedValue({
+			ok: true,
+			json: async () => ({ recommendations: [{ teamPreview: 'Titan List Team', weightedWinRate: 0.6, confidence: 0.5, score: 0.58, battles: 9 }] }),
+		});
+
+		await overlay.onApiProcessed({ calls: [{ name: 'titanArenaGetEnemies', args: {} }] });
+		await flushScheduledRefresh();
+
+		const url = global.fetch.mock.calls[0][0];
+		expect(url).toContain('battleType=titanarena');
+		expect(url).toContain('opponentId=92');
+		expect(url).toContain('opponentPower=260000');
+
+		overlay.destroy();
+	});
+
+	it('should treat grandArenaFindEnemies alias as grand arena enemy-list trigger', async () => {
+		const idb = makeIdbStorage({
+			grandArenaEnemies: [{ userId: 17, name: 'Grand Alias', teams: [{ power: 190000 }, { power: 195000 }, { power: 200000 }] }],
+		});
+		const overlay = new BattleRecommendationOverlay(idb, makePrefStorage());
+		overlay.init();
+
+		global.fetch.mockResolvedValue({
+			ok: true,
+			json: async () => ({ recommendations: [{ teamPreview: 'GA Alias Team', weightedWinRate: 0.58, confidence: 0.48, score: 0.57, battles: 8 }] }),
+		});
+
+		await overlay.onApiProcessed({ calls: [{ name: 'grandArenaFindEnemies', args: {} }] });
+		await flushScheduledRefresh();
+
+		expect(global.fetch.mock.calls[0][0]).toContain('battleType=grandarena');
+		expect(global.fetch.mock.calls[0][0]).toContain('opponentId=17');
+
+		overlay.destroy();
+	});
+
+	it('should treat titanArenaFindEnemies alias as titan arena enemy-list trigger', async () => {
+		const idb = makeIdbStorage({
+			titanArenaEnemies: [{ userId: 71, name: 'Titan Alias', power: 225000 }],
+		});
+		const overlay = new BattleRecommendationOverlay(idb, makePrefStorage());
+		overlay.init();
+
+		global.fetch.mockResolvedValue({
+			ok: true,
+			json: async () => ({ recommendations: [{ teamPreview: 'Titan Alias Team', weightedWinRate: 0.59, confidence: 0.49, score: 0.58, battles: 10 }] }),
+		});
+
+		await overlay.onApiProcessed({ calls: [{ name: 'titanArenaFindEnemies', args: {} }] });
+		await flushScheduledRefresh();
+
+		const url = global.fetch.mock.calls[0][0];
+		expect(url).toContain('battleType=titanarena');
+		expect(url).toContain('opponentId=71');
 
 		overlay.destroy();
 	});
@@ -345,6 +520,25 @@ describe('BattleRecommendationOverlay', () => {
 		});
 
 		await overlay.onApiProcessed({ calls: [{ name: 'clanWarGetInfo', args: {} }] });
+		await flushScheduledRefresh();
+
+		const url = global.fetch.mock.calls[0][0];
+		expect(url).toContain('mode=guildwar');
+		expect(url).toContain('objective=defense');
+
+		overlay.destroy();
+	});
+
+	it('should treat clanWarGetDefense alias as guild war mode trigger', async () => {
+		const overlay = new BattleRecommendationOverlay(makeIdbStorage(), makePrefStorage({ teamRecommendationsObjective: 'balanced' }));
+		overlay.init();
+
+		global.fetch.mockResolvedValue({
+			ok: true,
+			json: async () => ({ recommendations: [{ teamPreview: 'Defense Alias Team', estimatedWinProbability: 0.56, confidenceScore: 0.45, finalScore: 0.54 }] }),
+		});
+
+		await overlay.onApiProcessed({ calls: [{ name: 'clanWarGetDefense', args: {} }] });
 		await flushScheduledRefresh();
 
 		const url = global.fetch.mock.calls[0][0];
@@ -753,6 +947,146 @@ describe('BattleRecommendationOverlay', () => {
 
 		const body = document.querySelector('#oj-bro-body')?.textContent || '';
 		expect(body).toContain('Stable');
+
+		overlay.destroy();
+	});
+
+	it('should render operations diagnostics when operations summary is enabled', async () => {
+		const idb = makeIdbStorage({ arenaEnemies: [{ userId: 10, name: 'A', power: 100000 }] });
+		const overlay = new BattleRecommendationOverlay(idb, makePrefStorage({
+			battleRecommendationOverlayShowOps: true,
+			teamRecommendationsPreferredTrendWindowDays: 90,
+		}));
+		overlay.init();
+
+		global.fetch
+			.mockResolvedValueOnce({ ok: true, json: async () => ({ recommendations: [{ teamPreview: 'Stable', weightedWinRate: 0.6, confidence: 0.5, score: 0.6 }] }) })
+			.mockResolvedValueOnce({
+				ok: true,
+				json: async () => ({
+					preferredTrendWindowDays: 90,
+					modes: [{
+						mode: 'arena',
+						meanAbsoluteError: 0.11,
+						meanBrierScore: 0.19,
+						predictionBias: -0.02,
+						suggestedFrictionScale: 1.07,
+						samples: 37,
+						isStale: false,
+					}],
+				}),
+			});
+
+		await overlay.onApiProcessed({ calls: [{ name: 'arenaAttack', args: { enemyUserId: 10 } }] });
+		await flushScheduledRefresh();
+
+		const bodyText = document.querySelector('#oj-bro-body')?.textContent || '';
+		expect(bodyText).toContain('Ops Metrics');
+		expect(bodyText).toContain('MAE');
+		expect(bodyText).toContain('0.110');
+		expect(bodyText).toContain('Brier');
+		expect(bodyText).toContain('0.190');
+
+		const operationsCall = global.fetch.mock.calls.find((entry) => String(entry?.[0] || '').includes('/api/sync/teams/recommendations/operations-summary'));
+		expect(operationsCall).toBeTruthy();
+		expect(String(operationsCall[0])).toContain('preferredTrendWindowDays=90');
+
+		overlay.destroy();
+	});
+
+	it('should show waiting operations message when mode summary is unavailable', async () => {
+		const idb = makeIdbStorage({ arenaEnemies: [{ userId: 15, name: 'B', power: 105000 }] });
+		const overlay = new BattleRecommendationOverlay(idb, makePrefStorage({ battleRecommendationOverlayShowOps: true }));
+		overlay.init();
+
+		global.fetch
+			.mockResolvedValueOnce({ ok: true, json: async () => ({ recommendations: [{ teamPreview: 'Stable', weightedWinRate: 0.58, confidence: 0.48, score: 0.57 }] }) })
+			.mockResolvedValueOnce({
+				ok: true,
+				json: async () => ({
+					preferredTrendWindowDays: 30,
+					modes: [{
+						mode: 'guildwar',
+						meanAbsoluteError: 0.2,
+						meanBrierScore: 0.22,
+						predictionBias: 0,
+						suggestedFrictionScale: 1.1,
+						samples: 12,
+						isStale: false,
+					}],
+				}),
+			});
+
+		await overlay.onApiProcessed({ calls: [{ name: 'arenaAttack', args: { enemyUserId: 15 } }] });
+		await flushScheduledRefresh();
+
+		const bodyText = document.querySelector('#oj-bro-body')?.textContent || '';
+		expect(bodyText).toContain('Waiting for operations summary data...');
+
+		overlay.destroy();
+	});
+
+	it('should allow toggling operations diagnostics from overlay controls', async () => {
+		const pref = makePrefStorage();
+		const idb = makeIdbStorage({ arenaEnemies: [{ userId: 21, name: 'Ops Toggle', power: 111000 }] });
+		const overlay = new BattleRecommendationOverlay(idb, pref);
+		overlay.init();
+
+		global.fetch
+			.mockResolvedValueOnce({ ok: true, json: async () => ({ recommendations: [{ teamPreview: 'Stable', weightedWinRate: 0.62, confidence: 0.5, score: 0.59 }] }) })
+			.mockResolvedValueOnce({
+				ok: true,
+				json: async () => ({
+					preferredTrendWindowDays: 30,
+					modes: [{
+						mode: 'arena',
+						meanAbsoluteError: 0.13,
+						meanBrierScore: 0.2,
+						predictionBias: 0.01,
+						suggestedFrictionScale: 1.05,
+						samples: 22,
+						isStale: false,
+					}],
+				}),
+			});
+
+		await overlay.onApiProcessed({ calls: [{ name: 'arenaAttack', args: { enemyUserId: 21 } }] });
+		const opsToggle = document.querySelector('#oj-bro-ops-toggle');
+		expect(opsToggle).toBeTruthy();
+		opsToggle.click();
+		await flushScheduledRefresh();
+
+		expect(pref.set).toHaveBeenCalledWith('battleRecommendationOverlayShowOps', true);
+		const bodyText = document.querySelector('#oj-bro-body')?.textContent || '';
+		expect(bodyText).toContain('Ops Metrics');
+
+		overlay.destroy();
+	});
+
+	it('should cache operations summary between nearby refreshes', async () => {
+		const idb = makeIdbStorage({ arenaEnemies: [{ userId: 31, name: 'Ops Cache', power: 125000 }] });
+		const overlay = new BattleRecommendationOverlay(idb, makePrefStorage({ battleRecommendationOverlayShowOps: true }));
+		overlay.init();
+
+		global.fetch
+			.mockResolvedValueOnce({ ok: true, json: async () => ({ recommendations: [{ teamPreview: 'First Pull', weightedWinRate: 0.6, confidence: 0.5, score: 0.59 }] }) })
+			.mockResolvedValueOnce({
+				ok: true,
+				json: async () => ({
+					preferredTrendWindowDays: 30,
+					modes: [{ mode: 'arena', meanAbsoluteError: 0.12, meanBrierScore: 0.2, predictionBias: 0, suggestedFrictionScale: 1.02, samples: 42, isStale: false }],
+				}),
+			})
+			.mockResolvedValueOnce({ ok: true, json: async () => ({ recommendations: [{ teamPreview: 'Second Pull', weightedWinRate: 0.59, confidence: 0.49, score: 0.58 }] }) });
+
+		await overlay.onApiProcessed({ calls: [{ name: 'arenaAttack', args: { enemyUserId: 31 } }] });
+		await flushScheduledRefresh();
+
+		jest.advanceTimersByTime(1500);
+		await overlay.refresh();
+
+		const operationsCalls = global.fetch.mock.calls.filter((entry) => String(entry?.[0] || '').includes('/api/sync/teams/recommendations/operations-summary'));
+		expect(operationsCalls).toHaveLength(1);
 
 		overlay.destroy();
 	});

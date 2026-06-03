@@ -105,6 +105,8 @@ const TEAM_RECOMMENDATION_BACKTEST_PATH = '/api/sync/teams/recommendations/backt
 const TEAM_RECOMMENDATION_CALIBRATION_PATH = '/api/sync/teams/recommendations/calibration';
 /** @const {string} Local API path for persisted team recommendation trend preferences */
 const TEAM_RECOMMENDATION_PREFERENCES_PATH = '/api/sync/teams/recommendations/preferences';
+/** @const {string} Local API path for compact recommendation operations summary */
+const TEAM_RECOMMENDATION_OPERATIONS_SUMMARY_PATH = '/api/sync/teams/recommendations/operations-summary';
 /** @const {string} Local API path for quick install health checks */
 const SYNC_HEALTH_PATH = '/api/sync/health';
 /** @const {string} Local API path for quick setup diagnostics */
@@ -1362,6 +1364,7 @@ class UIManager {
 			const selectedMode = this.prefStorage.get('teamRecommendationsMode', 'arena');
 			const selectedObjective = this.prefStorage.get('teamRecommendationsObjective', 'balanced');
 			const selectedTrendWindowPreference = this.prefStorage.get('teamRecommendationsTrendWindow', 'auto');
+			const showOperationsSummary = this.prefStorage.get('teamRecommendationsShowOperationsSummary', true);
 			const profileMetadata = await this._getTeamRecommendationProfileMetadata();
 			const modeOptions = Array.isArray(profileMetadata?.modes) && profileMetadata.modes.length > 0
 				? profileMetadata.modes
@@ -1382,6 +1385,7 @@ class UIManager {
 
 			const backtest = await this._getTeamRecommendationBacktestPayload(selectedMode, selectedObjective);
 			const calibration = await this._getTeamRecommendationCalibrationPayload(selectedMode, trendWindowDays);
+			const operationsSummary = await this._getTeamRecommendationOperationsSummaryPayload(trendWindowDays);
 			const payload = await this._getTeamRecommendationEnginePayload(selectedMode, selectedObjective, trendWindowDays);
 			const recs = Array.isArray(payload?.recommendations) ? payload.recommendations : [];
 			if (recs.length === 0) return '';
@@ -1428,6 +1432,9 @@ class UIManager {
 			const trendWindowOptions = Array.isArray(modeOption?.supportedTrendWindowDays) && modeOption.supportedTrendWindowDays.length > 0
 				? modeOption.supportedTrendWindowDays
 				: [7, 30, 90];
+			const operationsSummaryHtml = showOperationsSummary
+				? this._renderTeamRecommendationOperationsSummary(selectedMode, operationsSummary)
+				: '';
 
 			const rows = renderTeamRecommendationRows({
 				recommendations: recs,
@@ -1444,6 +1451,8 @@ class UIManager {
 				selectedObjective,
 				selectedTrendWindowPreference,
 				defaultTrendWindowDays,
+				showOperationsSummary,
+				operationsSummaryHtml,
 				rowsHtml: rows,
 				escapeHtml: (value) => this._escapeHtml(value),
 			});
@@ -1581,6 +1590,77 @@ class UIManager {
 			requestUrl: url.toString(),
 			fallbackPayload: null,
 		});
+	}
+
+	/**
+	 * Get Team Recommendation operations summary payload from cache/API.
+	 *
+	 * @param {number} trendWindowDays - Preferred calibration trend window days
+	 * @returns {Promise<object|null>} API payload or cached payload
+	 * @private
+	 */
+	async _getTeamRecommendationOperationsSummaryPayload(trendWindowDays = 30) {
+		const resolvedWindow = [7, 30, 90].includes(Number(trendWindowDays)) ? Number(trendWindowDays) : 30;
+		const cacheKey = `teamRecommendationOperationsSummary:${resolvedWindow}`;
+		const url = new URL(this._buildApiUrl(TEAM_RECOMMENDATION_OPERATIONS_SUMMARY_PATH));
+		url.searchParams.set('preferredTrendWindowDays', String(resolvedWindow));
+
+		return getCachedApiPayload({
+			idbStorage: this.idbStorage,
+			cacheKey,
+			ttlMs: RECOMMENDATIONS_CACHE_TTL_MS,
+			requestUrl: url.toString(),
+			fallbackPayload: null,
+		});
+	}
+
+	/**
+	 * Render mode-scoped operations diagnostics for Team Recommendation Engine section.
+	 *
+	 * @param {string} selectedMode - Selected dashboard mode
+	 * @param {object|null} operationsSummary - Operations summary payload
+	 * @returns {string} HTML fragment
+	 * @private
+	 */
+	_renderTeamRecommendationOperationsSummary(selectedMode, operationsSummary) {
+		const modes = Array.isArray(operationsSummary?.modes) ? operationsSummary.modes : [];
+		if (modes.length === 0) {
+			return '<div style="margin:4px 0 8px 0;padding:6px;border:1px dashed #385142;border-radius:6px;background:#15241d;font-size:10px;color:#89ad9a">Ops: waiting for summary data...</div>';
+		}
+
+		const normalizedMode = String(selectedMode || 'arena').toLowerCase();
+		const modeAlias = normalizedMode === 'titanarena' ? 'arena' : normalizedMode;
+		const row = modes.find((entry) => String(entry?.mode || '').toLowerCase() === modeAlias)
+			|| modes.find((entry) => String(entry?.mode || '').toLowerCase() === normalizedMode)
+			|| null;
+		if (!row) {
+			return '<div style="margin:4px 0 8px 0;padding:6px;border:1px dashed #385142;border-radius:6px;background:#15241d;font-size:10px;color:#89ad9a">Ops: no mode summary available for this selection yet.</div>';
+		}
+
+		const mae = Number(row.meanAbsoluteError || 0);
+		const brier = Number(row.meanBrierScore || 0);
+		const bias = Number(row.predictionBias || 0);
+		const frictionScale = Number(row.suggestedFrictionScale || 0);
+		const samples = Number(row.samples || 0);
+		const isStale = Boolean(row.isStale);
+		const warn = isStale || mae > 0.22 || brier > 0.28;
+		const badgeStyle = warn
+			? 'color:#ffd99a;background:rgba(255,167,38,0.16);border-color:rgba(255,167,38,0.38)'
+			: 'color:#9cefc7;background:rgba(67,160,71,0.16);border-color:rgba(76,175,80,0.38)';
+
+		return `<div style="margin:4px 0 8px 0;padding:6px;border:1px solid #2b4a3c;border-radius:6px;background:#15241d">
+			<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:6px">
+				<div style="font-size:10px;color:#9ed0b8;font-weight:700">Ops Diagnostics</div>
+				<div style="font-size:9px;border:1px solid transparent;padding:2px 6px;border-radius:999px;${badgeStyle}">${isStale ? 'Stale' : 'Fresh'}</div>
+			</div>
+			<div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:5px">
+				<div style="font-size:10px;color:#95b7a6;background:#1b2b24;border:1px solid #2f4d3f;border-radius:5px;padding:4px">MAE <strong style="color:#d7f6e9">${mae.toFixed(3)}</strong></div>
+				<div style="font-size:10px;color:#95b7a6;background:#1b2b24;border:1px solid #2f4d3f;border-radius:5px;padding:4px">Brier <strong style="color:#d7f6e9">${brier.toFixed(3)}</strong></div>
+				<div style="font-size:10px;color:#95b7a6;background:#1b2b24;border:1px solid #2f4d3f;border-radius:5px;padding:4px">Bias <strong style="color:#d7f6e9">${bias.toFixed(3)}</strong></div>
+				<div style="font-size:10px;color:#95b7a6;background:#1b2b24;border:1px solid #2f4d3f;border-radius:5px;padding:4px">Scale <strong style="color:#d7f6e9">${frictionScale.toFixed(2)}</strong></div>
+				<div style="font-size:10px;color:#95b7a6;background:#1b2b24;border:1px solid #2f4d3f;border-radius:5px;padding:4px">Samples <strong style="color:#d7f6e9">${samples.toLocaleString()}</strong></div>
+			</div>
+		</div>`;
 	}
 
 	/**

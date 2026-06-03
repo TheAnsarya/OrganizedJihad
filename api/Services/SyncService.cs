@@ -2110,6 +2110,40 @@ public class SyncService {
 	}
 
 	/// <summary>
+	/// Returns a compact per-mode operations summary derived from calibration state.
+	/// </summary>
+	public async Task<TeamRecommendationOperationsSummaryResponse> GetTeamRecommendationOperationsSummaryAsync(int? preferredTrendWindowDays = null) {
+		var generatedAtUtc = DateTime.UtcNow;
+		var effectiveTrendWindowDays = preferredTrendWindowDays is 7 or 30 or 90
+			? preferredTrendWindowDays.Value
+			: 30;
+
+		var modes = new List<TeamRecommendationModeOperationsSummary>();
+		foreach (var mode in TeamRecommendationProfileCatalog.SupportedModes) {
+			var calibration = await GetTeamRecommendationCalibrationAsync(mode, effectiveTrendWindowDays);
+			var isStale = !calibration.LastUpdatedUtc.HasValue
+				|| (generatedAtUtc - calibration.LastUpdatedUtc.Value).TotalDays > 7;
+
+			modes.Add(new TeamRecommendationModeOperationsSummary {
+				Mode = calibration.Mode,
+				SuggestedFrictionScale = calibration.SuggestedFrictionScale,
+				MeanAbsoluteError = calibration.MeanAbsoluteError,
+				MeanBrierScore = calibration.MeanBrierScore,
+				PredictionBias = calibration.PredictionBias,
+				Samples = calibration.Samples,
+				IsStale = isStale,
+				LastUpdatedUtc = calibration.LastUpdatedUtc,
+			});
+		}
+
+		return new TeamRecommendationOperationsSummaryResponse {
+			PreferredTrendWindowDays = effectiveTrendWindowDays,
+			Modes = modes,
+			GeneratedAtUtc = generatedAtUtc,
+		};
+	}
+
+	/// <summary>
 	/// Returns a curated catalog of external Hero Wars tooling references.
 	/// This endpoint is metadata-only and intentionally does not embed third-party code.
 	/// </summary>

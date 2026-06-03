@@ -652,3 +652,68 @@ public class TeamRecommendationCalibrationTrendWindow {
 	/// </summary>
 	public DateTime? LastUpdatedUtc { get; set; }
 }
+
+/// <summary>
+/// Compact operations summary payload for recommendation calibration health by mode.
+/// </summary>
+public class TeamRecommendationOperationsSummaryResponse {
+	/// <summary>
+	/// Trend window used for calibration projection in this summary.
+	/// </summary>
+	public int PreferredTrendWindowDays { get; set; } = 30;
+
+	/// <summary>
+	/// Per-mode recommendation operations summaries.
+	/// </summary>
+	public List<TeamRecommendationModeOperationsSummary> Modes { get; set; } = [];
+
+	/// <summary>
+	/// UTC timestamp when the summary payload was generated.
+	/// </summary>
+	public DateTime GeneratedAtUtc { get; set; }
+}
+
+/// <summary>
+/// Per-mode recommendation calibration and readiness summary.
+/// </summary>
+public class TeamRecommendationModeOperationsSummary {
+	/// <summary>
+	/// Recommendation mode key.
+	/// </summary>
+	public string Mode { get; set; } = "arena";
+
+	/// <summary>
+	/// Suggested friction scale for this mode and trend window.
+	/// </summary>
+	public double SuggestedFrictionScale { get; set; } = 1d;
+
+	/// <summary>
+	/// Mean absolute error in calibration state.
+	/// </summary>
+	public double MeanAbsoluteError { get; set; }
+
+	/// <summary>
+	/// Mean Brier score in calibration state.
+	/// </summary>
+	public double MeanBrierScore { get; set; }
+
+	/// <summary>
+	/// Prediction bias for this mode.
+	/// </summary>
+	public double PredictionBias { get; set; }
+
+	/// <summary>
+	/// Number of calibration samples for this mode.
+	/// </summary>
+	public int Samples { get; set; }
+
+	/// <summary>
+	/// Indicates whether the mode appears stale for operations monitoring.
+	/// </summary>
+	public bool IsStale { get; set; }
+
+	/// <summary>
+	/// UTC timestamp of last calibration update for this mode.
+	/// </summary>
+	public DateTime? LastUpdatedUtc { get; set; }
+}
