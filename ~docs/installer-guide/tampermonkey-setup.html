@@ -1,0 +1,207 @@
+<!doctype html>
+<html lang="en">
+<head>
+	<meta charset="utf-8" />
+	<meta name="viewport" content="width=device-width, initial-scale=1" />
+	<title>OrganizedJihad Userscript Setup Guide</title>
+	<style>
+		:root {
+			--bg: #f2f5f8;
+			--panel: #ffffff;
+			--ink: #1f2a37;
+			--muted: #4b5563;
+			--accent: #0e7490;
+			--line: #d1d5db;
+		}
+
+		* {
+			box-sizing: border-box;
+		}
+
+		body {
+			margin: 0;
+			font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+			background: linear-gradient(180deg, #eef3f9 0%, #f8fafc 100%);
+			color: var(--ink);
+		}
+
+		header {
+			padding: 28px 24px 20px;
+			background: linear-gradient(120deg, #0f172a 0%, #1e293b 100%);
+			color: #f8fafc;
+		}
+
+		h1 {
+			margin: 0 0 10px;
+			font-size: 28px;
+		}
+
+		header p {
+			margin: 0;
+			opacity: 0.92;
+			max-width: 900px;
+		}
+
+		main {
+			max-width: 1060px;
+			margin: 20px auto 30px;
+			padding: 0 16px;
+		}
+
+		.notice {
+			background: #fefce8;
+			border: 1px solid #facc15;
+			padding: 12px 14px;
+			border-radius: 8px;
+			color: #713f12;
+			margin-bottom: 18px;
+		}
+
+		.card {
+			background: var(--panel);
+			border: 1px solid var(--line);
+			border-radius: 12px;
+			padding: 16px;
+			margin-bottom: 16px;
+			box-shadow: 0 3px 10px rgba(15, 23, 42, 0.06);
+		}
+
+		h2 {
+			margin: 0 0 10px;
+			font-size: 20px;
+		}
+
+		h3 {
+			margin: 18px 0 8px;
+			font-size: 17px;
+		}
+
+		p, li {
+			line-height: 1.5;
+			color: var(--muted);
+		}
+
+		img {
+			display: block;
+			width: 100%;
+			max-width: 860px;
+			height: auto;
+			border: 1px solid #cbd5e1;
+			border-radius: 8px;
+			margin: 10px 0 6px;
+		}
+
+		code {
+			background: #e2e8f0;
+			padding: 2px 6px;
+			border-radius: 5px;
+		}
+
+		.steps {
+			padding-left: 20px;
+		}
+	</style>
+</head>
+<body>
+	<header>
+		<h1>OrganizedJihad Userscript Setup Guide</h1>
+		<p>
+			Use this page after running the installer. Pick your browser section below and follow the same three-part flow:
+			install Tampermonkey, import <code>organized-jihad.user.js</code>, then verify the script is enabled.
+		</p>
+	</header>
+
+	<main>
+		<div class="notice">
+			<strong>Userscript file location:</strong>
+			<code>%LOCALAPPDATA%\OrganizedJihad\userscript\organized-jihad.user.js</code>
+		</div>
+
+		<section class="card">
+			<h2>Before You Start</h2>
+			<ol class="steps">
+				<li>Close any old Hero Wars browser tabs before importing the script.</li>
+				<li>Install Tampermonkey in your browser (links are opened by installer when enabled).</li>
+				<li>In Tampermonkey, import <code>organized-jihad.user.js</code> from your installed userscript folder.</li>
+				<li>Confirm the script is enabled, then refresh Hero Wars.</li>
+			</ol>
+		</section>
+
+		<section class="card">
+			<h2>Google Chrome</h2>
+			<h3>Step 1: Install Tampermonkey</h3>
+			<img src="guide-screenshots/chrome-setup.png" onerror="this.onerror=null;this.src='screenshots/chrome-setup.png';" alt="Chrome Tampermonkey store page" />
+			<h3>Step 2: Import organized-jihad.user.js</h3>
+			<img src="guide-screenshots/tampermonkey-import-utilities.png" onerror="this.onerror=null;this.src='screenshots/tampermonkey-import-utilities.png';" alt="Tampermonkey Utilities import from file" />
+			<h3>Step 3: Verify script is enabled</h3>
+			<img src="guide-screenshots/tampermonkey-enabled-dashboard.png" onerror="this.onerror=null;this.src='screenshots/tampermonkey-enabled-dashboard.png';" alt="Tampermonkey dashboard enabled script list" />
+			<ol class="steps">
+				<li>Install Tampermonkey from the Chrome Web Store.</li>
+				<li>Open Tampermonkey Dashboard -> Utilities -> Import from file.</li>
+				<li>Select <code>organized-jihad.user.js</code> and click Install.</li>
+				<li>In Dashboard, confirm OrganizedJihad is enabled.</li>
+			</ol>
+		</section>
+
+		<section class="card">
+			<h2>Microsoft Edge</h2>
+			<h3>Step 1: Install Tampermonkey</h3>
+			<img src="guide-screenshots/edge-setup.png" onerror="this.onerror=null;this.src='screenshots/edge-setup.png';" alt="Edge Tampermonkey add-ons page" />
+			<h3>Step 2: Import organized-jihad.user.js</h3>
+			<img src="guide-screenshots/tampermonkey-import-utilities.png" onerror="this.onerror=null;this.src='screenshots/tampermonkey-import-utilities.png';" alt="Tampermonkey Utilities import from file" />
+			<h3>Step 3: Verify script is enabled</h3>
+			<img src="guide-screenshots/tampermonkey-enabled-dashboard.png" onerror="this.onerror=null;this.src='screenshots/tampermonkey-enabled-dashboard.png';" alt="Tampermonkey dashboard enabled script list" />
+			<ol class="steps">
+				<li>Install Tampermonkey from the Edge Add-ons store.</li>
+				<li>Open the dashboard and import <code>organized-jihad.user.js</code>.</li>
+				<li>Enable the script and refresh Hero Wars.</li>
+			</ol>
+		</section>
+
+		<section class="card">
+			<h2>Mozilla Firefox</h2>
+			<h3>Step 1: Install Tampermonkey</h3>
+			<img src="guide-screenshots/firefox-setup.png" onerror="this.onerror=null;this.src='screenshots/firefox-setup.png';" alt="Firefox add-ons Tampermonkey page" />
+			<h3>Step 2: Import organized-jihad.user.js</h3>
+			<img src="guide-screenshots/tampermonkey-import-utilities.png" onerror="this.onerror=null;this.src='screenshots/tampermonkey-import-utilities.png';" alt="Tampermonkey Utilities import from file" />
+			<h3>Step 3: Verify script is enabled</h3>
+			<img src="guide-screenshots/tampermonkey-enabled-dashboard.png" onerror="this.onerror=null;this.src='screenshots/tampermonkey-enabled-dashboard.png';" alt="Tampermonkey dashboard enabled script list" />
+			<ol class="steps">
+				<li>Install Tampermonkey from addons.mozilla.org.</li>
+				<li>Use Tampermonkey Utilities to import <code>organized-jihad.user.js</code>.</li>
+				<li>Confirm script status is Enabled.</li>
+			</ol>
+		</section>
+
+		<section class="card">
+			<h2>Opera</h2>
+			<h3>Step 1: Install Tampermonkey</h3>
+			<img src="guide-screenshots/opera-setup.png" onerror="this.onerror=null;this.src='screenshots/opera-setup.png';" alt="Opera add-ons Tampermonkey page" />
+			<h3>Step 2: Import organized-jihad.user.js</h3>
+			<img src="guide-screenshots/tampermonkey-import-utilities.png" onerror="this.onerror=null;this.src='screenshots/tampermonkey-import-utilities.png';" alt="Tampermonkey Utilities import from file" />
+			<h3>Step 3: Verify script is enabled</h3>
+			<img src="guide-screenshots/tampermonkey-enabled-dashboard.png" onerror="this.onerror=null;this.src='screenshots/tampermonkey-enabled-dashboard.png';" alt="Tampermonkey dashboard enabled script list" />
+			<ol class="steps">
+				<li>Install Tampermonkey from Opera Add-ons.</li>
+				<li>Open Tampermonkey Dashboard and import the script file.</li>
+				<li>Enable script, then refresh Hero Wars.</li>
+			</ol>
+		</section>
+
+		<section class="card">
+			<h2>Opera GX</h2>
+			<h3>Step 1: Install Tampermonkey</h3>
+			<img src="guide-screenshots/opera-gx-setup.png" onerror="this.onerror=null;this.src='screenshots/opera-gx-setup.png';" alt="Opera GX add-ons Tampermonkey page" />
+			<h3>Step 2: Import organized-jihad.user.js</h3>
+			<img src="guide-screenshots/tampermonkey-import-utilities.png" onerror="this.onerror=null;this.src='screenshots/tampermonkey-import-utilities.png';" alt="Tampermonkey Utilities import from file" />
+			<h3>Step 3: Verify script is enabled</h3>
+			<img src="guide-screenshots/tampermonkey-enabled-dashboard.png" onerror="this.onerror=null;this.src='screenshots/tampermonkey-enabled-dashboard.png';" alt="Tampermonkey dashboard enabled script list" />
+			<ol class="steps">
+				<li>Install Tampermonkey from the Opera Add-ons page (same extension feed as Opera).</li>
+				<li>Import <code>organized-jihad.user.js</code> from the userscript install folder.</li>
+				<li>Keep the script enabled for hero-wars.com domains.</li>
+			</ol>
+		</section>
+	</main>
+</body>
+</html>

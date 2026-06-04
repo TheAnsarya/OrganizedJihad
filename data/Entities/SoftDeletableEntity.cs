@@ -46,7 +46,6 @@ public abstract class SoftDeletableEntity : AuditableEntity, ISoftDelete {
 	///
 	/// Values:
 	/// - "Browser" - Deleted via browser userscript
-	/// - "DesktopApp" - Deleted via desktop application
 	/// - "System" - Deleted by system process
 	/// - User identifier - Specific user who deleted the record
 	/// </summary>

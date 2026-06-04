@@ -20,6 +20,9 @@
 // @match        https://apps-1701433570146040.apps.fbsbx.com/*
 // @grant        GM_addStyle
 // @grant        GM_notification
+// @grant        GM_xmlhttpRequest
+// @connect      localhost
+// @connect      127.0.0.1
 // @run-at       document-start
 // ==/UserScript==
 
@@ -33,7 +36,9 @@ import CalendarManager from './modules/calendarManager.js';
 import SuggestionsEngine from './modules/suggestionsEngine.js';
 import APIMonitor from './modules/apiMonitor.js';
 import GameOverlay from './modules/gameOverlay.js';
+import BattleRecommendationOverlay from './modules/battleRecommendationOverlay.js';
 import DomTargeting from './modules/domTargeting.js';
+import { getConfiguredApiBaseUrl } from './modules/helpers/apiConfig.js';
 import NotificationManager from './modules/notificationManager.js';
 import './styles/main.css';
 
@@ -354,12 +359,13 @@ import './styles/main.css';
 		window._ojGlobalRejectionHandler = _onUnhandledRejection;
 
 		// ─── Initialize sync client (optional) ──────────────────────
-		const syncClient = new SyncClient('http://localhost:5124');
+		const configuredApiBaseUrl = getConfiguredApiBaseUrl(prefStorage);
+		const syncClient = new SyncClient(configuredApiBaseUrl);
 		let apiAvailable = false;
 		try {
 			apiAvailable = await syncClient.checkHealth();
 			if (apiAvailable) {
-				console.log('[OrganizedJihad] ✅ API server connected at http://localhost:5124');
+				console.log(`[OrganizedJihad] ✅ API server connected at ${configuredApiBaseUrl}`);
 			}
 		} catch {
 			// Silently continue — API server is optional
@@ -377,6 +383,10 @@ import './styles/main.css';
 		// Initialize game overlay (floating hero completion panel, toggle via Alt+H)
 		const gameOverlay = new GameOverlay(idbStorage, prefStorage);
 		gameOverlay.init();
+
+		// Initialize battle recommendation overlay (floating in-game helper, Alt+R)
+		const battleRecommendationOverlay = new BattleRecommendationOverlay(idbStorage, prefStorage);
+		battleRecommendationOverlay.init();
 
 		// Initialize DOM targeting for game-aware positioning (#50)
 		const domTargeting = new DomTargeting({
@@ -444,6 +454,7 @@ import './styles/main.css';
 			}
 
 			await gameOverlay.onHeroDataUpdated();
+			await battleRecommendationOverlay.onApiProcessed(request);
 		};
 
 		// Catch up the badge with API calls captured during PHASE 1
@@ -486,7 +497,7 @@ import './styles/main.css';
 		console.log('[OrganizedJihad] ✅ PHASE 2 complete — Tracker ready');
 
 		// Register modules for cleanup on page unload
-		_destroyables.push(gameTracker, notificationManager, domTargeting, gameOverlay, uiManager, apiMonitor);
+		_destroyables.push(gameTracker, notificationManager, domTargeting, gameOverlay, battleRecommendationOverlay, uiManager, apiMonitor);
 		// Store interval ID for cleanup alongside the sync interval
 		window.organizedJihadSuggestionsInterval = suggestionsIntervalId;
 	}

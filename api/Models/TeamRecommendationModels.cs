@@ -39,6 +39,81 @@ public class TeamRecommendationEngineResponse {
 }
 
 /// <summary>
+/// Arena-first integrated recommendation and simulation response payload.
+/// </summary>
+public class ArenaTeamRecommendationSimulationResponse {
+	/// <summary>
+	/// Mode identifier for this endpoint (always arena).
+	/// </summary>
+	public string Mode { get; set; } = "arena";
+
+	/// <summary>
+	/// Objective profile used for recommendation generation.
+	/// </summary>
+	public string Objective { get; set; } = "balanced";
+
+	/// <summary>
+	/// Optional opponent id used for historical filtering.
+	/// </summary>
+	public long? OpponentId { get; set; }
+
+	/// <summary>
+	/// Optional caller-provided opponent power.
+	/// </summary>
+	public int? OpponentPower { get; set; }
+
+	/// <summary>
+	/// Effective opponent power used by simulator.
+	/// </summary>
+	public int OpponentPowerUsed { get; set; }
+
+	/// <summary>
+	/// Power window used for historical filtering.
+	/// </summary>
+	public int PowerWindow { get; set; }
+
+	/// <summary>
+	/// Minimum sample threshold used by historical recommendations.
+	/// </summary>
+	public int MinSamples { get; set; }
+
+	/// <summary>
+	/// Maximum recommendations returned.
+	/// </summary>
+	public int Limit { get; set; }
+
+	/// <summary>
+	/// Number of historical arena samples evaluated.
+	/// </summary>
+	public int HistorySampleCount { get; set; }
+
+	/// <summary>
+	/// Number of history-sourced recommendation rows considered before final ranking.
+	/// </summary>
+	public int HistoryRecommendationCount { get; set; }
+
+	/// <summary>
+	/// Number of engine-sourced recommendation rows considered before final ranking.
+	/// </summary>
+	public int EngineRecommendationCount { get; set; }
+
+	/// <summary>
+	/// Unified recommendation cards enriched with simulation fields.
+	/// </summary>
+	public List<TeamRecommendationCard> Recommendations { get; set; } = [];
+
+	/// <summary>
+	/// Optional API note describing sparse-data or fallback behavior.
+	/// </summary>
+	public string? Note { get; set; }
+
+	/// <summary>
+	/// UTC timestamp when payload was generated.
+	/// </summary>
+	public DateTime GeneratedAtUtc { get; set; }
+}
+
+/// <summary>
 /// Summary of current roster and key resource state.
 /// </summary>
 public class TeamRosterSummary {
@@ -116,6 +191,36 @@ public class TeamRecommendationCard {
 	/// Final blended ranking score.
 	/// </summary>
 	public double FinalScore { get; set; }
+
+	/// <summary>
+	/// Simulator-estimated win probability (0..1).
+	/// </summary>
+	public double? SimulatedWinProbability { get; set; }
+
+	/// <summary>
+	/// Lower confidence bound of simulator estimate.
+	/// </summary>
+	public double? SimulationConfidenceLow { get; set; }
+
+	/// <summary>
+	/// Upper confidence bound of simulator estimate.
+	/// </summary>
+	public double? SimulationConfidenceHigh { get; set; }
+
+	/// <summary>
+	/// Number of Monte Carlo runs used by simulator.
+	/// </summary>
+	public int? SimulationRuns { get; set; }
+
+	/// <summary>
+	/// Team power estimate used for simulator input.
+	/// </summary>
+	public int? TeamPowerEstimate { get; set; }
+
+	/// <summary>
+	/// Opponent power used for simulator input.
+	/// </summary>
+	public int? OpponentPowerUsed { get; set; }
 
 	/// <summary>
 	/// Human-readable explanation for recommendation.
@@ -649,6 +754,81 @@ public class TeamRecommendationCalibrationTrendWindow {
 
 	/// <summary>
 	/// UTC timestamp of the most recent observation in this window.
+	/// </summary>
+	public DateTime? LastUpdatedUtc { get; set; }
+}
+
+/// <summary>
+/// Compact operations summary payload for recommendation calibration health by mode.
+/// </summary>
+public class TeamRecommendationOperationsSummaryResponse {
+	/// <summary>
+	/// Trend window used for calibration projection in this summary.
+	/// </summary>
+	public int PreferredTrendWindowDays { get; set; } = 30;
+
+	/// <summary>
+	/// Per-mode recommendation operations summaries.
+	/// </summary>
+	public List<TeamRecommendationModeOperationsSummary> Modes { get; set; } = [];
+
+	/// <summary>
+	/// UTC timestamp when the summary payload was generated.
+	/// </summary>
+	public DateTime GeneratedAtUtc { get; set; }
+}
+
+/// <summary>
+/// Per-mode recommendation calibration and readiness summary.
+/// </summary>
+public class TeamRecommendationModeOperationsSummary {
+	/// <summary>
+	/// Recommendation mode key.
+	/// </summary>
+	public string Mode { get; set; } = "arena";
+
+	/// <summary>
+	/// Suggested friction scale for this mode and trend window.
+	/// </summary>
+	public double SuggestedFrictionScale { get; set; } = 1d;
+
+	/// <summary>
+	/// Mean absolute error in calibration state.
+	/// </summary>
+	public double MeanAbsoluteError { get; set; }
+
+	/// <summary>
+	/// Mean Brier score in calibration state.
+	/// </summary>
+	public double MeanBrierScore { get; set; }
+
+	/// <summary>
+	/// Prediction bias for this mode.
+	/// </summary>
+	public double PredictionBias { get; set; }
+
+	/// <summary>
+	/// Number of calibration samples for this mode.
+	/// </summary>
+	public int Samples { get; set; }
+
+	/// <summary>
+	/// Indicates whether the mode appears stale for operations monitoring.
+	/// </summary>
+	public bool IsStale { get; set; }
+
+	/// <summary>
+	/// Canonical health status key for UI consumers (healthy, monitor, stale).
+	/// </summary>
+	public string HealthStatus { get; set; } = "healthy";
+
+	/// <summary>
+	/// Human-readable health label aligned across overlay/dashboard surfaces.
+	/// </summary>
+	public string HealthLabel { get; set; } = "Healthy";
+
+	/// <summary>
+	/// UTC timestamp of last calibration update for this mode.
 	/// </summary>
 	public DateTime? LastUpdatedUtc { get; set; }
 }

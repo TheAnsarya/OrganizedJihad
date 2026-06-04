@@ -24,7 +24,7 @@ public class AuditInterceptor : SaveChangesInterceptor {
 	/// Initialize audit interceptor with current user context.
 	/// </summary>
 	/// <param name="currentUser">Identifier for current user/system performing the operation.
-	/// Examples: "Browser", "DesktopApp", "System", or specific user identifier</param>
+	/// Examples: "Browser", "System", or specific user identifier</param>
 	public AuditInterceptor(string currentUser = "System") {
 		_currentUser = currentUser;
 	}

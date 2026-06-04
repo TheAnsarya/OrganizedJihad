@@ -1,0 +1,79 @@
+<Project Sdk="Microsoft.NET.Sdk">
+	<PropertyGroup>
+		<OutputType>WinExe</OutputType>
+		<TargetFramework>net10.0</TargetFramework>
+		<Nullable>enable</Nullable>
+		<ImplicitUsings>enable</ImplicitUsings>
+		<AssemblyName>OrganizedJihad.Installer</AssemblyName>
+		<RootNamespace>OrganizedJihad.Installer</RootNamespace>
+		<ApplicationIcon>Assets\Icons\oj-tray-alt-steel.ico</ApplicationIcon>
+		<IncludeAllContentForSelfExtract>true</IncludeAllContentForSelfExtract>
+		<EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
+		<DebugType>None</DebugType>
+		<DebugSymbols>false</DebugSymbols>
+	</PropertyGroup>
+
+	<ItemGroup>
+		<PackageReference Include="Avalonia" Version="11.2.0" />
+		<PackageReference Include="Avalonia.Desktop" Version="11.2.0" />
+		<PackageReference Include="Avalonia.Themes.Fluent" Version="11.2.0" />
+		<PackageReference Include="Tmds.DBus.Protocol" Version="0.94.1" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<AvaloniaResource Include="Assets\oj-installer.ico" />
+		<AvaloniaResource Include="Assets\Icons\*.ico" />
+		<AvaloniaResource Include="Assets\Icons\*.png" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<Content Include="Assets\oj-installer.ico">
+			<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+			<CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+			<ExcludeFromSingleFile>false</ExcludeFromSingleFile>
+		</Content>
+		<Content Include="Assets\Icons\*.ico">
+			<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+			<CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+			<ExcludeFromSingleFile>false</ExcludeFromSingleFile>
+		</Content>
+		<Content Include="Assets\Icons\*.png">
+			<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+			<CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+			<ExcludeFromSingleFile>false</ExcludeFromSingleFile>
+		</Content>
+	</ItemGroup>
+
+	<ItemGroup Condition="Exists('bundle-payload')">
+		<Content Include="bundle-payload\*.*">
+			<Link>%(Filename)%(Extension)</Link>
+			<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+			<CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+			<ExcludeFromSingleFile>false</ExcludeFromSingleFile>
+		</Content>
+		<Content Include="bundle-payload\**\*">
+			<Link>%(RecursiveDir)%(Filename)%(Extension)</Link>
+			<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+			<CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+			<ExcludeFromSingleFile>false</ExcludeFromSingleFile>
+		</Content>
+	</ItemGroup>
+
+	<ItemGroup Condition="!Exists('bundle-payload')">
+		<Content Include="..\Install-OrganizedJihad.ps1" Link="Install-OrganizedJihad.ps1">
+			<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+			<CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+			<ExcludeFromSingleFile>false</ExcludeFromSingleFile>
+		</Content>
+		<Content Include="..\~docs\installer-guide\tampermonkey-setup.html" Link="tampermonkey-setup.html">
+			<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+			<CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+			<ExcludeFromSingleFile>false</ExcludeFromSingleFile>
+		</Content>
+		<Content Include="..\~docs\installer-guide\screenshots\**\*" Link="guide-screenshots\%(RecursiveDir)%(Filename)%(Extension)">
+			<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+			<CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+			<ExcludeFromSingleFile>false</ExcludeFromSingleFile>
+		</Content>
+	</ItemGroup>
+</Project>

@@ -30,7 +30,6 @@ public abstract class CreationAuditableEntity : ICreationAuditableEntity {
 	///
 	/// Values:
 	/// - "Browser" - Data synced from browser userscript
-	/// - "DesktopApp" - Data created in desktop application
 	/// - "System" - Data created by system processes
 	/// - User identifier - Specific user who created the record
 	/// </summary>

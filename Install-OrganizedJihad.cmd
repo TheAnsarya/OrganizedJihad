@@ -1,16 +1,19 @@
 @echo off
 setlocal
 
-set SCRIPT_DIR=%~dp0
-set SCRIPT_PATH=%SCRIPT_DIR%Install-OrganizedJihad.ps1
+set REPO_DIR=%~dp0
 
-if not exist "%SCRIPT_PATH%" (
-	echo [OJ Installer] Could not find Install-OrganizedJihad.ps1 next to this file.
+where dotnet >nul 2>&1
+if %errorlevel% neq 0 (
+	echo [OJ Installer] .NET SDK is required but dotnet was not found on PATH.
+	echo [OJ Installer] Install .NET SDK 10 and retry.
 	exit /b 1
 )
 
-pwsh -NoProfile -ExecutionPolicy Bypass -File "%SCRIPT_PATH%" %*
+pushd "%REPO_DIR%"
+dotnet run --project installer-core\OrganizedJihad.Installer.Cli -- --run-install-health-check %*
 set EXIT_CODE=%ERRORLEVEL%
+popd
 
 if not "%EXIT_CODE%"=="0" (
 	echo [OJ Installer] Failed with exit code %EXIT_CODE%.

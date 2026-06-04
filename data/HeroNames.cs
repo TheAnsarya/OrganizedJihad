@@ -7,7 +7,7 @@ namespace OrganizedJihad.Data;
 /// The Hero Wars API does not include hero names in API responses — names are
 /// resolved client-side via the game's translation system (LIB_HERO_NAME_{id}).
 /// This dictionary mirrors the mappings used by HeroWarsHelper (HWA) and is
-/// used by both the desktop app UI and the API layer to resolve "Hero_49" →
+/// used by API and userscript processing layers to resolve "Hero_49" →
 /// "Yasmine" etc.
 /// <para>
 /// Updated 2026-02-23 from HWA 3.3.3 reference data.

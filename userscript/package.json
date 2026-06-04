@@ -1,11 +1,11 @@
 {
 	"name": "organized-jihad",
-	"version": "0.9.102",
+	"version": "0.9.238",
 	"description": "TamperMonkey userscript for tracking Hero Wars game data with UI overlay",
 	"main": "dist/organized-jihad.user.js",
 	"type": "module",
 	"scripts": {
-		"build": "webpack --mode production",
+		"build": "webpack --mode production && node scripts/session-log-autogen.mjs",
 		"dev": "webpack --mode development --watch",
 		"dev:serve": "node serve-dev.cjs",
 		"lint": "eslint src/**/*.js",

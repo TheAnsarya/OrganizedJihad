@@ -13,10 +13,26 @@
       <PrivateAssets>all</PrivateAssets>
     </PackageReference>
     <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="9.0.10" />
+    <PackageReference Include="Serilog.AspNetCore" Version="9.0.0" />
+    <PackageReference Include="Serilog.Settings.Configuration" Version="9.0.0" />
+    <PackageReference Include="Serilog.Sinks.File" Version="6.0.0" />
   </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\data\OrganizedJihad.Data.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Content Include="Resources\UiTemplates\**\*.html">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+    </Content>
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Remove="OrganizedJihad.Api.TrayHost\**\*.cs" />
+    <EmbeddedResource Remove="OrganizedJihad.Api.TrayHost\**\*" />
+    <None Remove="OrganizedJihad.Api.TrayHost\**\*" />
   </ItemGroup>
 
 </Project>

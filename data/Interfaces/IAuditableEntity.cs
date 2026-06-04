@@ -30,7 +30,7 @@ public interface IAuditableEntity {
 	/// <summary>
 	/// Identifier of the user/system that created this record.
 	/// For browser sync: "Browser"
-	/// For desktop app: User identifier
+	/// For local/manual operations: User identifier
 	/// For system processes: "System"
 	/// </summary>
 	string? CreatedBy { get; set; }

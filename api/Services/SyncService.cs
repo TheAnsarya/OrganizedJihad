@@ -1,8 +1,10 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using OrganizedJihad.Api.Models;
+using OrganizedJihad.Api.Services.ProjectedItemCatalog;
 using OrganizedJihad.Api.Services.Simulation;
 using OrganizedJihad.Api.Services.TeamRecommendation;
+using OrganizedJihad.Api.Services.ToolCatalog;
 using OrganizedJihad.Data;
 using OrganizedJihad.Data.Models;
 using System;
@@ -31,43 +33,15 @@ namespace OrganizedJihad.Api.Services;
 /// - Transactions in EF Core: https://learn.microsoft.com/en-us/ef/core/saving/transactions
 /// </summary>
 public class SyncService {
-	private const string TeamRecommendationCalibrationMetadataKey = "team_recommendation_calibration_v1";
-	private const string TeamRecommendationTrendPreferencesMetadataKey = "team_recommendation_trend_preferences_v1";
 	private static readonly IReadOnlyList<int> SupportedCalibrationTrendWindowDays = [7, 30, 90];
-	private static readonly IReadOnlyDictionary<string, string> ProjectedItemCatalogAliases = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) {
-		["xp_potion_large"] = "xp_potion_l",
-		["xp_potion_medium"] = "xp_potion_m",
-		["xp_potion_small"] = "xp_potion_s",
-		["red_fragment"] = "item_red_fragment",
-		["orange_fragment"] = "item_orange_fragment",
-		["violet_fragment"] = "item_violet_fragment",
-		["green_fragment"] = "item_green_fragment",
-		["blue_fragment"] = "item_blue_fragment",
-		["gold"] = "gold_coin",
-		["coin_gold"] = "gold_coin",
-	};
-	private static readonly IReadOnlyList<ProjectedItemCatalogEntry> ProjectedItemCatalogSeed = [
-		new() { ItemId = "xp_potion_l", DisplayName = "Large XP Potion", Category = "consumable", Icon = "🧪" },
-		new() { ItemId = "xp_potion_m", DisplayName = "Medium XP Potion", Category = "consumable", Icon = "🧪" },
-		new() { ItemId = "xp_potion_s", DisplayName = "Small XP Potion", Category = "consumable", Icon = "🧪" },
-		new() { ItemId = "gold_coin", DisplayName = "Gold", Category = "resource", Icon = "🪙" },
-		new() { ItemId = "stamina_potion", DisplayName = "Stamina Potion", Category = "consumable", Icon = "🧪" },
-		new() { ItemId = "skin_stone", DisplayName = "Skin Stone", Category = "resource", Icon = "📦" },
-		new() { ItemId = "rune_stone", DisplayName = "Rune Stone", Category = "resource", Icon = "📦" },
-		new() { ItemId = "artifact_essence", DisplayName = "Artifact Essence", Category = "artifact", Icon = "🏺" },
-		new() { ItemId = "artifact_scroll", DisplayName = "Artifact Scroll", Category = "artifact", Icon = "🏺" },
-		new() { ItemId = "item_artifact_fragment", DisplayName = "Artifact Fragment", Category = "fragment", Icon = "🧩" },
-		new() { ItemId = "item_red_fragment", DisplayName = "Red Fragment", Category = "fragment", Icon = "🧩" },
-		new() { ItemId = "item_violet_fragment", DisplayName = "Violet Fragment", Category = "fragment", Icon = "🧩" },
-		new() { ItemId = "item_orange_fragment", DisplayName = "Orange Fragment", Category = "fragment", Icon = "🧩" },
-		new() { ItemId = "item_green_fragment", DisplayName = "Green Fragment", Category = "fragment", Icon = "🧩" },
-		new() { ItemId = "item_blue_fragment", DisplayName = "Blue Fragment", Category = "fragment", Icon = "🧩" },
-	];
 
 	private readonly IDbContextFactory<GameDatabaseContext> _contextFactory;
 	private readonly ILogger<SyncService> _logger;
 	private readonly IBattleSimulator _battleSimulator;
 	private readonly IReadOnlyList<IExternalRecommendationSignalProvider> _externalSignalProviders;
+	private readonly IProjectedItemCatalogProvider _projectedItemCatalogProvider;
+	private readonly IExternalToolCatalogProvider _externalToolCatalogProvider;
+	private readonly ITeamRecommendationStateStore _teamRecommendationStateStore;
 
 	/// <summary>
 	/// Initializes a new instance of the SyncService.
@@ -81,6 +55,72 @@ public class SyncService {
 		_logger = logger;
 		_battleSimulator = new MonteCarloBattleSimulator(new BaselineBattleFeatureExtractor());
 		_externalSignalProviders = [new CuratedToolCatalogSignalProvider()];
+		_projectedItemCatalogProvider = new SeededProjectedItemCatalogProvider();
+		_externalToolCatalogProvider = new CuratedExternalToolCatalogProvider();
+		_teamRecommendationStateStore = new TeamRecommendationSyncMetadataStateStore();
+	}
+
+	/// <summary>
+	/// Initializes a new instance of the SyncService with explicit catalog provider seams.
+	/// </summary>
+	/// <param name="contextFactory">Factory for creating database contexts</param>
+	/// <param name="logger">Logger for diagnostic information</param>
+	/// <param name="projectedItemCatalogProvider">Projected item catalog provider seam</param>
+	public SyncService(
+		IDbContextFactory<GameDatabaseContext> contextFactory,
+		ILogger<SyncService> logger,
+		IProjectedItemCatalogProvider projectedItemCatalogProvider) {
+		_contextFactory = contextFactory;
+		_logger = logger;
+		_battleSimulator = new MonteCarloBattleSimulator(new BaselineBattleFeatureExtractor());
+		_externalSignalProviders = [new CuratedToolCatalogSignalProvider()];
+		_projectedItemCatalogProvider = projectedItemCatalogProvider;
+		_externalToolCatalogProvider = new CuratedExternalToolCatalogProvider();
+		_teamRecommendationStateStore = new TeamRecommendationSyncMetadataStateStore();
+	}
+
+	/// <summary>
+	/// Initializes a new instance of the SyncService with explicit metadata provider seams.
+	/// </summary>
+	/// <param name="contextFactory">Factory for creating database contexts</param>
+	/// <param name="logger">Logger for diagnostic information</param>
+	/// <param name="projectedItemCatalogProvider">Projected item catalog provider seam</param>
+	/// <param name="externalToolCatalogProvider">External tool catalog provider seam</param>
+	public SyncService(
+		IDbContextFactory<GameDatabaseContext> contextFactory,
+		ILogger<SyncService> logger,
+		IProjectedItemCatalogProvider projectedItemCatalogProvider,
+		IExternalToolCatalogProvider externalToolCatalogProvider) {
+		_contextFactory = contextFactory;
+		_logger = logger;
+		_battleSimulator = new MonteCarloBattleSimulator(new BaselineBattleFeatureExtractor());
+		_externalSignalProviders = [new CuratedToolCatalogSignalProvider()];
+		_projectedItemCatalogProvider = projectedItemCatalogProvider;
+		_externalToolCatalogProvider = externalToolCatalogProvider;
+		_teamRecommendationStateStore = new TeamRecommendationSyncMetadataStateStore();
+	}
+
+	/// <summary>
+	/// Initializes a new instance of the SyncService with explicit Team Recommendation state-store seam.
+	/// </summary>
+	/// <param name="contextFactory">Factory for creating database contexts</param>
+	/// <param name="logger">Logger for diagnostic information</param>
+	/// <param name="projectedItemCatalogProvider">Projected item catalog provider seam</param>
+	/// <param name="externalToolCatalogProvider">External tool catalog provider seam</param>
+	/// <param name="teamRecommendationStateStore">Team Recommendation state persistence seam</param>
+	public SyncService(
+		IDbContextFactory<GameDatabaseContext> contextFactory,
+		ILogger<SyncService> logger,
+		IProjectedItemCatalogProvider projectedItemCatalogProvider,
+		IExternalToolCatalogProvider externalToolCatalogProvider,
+		ITeamRecommendationStateStore teamRecommendationStateStore) {
+		_contextFactory = contextFactory;
+		_logger = logger;
+		_battleSimulator = new MonteCarloBattleSimulator(new BaselineBattleFeatureExtractor());
+		_externalSignalProviders = [new CuratedToolCatalogSignalProvider()];
+		_projectedItemCatalogProvider = projectedItemCatalogProvider;
+		_externalToolCatalogProvider = externalToolCatalogProvider;
+		_teamRecommendationStateStore = teamRecommendationStateStore;
 	}
 
 	/// <summary>
@@ -1551,20 +1591,16 @@ public class SyncService {
 		int limit = 5) {
 		await using var context = await _contextFactory.CreateDbContextAsync();
 
-		var normalizedType = (battleType ?? "arena").Trim().ToLowerInvariant();
-		if (normalizedType != "arena" && normalizedType != "grandarena" && normalizedType != "titanarena") {
-			normalizedType = "arena";
-		}
-
-		powerWindow = Math.Clamp(powerWindow, 10000, 500000);
-		minSamples = Math.Clamp(minSamples, 1, 100);
-		limit = Math.Clamp(limit, 1, 20);
+		var normalizedType = BattleRecommendationMath.NormalizeBattleType(battleType);
+		powerWindow = BattleRecommendationMath.ResolvePowerWindow(powerWindow);
+		minSamples = BattleRecommendationMath.ResolveMinSamples(minSamples);
+		limit = BattleRecommendationMath.ResolveRecommendationLimit(limit);
 
 		var samples = normalizedType switch {
 			"grandarena" => await context.GrandArenaBattles
 				.AsNoTracking()
-				.Select(b => new BattleSample(
-					NormalizeTeamKey(b.AttackTeam),
+				.Select(b => new BattleRecommendationMath.TeamRecommendationBattleSample(
+					BattleRecommendationMath.NormalizeTeamKey(b.AttackTeam),
 					b.IsWin,
 					b.OpponentId,
 					b.OpponentPower,
@@ -1573,8 +1609,8 @@ public class SyncService {
 				.ToListAsync(),
 			"titanarena" => await context.TitanArenaBattles
 				.AsNoTracking()
-				.Select(b => new BattleSample(
-					NormalizeTeamKey(b.OurTitanTeam),
+				.Select(b => new BattleRecommendationMath.TeamRecommendationBattleSample(
+					BattleRecommendationMath.NormalizeTeamKey(b.OurTitanTeam),
 					b.IsWin,
 					b.OpponentId,
 					b.OpponentPower,
@@ -1583,8 +1619,8 @@ public class SyncService {
 				.ToListAsync(),
 			_ => await context.ArenaBattles
 				.AsNoTracking()
-				.Select(b => new BattleSample(
-					NormalizeTeamKey(b.OurTeam),
+				.Select(b => new BattleRecommendationMath.TeamRecommendationBattleSample(
+					BattleRecommendationMath.NormalizeTeamKey(b.OurTeam),
 					b.IsWin,
 					b.OpponentId,
 					b.OpponentPower,
@@ -1593,88 +1629,12 @@ public class SyncService {
 				.ToListAsync(),
 		};
 
-		if (opponentId.HasValue) {
-			samples = samples
-				.Where(s => s.OpponentId == opponentId.Value)
-				.ToList();
-		}
-
-		if (opponentPower.HasValue) {
-			var minPower = Math.Max(0, opponentPower.Value - powerWindow);
-			var maxPower = opponentPower.Value + powerWindow;
-			samples = samples
-				.Where(s => s.OpponentPower >= minPower && s.OpponentPower <= maxPower)
-				.ToList();
-		}
-
+		samples = BattleRecommendationMath.ApplyOpponentFilters(samples, opponentId, opponentPower, powerWindow);
 		var sampleCount = samples.Count;
-		var baselineWinRate = sampleCount == 0
-			? 0d
-			: (double)samples.Count(s => s.IsWin) / sampleCount;
+		var baselineWinRate = BattleRecommendationMath.ComputeBaselineWinRate(samples);
 
 		var now = DateTime.UtcNow;
-		var recommendations = samples
-			.Where(s => !string.IsNullOrWhiteSpace(s.TeamKey) && s.TeamKey != "[unknown]")
-			.GroupBy(s => s.TeamKey)
-			.Select(group => {
-				var groupSamples = group.ToList();
-				var battles = groupSamples.Count;
-				var wins = groupSamples.Count(s => s.IsWin);
-				var losses = battles - wins;
-				var winRate = battles == 0 ? 0d : (double)wins / battles;
-
-				var weightedSamples = groupSamples.Select(s => {
-					var ageDays = Math.Max(0d, (now - s.Timestamp).TotalDays);
-					var weight = Math.Exp(-ageDays / 30d);
-					return new { sample = s, weight };
-				}).ToList();
-
-				var totalWeight = weightedSamples.Sum(x => x.weight);
-				var weightedWins = weightedSamples
-					.Where(x => x.sample.IsWin)
-					.Sum(x => x.weight);
-				var weightedWinRate = totalWeight <= 0d ? 0d : weightedWins / totalWeight;
-
-				var confidence = Math.Min(1d, battles / 20d);
-
-				var avgOpponentPower = (int)Math.Round(groupSamples.Average(s => s.OpponentPower));
-				var lastSeen = groupSamples.Max(s => s.Timestamp);
-
-				var simulation = _battleSimulator.Simulate(new BattleSimulationInput {
-					BattleType = normalizedType,
-					HistoricalWinRate = winRate,
-					WeightedWinRate = weightedWinRate,
-					SampleCount = battles,
-					TeamPower = avgOpponentPower,
-					OpponentPower = opponentPower ?? avgOpponentPower,
-				}, runs: 2000);
-
-				var score = (simulation.EstimatedWinProbability * 0.75d) + (confidence * 0.25d);
-
-				return new BattleRecommendationCandidate {
-					TeamKey = group.Key,
-					TeamPreview = BuildTeamPreview(group.Key),
-					Battles = battles,
-					Wins = wins,
-					Losses = losses,
-					WinRate = Math.Round(winRate, 4),
-					WeightedWinRate = Math.Round(weightedWinRate, 4),
-					Confidence = Math.Round(confidence, 4),
-					Score = Math.Round(score, 4),
-					SimulatedWinProbability = Math.Round(simulation.EstimatedWinProbability, 4),
-					SimulationRuns = simulation.Runs,
-					SimulationConfidenceLow = Math.Round(simulation.ConfidenceLow, 4),
-					SimulationConfidenceHigh = Math.Round(simulation.ConfidenceHigh, 4),
-					AverageOpponentPower = avgOpponentPower,
-					LastSeen = lastSeen,
-					Rationale = $"{wins}/{battles} wins, weighted {weightedWinRate:P1}, simulated {simulation.EstimatedWinProbability:P1}, confidence {confidence:P0}"
-				};
-			})
-			.Where(r => r.Battles >= minSamples)
-			.OrderByDescending(r => r.Score)
-			.ThenByDescending(r => r.Battles)
-			.Take(limit)
-			.ToList();
+		var recommendations = BattleRecommendationMath.BuildCandidates(samples, normalizedType, _battleSimulator, opponentPower, minSamples, limit, now);
 
 		return new BattleRecommendationResponse {
 			BattleType = normalizedType,
@@ -1700,12 +1660,12 @@ public class SyncService {
 		int minSamples = 2,
 		int? preferredTrendWindowDays = null
 	) {
-		var normalizedMode = NormalizeTeamRecommendationMode(mode);
-		var normalizedObjective = NormalizeTeamObjective(objective);
+		var normalizedMode = TeamRecommendationOrchestrationMath.NormalizeMode(mode);
+		var normalizedObjective = TeamRecommendationOrchestrationMath.NormalizeObjective(objective);
 		var profile = TeamRecommendationProfileCatalog.Resolve(normalizedMode, normalizedObjective);
-		var externalSignals = GetExternalSignals(normalizedMode, normalizedObjective);
+		var externalSignals = TeamRecommendationOrchestrationMath.GetExternalSignals(_externalSignalProviders, normalizedMode, normalizedObjective);
 		var externalModeWeight = CuratedToolCatalogSignalProvider.GetModeExternalSignalWeight(normalizedMode);
-		var safeLimit = Math.Clamp(limit, 1, 10);
+		var safeLimit = TeamRecommendationOrchestrationMath.ResolveRecommendationLimit(limit);
 
 		await using var context = await _contextFactory.CreateDbContextAsync();
 
@@ -1780,8 +1740,15 @@ public class SyncService {
 		}
 
 		var latestInventory = await latestInventoryQuery.FirstOrDefaultAsync();
-		var resourcePressure = ComputeResourcePressureScore(latestSnapshot, latestInventory);
-		var calibrationScale = await GetModeFrictionCalibrationScaleAsync(context, normalizedMode, preferredTrendWindowDays);
+		var resourcePressure = TeamRecommendationScoringMath.ComputeResourcePressureScore(latestSnapshot, latestInventory);
+		var calibrationScale = await TeamRecommendationOrchestrationMath.ResolveModeFrictionCalibrationScaleAsync(
+			_teamRecommendationStateStore,
+			context,
+			normalizedMode,
+			normalizedObjective,
+			preferredTrendWindowDays,
+			SupportedCalibrationTrendWindowDays
+		);
 
 		var heroNameSet = latestHeroes
 			.Select(h => h.HeroName)
@@ -1801,13 +1768,13 @@ public class SyncService {
 			);
 
 			foreach (var rec in historical.Recommendations) {
-				var readiness = ComputeReadinessFromTeamPreview(rec.TeamPreview, heroNameSet);
+				var readiness = TeamRecommendationScoringMath.ComputeReadinessFromTeamPreview(rec.TeamPreview, heroNameSet);
 				var confidence = Math.Clamp((rec.Confidence + rec.SimulationConfidenceHigh - rec.SimulationConfidenceLow) / 2d, 0d, 1d);
-				var baseScore = ComputeFinalTeamScore(rec.SimulatedWinProbability, readiness, confidence, profile);
+				var baseScore = TeamRecommendationScoringMath.ComputeFinalTeamScore(rec.SimulatedWinProbability, readiness, confidence, profile);
 				var sourceScale = 0.70;
-				var frictionPenalty = ComputeRosterFrictionPenalty(resourcePressure, readiness, normalizedMode, normalizedObjective, sourceScale, calibrationScale);
+				var frictionPenalty = TeamRecommendationScoringMath.ComputeRosterFrictionPenalty(resourcePressure, readiness, normalizedMode, normalizedObjective, sourceScale, calibrationScale);
 				var frictionAdjustedScore = Math.Clamp(baseScore - frictionPenalty, 0d, 1d);
-				var finalScore = ApplyExternalSignalBonus(frictionAdjustedScore, externalSignals, externalModeWeight, sourceScale);
+				var finalScore = TeamRecommendationScoringMath.ApplyExternalSignalBonus(frictionAdjustedScore, externalSignals, externalModeWeight, sourceScale);
 
 				cards.Add(new TeamRecommendationCard {
 					Source = "history",
@@ -1819,12 +1786,12 @@ public class SyncService {
 					ConfidenceScore = confidence,
 					FinalScore = finalScore,
 					Rationale = $"Historical {normalizedMode} sample with simulator estimate {(rec.SimulatedWinProbability * 100):F1}% and readiness {(readiness * 100):F0}%; resource friction penalty {(frictionPenalty * 100):F1}%.",
-					Provenance = BuildProvenance("history", profile, rec.SimulatedWinProbability, readiness, confidence, baseScore, frictionAdjustedScore, finalScore, sourceScale, frictionPenalty, resourcePressure, calibrationScale, externalModeWeight, externalSignals),
+					Provenance = TeamRecommendationScoringMath.BuildProvenance("history", profile, rec.SimulatedWinProbability, readiness, confidence, baseScore, frictionAdjustedScore, finalScore, sourceScale, frictionPenalty, resourcePressure, calibrationScale, externalModeWeight, externalSignals),
 				});
 			}
 		}
 
-		var syntheticCards = BuildSyntheticRecommendationCards(
+		var syntheticCards = TeamRecommendationScoringMath.BuildSyntheticRecommendationCards(
 			normalizedMode,
 			normalizedObjective,
 			profile,
@@ -1866,18 +1833,198 @@ public class SyncService {
 	}
 
 	/// <summary>
+	/// Returns Arena-first integrated recommendation and simulation payload for userscript consumers.
+	/// </summary>
+	public async Task<ArenaTeamRecommendationSimulationResponse> GetArenaTeamRecommendationSimulationAsync(
+		string objective = "balanced",
+		int limit = 3,
+		int minSamples = 2,
+		long? opponentId = null,
+		int? opponentPower = null,
+		int powerWindow = 100000,
+		int? preferredTrendWindowDays = null
+	) {
+		var normalizedObjective = TeamRecommendationOrchestrationMath.NormalizeObjective(objective);
+		var safeLimit = TeamRecommendationOrchestrationMath.ResolveRecommendationLimit(limit);
+		var safeMinSamples = Math.Max(1, minSamples);
+
+		var history = await GetBattleRecommendationsAsync(
+			battleType: "arena",
+			opponentId: opponentId,
+			opponentPower: opponentPower,
+			powerWindow: powerWindow,
+			minSamples: safeMinSamples,
+			limit: safeLimit
+		);
+
+		var engine = await GetTeamRecommendationsAsync(
+			mode: "arena",
+			objective: normalizedObjective,
+			limit: safeLimit,
+			minSamples: safeMinSamples,
+			preferredTrendWindowDays: preferredTrendWindowDays
+		);
+
+		await using var context = await _contextFactory.CreateDbContextAsync();
+
+		var latestSnapshot = await context.PlayerSnapshots
+			.AsNoTracking()
+			.OrderByDescending(s => s.Timestamp)
+			.FirstOrDefaultAsync();
+
+		var rosterPlayerId = latestSnapshot?.PlayerId;
+		if (!rosterPlayerId.HasValue) {
+			rosterPlayerId = await context.Heroes
+				.AsNoTracking()
+				.OrderByDescending(h => h.Timestamp)
+				.Select(h => (long?)h.PlayerId)
+				.FirstOrDefaultAsync();
+		}
+
+		var heroQuery = context.Heroes
+			.AsNoTracking()
+			.OrderByDescending(h => h.Timestamp)
+			.Take(3000);
+
+		if (rosterPlayerId.HasValue) {
+			heroQuery = heroQuery
+				.Where(h => h.PlayerId == rosterPlayerId.Value)
+				.OrderByDescending(h => h.Timestamp)
+				.Take(3000);
+		}
+
+		var latestHeroes = await heroQuery.ToListAsync();
+		var heroPowerByName = latestHeroes
+			.Where(h => !string.IsNullOrWhiteSpace(h.HeroName))
+			.GroupBy(h => h.HeroName!, StringComparer.OrdinalIgnoreCase)
+			.ToDictionary(
+				g => g.Key,
+				g => g.OrderByDescending(x => x.Timestamp).ThenByDescending(x => x.Power).First().Power,
+				StringComparer.OrdinalIgnoreCase
+			);
+
+		var inferredOpponentPower = opponentPower
+			?? history.OpponentPower
+			?? ResolveAverageOpponentPower(history.Recommendations)
+			?? latestSnapshot?.TeamPower
+			?? 100000;
+
+		var cards = new List<TeamRecommendationCard>();
+		var historyCardsCount = 0;
+		var engineCardsCount = 0;
+
+		foreach (var rec in history.Recommendations) {
+			var simulation = _battleSimulator.Simulate(new BattleSimulationInput {
+				BattleType = "arena",
+				HistoricalWinRate = Math.Clamp(rec.WinRate, 0d, 1d),
+				WeightedWinRate = Math.Clamp(rec.WeightedWinRate, 0d, 1d),
+				SampleCount = Math.Max(1, rec.Battles),
+				TeamPower = Math.Max(1, EstimateTeamPowerFromPreview(rec.TeamPreview, heroPowerByName)),
+				OpponentPower = Math.Max(1, inferredOpponentPower),
+			}, runs: 1400);
+
+			cards.Add(new TeamRecommendationCard {
+				Source = "history",
+				TeamPreview = rec.TeamPreview,
+				ContextTag = normalizedObjective,
+				ModeProfile = "arena-history-sim",
+				EstimatedWinProbability = Math.Round(Math.Clamp(rec.SimulatedWinProbability, 0d, 1d), 6),
+				ReadinessScore = 0.5d,
+				ConfidenceScore = Math.Round(Math.Clamp(rec.Confidence, 0d, 1d), 6),
+				FinalScore = Math.Round(Math.Clamp(rec.Score, 0d, 1d), 6),
+				SimulatedWinProbability = Math.Round(Math.Clamp(simulation.EstimatedWinProbability, 0d, 1d), 6),
+				SimulationConfidenceLow = Math.Round(Math.Clamp(simulation.ConfidenceLow, 0d, 1d), 6),
+				SimulationConfidenceHigh = Math.Round(Math.Clamp(simulation.ConfidenceHigh, 0d, 1d), 6),
+				SimulationRuns = simulation.Runs,
+				TeamPowerEstimate = EstimateTeamPowerFromPreview(rec.TeamPreview, heroPowerByName),
+				OpponentPowerUsed = inferredOpponentPower,
+				Rationale = string.IsNullOrWhiteSpace(rec.Rationale)
+					? $"Arena historical recommendation with {rec.Battles} samples, simulation refreshed against target power {inferredOpponentPower:N0}."
+					: rec.Rationale,
+			});
+			historyCardsCount++;
+		}
+
+		foreach (var rec in engine.Recommendations) {
+			var estimated = Math.Clamp(rec.EstimatedWinProbability, 0d, 1d);
+			var simulation = _battleSimulator.Simulate(new BattleSimulationInput {
+				BattleType = "arena",
+				HistoricalWinRate = estimated,
+				WeightedWinRate = estimated,
+				SampleCount = Math.Max(1, safeMinSamples),
+				TeamPower = Math.Max(1, EstimateTeamPowerFromPreview(rec.TeamPreview, heroPowerByName)),
+				OpponentPower = Math.Max(1, inferredOpponentPower),
+			}, runs: 1400);
+
+			cards.Add(new TeamRecommendationCard {
+				Source = "engine",
+				TeamPreview = rec.TeamPreview,
+				ContextTag = rec.ContextTag,
+				ModeProfile = rec.ModeProfile,
+				EstimatedWinProbability = Math.Round(estimated, 6),
+				ReadinessScore = Math.Round(Math.Clamp(rec.ReadinessScore, 0d, 1d), 6),
+				ConfidenceScore = Math.Round(Math.Clamp(rec.ConfidenceScore, 0d, 1d), 6),
+				FinalScore = Math.Round(Math.Clamp(rec.FinalScore, 0d, 1d), 6),
+				SimulatedWinProbability = Math.Round(Math.Clamp(simulation.EstimatedWinProbability, 0d, 1d), 6),
+				SimulationConfidenceLow = Math.Round(Math.Clamp(simulation.ConfidenceLow, 0d, 1d), 6),
+				SimulationConfidenceHigh = Math.Round(Math.Clamp(simulation.ConfidenceHigh, 0d, 1d), 6),
+				SimulationRuns = simulation.Runs,
+				TeamPowerEstimate = EstimateTeamPowerFromPreview(rec.TeamPreview, heroPowerByName),
+				OpponentPowerUsed = inferredOpponentPower,
+				Rationale = string.IsNullOrWhiteSpace(rec.Rationale)
+					? $"Arena engine recommendation simulated against target power {inferredOpponentPower:N0}."
+					: rec.Rationale,
+				Provenance = rec.Provenance,
+			});
+			engineCardsCount++;
+		}
+
+		var merged = cards
+			.Where(c => !string.IsNullOrWhiteSpace(c.TeamPreview))
+			.GroupBy(c => c.TeamPreview, StringComparer.OrdinalIgnoreCase)
+			.Select(g => g.OrderByDescending(card => card.FinalScore)
+				.ThenByDescending(card => card.SimulatedWinProbability ?? card.EstimatedWinProbability)
+				.First())
+			.OrderByDescending(card => card.FinalScore)
+			.ThenByDescending(card => card.SimulatedWinProbability ?? card.EstimatedWinProbability)
+			.Take(safeLimit)
+			.ToList();
+
+		return new ArenaTeamRecommendationSimulationResponse {
+			Mode = "arena",
+			Objective = normalizedObjective,
+			OpponentId = opponentId,
+			OpponentPower = opponentPower,
+			OpponentPowerUsed = inferredOpponentPower,
+			PowerWindow = history.PowerWindow,
+			MinSamples = history.MinSamples,
+			Limit = safeLimit,
+			HistorySampleCount = history.SampleCount,
+			HistoryRecommendationCount = historyCardsCount,
+			EngineRecommendationCount = engineCardsCount,
+			Recommendations = merged,
+			Note = historyCardsCount == 0 && engineCardsCount > 0
+				? "Sparse historical arena data; using engine-backed simulated recommendations."
+				: merged.Count == 0
+					? "No recommendation candidates available yet. Play more arena battles to train recommendations."
+					: null,
+			GeneratedAtUtc = DateTime.UtcNow,
+		};
+	}
+
+	/// <summary>
 	/// Returns metadata for Team Recommendation Engine mode/objective profiles.
 	/// </summary>
 	public async Task<TeamRecommendationProfileMetadataResponse> GetTeamRecommendationProfileMetadataAsync() {
 		await using var context = await _contextFactory.CreateDbContextAsync();
-		var preferenceState = await LoadTeamRecommendationTrendPreferenceStateAsync(context);
+		var preferenceState = await _teamRecommendationStateStore.LoadTrendPreferenceStateAsync(context);
 
 		var modes = TeamRecommendationProfileCatalog.BuildModeOptions()
 			.Select(option => new TeamRecommendationModeOption {
 				Value = option.Value,
 				Label = option.Label,
 				PreferredTrendWindowDays = TeamRecommendationCalibrationStateMath.ResolveModePreferredTrendWindowDays(option.Value, preferenceState, SupportedCalibrationTrendWindowDays),
-				IsUserPreference = preferenceState.ModeTrendWindowDays.ContainsKey(option.Value),
+				IsUserPreference = TeamRecommendationCalibrationStateMath.HasModeTrendPreference(option.Value, preferenceState),
 				SupportedTrendWindowDays = [.. SupportedCalibrationTrendWindowDays],
 			})
 			.ToList();
@@ -1927,7 +2074,7 @@ public class SyncService {
 	/// </summary>
 	public async Task<TeamRecommendationTrendPreferenceResponse> GetTeamRecommendationTrendPreferencesAsync() {
 		await using var context = await _contextFactory.CreateDbContextAsync();
-		var preferenceState = await LoadTeamRecommendationTrendPreferenceStateAsync(context);
+		var preferenceState = await _teamRecommendationStateStore.LoadTrendPreferenceStateAsync(context);
 
 		var modes = TeamRecommendationProfileCatalog.SupportedModes
 			.Select(mode => new TeamRecommendationModeTrendPreference {
@@ -1948,18 +2095,16 @@ public class SyncService {
 	/// Saves a preferred Team Recommendation trend window for a mode.
 	/// </summary>
 	public async Task<TeamRecommendationTrendPreferenceResponse> SetTeamRecommendationTrendPreferenceAsync(string mode, int preferredTrendWindowDays) {
-		var normalizedMode = NormalizeTeamRecommendationMode(mode);
-		if (!TeamRecommendationCalibrationStateMath.IsSupportedCalibrationTrendWindow(preferredTrendWindowDays, SupportedCalibrationTrendWindowDays)) {
-			throw new ArgumentOutOfRangeException(nameof(preferredTrendWindowDays), "Supported values: 7, 30, 90.");
+		if (!TeamRecommendationModeNormalization.IsKnownMode(mode)) {
+			throw new ArgumentException("Unknown mode. Use a supported mode or alias.", nameof(mode));
 		}
 
 		await using var context = await _contextFactory.CreateDbContextAsync();
-		var preferenceState = await LoadTeamRecommendationTrendPreferenceStateAsync(context);
-		preferenceState.ModeTrendWindowDays[normalizedMode] = preferredTrendWindowDays;
+		var preferenceState = await _teamRecommendationStateStore.LoadTrendPreferenceStateAsync(context);
+		TeamRecommendationCalibrationStateMath.SetModeTrendPreference(preferenceState, mode, preferredTrendWindowDays, SupportedCalibrationTrendWindowDays);
 		preferenceState.UpdatedAtUtc = DateTime.UtcNow;
 
-		var serialized = JsonSerializer.Serialize(preferenceState);
-		await UpdateSyncMetadataAsync(context, TeamRecommendationTrendPreferencesMetadataKey, serialized);
+		await _teamRecommendationStateStore.SaveTrendPreferenceStateAsync(context, preferenceState);
 
 		return await GetTeamRecommendationTrendPreferencesAsync();
 	}
@@ -1975,10 +2120,10 @@ public class SyncService {
 		int limit = 3,
 		int minSamples = 2
 	) {
-		var normalizedMode = NormalizeTeamRecommendationMode(mode);
-		var normalizedObjective = NormalizeTeamObjective(objective);
+		var normalizedMode = TeamRecommendationOrchestrationMath.NormalizeMode(mode);
+		var normalizedObjective = TeamRecommendationOrchestrationMath.NormalizeObjective(objective);
 		var safeLookbackDays = Math.Clamp(lookbackDays, 1, 120);
-		var safeLimit = Math.Clamp(limit, 1, 10);
+		var safeLimit = TeamRecommendationOrchestrationMath.ResolveRecommendationLimit(limit);
 
 		if (normalizedMode is not ("arena" or "grandarena")) {
 			return new TeamRecommendationBacktestResponse {
@@ -2019,7 +2164,7 @@ public class SyncService {
 
 		var grouped = historicalSamples
 			.Select(sample => new {
-				NormalizedKey = NormalizeTeamSignature(sample.TeamKey),
+				NormalizedKey = TeamRecommendationScoringMath.NormalizeTeamSignature(sample.TeamKey),
 				sample.IsWin,
 			})
 			.Where(sample => !string.IsNullOrWhiteSpace(sample.NormalizedKey))
@@ -2028,7 +2173,7 @@ public class SyncService {
 
 		var cards = new List<TeamRecommendationBacktestCard>();
 		foreach (var rec in recommendations.Recommendations) {
-			var normalizedPreview = NormalizeTeamSignature(rec.TeamPreview);
+			var normalizedPreview = TeamRecommendationScoringMath.NormalizeTeamSignature(rec.TeamPreview);
 			grouped.TryGetValue(normalizedPreview, out var matches);
 			var matchedSamples = matches?.Count ?? 0;
 
@@ -2102,7 +2247,12 @@ public class SyncService {
 			GeneratedAtUtc = DateTime.UtcNow,
 		};
 
-		await UpdateTeamRecommendationCalibrationStateAsync(context, response);
+		await TeamRecommendationOrchestrationMath.UpdateCalibrationStateAsync(
+			_teamRecommendationStateStore,
+			context,
+			response,
+			SupportedCalibrationTrendWindowDays
+		);
 		return response;
 	}
 
@@ -2110,10 +2260,10 @@ public class SyncService {
 	/// Returns current calibration state and suggested friction scale for a mode.
 	/// </summary>
 	public async Task<TeamRecommendationCalibrationResponse> GetTeamRecommendationCalibrationAsync(string mode = "arena", int? preferredTrendWindowDays = null) {
-		var normalizedMode = NormalizeTeamRecommendationMode(mode);
+		var normalizedMode = TeamRecommendationOrchestrationMath.NormalizeMode(mode);
 		await using var context = await _contextFactory.CreateDbContextAsync();
-		var state = await LoadTeamRecommendationCalibrationStateAsync(context);
-		var preferenceState = await LoadTeamRecommendationTrendPreferenceStateAsync(context);
+		var state = await _teamRecommendationStateStore.LoadCalibrationStateAsync(context);
+		var preferenceState = await _teamRecommendationStateStore.LoadTrendPreferenceStateAsync(context);
 
 		if (!state.Modes.TryGetValue(normalizedMode, out var modeState)) {
 			modeState = new TeamRecommendationCalibrationModeState();
@@ -2127,7 +2277,7 @@ public class SyncService {
 			Mode = normalizedMode,
 			PreferredTrendWindowDays = resolvedTrendWindowDays,
 			SupportedTrendWindowDays = [.. SupportedCalibrationTrendWindowDays],
-			SuggestedFrictionScale = Math.Round(TeamRecommendationCalibrationStateMath.ResolveSuggestedScaleFromModeState(modeState, resolvedTrendWindowDays, nowUtc), 6),
+			SuggestedFrictionScale = Math.Round(TeamRecommendationCalibrationStateMath.ResolveSuggestedScaleFromModeState(modeState, resolvedTrendWindowDays, modeState.LastObjective, nowUtc), 6),
 			MeanAbsoluteError = Math.Round(Math.Clamp(modeState.MeanAbsoluteError, 0d, 1d), 6),
 			MeanBrierScore = Math.Round(Math.Clamp(modeState.MeanBrierScore, 0d, 1d), 6),
 			PredictionBias = Math.Round(Math.Clamp(modeState.PredictionBias, -1d, 1d), 6),
@@ -2137,6 +2287,105 @@ public class SyncService {
 			GeneratedAtUtc = nowUtc,
 			TrendWindows = trendWindows,
 		};
+	}
+
+	/// <summary>
+	/// Returns a compact per-mode operations summary derived from calibration state.
+	/// </summary>
+	public async Task<TeamRecommendationOperationsSummaryResponse> GetTeamRecommendationOperationsSummaryAsync(int? preferredTrendWindowDays = null) {
+		var generatedAtUtc = DateTime.UtcNow;
+		var effectiveTrendWindowDays = preferredTrendWindowDays is 7 or 30 or 90
+			? preferredTrendWindowDays.Value
+			: 30;
+
+		var modes = new List<TeamRecommendationModeOperationsSummary>();
+		foreach (var mode in TeamRecommendationProfileCatalog.SupportedModes) {
+			var calibration = await GetTeamRecommendationCalibrationAsync(mode, effectiveTrendWindowDays);
+			var isStale = !calibration.LastUpdatedUtc.HasValue
+				|| (generatedAtUtc - calibration.LastUpdatedUtc.Value).TotalDays > 7;
+			var (healthStatus, healthLabel) = ResolveOperationsHealthState(
+				calibration.MeanAbsoluteError,
+				calibration.MeanBrierScore,
+				isStale
+			);
+
+			modes.Add(new TeamRecommendationModeOperationsSummary {
+				Mode = calibration.Mode,
+				SuggestedFrictionScale = calibration.SuggestedFrictionScale,
+				MeanAbsoluteError = calibration.MeanAbsoluteError,
+				MeanBrierScore = calibration.MeanBrierScore,
+				PredictionBias = calibration.PredictionBias,
+				Samples = calibration.Samples,
+				IsStale = isStale,
+				HealthStatus = healthStatus,
+				HealthLabel = healthLabel,
+				LastUpdatedUtc = calibration.LastUpdatedUtc,
+			});
+		}
+
+		return new TeamRecommendationOperationsSummaryResponse {
+			PreferredTrendWindowDays = effectiveTrendWindowDays,
+			Modes = modes,
+			GeneratedAtUtc = generatedAtUtc,
+		};
+	}
+
+	private static (string Status, string Label) ResolveOperationsHealthState(double mae, double brier, bool isStale) {
+		if (isStale) {
+			return ("stale", "Stale");
+		}
+
+		if (mae > 0.22 || brier > 0.28) {
+			return ("monitor", "Needs Attention");
+		}
+
+		return ("healthy", "Healthy");
+	}
+
+	private static int EstimateTeamPowerFromPreview(string? teamPreview, IReadOnlyDictionary<string, int> heroPowerByName) {
+		var names = ParseTeamPreviewNames(teamPreview);
+		if (names.Count == 0) {
+			return 100000;
+		}
+
+		var total = 0;
+		foreach (var name in names) {
+			if (heroPowerByName.TryGetValue(name, out var power)) {
+				total += power;
+			}
+		}
+
+		if (total <= 0) {
+			return Math.Max(100000, names.Count * 18000);
+		}
+
+		return total;
+	}
+
+	private static List<string> ParseTeamPreviewNames(string? teamPreview) {
+		if (string.IsNullOrWhiteSpace(teamPreview)) {
+			return [];
+		}
+
+		return teamPreview
+			.Split([',', '|', ';', '/'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+			.Where(token => !string.IsNullOrWhiteSpace(token))
+			.Select(token => token.Trim())
+			.Distinct(StringComparer.OrdinalIgnoreCase)
+			.ToList();
+	}
+
+	private static int? ResolveAverageOpponentPower(IReadOnlyList<BattleRecommendationCandidate> recommendations) {
+		var values = recommendations
+			.Select(r => r.AverageOpponentPower)
+			.Where(v => v > 0)
+			.ToList();
+
+		if (values.Count == 0) {
+			return null;
+		}
+
+		return (int)Math.Round(values.Average());
 	}
 
 	/// <summary>
@@ -2150,871 +2399,22 @@ public class SyncService {
 		string? verificationStatus = null,
 		string? sort = null
 	) {
-		var reviewedAtRecent = new DateTime(2026, 5, 26, 0, 0, 0, DateTimeKind.Utc);
-		var reviewedAtStale = new DateTime(2025, 12, 1, 0, 0, 0, DateTimeKind.Utc);
-
-		var tools = new List<ToolCatalogEntry> {
-			new ToolCatalogEntry {
-				Name = "Hero Wars Simulator (Chrome Extension)",
-				Url = "https://chromewebstore.google.com/detail/hero-wars-simulator/oolajlfdlkcekemoilmmhkajgneokggb",
-				Category = "simulator",
-				Capabilities = "Battle calculation/simulation for arena, guild war, raid, and cross-server contexts.",
-				Caveats = "Third-party service; treat as reference only. Do not copy proprietary implementation code.",
-				LastReviewedUtc = reviewedAtRecent,
-				ConfidenceScore = 0.80,
-			},
-			new ToolCatalogEntry {
-				Name = "HW-Simulator",
-				Url = "https://www.hw-simulator.com/",
-				Category = "simulator",
-				Capabilities = "Simulator-focused site with extension ecosystem and feature plans.",
-				Caveats = "Backend-dependent tool; availability and assumptions may change.",
-				LastReviewedUtc = reviewedAtRecent,
-				ConfidenceScore = 0.76,
-			},
-			new ToolCatalogEntry {
-				Name = "HW Assistant",
-				Url = "https://hw-assist.com/",
-				Category = "extension",
-				Capabilities = "Automation/assistant extension with logs and workflow helpers.",
-				Caveats = "Automation tooling may conflict with personal policy/risk tolerance.",
-				LastReviewedUtc = reviewedAtRecent,
-				ConfidenceScore = 0.70,
-			},
-			new ToolCatalogEntry {
-				Name = "Hero Wars Hub",
-				Url = "https://herowarshub.com/",
-				Category = "calculator",
-				Capabilities = "Tooling and guides including Mysterious Island simulator resources.",
-				Caveats = "Community-maintained content; verify against current game patches.",
-				LastReviewedUtc = reviewedAtRecent,
-				ConfidenceScore = 0.74,
-			},
-			new ToolCatalogEntry {
-				Name = "Hero Wars Calculator Hub",
-				Url = "https://www.hwcalculator.com/",
-				Category = "calculator",
-				Capabilities = "Resource planning calculators for evolution, artifacts, and upgrades.",
-				Caveats = "Treat outputs as planning aids; cross-check in-game values before committing resources.",
-				LastReviewedUtc = reviewedAtRecent,
-				ConfidenceScore = 0.78,
-			},
-			new ToolCatalogEntry {
-				Name = "Hero Wars Central",
-				Url = "https://www.herowarscentral.com/",
-				Category = "guides",
-				Capabilities = "Event guides, team suggestions, and strategy writeups.",
-				Caveats = "Content opinions vary; use as directional signal with local telemetry confirmation.",
-				LastReviewedUtc = reviewedAtStale,
-				ConfidenceScore = 0.72,
-			},
-		};
-
-		var now = DateTime.UtcNow;
-		foreach (var tool in tools) {
-			tool.VerificationStatus = ComputeVerificationStatus(tool, now);
-		}
-
-		if (minConfidence.HasValue) {
-			var threshold = Math.Clamp(minConfidence.Value, 0d, 1d);
-			tools = tools.Where(t => t.ConfidenceScore >= threshold).ToList();
-		}
-
-		if (!includeStale) {
-			tools = tools.Where(t => !string.Equals(t.VerificationStatus, "stale", StringComparison.OrdinalIgnoreCase)).ToList();
-		}
-
-		if (!string.IsNullOrWhiteSpace(category)) {
-			var categoryFilter = category.Trim();
-			tools = tools.Where(t => string.Equals(t.Category, categoryFilter, StringComparison.OrdinalIgnoreCase)).ToList();
-		}
-
-		if (!string.IsNullOrWhiteSpace(verificationStatus)) {
-			var statusFilter = verificationStatus.Trim();
-			tools = tools.Where(t => string.Equals(t.VerificationStatus, statusFilter, StringComparison.OrdinalIgnoreCase)).ToList();
-		}
-
-		var normalizedSort = (sort ?? "confidence").Trim().ToLowerInvariant();
-		tools = normalizedSort switch {
-			"name" => tools.OrderBy(t => t.Name).ToList(),
-			"reviewed" => tools.OrderByDescending(t => t.LastReviewedUtc).ToList(),
-			_ => tools.OrderByDescending(t => t.ConfidenceScore).ThenBy(t => t.Name).ToList(),
-		};
-
-		return new ToolCatalogResponse {
-			GeneratedAtUtc = now,
-			Tools = tools,
-		};
+		return _externalToolCatalogProvider.BuildCatalog(minConfidence, includeStale, category, verificationStatus, sort);
 	}
 
 	/// <summary>
 	/// Returns supported filter/sort metadata for the external tool catalog endpoint.
 	/// </summary>
 	public ToolCatalogFilterMetadataResponse GetExternalToolCatalogFilterMetadata() {
-		var now = DateTime.UtcNow;
-		var catalog = GetExternalToolCatalog(includeStale: true, sort: "name");
-
-		var categories = catalog.Tools
-			.Select(t => t.Category)
-			.Where(c => !string.IsNullOrWhiteSpace(c))
-			.Distinct(StringComparer.OrdinalIgnoreCase)
-			.OrderBy(c => c)
-			.ToList();
-
-		var statuses = catalog.Tools
-			.Select(t => t.VerificationStatus)
-			.Where(s => !string.IsNullOrWhiteSpace(s))
-			.Distinct(StringComparer.OrdinalIgnoreCase)
-			.OrderBy(s => s)
-			.ToList();
-
-		return new ToolCatalogFilterMetadataResponse {
-			GeneratedAtUtc = now,
-			Categories = categories,
-			VerificationStatuses = statuses,
-			SortOptions = ["confidence", "reviewed", "name"],
-			DefaultMinConfidence = 0.65,
-			DefaultIncludeStale = false,
-			DefaultSort = "confidence",
-		};
+		return _externalToolCatalogProvider.BuildFilterMetadata();
 	}
 
 	/// <summary>
 	/// Returns deterministic projected-item display metadata and alias mappings.
 	/// </summary>
 	public ProjectedItemCatalogResponse GetProjectedItemCatalog() {
-		var items = ProjectedItemCatalogSeed
-			.Select(entry => new ProjectedItemCatalogEntry {
-				ItemId = entry.ItemId,
-				DisplayName = entry.DisplayName,
-				Category = entry.Category,
-				Icon = entry.Icon,
-			})
-			.OrderBy(entry => entry.ItemId)
-			.ToList();
-
-		var aliases = ProjectedItemCatalogAliases
-			.OrderBy(pair => pair.Key)
-			.ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.OrdinalIgnoreCase);
-
-		return new ProjectedItemCatalogResponse {
-			GeneratedAtUtc = DateTime.UtcNow,
-			Items = items,
-			Aliases = aliases,
-		};
+		return _projectedItemCatalogProvider.BuildCatalog();
 	}
-
-	private static string ComputeVerificationStatus(ToolCatalogEntry entry, DateTime nowUtc) {
-		var ageDays = (nowUtc - entry.LastReviewedUtc).TotalDays;
-		if (entry.LastReviewedUtc == default || ageDays > 90) {
-			return "stale";
-		}
-
-		if (entry.ConfidenceScore >= 0.75) {
-			return "verified";
-		}
-
-		if (entry.ConfidenceScore >= 0.60) {
-			return "partial";
-		}
-
-		return "unverified";
-	}
-
-	private static string NormalizeTeamRecommendationMode(string? mode) {
-		var normalized = (mode ?? "arena").Trim().ToLowerInvariant();
-		return normalized switch {
-			"arena" => "arena",
-			"grandarena" or "grand_arena" or "grand-arena" => "grandarena",
-			"guildwar" or "guild_war" or "guild-war" or "gw" => "guildwar",
-			"cow" or "clashofworlds" or "clash_of_worlds" or "clash-of-worlds" => "cow",
-			"campaign" => "campaign",
-			"adventure" => "adventure",
-			_ => "arena",
-		};
-	}
-
-	private static string NormalizeTeamObjective(string? objective) {
-		var normalized = (objective ?? "balanced").Trim().ToLowerInvariant();
-		return normalized switch {
-			"offense" => "offense",
-			"defense" => "defense",
-			"speed" => "speed",
-			"sustain" => "sustain",
-			_ => "balanced",
-		};
-	}
-
-	private static double ComputeReadinessFromTeamPreview(string? teamPreview, HashSet<string> availableNames) {
-		if (string.IsNullOrWhiteSpace(teamPreview) || availableNames.Count == 0) {
-			return 0.5;
-		}
-
-		var tokens = teamPreview
-			.Split([',', '|', ';', '/'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-			.Where(t => !string.IsNullOrWhiteSpace(t))
-			.ToList();
-
-		if (tokens.Count == 0) {
-			return 0.5;
-		}
-
-		var matches = tokens.Count(t => availableNames.Contains(t));
-		return Math.Clamp((double)matches / tokens.Count, 0d, 1d);
-	}
-
-	private static double ComputeFinalTeamScore(double winProbability, double readiness, double confidence, TeamRecommendationScoringProfile profile) {
-		return Math.Clamp(
-			(winProbability * profile.WinWeight) +
-			(readiness * profile.ReadinessWeight) +
-			(confidence * profile.ConfidenceWeight),
-			0d,
-			1d
-		);
-	}
-
-	private static List<TeamRecommendationCard> BuildSyntheticRecommendationCards(
-		string mode,
-		string objective,
-		TeamRecommendationScoringProfile profile,
-		double externalModeWeight,
-		IReadOnlyList<ExternalRecommendationSignal> externalSignals,
-		double resourcePressure,
-		double calibrationScale,
-		IReadOnlyList<Hero> heroes,
-		IReadOnlyList<Titan> titans,
-		int limit
-	) {
-		var cards = new List<TeamRecommendationCard>();
-		if (limit <= 0) {
-			return cards;
-		}
-
-		var normalizedObjective = NormalizeTeamObjective(objective);
-
-		if (mode == "cow") {
-			var rankedTitans = titans
-				.OrderByDescending(t =>
-					(t.Power / 120000d) +
-					(ComputeTitanMaturityScore(t) * 0.75d) +
-					(normalizedObjective == "offense" ? (t.SkillLevel / 120d) * 0.25d : 0d) +
-					(normalizedObjective is "defense" or "sustain" ? (t.Stars / 6d) * 0.20d : 0d))
-				.ToList();
-
-			var primaryTitans = rankedTitans.Take(5).ToList();
-			if (primaryTitans.Count > 0) {
-				var titanReadiness = ComputeTeamReadinessFromTitans(primaryTitans);
-				var titanDepth = Math.Clamp((double)rankedTitans.Count / 10d, 0d, 1d);
-				var titanConfidence = Math.Clamp(0.42 + (titanDepth * 0.24), 0d, 1d);
-				var titanWin = normalizedObjective switch {
-					"offense" => 0.66,
-					"defense" => 0.59,
-					"speed" => 0.63,
-					"sustain" => 0.61,
-					_ => 0.62,
-				};
-
-				cards.Add(CreateSyntheticCard(
-					teamPreview: string.Join(", ", primaryTitans.Select(t => t.TitanName).Where(n => !string.IsNullOrWhiteSpace(n))),
-					mode: mode,
-					objective: normalizedObjective,
-					profile: profile,
-					externalModeWeight: externalModeWeight,
-					externalSignals: externalSignals,
-					resourcePressure: resourcePressure,
-					calibrationScale: calibrationScale,
-					winProbability: titanWin,
-					readiness: titanReadiness,
-					confidence: titanConfidence,
-					sourceScale: 0.88,
-					rationale: $"CoW titan lineup ranked for {normalizedObjective} using titan power, maturity, and roster depth.",
-					source: "synthetic"
-				));
-			}
-
-			var reserveTitans = rankedTitans.Skip(3).Take(5).ToList();
-			if (reserveTitans.Count == 5) {
-				var reserveReadiness = ComputeTeamReadinessFromTitans(reserveTitans);
-				cards.Add(CreateSyntheticCard(
-					teamPreview: string.Join(", ", reserveTitans.Select(t => t.TitanName).Where(n => !string.IsNullOrWhiteSpace(n))),
-					mode: mode,
-					objective: normalizedObjective,
-					profile: profile,
-					externalModeWeight: externalModeWeight,
-					externalSignals: externalSignals,
-					resourcePressure: resourcePressure,
-					calibrationScale: calibrationScale,
-					winProbability: 0.56,
-					readiness: reserveReadiness,
-					confidence: 0.44,
-					sourceScale: 0.82,
-					rationale: "CoW reserve titan lineup for rotation or counter-slot coverage.",
-					source: "synthetic"
-				));
-			}
-		}
-
-		var rankedHeroes = RankHeroesForModeAndObjective(heroes, mode, normalizedObjective).ToList();
-		if (rankedHeroes.Count == 0) {
-			return cards;
-		}
-
-		if (mode == "grandarena") {
-			var teamA = rankedHeroes.Take(5).ToList();
-			var teamB = rankedHeroes.Skip(5).Take(5).ToList();
-			var teamC = rankedHeroes.Skip(10).Take(5).ToList();
-
-			var teams = new[] { teamA, teamB, teamC }
-				.Where(t => t.Count > 0)
-				.Select(t => string.Join(", ", t.Select(h => h.HeroName).Where(n => !string.IsNullOrWhiteSpace(n))))
-				.Where(t => !string.IsNullOrWhiteSpace(t))
-				.ToList();
-
-			if (teams.Count > 0) {
-				var draftPool = rankedHeroes.Take(15).ToList();
-				var readiness = ComputeTeamReadinessFromHeroes(draftPool);
-				var depth = Math.Clamp((double)rankedHeroes.Count / 15d, 0d, 1d);
-				var confidence = Math.Clamp(0.36 + (depth * 0.28), 0d, 1d);
-				var win = normalizedObjective switch {
-					"offense" => 0.62,
-					"defense" => 0.57,
-					"speed" => 0.60,
-					"sustain" => 0.58,
-					_ => 0.59,
-				};
-
-				cards.Add(CreateSyntheticCard(
-					teamPreview: string.Join(" | ", teams),
-					mode: mode,
-					objective: normalizedObjective,
-					profile: profile,
-					externalModeWeight: externalModeWeight,
-					externalSignals: externalSignals,
-					resourcePressure: resourcePressure,
-					calibrationScale: calibrationScale,
-					winProbability: win,
-					readiness: readiness,
-					confidence: confidence,
-					sourceScale: 0.84,
-					rationale: $"Grand Arena squads assembled for {normalizedObjective} with roster depth-aware confidence.",
-					source: "synthetic"
-				));
-			}
-		}
-
-		var primaryTeam = rankedHeroes.Take(5).ToList();
-		if (primaryTeam.Count > 0) {
-			var readiness = ComputeTeamReadinessFromHeroes(primaryTeam);
-			var primaryWin = (mode, normalizedObjective) switch {
-				("campaign", "offense") => 0.72,
-				("campaign", "sustain") => 0.68,
-				("campaign", _) => 0.70,
-				("adventure", "offense") => 0.68,
-				("adventure", "sustain") => 0.69,
-				("adventure", _) => 0.66,
-				("guildwar", "defense") => 0.61,
-				("guildwar", "offense") => 0.60,
-				("guildwar", _) => 0.57,
-				("arena", "offense") => 0.64,
-				("arena", "speed") => 0.63,
-				("arena", _) => 0.62,
-				_ => 0.61,
-			};
-			var depth = Math.Clamp((double)rankedHeroes.Count / (mode == "grandarena" ? 15d : 10d), 0d, 1d);
-			var primaryConfidence = Math.Clamp(0.34 + (depth * 0.30), 0d, 1d);
-
-			cards.Add(CreateSyntheticCard(
-				teamPreview: string.Join(", ", primaryTeam.Select(h => h.HeroName).Where(n => !string.IsNullOrWhiteSpace(n))),
-				mode: mode,
-				objective: normalizedObjective,
-				profile: profile,
-				externalModeWeight: externalModeWeight,
-				externalSignals: externalSignals,
-				resourcePressure: resourcePressure,
-				calibrationScale: calibrationScale,
-				winProbability: primaryWin,
-				readiness: readiness,
-				confidence: primaryConfidence,
-				sourceScale: 0.78,
-				rationale: $"{mode} primary lineup tuned for {normalizedObjective} using weighted roster maturity.",
-				source: "synthetic"
-			));
-		}
-
-		var secondaryTeam = rankedHeroes.Skip(mode == "campaign" ? 2 : 4).Take(5).ToList();
-		if (secondaryTeam.Count > 0) {
-			var secondaryReadiness = ComputeTeamReadinessFromHeroes(secondaryTeam);
-			var secondaryWin = (mode, normalizedObjective) switch {
-				("guildwar", "defense") => 0.58,
-				("campaign", "sustain") => 0.60,
-				("adventure", "sustain") => 0.59,
-				("arena", "speed") => 0.56,
-				_ => 0.55,
-			};
-
-			cards.Add(CreateSyntheticCard(
-				teamPreview: string.Join(", ", secondaryTeam.Select(h => h.HeroName).Where(n => !string.IsNullOrWhiteSpace(n))),
-				mode: mode,
-				objective: normalizedObjective,
-				profile: profile,
-				externalModeWeight: externalModeWeight,
-				externalSignals: externalSignals,
-				resourcePressure: resourcePressure,
-				calibrationScale: calibrationScale,
-				winProbability: secondaryWin,
-				readiness: secondaryReadiness,
-				confidence: 0.40,
-				sourceScale: 0.72,
-				rationale: $"{mode} alternate lineup to preserve the main core while covering {normalizedObjective} fallback scenarios.",
-				source: "synthetic"
-			));
-		}
-
-		if (mode is "guildwar" or "campaign" or "adventure") {
-			var sustainRanked = RankHeroesForModeAndObjective(heroes, mode, "sustain").Take(5).ToList();
-			if (sustainRanked.Count == 5) {
-				cards.Add(CreateSyntheticCard(
-					teamPreview: string.Join(", ", sustainRanked.Select(h => h.HeroName).Where(n => !string.IsNullOrWhiteSpace(n))),
-					mode: mode,
-					objective: normalizedObjective,
-					profile: profile,
-					externalModeWeight: externalModeWeight,
-					externalSignals: externalSignals,
-					resourcePressure: resourcePressure,
-					calibrationScale: calibrationScale,
-					winProbability: mode == "guildwar" ? 0.56 : 0.63,
-					readiness: ComputeTeamReadinessFromHeroes(sustainRanked),
-					confidence: 0.47,
-					sourceScale: 0.74,
-					rationale: $"{mode} sustain-leaning lineup for long-fight stability and attrition resilience.",
-					source: "synthetic"
-				));
-			}
-		}
-
-		return cards.Take(limit).ToList();
-	}
-
-	private IReadOnlyList<ExternalRecommendationSignal> GetExternalSignals(string mode, string objective) {
-		return _externalSignalProviders
-			.SelectMany(provider => provider.GetSignals(mode, objective))
-			.GroupBy(signal => signal.SourceName, StringComparer.OrdinalIgnoreCase)
-			.Select(group => group.OrderByDescending(s => s.Confidence).First())
-			.OrderByDescending(signal => signal.Confidence)
-			.ToList();
-	}
-
-	private static List<TeamRecommendationProvenance> BuildProvenance(
-		string sourceType,
-		TeamRecommendationScoringProfile profile,
-		double winProbability,
-		double readiness,
-		double confidence,
-		double baseScore,
-		double frictionAdjustedScore,
-		double finalScore,
-		double sourceScale,
-		double frictionPenalty,
-		double resourcePressure,
-		double calibrationScale,
-		double externalModeWeight,
-		IReadOnlyList<ExternalRecommendationSignal> externalSignals
-	) {
-		var records = new List<TeamRecommendationProvenance> {
-			new TeamRecommendationProvenance {
-				SourceType = "profile",
-				SourceName = profile.ProfileName,
-				Confidence = 1d,
-				Detail = $"Weights => win {profile.WinWeight:F2}, readiness {profile.ReadinessWeight:F2}, confidence {profile.ConfidenceWeight:F2}.",
-				Contribution = new TeamRecommendationContribution {
-					WinWeight = Math.Round(profile.WinWeight, 6),
-					ReadinessWeight = Math.Round(profile.ReadinessWeight, 6),
-					ConfidenceWeight = Math.Round(profile.ConfidenceWeight, 6),
-				},
-			},
-			new TeamRecommendationProvenance {
-				SourceType = sourceType,
-				SourceName = sourceType switch {
-					"history" => "Historical battle outcomes",
-					"simulator" => "Monte Carlo simulator",
-					_ => "Current roster state",
-				},
-				Confidence = Math.Clamp(confidence, 0d, 1d),
-				Detail = $"Components => win {winProbability:F2}, readiness {readiness:F2}, confidence {confidence:F2}; score {baseScore:F3} -> {frictionAdjustedScore:F3} -> {finalScore:F3} (friction {frictionPenalty:F3}, pressure {resourcePressure:F2}).",
-				Contribution = new TeamRecommendationContribution {
-					WinProbability = Math.Round(Math.Clamp(winProbability, 0d, 1d), 6),
-					Readiness = Math.Round(Math.Clamp(readiness, 0d, 1d), 6),
-					Confidence = Math.Round(Math.Clamp(confidence, 0d, 1d), 6),
-					WinWeight = Math.Round(profile.WinWeight, 6),
-					ReadinessWeight = Math.Round(profile.ReadinessWeight, 6),
-					ConfidenceWeight = Math.Round(profile.ConfidenceWeight, 6),
-					BaseScore = Math.Round(Math.Clamp(baseScore, 0d, 1d), 6),
-					FrictionPenalty = Math.Round(Math.Clamp(frictionPenalty, 0d, 1d), 6),
-					ResourcePressure = Math.Round(Math.Clamp(resourcePressure, 0d, 1d), 6),
-					CalibrationScale = Math.Round(Math.Clamp(calibrationScale, 0.65d, 1.45d), 6),
-					FinalScore = Math.Round(Math.Clamp(finalScore, 0d, 1d), 6),
-					ExternalBonus = Math.Round(Math.Max(0d, finalScore - frictionAdjustedScore), 6),
-					SourceScale = Math.Round(Math.Clamp(sourceScale, 0d, 1d), 6),
-					ExternalModeWeight = Math.Round(Math.Clamp(externalModeWeight, 0d, 1d), 6),
-				},
-			}
-		};
-
-		var topSignals = externalSignals.Take(3).ToList();
-		var normalizedSourceScale = Math.Clamp(sourceScale, 0d, 1d);
-		var normalizedModeWeight = Math.Clamp(externalModeWeight, 0d, 1d);
-		var normalizedResourcePressure = Math.Clamp(resourcePressure, 0d, 1d);
-		var normalizedFrictionPenalty = Math.Clamp(frictionPenalty, 0d, 1d);
-		var normalizedCalibrationScale = Math.Clamp(calibrationScale, 0.65d, 1.45d);
-		var perSignalBonusDenominator = topSignals.Count == 0
-			? 1d
-			: topSignals.Sum(signal => Math.Clamp(signal.Confidence, 0d, 1d));
-
-		records.AddRange(topSignals.Select(signal => {
-			var normalizedSignalConfidence = Math.Clamp(signal.Confidence, 0d, 1d);
-			var signalRatio = perSignalBonusDenominator <= 0d
-				? 0d
-				: normalizedSignalConfidence / perSignalBonusDenominator;
-			var signalBonus = Math.Max(0d, finalScore - frictionAdjustedScore) * signalRatio;
-
-			return new TeamRecommendationProvenance {
-				SourceType = signal.SourceType,
-				SourceName = signal.SourceName,
-				SourceUrl = signal.SourceUrl,
-				Confidence = normalizedSignalConfidence,
-				Detail = $"{signal.Detail} Mode external weight {externalModeWeight:F2}.",
-				Contribution = new TeamRecommendationContribution {
-					SourceConfidence = Math.Round(normalizedSignalConfidence, 6),
-					ExternalModeWeight = Math.Round(normalizedModeWeight, 6),
-					SourceScale = Math.Round(normalizedSourceScale, 6),
-					FrictionPenalty = Math.Round(normalizedFrictionPenalty, 6),
-					ResourcePressure = Math.Round(normalizedResourcePressure, 6),
-					CalibrationScale = Math.Round(normalizedCalibrationScale, 6),
-					ExternalBonus = Math.Round(signalBonus, 6),
-					BaseScore = Math.Round(Math.Clamp(baseScore, 0d, 1d), 6),
-					FinalScore = Math.Round(Math.Clamp(finalScore, 0d, 1d), 6),
-				},
-			};
-		}));
-
-		return records;
-	}
-
-	private static double ApplyExternalSignalBonus(
-		double baseScore,
-		IReadOnlyList<ExternalRecommendationSignal> externalSignals,
-		double modeWeight,
-		double sourceScale
-	) {
-		if (externalSignals.Count == 0 || modeWeight <= 0d) {
-			return Math.Clamp(baseScore, 0d, 1d);
-		}
-
-		var aggregate = externalSignals
-			.Take(3)
-			.Average(signal => Math.Clamp(signal.Confidence, 0d, 1d));
-
-		var bonus = aggregate * Math.Clamp(modeWeight, 0d, 1d) * Math.Clamp(sourceScale, 0d, 1d);
-		return Math.Clamp(baseScore + bonus, 0d, 1d);
-	}
-
-	private static TeamRecommendationCard CreateSyntheticCard(
-		string teamPreview,
-		string mode,
-		string objective,
-		TeamRecommendationScoringProfile profile,
-		double externalModeWeight,
-		IReadOnlyList<ExternalRecommendationSignal> externalSignals,
-		double resourcePressure,
-		double calibrationScale,
-		double winProbability,
-		double readiness,
-		double confidence,
-		double sourceScale,
-		string rationale,
-		string source
-	) {
-		var normalizedWin = Math.Clamp(winProbability, 0d, 1d);
-		var normalizedReadiness = Math.Clamp(readiness, 0d, 1d);
-		var normalizedConfidence = Math.Clamp(confidence, 0d, 1d);
-		var baseScore = ComputeFinalTeamScore(normalizedWin, normalizedReadiness, normalizedConfidence, profile);
-		var frictionPenalty = ComputeRosterFrictionPenalty(resourcePressure, normalizedReadiness, mode, objective, sourceScale, calibrationScale);
-		var frictionAdjustedScore = Math.Clamp(baseScore - frictionPenalty, 0d, 1d);
-		var finalScore = ApplyExternalSignalBonus(frictionAdjustedScore, externalSignals, externalModeWeight, sourceScale);
-
-		return new TeamRecommendationCard {
-			Source = source,
-			TeamPreview = teamPreview,
-			ContextTag = objective,
-			ModeProfile = profile.ProfileName,
-			EstimatedWinProbability = normalizedWin,
-			ReadinessScore = normalizedReadiness,
-			ConfidenceScore = normalizedConfidence,
-			FinalScore = finalScore,
-			Rationale = $"{rationale} Resource friction penalty {(frictionPenalty * 100):F1}%.",
-			Provenance = BuildProvenance("roster", profile, normalizedWin, normalizedReadiness, normalizedConfidence, baseScore, frictionAdjustedScore, finalScore, sourceScale, frictionPenalty, resourcePressure, calibrationScale, externalModeWeight, externalSignals),
-		};
-	}
-
-	private static double ComputeRosterFrictionPenalty(
-		double resourcePressure,
-		double readiness,
-		string mode,
-		string objective,
-		double sourceScale,
-		double calibrationScale
-	) {
-		var normalizedPressure = Math.Clamp(resourcePressure, 0d, 1d);
-		var normalizedReadiness = Math.Clamp(readiness, 0d, 1d);
-		var normalizedScale = Math.Clamp(sourceScale, 0d, 1d);
-
-		var modeMultiplier = NormalizeTeamRecommendationMode(mode) switch {
-			"campaign" => 0.78,
-			"adventure" => 0.82,
-			"guildwar" => 0.95,
-			"cow" => 0.92,
-			"grandarena" => 1.00,
-			_ => 0.90,
-		};
-
-		var objectiveMultiplier = NormalizeTeamObjective(objective) switch {
-			"offense" => 1.08,
-			"speed" => 1.04,
-			"defense" => 0.96,
-			"sustain" => 0.93,
-			_ => 1.00,
-		};
-
-		var readinessRelief = 1d - (normalizedReadiness * 0.72d);
-		var normalizedCalibrationScale = Math.Clamp(calibrationScale, 0.65d, 1.45d);
-		var penalty = normalizedPressure * readinessRelief * modeMultiplier * objectiveMultiplier * normalizedCalibrationScale * (0.06d + (normalizedScale * 0.14d));
-		return Math.Clamp(penalty, 0d, 0.30d);
-	}
-
-	private async Task<double> GetModeFrictionCalibrationScaleAsync(GameDatabaseContext context, string mode, int? preferredTrendWindowDays = null) {
-		var state = await LoadTeamRecommendationCalibrationStateAsync(context);
-		var preferenceState = await LoadTeamRecommendationTrendPreferenceStateAsync(context);
-		if (state.Modes.TryGetValue(mode, out var modeState) && modeState.Samples > 0) {
-			var resolvedTrendWindowDays = TeamRecommendationCalibrationStateMath.ResolvePreferredCalibrationTrendWindowDays(modeState, preferenceState, mode, preferredTrendWindowDays, SupportedCalibrationTrendWindowDays);
-			return TeamRecommendationCalibrationStateMath.ResolveSuggestedScaleFromModeState(modeState, resolvedTrendWindowDays, DateTime.UtcNow);
-		}
-
-		return 1d;
-	}
-
-	private async Task<TeamRecommendationTrendPreferenceState> LoadTeamRecommendationTrendPreferenceStateAsync(GameDatabaseContext context) {
-		var metadata = await context.SyncMetadata
-			.AsNoTracking()
-			.FirstOrDefaultAsync(m => m.Key == TeamRecommendationTrendPreferencesMetadataKey);
-
-		if (metadata == null || string.IsNullOrWhiteSpace(metadata.Value)) {
-			return new TeamRecommendationTrendPreferenceState();
-		}
-
-		try {
-			var parsed = JsonSerializer.Deserialize<TeamRecommendationTrendPreferenceState>(metadata.Value);
-			if (parsed?.ModeTrendWindowDays == null) {
-				return new TeamRecommendationTrendPreferenceState();
-			}
-
-			return parsed;
-		} catch {
-			return new TeamRecommendationTrendPreferenceState();
-		}
-	}
-
-	private async Task<TeamRecommendationCalibrationState> LoadTeamRecommendationCalibrationStateAsync(GameDatabaseContext context) {
-		var metadata = await context.SyncMetadata
-			.AsNoTracking()
-			.FirstOrDefaultAsync(m => m.Key == TeamRecommendationCalibrationMetadataKey);
-
-		if (metadata == null || string.IsNullOrWhiteSpace(metadata.Value)) {
-			return new TeamRecommendationCalibrationState();
-		}
-
-		try {
-			var parsed = JsonSerializer.Deserialize<TeamRecommendationCalibrationState>(metadata.Value);
-			if (parsed?.Modes == null) {
-				return new TeamRecommendationCalibrationState();
-			}
-
-			return parsed;
-		} catch {
-			return new TeamRecommendationCalibrationState();
-		}
-	}
-
-	private async Task UpdateTeamRecommendationCalibrationStateAsync(GameDatabaseContext context, TeamRecommendationBacktestResponse backtest) {
-		if (backtest.MatchedTeamCount <= 0) {
-			return;
-		}
-
-		var state = await LoadTeamRecommendationCalibrationStateAsync(context);
-		var preferenceState = await LoadTeamRecommendationTrendPreferenceStateAsync(context);
-		if (!state.Modes.TryGetValue(backtest.Mode, out var modeState)) {
-			modeState = new TeamRecommendationCalibrationModeState();
-			state.Modes[backtest.Mode] = modeState;
-		}
-
-		TeamRecommendationCalibrationStateMath.ApplyBacktestObservation(
-			modeState,
-			preferenceState,
-			backtest,
-			DateTime.UtcNow,
-			SupportedCalibrationTrendWindowDays
-		);
-
-		state.UpdatedAtUtc = DateTime.UtcNow;
-		var serialized = JsonSerializer.Serialize(state);
-		await UpdateSyncMetadataAsync(context, TeamRecommendationCalibrationMetadataKey, serialized);
-	}
-
-	private static double ComputeResourcePressureScore(PlayerSnapshot? snapshot, InventorySnapshot? inventory) {
-		var goldPressure = 1d - Math.Clamp((snapshot?.Gold ?? 0L) / 2_500_000d, 0d, 1d);
-		var emeraldPressure = 1d - Math.Clamp((snapshot?.Emeralds ?? 0) / 3_500d, 0d, 1d);
-		var consumablePressure = 1d - Math.Clamp((inventory?.TotalConsumables ?? 0) / 900d, 0d, 1d);
-		var evolutionPressure = 1d - Math.Clamp((inventory?.TotalEvolutionItems ?? 0) / 750d, 0d, 1d);
-		var heroSoulPressure = 1d - Math.Clamp((inventory?.TotalHeroSoulStones ?? 0) / 1500d, 0d, 1d);
-		var titanSoulPressure = 1d - Math.Clamp((inventory?.TotalTitanSoulStones ?? 0) / 800d, 0d, 1d);
-
-		var weighted =
-			(goldPressure * 0.22d) +
-			(emeraldPressure * 0.24d) +
-			(consumablePressure * 0.14d) +
-			(evolutionPressure * 0.14d) +
-			(heroSoulPressure * 0.14d) +
-			(titanSoulPressure * 0.12d);
-
-		return Math.Clamp(weighted, 0d, 1d);
-	}
-
-	private static IReadOnlyList<Hero> RankHeroesForModeAndObjective(
-		IReadOnlyList<Hero> heroes,
-		string mode,
-		string objective
-	) {
-		var normalizedMode = NormalizeTeamRecommendationMode(mode);
-		var normalizedObjective = NormalizeTeamObjective(objective);
-
-		return heroes
-			.Where(h => !string.IsNullOrWhiteSpace(h.HeroName))
-			.OrderByDescending(hero => {
-				var maturity = ComputeHeroMaturityScore(hero);
-				var basePower = Math.Clamp(hero.Power / 140000d, 0d, 1.2d);
-				var objectiveBias = normalizedObjective switch {
-					"offense" => ((hero.Power / 140000d) * 0.45d) + ((hero.SkillLevel1 + hero.SkillLevel2 + hero.SkillLevel3 + hero.SkillLevel4) / 600d) * 0.20d,
-					"defense" => ((hero.Color / 20d) * 0.35d) + ((hero.Stars / 6d) * 0.20d),
-					"speed" => ((hero.Level / 130d) * 0.35d) + ((hero.SkillLevel1 / 150d) * 0.20d),
-					"sustain" => ((hero.Stars / 6d) * 0.35d) + ((hero.ArtifactBook + hero.ArtifactRing) / 12d) * 0.22d,
-					_ => (hero.Power / 140000d) * 0.30d,
-				};
-
-				var modeBias = normalizedMode switch {
-					"campaign" => ((hero.Level / 130d) * 0.14d) + ((hero.Stars / 6d) * 0.06d),
-					"adventure" => ((hero.Color / 20d) * 0.10d) + ((hero.Stars / 6d) * 0.08d),
-					"guildwar" => ((hero.Power / 140000d) * 0.08d) + ((hero.Color / 20d) * 0.08d),
-					"grandarena" => ((hero.Power / 140000d) * 0.06d) + ((hero.Stars / 6d) * 0.08d),
-					_ => 0d,
-				};
-
-				return basePower + (maturity * 0.60d) + objectiveBias + modeBias;
-			})
-			.ThenByDescending(h => h.Power)
-			.ThenByDescending(h => h.Color)
-			.ThenByDescending(h => h.Stars)
-			.ToList();
-	}
-
-	private static double ComputeHeroMaturityScore(Hero hero) {
-		if (hero is null) {
-			return 0d;
-		}
-
-		var levelScore = Math.Clamp(hero.Level / 130d, 0d, 1d);
-		var starScore = Math.Clamp(hero.Stars / 6d, 0d, 1d);
-		var colorScore = Math.Clamp(hero.Color / 20d, 0d, 1d);
-		var artifactScore = Math.Clamp((hero.ArtifactWeapon + hero.ArtifactBook + hero.ArtifactRing) / 18d, 0d, 1d);
-		return Math.Clamp((levelScore * 0.30d) + (starScore * 0.25d) + (colorScore * 0.25d) + (artifactScore * 0.20d), 0d, 1d);
-	}
-
-	private static double ComputeTitanMaturityScore(Titan titan) {
-		if (titan is null) {
-			return 0d;
-		}
-
-		var levelScore = Math.Clamp(titan.Level / 120d, 0d, 1d);
-		var starScore = Math.Clamp(titan.Stars / 6d, 0d, 1d);
-		var summonScore = Math.Clamp(titan.SummonStars / 6d, 0d, 1d);
-		var skinScore = Math.Clamp(titan.SkinLevel / 60d, 0d, 1d);
-		return Math.Clamp((levelScore * 0.30d) + (starScore * 0.28d) + (summonScore * 0.22d) + (skinScore * 0.20d), 0d, 1d);
-	}
-
-	private static double ComputeTeamReadinessFromHeroes(IReadOnlyList<Hero> team) {
-		if (team.Count == 0) {
-			return 0d;
-		}
-
-		return Math.Clamp(team.Average(ComputeHeroMaturityScore), 0d, 1d);
-	}
-
-	private static double ComputeTeamReadinessFromTitans(IReadOnlyList<Titan> team) {
-		if (team.Count == 0) {
-			return 0d;
-		}
-
-		return Math.Clamp(team.Average(ComputeTitanMaturityScore), 0d, 1d);
-	}
-
-	private static string NormalizeTeamKey(string? teamKey) {
-		if (string.IsNullOrWhiteSpace(teamKey)) {
-			return "[unknown]";
-		}
-
-		var trimmed = teamKey.Trim();
-		return trimmed.Length <= 1024
-			? trimmed
-			: trimmed[..1024];
-	}
-
-	private static string NormalizeTeamSignature(string? teamPreview) {
-		if (string.IsNullOrWhiteSpace(teamPreview)) {
-			return string.Empty;
-		}
-
-		var canonical = teamPreview
-			.Trim()
-			.Replace(" | ", ",", StringComparison.Ordinal)
-			.Replace("|", ",", StringComparison.Ordinal)
-			.Replace(";", ",", StringComparison.Ordinal)
-			.Replace("/", ",", StringComparison.Ordinal)
-			.Replace(" ", string.Empty, StringComparison.Ordinal)
-			.ToLowerInvariant();
-
-		while (canonical.Contains(",,")) {
-			canonical = canonical.Replace(",,", ",", StringComparison.Ordinal);
-		}
-
-		return canonical.Trim(',');
-	}
-
-	private static string BuildTeamPreview(string teamKey) {
-		if (string.IsNullOrWhiteSpace(teamKey)) {
-			return "Unknown team";
-		}
-
-		var compact = teamKey.Replace("\r", string.Empty).Replace("\n", string.Empty);
-		return compact.Length <= 180
-			? compact
-			: $"{compact[..177]}...";
-	}
-
-	private sealed record BattleSample(
-		string TeamKey,
-		bool IsWin,
-		long OpponentId,
-		int OpponentPower,
-		DateTime Timestamp
-	);
 
 	/// <summary>
 	/// Gets statistics about the database contents.

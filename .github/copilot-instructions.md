@@ -2,15 +2,13 @@
 
 ## Project: OrganizedJihad (OJ) - Hero Wars Comprehensive Tracker
 
-A multi-tier game tracking solution for Hero Wars that captures, stores, and analyzes ALL gameplay data including account state, battles, hero/titan upgrades, inventory usage, daily/guild quests, and more.
+A two-tier game tracking solution for Hero Wars that captures, stores, and analyzes ALL gameplay data including account state, battles, hero/titan upgrades, inventory usage, daily/guild quests, and more.
 
 ### Architecture Overview
 
 **Tier 1 - Browser Userscript** (`userscript/`): TamperMonkey userscript that intercepts Hero Wars API requests/responses in the browser and syncs captured data to the local API.
 
-**Tier 2 - Desktop App** (`desktop-app/`): .NET MAUI Blazor Hybrid desktop application for viewing, analyzing, and managing tracked data with rich UI.
-
-**Tier 3 - API Backend** (`api/`): ASP.NET Core Web API that receives sync data from the browser userscript and persists it to the database.
+**Tier 2 - API Backend** (`api/`): ASP.NET Core Web API that receives sync data from the browser userscript and persists it to the database.
 
 **Data Layer** (`data/`): Entity Framework Core with SQLite, containing all game entity models, migrations, audit interceptors, and database context.
 
@@ -52,7 +50,9 @@ A multi-tier game tracking solution for Hero Wars that captures, stores, and ana
 - `~docs/oj-manual-prompts-log.txt` is a manually maintained file.
 - AI MUST NEVER edit, stage, or commit `~docs/oj-manual-prompts-log.txt`.
 - AI should ignore that file if it appears modified and continue with requested work (including push/PR/commits) without pausing for confirmation.
-- For unrelated dirty files in general, prefer continuing by committing only intended files (do not block unless the user explicitly asks for a full-clean-tree gate).
+- For unrelated dirty files in general, ALWAYS continue by committing only intended files.
+- Do not pause for confirmation when unexpected unrelated modifications are present.
+- Only request confirmation if the user explicitly asks for a full-clean-tree gate.
 
 ---
 
@@ -123,10 +123,6 @@ OrganizedJihad/
 │   │   ├── DailyActivityModels.cs   # Daily quests, guild quests, login rewards
 │   │   └── InventoryModels.cs       # Inventory item usage, equipment changes
 │   └── Migrations/
-│
-├── desktop-app/                     # .NET MAUI Blazor Hybrid (Tier 2)
-│   ├── OrganizedJihad.Desktop.csproj
-│   └── ...
 │
 ├── userscript/                      # TamperMonkey Userscript (Tier 1)
 │   ├── package.json
@@ -270,5 +266,5 @@ OrganizedJihad/
 13. 🔄 Comprehensive test coverage (569/16 — heroNames, syncClient, apiMonitor added)
 14. 🔄 Performance benchmarking
 15. 🔄 Refactor: Extract gameTracker.js handler groups into tracker modules (#102)
-16. ⬜ Desktop app data visualization
+16. ⬜ Additional API/UI reporting visualizations
 17. ⬜ Automated daily report generation

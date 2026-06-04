@@ -1,61 +1,98 @@
 # OrganizedJihad Userscript — Installation & Quick Start Guide
 
-## Fastest Windows Setup (Installer + Upgrade)
+## Windows Setup Options
+
+## One-Click GUI Setup (No CLI)
+
+Preferred release flow for non-technical users:
+
+1. Run `OrganizedJihad.Installer.exe` from the release bundle.
+2. Select browser target (Opera GX included).
+3. Click `Install Ecosystem`.
+4. Wait for completion status in the installer window.
+
+UX expectation:
+
+- EXE path is UI-only and does not require command prompt interaction.
+- CLI is only for users intentionally running install commands from terminal/PowerShell.
+
+The GUI installer uses the same hardened install pipeline and runs first-run checks automatically.
+At startup, the installer requests administrator privileges so full install steps can complete.
+
+Additional GUI hardening behavior:
+
+- Preflight validation blocks invalid install root/API URL inputs.
+- Each run writes a timestamped installer log to `%LOCALAPPDATA%\\OrganizedJihad\\installer-logs`.
+- The installer window includes buttons to open the install folder and log folder directly.
+
+If you are publishing this installer from source, generate the executable with:
+
+```bash
+dotnet publish installer-ui/OrganizedJihad.Installer.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:IncludeAllContentForSelfExtract=true -o installer-ui/publish/win-x64
+```
+
+Output executable:
+
+```text
+installer-ui\publish\win-x64\OrganizedJihad.Installer.exe
+```
+
+## Fastest Windows Setup (Installer + Upgrade, CLI)
 
 From the repository root, run:
 
-```powershell
-pwsh -ExecutionPolicy Bypass -File .\Install-OrganizedJihad.ps1
+```bash
+dotnet run --project installer-core/OrganizedJihad.Installer.Cli -- --run-install-health-check
 ```
+
+By default, the managed installer runs cross-platform and performs post-install health checks when requested.
 
 Or double-click:
 
-```
+```text
 Install-OrganizedJihad.cmd
 ```
 
 This installer will:
 
-- build the latest userscript (`userscript/dist/organized-jihad.user.js`)
-- publish and install/update the API backend
-- register API startup task (`OrganizedJihad.Api.Autostart`)
-   - when elevated: system startup + logon triggers
-   - when not elevated: logon fallback trigger
-- open Tampermonkey extension install pages
-- open the generated `.user.js` file so Tampermonkey can install/update the script
+- install bundled API/runtime-host payloads
+- install userscript + setup guide assets
+- open Tampermonkey extension install pages (including Opera GX bootstrap links)
+- run optional health checks and diagnostics links
 
-Use `-SkipTampermonkeyBootstrap` if you only want backend/userscript artifact updates.
+Use `--skip-tampermonkey-bootstrap` if you only want backend/userscript artifact updates.
+
+Target specific browser bootstrap pages (example with Opera GX):
+
+```bash
+dotnet run --project installer-core/OrganizedJihad.Installer.Cli -- --tampermonkey-browsers operaGX,chrome
+```
 
 Optional post-install health-check run from installer:
 
-```powershell
-pwsh -ExecutionPolicy Bypass -File .\Install-OrganizedJihad.ps1 -RunInstallHealthCheck -InstallHealthCheckOpen failed
-```
-
-Optional JSON output from installer-triggered health check:
-
-```powershell
-pwsh -ExecutionPolicy Bypass -File .\Install-OrganizedJihad.ps1 -RunInstallHealthCheck -InstallHealthCheckJson
+```bash
+dotnet run --project installer-core/OrganizedJihad.Installer.Cli -- --run-install-health-check
 ```
 
 One-command first-run diagnostics bundle:
 
-```powershell
-pwsh -ExecutionPolicy Bypass -File .\Install-OrganizedJihad.ps1 -FirstRunDiagnostics
+```bash
+dotnet run --project installer-core/OrganizedJihad.Installer.Cli -- --first-run-diagnostics --run-install-health-check
 ```
 
-This implies:
-- `-RunInstallHealthCheck`
-- `-InstallHealthCheckOpen failed` (unless explicitly overridden)
-- `-OpenUserscriptDiagnostics`
+This typically includes:
+
+- `--run-install-health-check`
+- optional diagnostics URL opens via installer flags
 
 Open diagnostics entry points automatically after install:
 
-```powershell
-pwsh -ExecutionPolicy Bypass -File .\Install-OrganizedJihad.ps1 -OpenUserscriptDiagnostics
+```bash
+dotnet run --project installer-core/OrganizedJihad.Installer.Cli -- --open-userscript-diagnostics
 ```
 
 This opens:
+
 - Hero Wars web page (for userscript overlay diagnostics)
 - API health URL (`/api/sync/health`)
 - API docs URL (`/api/sync`)
@@ -65,6 +102,12 @@ This opens:
 - **Browser**: Chrome, Edge, Firefox, or any Chromium-based browser
 - **TamperMonkey**: Browser extension for running userscripts
 - **Hero Wars Account**: Web version at <https://www.hero-wars.com/> (Facebook, Google, or direct login)
+
+### Opera GX Notes
+
+- The installer supports `operaGX` in `--tampermonkey-browsers`.
+- It opens Opera Add-ons pages and Tampermonkey install links for Chromium compatibility.
+- If Opera GX is installed in the default location, the installer opens bootstrap links directly in Opera GX.
 
 ---
 
@@ -94,6 +137,9 @@ yarn install
 # Build the userscript bundle
 yarn build
 ```
+
+`yarn build` now also appends an automated daily session entry under `~docs/copilot-chats/`
+using `userscript/scripts/session-log-autogen.mjs`.
 
 This produces `userscript/dist/organized-jihad.user.js` — a single bundled JS file.
 

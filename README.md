@@ -4,13 +4,12 @@ A multi-tier game tracking solution for [Hero Wars](https://hero-wars.com) that 
 
 ## Architecture
 
-OJ is a three-tier system:
+OJ is a two-tier system:
 
 | Tier | Technology | Purpose |
 |------|-----------|---------|
 | **1 - Browser Userscript** | TamperMonkey + Webpack 5 | Intercepts game API traffic in real time |
-| **2 - Desktop App** | .NET MAUI Blazor Hybrid | View, analyze, and explore tracked data |
-| **3 - API Backend** | ASP.NET Core Web API | Receives sync payloads, persists to SQLite via EF Core |
+| **2 - API Backend** | ASP.NET Core Web API | Receives sync payloads, persists to SQLite via EF Core |
 
 See [Architecture Details](~docs/plans/architecture.md) for the full design.
 
@@ -32,6 +31,48 @@ See [Tracking Reference](~docs/plans/tracking-reference.md) for the complete dat
 
 ## Quick Start
 
+### Stable Release Download (v0.2.2)
+
+- GitHub Release: <https://github.com/TheAnsarya/OrganizedJihad/releases/tag/v0.2.2>
+- Recommended asset: `OrganizedJihad.Installer.exe`
+- Verify integrity using bundled `SHA256SUMS.txt`
+- The EXE is self-contained (API + userscript payloads included); source repository files are not required.
+
+Windows download safety prompt guidance:
+
+1. If your browser flags the EXE as uncommon, click `Keep` -> `Keep anyway`.
+2. Right-click `OrganizedJihad.Installer.exe` -> `Properties`.
+3. In the General tab, check `Unblock` if present.
+4. Click `Apply`, then `OK`, then run the installer.
+
+To build release artifacts locally:
+
+```bash
+dotnet run --project installer-core/OrganizedJihad.Release.Cli -- --version 0.2.3 --runtimes win-x64
+```
+
+For cross-platform 0.2.3 matrix artifacts (Windows/macOS/Linux):
+
+```bash
+dotnet run --project installer-core/OrganizedJihad.Release.Cli -- --version 0.2.3
+```
+
+Useful release CLI options:
+
+- `--runtimes win-x64,linux-x64,osx-x64,osx-arm64` to choose target runtime matrix
+- `--smoke-runtime auto|none|<runtime>` to control which published runtime gets smoke validation
+- `--dry-run` to print the execution plan without running build/publish/check commands
+- `--dry-run-format text|json` to choose human-readable or machine-readable plan output
+- `--dry-run-output-path <path>` to persist dry-run plan output to a file
+- `--dry-run-fail-on-warnings` to return non-zero when dry-run detects warnings
+- `--dry-run-fail-on-errors` to return non-zero when dry-run detects errors
+- dry-run JSON output includes `schemaVersion`, `notices`, `hasWarnings`, and `hasErrors` for CI policy gates
+- `--startup-timeout-seconds <10..600>` to tune migration/smoke API readiness wait bounds
+- `--runtimes` now validates token safety (max 16 entries; no path separators)
+- `--output-root` is safety-checked to ensure artifact cleanup stays inside repository boundaries
+- `--skip-userscript-build` to reuse existing userscript bundle for faster reruns
+- `--release-notes-path ~docs/plans/release-v0.2.3-github-body.md` to control copied release notes draft
+
 ### Prerequisites
 
 - [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0)
@@ -39,35 +80,97 @@ See [Tracking Reference](~docs/plans/tracking-reference.md) for the complete dat
 - [Yarn](https://yarnpkg.com/) package manager
 - [TamperMonkey](https://www.tampermonkey.net/) browser extension
 
-### One-Command Windows Install / Upgrade
+### One-Click GUI Installer (Recommended For Live Testing)
+
+For release/live testing, use the Avalonia GUI installer executable and avoid command-line setup:
+
+1. Open the release bundle and run `OrganizedJihad.Installer.exe`.
+2. Pick your userscript browser target (Opera GX supported).
+3. Click `Step 1: Install / Verify Tampermonkey`.
+4. Click `Step 2: Install API Server` (starts with tray-host in hidden icons, Plex-style, and opens API UI from the tray icon).
+5. Click `Step 3: Install Userscript`.
+6. Wait for `Status: Install complete` in the installer window.
+
+For manual userscript setup, open this guide after install:
+
+- `%LOCALAPPDATA%\OrganizedJihad\userscript\tampermonkey-setup.html`
+
+The installer UI provides explicit buttons for each install step:
+
+- Step 1: Install / Verify Tampermonkey
+- Step 2: Install API Server
+- Step 3: Install Userscript
+- Run Full Install (runs API + userscript in sequence)
+
+When API install is enabled, the installer deploys an API tray host so startup runs with a Windows notification area icon (background apps menu). Double-clicking the tray icon opens the API UI URL.
+
+GUI-first behavior guarantee:
+
+- If you launch the EXE installer, installation stays in the installer UI flow.
+- The installer requests Windows UAC elevation inside that UI flow.
+- No command prompt usage is required unless you intentionally run the CLI installer from a terminal.
+
+The GUI installer orchestrates:
+
+- API install/startup setup
+- userscript build/install artifact copy
+- browser bootstrap links for Tampermonkey + userscript import
+- first-run diagnostics and health checks
+
+At the beginning of install, OJ requests administrator privileges so the full setup can complete (system startup task registration and full install permissions).
+
+Cross-platform note (v0.2.3):
+
+- Installer UI is Avalonia and now supports Windows/macOS/Linux runtime execution.
+- Windows keeps UAC/elevation flow for startup task integration.
+- macOS/Linux run managed installer workflow without Windows task scheduler dependencies.
+
+Installer UX hardening notes:
+
+- Preflight checks validate install path and API URL before execution.
+- Install logs are persisted under `%LOCALAPPDATA%\\OrganizedJihad\\installer-logs`.
+- Quick actions in the installer allow opening install and log folders after runs.
+
+If you are building the GUI installer from source:
+
+```bash
+dotnet publish installer-ui/OrganizedJihad.Installer.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:IncludeAllContentForSelfExtract=true -o installer-ui/publish/win-x64
+```
+
+This produces `installer-ui/publish/win-x64/OrganizedJihad.Installer.exe` on Windows and runtime-specific binaries for macOS/Linux when `-r` is changed.
+
+### One-Command Install / Upgrade (CLI)
 
 Run this from the repository root:
 
-```powershell
-pwsh -ExecutionPolicy Bypass -File .\Install-OrganizedJihad.ps1
-```
-
-Or double-click:
-
-```
-Install-OrganizedJihad.cmd
+```bash
+dotnet run --project installer-core/OrganizedJihad.Installer.Cli -- --run-install-health-check
 ```
 
 What it does:
 
-- Builds the latest TamperMonkey userscript bundle
-- Publishes the API backend as a self-contained Windows executable
-- Installs/updates artifacts in `%LOCALAPPDATA%\OrganizedJihad`
-- Registers `OrganizedJihad.Api.Autostart` scheduled task (runs on logon)
-- Registers `OrganizedJihad.Api.Autostart` for system startup + logon when installer is run as Administrator
-- Falls back to logon startup when not elevated
-- Opens Tampermonkey extension install pages and opens the latest userscript file for import/update
+- Installs bundled API/runtime-host payloads to the configured install root
+- Installs userscript + setup guide assets
+- Starts runtime host or API directly depending on available binaries
+- Runs optional health checks and diagnostics links
+- Opens Tampermonkey install pages for selected browser bootstrap
 
 Optional flags:
 
-- `-SkipTampermonkeyBootstrap` to skip opening extension/script pages
-- `-SkipYarnInstall` to skip `yarn install` during repeat installs
-- `-InstallRoot "D:\Apps\OrganizedJihad"` to customize install location
+- `--skip-tampermonkey-bootstrap` to skip opening extension/script pages
+- `--tampermonkey-browsers chrome,operaGX` to target specific browser bootstrap pages
+- `--skip-userscript-install` to skip userscript payload install
+- `--install-root "D:\Apps\OrganizedJihad"` to customize install location
+- `--api-url "http://localhost:5124"` to customize runtime API URL
+
+New reliability behaviors:
+
+- Installer health diagnostics include `/ui/userscript-handshake` checks to confirm userscript-to-API handshake freshness.
+
+Legacy note:
+
+- `Install-OrganizedJihad.ps1` and `Install-OrganizedJihad.cmd` remain in the repository for compatibility, but v0.2.3 primary install flow is managed `.NET` CLI/UI.
+- `Publish-ReleaseArtifacts.ps1` and `Publish-ReleaseArtifacts-0.2.3.ps1` are compatibility wrappers that now delegate to `OrganizedJihad.Release.Cli`.
 
 ### Build & Run
 
@@ -87,10 +190,38 @@ cd userscript
 yarn install
 yarn build
 # Install dist/organized-jihad.user.js in TamperMonkey
-
-# Run the desktop app
-dotnet run --project desktop-app
 ```
+
+### Release Validation Automation
+
+```bash
+# Validate migration path + host-compatible smoke checks as part of managed matrix run
+dotnet run --project installer-core/OrganizedJihad.Release.Cli -- --version 0.2.3 --runtimes win-x64,linux-x64,osx-x64,osx-arm64
+
+# Force smoke checks on linux-x64 publish (when running on compatible host)
+dotnet run --project installer-core/OrganizedJihad.Release.Cli -- --version 0.2.3 --runtimes linux-x64,osx-arm64 --smoke-runtime linux-x64
+
+# Show release plan only (no build/publish/check execution)
+dotnet run --project installer-core/OrganizedJihad.Release.Cli -- --version 0.2.3 --runtimes win-x64,linux-x64 --dry-run
+
+# Emit plan as JSON for CI preflight checks
+dotnet run --project installer-core/OrganizedJihad.Release.Cli -- --version 0.2.3 --runtimes win-x64,linux-x64 --dry-run --dry-run-format json
+
+# Emit and persist plan JSON for CI artifacts
+dotnet run --project installer-core/OrganizedJihad.Release.Cli -- --version 0.2.3 --runtimes win-x64,linux-x64 --dry-run --dry-run-format json --dry-run-output-path artifacts/dryrun/plan.json
+
+# Fail CI on dry-run warnings
+dotnet run --project installer-core/OrganizedJihad.Release.Cli -- --version 0.2.3 --runtimes osx-arm64 --dry-run --dry-run-fail-on-warnings
+
+# Print built-in command help
+dotnet run --project installer-core/OrganizedJihad.Release.Cli -- --help
+
+# Optional fast rerun while skipping managed validation checks
+dotnet run --project installer-core/OrganizedJihad.Release.Cli -- --version 0.2.3 --runtimes win-x64 --skip-migration-check --skip-smoke-test --skip-userscript-build
+```
+
+`OrganizedJihad.Release.Cli` now runs migration + smoke checks by default.
+Use `--skip-migration-check` and/or `--skip-smoke-test` only when intentionally bypassing validation.
 
 ### Running Tests
 
@@ -105,7 +236,7 @@ yarn test
 
 ## Project Structure
 
-```
+```text
 OrganizedJihad/
 ├── api/                    # ASP.NET Core Web API (Tier 3)
 │   ├── Controllers/        #   SyncController (import/query endpoints)
@@ -117,12 +248,6 @@ OrganizedJihad/
 │   ├── Models/             #   35+ game entity models
 │   ├── Migrations/         #   Database migrations
 │   └── GameDatabaseContext.cs
-│
-├── desktop-app/            # .NET MAUI Blazor Hybrid (Tier 2)
-│   ├── Components/Pages/   #   Dashboard, Battles, Chests, Resources,
-│   │                       #   ShopPurchases, Inventory, Hero/Titan Rosters,
-│   │                       #   Hero/Titan Upgrades, Daily Activity
-│   └── Services/           #   DataService, SyncService
 │
 ├── userscript/             # TamperMonkey Userscript (Tier 1)
 │   └── src/modules/        #   apiMonitor, gameTracker, syncClient,
@@ -136,22 +261,6 @@ OrganizedJihad/
     ├── plans/              #   Architecture, tracking reference, roadmap
     └── copilot-chats/      #   AI session logs
 ```
-
-## Desktop App Pages
-
-| Page | Route | Description |
-|------|-------|-------------|
-| Dashboard | `/` | Overview with latest snapshot, quick stats, recent activity |
-| Hero Roster | `/heroes` | All heroes with level, stars, color, power, progress bars |
-| Hero Upgrades | `/hero-upgrades` | Every hero upgrade event (level, star, color, skill, artifact) |
-| Titan Roster | `/titans` | All titans with level, stars, element, power, progress bars |
-| Titan Upgrades | `/titan-upgrades` | Every titan upgrade event |
-| Battles | `/battles` | All battle types grouped: Arena, Grand Arena, Titan Arena, Guild War, Raid Boss, Expedition |
-| Resources | `/resources` | Clickable resource balances with earn/spend transaction log |
-| Chests | `/chests` | Chest openings with individual drops, percentages, rarity breakdown |
-| Shop Purchases | `/shop-purchases` | All shop/merchant purchases with currency analysis |
-| Inventory | `/inventory-usage` | Current inventory grouped by type + consumable usage log |
-| Daily Activity | `/daily-activity` | Daily quests, guild quests, login rewards |
 
 ## Development Guidelines
 

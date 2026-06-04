@@ -24,6 +24,103 @@
 
 import IndexedDBStorage from './indexedDBStorage.js';
 import UpgradeTracker from './trackers/UpgradeTracker.js';
+import { trackGenericEvent, trackGenericUpgrade } from './trackers/GameTrackerGenericTrackingHelpers.js';
+import {
+	createHandlerRegistry,
+	registerTrackerHandler,
+	topologicalSortHandlerMethods,
+} from './trackers/GameTrackerRegistryEngine.js';
+import { applyDefaultTrackerRegistrars } from './trackers/GameTrackerRegistryBootstrap.js';
+import {
+	buildApiPayload,
+	buildSortedResults,
+	dispatchSortedResults,
+} from './trackers/GameTrackerResponseDispatchHelpers.js';
+import {
+	buildUnexpectedFormatDiagnostics,
+} from './trackers/GameTrackerResponseDiagnosticsHelpers.js';
+import {
+	trackResourceTransactionHelper,
+	trackGuildActivityHelper,
+} from './trackers/GameTrackerEconomyTrackingHelpers.js';
+import {
+	trackBatchQuestFarmHelper,
+	trackDailyBonusInfoHelper,
+	trackDailyQuestFarmHelper,
+	trackLoginRewardHelper,
+	trackQuestsDataHelper,
+} from './trackers/GameTrackerQuestTrackingHelpers.js';
+import {
+	trackInventoryItemUsageHelper,
+} from './trackers/GameTrackerInventoryTrackingHelpers.js';
+import {
+	buildGuildMemberSnapshotPayload,
+	persistGuildMemberSnapshotPayload,
+	trackGuildDataHelper,
+} from './trackers/GameTrackerGuildTrackingHelpers.js';
+import {
+	executeGuildDungeonParticipationTracking,
+	executeGuildRaidParticipationTracking,
+	executeGuildWarParticipationTracking,
+} from './trackers/GameTrackerGuildParticipationExecutionHelpers.js';
+import {
+	getStoredGuildIdHelper,
+	trackTitaniteTransactionHelper,
+} from './trackers/GameTrackerGuildCurrencyHelpers.js';
+import {
+	persistCrossServerWarBattles,
+} from './trackers/GameTrackerCrossServerExecutionHelpers.js';
+import {
+	executeGuildWarBattleTracking,
+	executeRaidBossAttackTracking,
+} from './trackers/GameTrackerBattleExecutionHelpers.js';
+import {
+	appendChestHistory,
+	applyChestDropRateUpdates,
+	buildChestHistoryEntry,
+	buildChestOpeningRecord,
+	buildChestResourceTransactionIntents,
+	buildConsumableDropRecords,
+	sourceTypeLabel,
+} from './trackers/GameTrackerConsumableOpeningHelpers.js';
+import {
+	buildExpeditionBattleRecord,
+	buildExpeditionResourceRewardIntents,
+	buildExpeditionStateMetadata,
+	buildMissionResourceRewardIntents,
+	buildQuestCompletionRecord,
+	buildQuestResourceRewardIntents,
+	buildShopPurchaseRecord,
+	buildShopResourceSpendIntents,
+	buildTowerResourceRewardIntents,
+	extractDropsIntoArray,
+	normalizeRewardsPayload,
+	resolveRewardPayload,
+} from './trackers/GameTrackerRewardEconomyHelpers.js';
+import {
+	buildMissionProgressLogMessage,
+	buildMissionProgressRecord,
+	buildTowerProgressLogMessage,
+	buildTowerProgressRecord,
+	executeResourceTransactionIntents,
+	getExistingProgressRecord,
+	resolveTowerType,
+} from './trackers/GameTrackerProgressionTrackingHelpers.js';
+import {
+	appendBoundedHistory,
+	buildGuildWarDataResponse,
+	buildRaidBossDataResponse,
+	buildCrossServerWarInfoMetadata,
+	buildGuildWarInfoMetadata,
+	buildRaidBossAttackHistoryRecord,
+	buildRaidBossBattleRecord,
+	buildRaidBossDamageSummary,
+	buildRaidBossInfoMetadata,
+	resolveCrossServerBattleResults,
+} from './trackers/GameTrackerWarRaidHelpers.js';
+import {
+	finalizeProcessApiResponseLifecycle,
+} from './trackers/GameTrackerResponseLifecycleHelpers.js';
 import { compressHeroBatch, compressTitanBatch } from './heroCompression.js';
 import { resolveHeroName, resolveTitanElement } from './heroNames.js';
 
@@ -1155,37 +1252,20 @@ class GameTracker {
 		const extracted = this._extractCalls(request, response);
 
 		if (!extracted) {
-			// Diagnostic logging: show what we actually received.
-			// Wrap JSON.stringify in try/catch because non-serializable data
-			// (BigInt, circular refs, etc.) would throw and silently kill the
-			// entire function before we ever push to the API log.
-			let reqKeys = '(null)';
-			let resKeys = '(null)';
-			let reqSnippet = '(null)';
-			let resSnippet = '(null)';
-			try {
-				reqKeys = request ? Object.keys(request).join(', ') : '(null)';
-				resKeys = response ? Object.keys(response).join(', ') : '(null)';
-			} catch { /* ignore */ }
-			try {
-				reqSnippet = JSON.stringify(request)?.substring(0, 200) || '(null)';
-			} catch {
-				reqSnippet = `(unstringifiable: ${typeof request})`;
-			}
-			try {
-				resSnippet = JSON.stringify(response)?.substring(0, 200) || '(null)';
-			} catch {
-				resSnippet = `(unstringifiable: ${typeof response})`;
-			}
-			const detail = `No .calls/.results | req keys=[${reqKeys}] res keys=[${resKeys}]`;
-			console.warn('[OrganizedJihad] processAPIResponse: unexpected format', {
-				requestKeys: reqKeys,
-				responseKeys: resKeys,
-				requestSnippet: reqSnippet,
-				responseSnippet: resSnippet,
-				page: this._pageHost,
-			});
-			this._pushApiLog([], 'skipped', detail, `req: ${reqSnippet} | res: ${resSnippet}`, this._lastInterceptedUrl);
+			const diagnostics = buildUnexpectedFormatDiagnostics(
+				request,
+				response,
+				this._pageHost,
+				this._lastInterceptedUrl
+			);
+			console.warn('[OrganizedJihad] processAPIResponse: unexpected format', diagnostics.warningContext);
+			this._pushApiLog(
+				diagnostics.apiLogPayload.callNames,
+				diagnostics.apiLogPayload.status,
+				diagnostics.apiLogPayload.detail,
+				diagnostics.apiLogPayload.error,
+				diagnostics.apiLogPayload.url
+			);
 			return;
 		}
 
@@ -1193,164 +1273,33 @@ class GameTracker {
 		const { calls: extractedCalls, callMap, callArgs } = extracted;
 		const allCallNames = extractedCalls.map((c) => c.name);
 
-		// Track which calls were dispatched vs unhandled
-		const dispatched = [];
-		const unhandled = [];
-		const errors = [];
-
 		// Topologically sort results so dependencies process first (#47)
-		const resultsByIdent = new Map();
-		for (const result of response.results) {
-			resultsByIdent.set(result.ident, result);
-		}
-		const identOrder = response.results.map((r) => r.ident);
-		const methodOrder = identOrder.map((ident) => callMap[ident]).filter(Boolean);
-		const uniqueMethods = [...new Set(methodOrder)];
-		const sortedMethods = this._topologicalSortMethods(uniqueMethods);
+		const { sortedResults } = buildSortedResults(
+			response.results,
+			callMap,
+			(methodNames) => this._topologicalSortMethods(methodNames)
+		);
 
-		// Build sorted results list: dependency-ordered methods first,
-		// then any results without a mapped method name
-		const sortedResults = [];
-		for (const method of sortedMethods) {
-			// Find all results that map to this method (in original order)
-			for (const ident of identOrder) {
-				if (callMap[ident] === method && resultsByIdent.has(ident)) {
-					sortedResults.push(resultsByIdent.get(ident));
-					resultsByIdent.delete(ident);
-				}
-			}
-		}
-		// Append any unmapped results at the end
-		for (const ident of identOrder) {
-			if (resultsByIdent.has(ident)) {
-				sortedResults.push(resultsByIdent.get(ident));
-			}
-		}
-
-		// Process each result using the handler registry (#46)
-		for (const result of sortedResults) {
-			const callName = callMap[result.ident];
-			const args = callArgs[result.ident];
-			const responseData = result.result?.response;
-
-			if (!responseData) {
-				if (callName) unhandled.push(callName + '(no data)');
-				continue;
-			}
-
-			// Look up handlers in the registry
-			const handlers = this._handlerRegistry.get(callName);
-			if (!handlers || handlers.length === 0) {
-				if (callName) unhandled.push(callName);
-				continue;
-			}
-
-			// Execute all registered handlers for this API method
-			for (const entry of handlers) {
-				// Skip handlers whose tracking category is disabled (#27)
-				if (entry.category && !this._trackingPrefs[entry.category]) {
-					continue;
-				}
-				try {
-					await entry.handler.call(this, callName, args, responseData);
-					if (!dispatched.includes(callName)) {
-						dispatched.push(callName);
-					}
-				} catch (error) {
-					console.error(`[OrganizedJihad] Error in handler "${entry.label}" for ${callName}:`, error);
-					errors.push(`${callName}/${entry.label}: ${error?.message || String(error)}`);
-					await this._logError(`processAPIResponse:${callName}:${entry.label}`, error);
-				}
-			}
-		}
+		const { dispatched, unhandled, errors } = await dispatchSortedResults(
+			this,
+			sortedResults,
+			callMap,
+			callArgs
+		);
 
 		// Push to API call log ring buffer
 		// Build per-call payload map for API Log viewer (#91)
-		const payload = {};
-		for (const result of sortedResults) {
-			const callName = callMap[result.ident];
-			if (!callName) continue;
-			const args = callArgs[result.ident];
-			const responseData = result.result?.response;
-
-			// ── API Sample Collector: store one complete sample per method ──
-			// Only stores the FIRST sample seen for each method (to capture
-			// the "clean" initial response). Call clearApiSamples() to reset.
-			// Evicts the oldest entry when _apiSampleMaxMethods is exceeded (#137).
-			if (callName && responseData && !this._apiSamples.has(callName)) {
-				try {
-					const resStr = JSON.stringify(responseData);
-					const sampleEntry = resStr.length <= this._apiSampleMaxResponseSize
-						? {
-							args: JSON.parse(JSON.stringify(args || {})),
-							response: JSON.parse(resStr),
-							capturedAt: new Date().toISOString(),
-							responseSize: resStr.length,
-						}
-						: {
-							// Too large — store truncation marker with size info
-							args: JSON.parse(JSON.stringify(args || {})),
-							response: `[too large: ${resStr.length} bytes — increase _apiSampleMaxResponseSize to capture]`,
-							capturedAt: new Date().toISOString(),
-							responseSize: resStr.length,
-						};
-
-					this._apiSamples.set(callName, sampleEntry);
-
-					// LRU eviction: drop the oldest entry if we exceed the cap (#137)
-					if (this._apiSamples.size > this._apiSampleMaxMethods) {
-						// Map iteration order = insertion order; first key is oldest
-						const oldestKey = this._apiSamples.keys().next().value;
-						this._apiSamples.delete(oldestKey);
-					}
-				} catch { /* ignore unstringifiable responses */ }
-			}
-
-			// Truncate large payloads to prevent memory bloat
-			try {
-				const argsStr = JSON.stringify(args);
-				const resStr = JSON.stringify(responseData);
-				payload[callName] = {
-					args: argsStr.length > 2000 ? JSON.parse(argsStr.substring(0, 2000) + '..."') : args,
-					response: resStr.length > 5000 ? `[truncated: ${resStr.length} bytes]` : responseData,
-				};
-			} catch {
-				payload[callName] = { args, response: '[unstringifiable]' };
-			}
-		}
-
-		const status = errors.length > 0 ? 'error' : (dispatched.length > 0 ? 'ok' : 'no-match');
-		const detail = dispatched.length > 0
-			? `Dispatched: ${dispatched.join(', ')}` + (unhandled.length > 0 ? ` | Unhandled: ${unhandled.join(', ')}` : '')
-			: `Unhandled: ${unhandled.join(', ') || 'none'}`;
-		this._pushApiLog(allCallNames, status, detail, errors.length > 0 ? errors.join('; ') : null, this._lastInterceptedUrl, payload);
-
-		// Diagnostic: console summary of dispatch results (#61)
-		if (dispatched.length > 0) {
-			console.log(
-				`%c[OJ]%c ✓ Dispatched: ${dispatched.join(', ')}` +
-				(unhandled.length > 0 ? ` | Skipped: ${unhandled.length}` : ''),
-				'color:#4CAF50;font-weight:bold',
-				'color:#8BC34A'
-			);
-		} else {
-			console.log(
-				`%c[OJ]%c ○ No handlers matched: ${allCallNames.join(', ')}`,
-				'color:#FF9800;font-weight:bold',
-				'color:#FFB74D'
-			);
-		}
-		if (errors.length > 0) {
-			console.warn(`%c[OJ]%c ✗ Handler errors: ${errors.join('; ')}`,
-				'color:#F44336;font-weight:bold',
-				'color:#EF9A9A'
-			);
-		}
-
-		// Trigger debounced data snapshot (#28)
-		// Uses a 5-second coalescing window so rapid API bursts produce
-		// only a single snapshot write instead of one per response.
-		this._debouncedSnapshot();
+		const payload = buildApiPayload(this, sortedResults, callMap, callArgs);
+		// Finalize dispatch lifecycle: api log + console summary + snapshot trigger.
+		finalizeProcessApiResponseLifecycle(
+			this,
+			allCallNames,
+			dispatched,
+			unhandled,
+			errors,
+			payload,
+			this._lastInterceptedUrl
+		);
 	}
 
 	// =====================================================================
@@ -1376,24 +1325,7 @@ class GameTracker {
 	 *     One of: player, battles, chests, guild, quests, upgrades.
 	 */
 	registerHandler(methods, handler, label = handler.name || '(anonymous)', options = {}) {
-		const methodList = Array.isArray(methods) ? methods : [methods];
-		const dependsOn = options.dependsOn || [];
-		const category = options.category || null;
-
-		// Validate: detect obviously circular self-dependencies
-		for (const method of methodList) {
-			if (dependsOn.includes(method)) {
-				console.warn(`[OrganizedJihad] Handler "${label}" has circular self-dependency on "${method}" — ignoring dependency`);
-				dependsOn.splice(dependsOn.indexOf(method), 1);
-			}
-		}
-
-		for (const method of methodList) {
-			if (!this._handlerRegistry.has(method)) {
-				this._handlerRegistry.set(method, []);
-			}
-			this._handlerRegistry.get(method).push({ handler, label, dependsOn, category });
-		}
+		registerTrackerHandler(this._handlerRegistry, methods, handler, label, options, console.warn);
 	}
 
 	/**
@@ -1409,78 +1341,7 @@ class GameTracker {
 	 * @private
 	 */
 	_topologicalSortMethods(methodNames) {
-		const nameSet = new Set(methodNames);
-
-		// Build forward deps (method → deps it needs) and reverse map
-		// (dep → methods that depend on it) for O(E) inner loop in Kahn's. (#142)
-		/** @type {Map<string, Set<string>>} */
-		const deps = new Map();
-		/** @type {Map<string, Set<string>>} */
-		const dependents = new Map();
-
-		for (const name of methodNames) {
-			deps.set(name, new Set());
-			dependents.set(name, new Set());
-		}
-
-		for (const name of methodNames) {
-			const handlers = this._handlerRegistry.get(name) || [];
-			for (const entry of handlers) {
-				for (const dep of entry.dependsOn || []) {
-					if (nameSet.has(dep) && dep !== name) {
-						deps.get(name).add(dep);
-						dependents.get(dep).add(name);
-					}
-				}
-			}
-		}
-
-		// in-degree = number of in-batch deps each method has
-		/** @type {Map<string, number>} */
-		const inDegree = new Map();
-		for (const [name, depSet] of deps) {
-			inDegree.set(name, depSet.size);
-		}
-
-		// Kahn's algorithm — index-based queue avoids O(n) shift(),
-		// Set avoids O(n) includes() checks (#142)
-		const queue = [];
-		for (const [name, degree] of inDegree) {
-			if (degree === 0) {
-				queue.push(name);
-			}
-		}
-
-		const sorted = [];
-		const sortedSet = new Set();
-		let qi = 0;
-		while (qi < queue.length) {
-			const current = queue[qi++];
-			sorted.push(current);
-			sortedSet.add(current);
-
-			// Only iterate methods that actually depend on `current`
-			for (const dependent of (dependents.get(current) || [])) {
-				const depSet = deps.get(dependent);
-				if (depSet?.has(current)) {
-					depSet.delete(current);
-					if (depSet.size === 0 && !sortedSet.has(dependent)) {
-						queue.push(dependent);
-					}
-				}
-			}
-		}
-
-		// Detect cycles: any remaining methods not in sorted
-		if (sorted.length < methodNames.length) {
-			const remaining = methodNames.filter((n) => !sortedSet.has(n));
-			if (remaining.length > 0) {
-				console.warn(`[OrganizedJihad] Circular handler dependencies detected: ${remaining.join(', ')} — appending in original order`);
-				sorted.push(...remaining);
-			}
-		}
-
-		return sorted;
+		return topologicalSortHandlerMethods(methodNames, this._handlerRegistry, console.warn);
 	}
 
 	/**
@@ -1492,1640 +1353,8 @@ class GameTracker {
 	 */
 	_buildHandlerRegistry() {
 		/** @type {Map<string, Array<{handler: Function, label: string}>>} */
-		this._handlerRegistry = new Map();
-
-		// ── Core player data ───────────────────────────────────────────
-		this.registerHandler('userGetInfo', async (_call, _args, data) => {
-			await this.trackPlayerData(data);
-		}, 'trackPlayerData', { category: 'player' });
-
-		this.registerHandler('heroGetAll', async (_call, _args, data) => {
-			await this.trackHeroesData(data);
-		}, 'trackHeroesData', { dependsOn: ['userGetInfo'], category: 'player' });
-
-		this.registerHandler('inventoryGet', async (_call, _args, data) => {
-			await this.trackInventoryData(data);
-		}, 'trackInventoryData', { dependsOn: ['userGetInfo'], category: 'player' });
-
-		// ── Battle systems ──────────────────────────────────────────────
-		this.registerHandler('missionEnd', async (callName, args, data) => {
-			await this.trackMissionProgress(args, data);
-			await this.trackBattleResult(callName, args, data);
-		}, 'trackMission', { category: 'battles' });
-
-		this.registerHandler('towerEnd', async (callName, args, data) => {
-			await this.trackTowerProgress(args, data);
-			await this.trackBattleResult(callName, args, data);
-		}, 'trackTower', { category: 'battles' });
-
-		this.registerHandler('bossEnd', async (callName, args, data) => {
-			await this.trackBattleResult(callName, args, data);
-		}, 'trackBossEnd', { category: 'battles' });
-
-		// ── Arena ───────────────────────────────────────────────────────
-		this.registerHandler('arenaGetEnemies', async (_call, _args, data) => {
-			await this.trackArenaEnemies(data);
-		}, 'trackArenaEnemies', { category: 'battles' });
-
-		this.registerHandler(['arenaAttack', 'arenaEnd'], async (_call, args, data) => {
-			await this.trackArenaBattle(args, data);
-		}, 'trackArenaBattle', { category: 'battles' });
-
-		// ── Titan Arena ─────────────────────────────────────────────────
-		this.registerHandler('titanArenaGetEnemies', async (_call, _args, data) => {
-			await this.trackTitanArenaEnemies(data);
-		}, 'trackTitanArenaEnemies', { category: 'battles' });
-
-		this.registerHandler('titanArenaAttack', async (_call, args, data) => {
-			await this.trackTitanArenaBattle(args, data);
-		}, 'trackTitanArenaBattle', { category: 'battles' });
-
-		// ── Grand Arena ─────────────────────────────────────────────────
-		this.registerHandler('grandArenaGetEnemies', async (_call, _args, data) => {
-			await this.trackGrandArenaEnemies(data);
-		}, 'trackGrandArenaEnemies', { category: 'battles' });
-
-		this.registerHandler('grandArenaAttack', async (_call, args, data) => {
-			await this.trackGrandArenaBattle(args, data);
-		}, 'trackGrandArenaBattle', { category: 'battles' });
-
-		// ── Guild War ───────────────────────────────────────────────────
-		this.registerHandler('clanWarAttack', async (_call, args, data) => {
-			await this.trackGuildWarBattle(args, data);
-		}, 'trackGuildWarBattle', { category: 'battles' });
-
-		// ── Cross-Server War (#40) ──────────────────────────────────────
-		this.registerHandler('clanWarGetBattleResults', async (_call, args, data) => {
-			await this.trackCrossServerWarResults(args, data);
-		}, 'trackCrossServerWarResults', { category: 'battles' });
-
-		// ── Arena / Grand Arena Replays (#42) ───────────────────────────
-		this.registerHandler('arenaGetReplay', async (callName, args, data) => {
-			await this.trackArenaReplay(callName, args, data);
-		}, 'trackArenaReplay', { category: 'battles' });
-
-		this.registerHandler('grandGetReplay', async (callName, args, data) => {
-			await this.trackArenaReplay(callName, args, data);
-		}, 'trackGrandArenaReplay', { category: 'battles' });
-
-		this.registerHandler('arenaFindEnemies', async (_call, _args, data) => {
-			await this.trackArenaEnemies(data);
-		}, 'trackArenaFindEnemies', { category: 'battles' });
-
-		// ── Adventure / Boss Replays (#41) ──────────────────────────────
-		this.registerHandler(['adventureGetReplay', 'bossGetReplay'], async (callName, args, data) => {
-			await this.trackAdventureReplay(callName, args, data);
-		}, 'trackAdventureReplay', { category: 'battles' });
-
-		// ── Generic Replay (#106) ───────────────────────────────────────
-		// The game may use battleGetReplay as a unified replay endpoint
-		// for all battle types. Route to the appropriate tracker based on
-		// response data; fall through to arena replay as the default.
-		this.registerHandler('battleGetReplay', async (_call, args, data) => {
-			// Unwrap nested replay wrapper if present
-			const replay = data.replay || data;
-			// Detect type from ident, args, or response structure
-			const ident = args.ident || args.type || '';
-			if (ident.includes('boss') || ident.includes('adventure')) {
-				await this.trackAdventureReplay('battleGetReplay', args, replay);
-			} else if (ident.includes('grand')) {
-				await this.trackArenaReplay('grandGetReplay', args, replay);
-			} else {
-				// Default to arena replay — the most common replay type
-				await this.trackArenaReplay('arenaGetReplay', args, replay);
-			}
-		}, 'trackBattleGetReplay', { category: 'battles' });
-
-		// ── Guild Raid ──────────────────────────────────────────────────
-		this.registerHandler('bossRaidAttack', async (_call, args, data) => {
-			await this.trackRaidBossAttack(args, data);
-		}, 'trackRaidBossAttack', { category: 'battles' });
-
-		// ── Loot and rewards ────────────────────────────────────────────
-		this.registerHandler('chestOpen', async (_call, args, data) => {
-			await this.trackChestOpening(args, data);
-		}, 'trackChestOpening', { category: 'chests' });
-
-		this.registerHandler('shopBuy', async (_call, args, data) => {
-			await this.trackShopPurchase(args, data);
-		}, 'trackShopPurchase', { category: 'chests' });
-
-		this.registerHandler('questComplete', async (_call, args, data) => {
-			await this.trackQuestComplete(args, data);
-		}, 'trackQuestComplete', { category: 'quests' });
-
-		// ── Other data ──────────────────────────────────────────────────
-		this.registerHandler('questGetAll', async (_call, _args, data) => {
-			await this.trackQuestsData(data);
-		}, 'trackQuestsData', { category: 'quests' });
-
-		this.registerHandler('clanGetInfo', async (_call, _args, data) => {
-			await this.trackGuildData(data);
-			await this.trackGuildMembers(data);
-		}, 'trackGuildData', { category: 'guild' });
-
-		this.registerHandler(['clanWarGetInfo', 'clanWarUserGetInfo'], async (_call, _args, data) => {
-			await this.trackGuildWarInfo(data);
-			await this.trackGuildWarParticipation(data);
-		}, 'trackGuildWarInfo', { category: 'guild' });
-
-		// ── Guild War Brief Info (#119) ─────────────────────────────────
-		// clanWarGetBriefInfo returns remaining attack tries and war status.
-		// Response: { tries, targets, arePointsMax, hasActiveWar, nextWarTime }
-		this.registerHandler('clanWarGetBriefInfo', async (_call, _args, data) => {
-			await this.storage.setMetadata('guildWarBrief', {
-				triesRemaining: data.tries ?? 0,
-				targets: data.targets ?? 0,
-				arePointsMax: data.arePointsMax ?? false,
-				hasActiveWar: data.hasActiveWar ?? false,
-				nextWarTime: data.nextWarTime || 0,
-				nearestWarEndTime: data.nearestWarEndTime || 0,
-				lastUpdate: Date.now(),
-			});
-			console.log(`[OrganizedJihad] GW brief: ${data.tries ?? 0} tries remaining, active: ${data.hasActiveWar}`);
-		}, 'trackGuildWarBrief', { category: 'guild' });
-
-		// ── Clash of Worlds (CoW) (#119) ────────────────────────────────
-		// crossClanWar_getInfo returns full CoW state including hero/titan attack usage.
-		// Response: { war: { myTries: { heroes, titans, usedHeroes, usedTitans }, enemyClan, points, enemyPoints } }
-		this.registerHandler('crossClanWar_getInfo', async (_call, _args, data) => {
-			const myTries = data.war?.myTries || {};
-			await this.storage.setMetadata('cowData', {
-				heroAttacksRemaining: myTries.heroes ?? 0,
-				titanAttacksRemaining: myTries.titans ?? 0,
-				heroAttacksMax: 3, // CoW always has 3 hero + 2 titan attacks
-				titanAttacksMax: 2,
-				usedHeroes: myTries.usedHeroes || [],
-				usedTitans: myTries.usedTitans || [],
-				ourPoints: data.war?.points || '0',
-				enemyPoints: data.war?.enemyPoints || '0',
-				enemyClan: data.war?.enemyClan?.title || null,
-				isActive: !!data.war,
-				rating: data.rating || '0',
-				division: data.division || 0,
-				league: data.league || 0,
-				lastUpdate: Date.now(),
-			});
-			console.log(`[OrganizedJihad] CoW: heroes ${3 - (myTries.heroes ?? 3)}/3, titans ${2 - (myTries.titans ?? 2)}/2`);
-		}, 'trackCowData', { category: 'guild' });
-
-		// NOTE: The actual API method is `clanRaid_getInfo`, NOT `bossRaidGetInfo` (#120)
-		// Confirmed via API Sample Collector — see ~docs/api-samples/
-		this.registerHandler('clanRaid_getInfo', async (_call, _args, data) => {
-			await this.trackRaidBossInfo(data);
-			await this.trackGuildRaidParticipation(data);
-		}, 'trackRaidBossInfo', { category: 'guild' });
-
-		this.registerHandler(['dungeonGetState', 'titanDungeonGetInfo'], async (_call, _args, data) => {
-			await this.trackGuildDungeonParticipation(data);
-		}, 'trackGuildDungeon', { category: 'guild' });
-
-		this.registerHandler('expeditionGetState', async (_call, _args, data) => {
-			await this.trackExpeditionState(data);
-		}, 'trackExpeditionState', { category: 'battles' });
-
-		this.registerHandler('expeditionBattle', async (_call, args, data) => {
-			await this.trackExpeditionBattle(args, data);
-		}, 'trackExpeditionBattle', { category: 'battles' });
-
-		this.registerHandler('titanGetAll', async (_call, _args, data) => {
-			await this.trackTitansData(data);
-		}, 'trackTitansData', { category: 'player' });
-
-		this.registerHandler('pet_getAll', async (_call, _args, data) => {
-			await this.trackPetsData(data);
-		}, 'trackPetsData', { category: 'player' });
-
-		// ── Chat and communication ──────────────────────────────────────
-		this.registerHandler(['chatGetDialog', 'chatGetNewMessages'], async (callName, args, data) => {
-			await this.trackChatMessages(args, data, callName);
-		}, 'trackChatMessages', { category: 'guild' });
-
-		this.registerHandler('chatSendMessage', async (_call, args, data) => {
-			await this.trackOutgoingMessage(args, data);
-		}, 'trackOutgoingMessage', { category: 'guild' });
-
-		// ── Mail tracking (Phase 12, #94) ───────────────────────────────
-		this.registerHandler('mailGetAll', async (_call, _args, data) => {
-			await this.trackMailList(data);
-		}, 'trackMailList', { category: 'player' });
-
-		this.registerHandler(['mailFarm', 'mailCollect'], async (callName, args, data) => {
-			await this.trackMailRewards(callName, args, data);
-		}, 'trackMailRewards', { category: 'player' });
-
-		// ── Hero Upgrade Events (Phase 8) ───────────────────────────────
-		this.registerHandler('heroUpgradeSkill', async (_call, args, data) => {
-			await this.upgradeTracker.trackHeroSkillUpgrade(args, data, await this._getPlayerId());
-		}, 'heroSkillUpgrade', { category: 'upgrades' });
-
-		this.registerHandler('heroArtifactLevelUp', async (_call, args, data) => {
-			await this.upgradeTracker.trackHeroArtifactUpgrade(args, data, await this._getPlayerId());
-			// Track each consumed artifact resource if items data is present
-			if (args.items) {
-				for (const [itemId, qty] of Object.entries(args.items)) {
-					await this.trackInventoryItemUsage(
-						{ ...args, itemId, amount: qty },
-						data, 'artifact_resource', 'hero_artifact'
-					);
-				}
-			} else {
-				await this.trackInventoryItemUsage(
-					{ ...args, itemId: `artifact_slot_${args.slotId || 0}`, amount: 1 },
-					data, 'artifact_resource', 'hero_artifact'
-				);
-			}
-		}, 'heroArtifactUpgrade', { category: 'upgrades' });
-
-		this.registerHandler('heroSkinUpgrade', async (_call, args, data) => {
-			await this.upgradeTracker.trackHeroSkinUpgrade(args, data, await this._getPlayerId());
-			await this.trackInventoryItemUsage(
-				{ ...args, itemId: args.skinId, amount: 1 },
-				data, 'skin_stone', 'hero_skin'
-			);
-		}, 'heroSkinUpgrade', { category: 'upgrades' });
-
-		this.registerHandler('heroEnchantRune', async (_call, args, data) => {
-			await this.upgradeTracker.trackHeroGlyphUpgrade(args, data, await this._getPlayerId());
-			// Track each consumed glyph essence from items.consumable
-			const consumables = args.items?.consumable || {};
-			for (const [itemId, qty] of Object.entries(consumables)) {
-				await this.trackInventoryItemUsage(
-					{ ...args, itemId, amount: qty },
-					data, 'glyph_essence', 'hero_glyph'
-				);
-			}
-		}, 'heroGlyphUpgrade', { category: 'upgrades' });
-
-		this.registerHandler('consumableUseHeroXp', async (_call, args, data) => {
-			await this.upgradeTracker.trackHeroLevelUpgrade(args, data, await this._getPlayerId());
-			await this.trackInventoryItemUsage(args, data, 'potion', 'hero_level');
-		}, 'heroLevelUpgrade', { category: 'upgrades' });
-
-		this.registerHandler('heroLevelUp', async (_call, args, data) => {
-			await this.upgradeTracker.trackHeroGoldLevelUpgrade(args, data, await this._getPlayerId());
-		}, 'heroGoldLevelUpgrade', { category: 'upgrades' });
-
-		this.registerHandler(['heroEvolve', 'heroPromote'], async (_call, args, data) => {
-			await this.upgradeTracker.trackHeroStarUpgrade(args, data, await this._getPlayerId());
-		}, 'heroStarUpgrade', { category: 'upgrades' });
-
-		this.registerHandler('heroColorEvolve', async (_call, args, data) => {
-			await this.upgradeTracker.trackHeroColorUpgrade(args, data, await this._getPlayerId());
-		}, 'heroColorUpgrade', { category: 'upgrades' });
-
-		this.registerHandler('heroEquip', async (_call, args, data) => {
-			await this.upgradeTracker.trackEquipmentChange(args, data, await this._getPlayerId(), 'equipped');
-		}, 'heroEquip', { category: 'upgrades' });
-
-		// Hero ascension — consuming ascension materials
-		this.registerHandler('heroAscension', async (_call, args, data) => {
-			// args may contain: {heroId, items: {[itemId]: qty, ...}}
-			const materials = args.items || {};
-			if (Object.keys(materials).length > 0) {
-				for (const [itemId, qty] of Object.entries(materials)) {
-					await this.trackInventoryItemUsage(
-						{ ...args, itemId, amount: qty },
-						data, 'ascension_material', 'hero_ascension'
-					);
-				}
-			} else {
-				await this.trackInventoryItemUsage(args, data, 'ascension_material', 'hero_ascension');
-			}
-		}, 'heroAscension', { category: 'upgrades' });
-
-		// ── Titan Upgrade Events (Phase 8) ──────────────────────────────
-		this.registerHandler('titanArtifactLevelUp', async (_call, args, data) => {
-			await this.upgradeTracker.trackTitanArtifactUpgrade(args, data, await this._getPlayerId());
-		}, 'titanArtifactUpgrade', { category: 'upgrades' });
-
-		this.registerHandler('titanUsePotions', async (_call, args, data) => {
-			await this.upgradeTracker.trackTitanLevelUpgrade(args, data, await this._getPlayerId());
-			await this.trackInventoryItemUsage(args, data, 'potion', 'titan_level');
-		}, 'titanLevelUpgrade', { category: 'upgrades' });
-
-		this.registerHandler(['titanEvolve', 'titanStarUp'], async (_call, args, data) => {
-			await this.upgradeTracker.trackTitanStarUpgrade(args, data, await this._getPlayerId());
-		}, 'titanStarUpgrade', { category: 'upgrades' });
-
-		this.registerHandler('titanUpgradeSkill', async (_call, args, data) => {
-			await this.upgradeTracker.trackTitanSkillUpgrade(args, data, await this._getPlayerId());
-		}, 'titanSkillUpgrade', { category: 'upgrades' });
-
-		this.registerHandler('titanSkinUpgrade', async (_call, args, data) => {
-			await this.upgradeTracker.trackTitanSkinUpgrade(args, data, await this._getPlayerId());
-		}, 'titanSkinUpgrade', { category: 'upgrades' });
-
-		// ── Daily Activity Events (Phase 8) ─────────────────────────────
-		this.registerHandler('questFarm', async (_call, args, data) => {
-			await this.trackDailyQuestFarm(args, data);
-		}, 'trackDailyQuestFarm', { category: 'quests' });
-
-		this.registerHandler('quest_questsFarm', async (_call, args, data) => {
-			await this.trackBatchQuestFarm(args, data);
-		}, 'trackBatchQuestFarm', { category: 'quests' });
-
-		this.registerHandler('dailyBonusFarm', async (_call, args, data) => {
-			await this.trackLoginReward(args, data);
-		}, 'trackLoginReward', { category: 'quests' });
-
-		this.registerHandler('dailyBonusGetInfo', async (_call, _args, data) => {
-			await this.trackDailyBonusInfo(data);
-		}, 'trackDailyBonusInfo', { category: 'quests' });
-
-		// ── Consumable Reward / Drop-Rate Tracking (Phase 10) ───────────
-		this.registerHandler('artifactChestOpen', async (_call, args, data) => {
-			await this.trackConsumableOpening(args, data, 'artifactChest');
-		}, 'consumable:artifactChest', { category: 'chests' });
-
-		this.registerHandler('titanArtifactChestOpen', async (_call, args, data) => {
-			await this.trackConsumableOpening(args, data, 'titanArtifactChest');
-		}, 'consumable:titanArtifactChest', { category: 'chests' });
-
-		this.registerHandler('pet_chestOpen', async (_call, args, data) => {
-			await this.trackConsumableOpening(args, data, 'petChest');
-		}, 'consumable:petChest', { category: 'chests' });
-
-		this.registerHandler('consumableUseLootBox', async (_call, args, data) => {
-			await this.trackConsumableOpening(args, data, 'lootBox');
-		}, 'consumable:lootBox', { category: 'chests' });
-
-		this.registerHandler('towerOpenChest', async (_call, args, data) => {
-			await this.trackConsumableOpening(args, data, 'towerChest');
-		}, 'consumable:towerChest', { category: 'chests' });
-
-		this.registerHandler('bossOpenChest', async (_call, args, data) => {
-			await this.trackConsumableOpening(args, data, 'outlandChest');
-		}, 'consumable:outlandChest', { category: 'chests' });
-
-		// ── Additional Battle Endpoints (#112) ──────────────────────────
-		// Titan Arena end — battle completion with results
-		this.registerHandler('titanArenaEnd', async (callName, args, data) => {
-			await this.trackTitanArenaBattle(args, data);
-		}, 'trackTitanArenaEnd', { category: 'battles' });
-
-		// Grand Arena end — battle completion with results
-		this.registerHandler('grandArenaEnd', async (callName, args, data) => {
-			await this.trackGrandArenaBattle(args, data);
-		}, 'trackGrandArenaEnd', { category: 'battles' });
-
-		// Adventure end — adventure boss battles
-		this.registerHandler('adventureEnd', async (callName, args, data) => {
-			await this.trackBattleResult(callName, args, data);
-		}, 'trackAdventureEnd', { category: 'battles' });
-
-		// Dungeon battles
-		this.registerHandler(['dungeonBattle', 'dungeonEnd'], async (callName, args, data) => {
-			await this.trackBattleResult(callName, args, data);
-		}, 'trackDungeonBattle', { category: 'battles' });
-
-		// Titan dungeon battles
-		this.registerHandler(['titanDungeonBattle', 'titanDungeonEnd'], async (callName, args, data) => {
-			await this.trackBattleResult(callName, args, data);
-		}, 'trackTitanDungeonBattle', { category: 'battles' });
-
-		// NOTE: arenaEnd is already registered alongside arenaAttack in the Arena
-		// section above (line ~1515). Removed duplicate registration here (#131).
-
-		// ── Pet Upgrade Endpoints (#112) ─────────────────────────────────
-		this.registerHandler('pet_levelUp', async (_call, args, data) => {
-			await this._trackGenericUpgrade('pet', 'levelUp', args, data);
-		}, 'petLevelUp', { category: 'upgrades' });
-
-		this.registerHandler('pet_evolve', async (_call, args, data) => {
-			await this._trackGenericUpgrade('pet', 'evolve', args, data);
-		}, 'petEvolve', { category: 'upgrades' });
-
-		// ── Titan Additional Upgrades (#112) ────────────────────────────
-		this.registerHandler('titanEnchantRune', async (_call, args, data) => {
-			await this.upgradeTracker.trackTitanGlyphUpgrade?.(args, data, await this._getPlayerId());
-			await this._trackGenericUpgrade('titan', 'glyphUpgrade', args, data);
-		}, 'titanGlyphUpgrade', { category: 'upgrades' });
-
-		this.registerHandler('titanSpiritUpgrade', async (_call, args, data) => {
-			await this._trackGenericUpgrade('titan', 'spiritUpgrade', args, data);
-		}, 'titanSpiritUpgrade', { category: 'upgrades' });
-
-		// ── Economy / Shopping Endpoints (#112) ─────────────────────────
-		this.registerHandler('offerBuy', async (_call, args, data) => {
-			await this._trackGenericEvent('economy', 'offerBuy', args, data);
-			// Track resource costs if available
-			if (data.reward) {
-				const rewards = data.reward;
-				if (rewards.gold) await this.trackResourceTransaction('gold', rewards.gold, 'offer', 'shop');
-				if (rewards.starmoney) await this.trackResourceTransaction('emeralds', rewards.starmoney, 'offer', 'shop');
-			}
-		}, 'trackOfferBuy', { category: 'chests' });
-
-		this.registerHandler(['campaignFarm', 'missionFarm'], async (_call, args, data) => {
-			await this._trackGenericEvent('economy', 'campaignFarm', args, data);
-			// Track loot rewards from auto-farming
-			if (data.reward) {
-				const rewards = data.reward;
-				if (rewards.gold) await this.trackResourceTransaction('gold', rewards.gold, 'farm', 'campaign');
-				if (rewards.starmoney) await this.trackResourceTransaction('emeralds', rewards.starmoney, 'farm', 'campaign');
-			}
-		}, 'trackCampaignFarm', { category: 'quests' });
-
-		// ── Friend / Social Endpoints (#112) ────────────────────────────
-		this.registerHandler(['friendSendGift', 'friendGetGift', 'friendSendHearts', 'friendGetHearts'], async (_call, args, data) => {
-			await this._trackGenericEvent('social', 'friendGift', args, data);
-			if (data.reward?.starmoney) {
-				await this.trackResourceTransaction('emeralds', data.reward.starmoney, 'gift', 'friend');
-			}
-		}, 'trackFriendGift', { category: 'player' });
-
-		// ── Event / Season Endpoints (#112) ─────────────────────────────
-		this.registerHandler(['eventGetInfo', 'eventGetAll'], async (_call, _args, data) => {
-			await this._trackGenericEvent('event', 'eventInfo', {}, data);
-		}, 'trackEventInfo', { category: 'quests' });
-
-		this.registerHandler('eventFarm', async (_call, args, data) => {
-			await this._trackGenericEvent('event', 'eventFarm', args, data);
-			if (data.reward) {
-				const rewards = data.reward;
-				if (rewards.gold) await this.trackResourceTransaction('gold', rewards.gold, 'event', 'event');
-				if (rewards.starmoney) await this.trackResourceTransaction('emeralds', rewards.starmoney, 'event', 'event');
-			}
-		}, 'trackEventFarm', { category: 'quests' });
-
-		this.registerHandler(['seasonGetInfo', 'seasonGetAll'], async (_call, _args, data) => {
-			await this._trackGenericEvent('event', 'seasonInfo', {}, data);
-		}, 'trackSeasonInfo', { category: 'quests' });
-
-		this.registerHandler('seasonFarm', async (_call, args, data) => {
-			await this._trackGenericEvent('event', 'seasonFarm', args, data);
-			if (data.reward) {
-				const rewards = data.reward;
-				if (rewards.gold) await this.trackResourceTransaction('gold', rewards.gold, 'season', 'season');
-				if (rewards.starmoney) await this.trackResourceTransaction('emeralds', rewards.starmoney, 'season', 'season');
-			}
-		}, 'trackSeasonFarm', { category: 'quests' });
-
-		// ── Additional Chest Types (#112) ───────────────────────────────
-		this.registerHandler('skinChestOpen', async (_call, args, data) => {
-			await this.trackConsumableOpening(args, data, 'skinChest');
-		}, 'consumable:skinChest', { category: 'chests' });
-
-		this.registerHandler('runeChestOpen', async (_call, args, data) => {
-			await this.trackConsumableOpening(args, data, 'runeChest');
-		}, 'consumable:runeChest', { category: 'chests' });
-
-		this.registerHandler('gachaOpen', async (_call, args, data) => {
-			await this.trackConsumableOpening(args, data, 'gacha');
-		}, 'consumable:gacha', { category: 'chests' });
-
-		// ── Adventure State (#112) ──────────────────────────────────────
-		this.registerHandler('adventureGetAll', async (_call, _args, data) => {
-			await this._trackGenericEvent('adventure', 'adventureState', {}, data);
-		}, 'trackAdventureState', { category: 'battles' });
-
-		// ── Guild Dungeon (#112) ────────────────────────────────────────
-		this.registerHandler('clanDungeonBattle', async (callName, args, data) => {
-			await this.trackBattleResult(callName, args, data);
-		}, 'trackClanDungeonBattle', { category: 'battles' });
-
-		// ── Hero Special Endpoints (#112) ───────────────────────────────
-		this.registerHandler('heroAbsoluteStarMission', async (_call, args, data) => {
-			await this._trackGenericEvent('hero', 'absoluteStarMission', args, data);
-		}, 'trackAbsoluteStarMission', { category: 'upgrades' });
-
-		this.registerHandler('heroGiftOfElements', async (_call, args, data) => {
-			await this._trackGenericUpgrade('hero', 'giftOfElements', args, data);
-		}, 'trackGiftOfElements', { category: 'upgrades' });
-
-		// ── Seer / Special (#112) ───────────────────────────────────────
-		this.registerHandler('seerFarm', async (_call, args, data) => {
-			await this._trackGenericEvent('economy', 'seerFarm', args, data);
-			if (data.reward) {
-				const rewards = data.reward;
-				if (rewards.gold) await this.trackResourceTransaction('gold', rewards.gold, 'seer', 'seer');
-				if (rewards.starmoney) await this.trackResourceTransaction('emeralds', rewards.starmoney, 'seer', 'seer');
-			}
-		}, 'trackSeerFarm', { category: 'quests' });
-
-		// NOTE: towerGetState handler is defined below in Phase 12 block
-		// with richer metadata caching (floor, teamHealth, etc.)
-
-		// ── Clash of Worlds (#112) ──────────────────────────────────────
-		this.registerHandler(['clashGetInfo', 'clashBattle', 'clashEnd'], async (callName, args, data) => {
-			if (callName.includes('Battle') || callName.includes('End')) {
-				await this.trackBattleResult(callName, args, data);
-			} else {
-				await this._trackGenericEvent('clash', 'clashInfo', args, data);
-			}
-		}, 'trackClash', { category: 'battles' });
-
-		// ── Tournament of Elements (#112) ───────────────────────────────
-		this.registerHandler(['tournamentGetInfo', 'tournamentBattle', 'tournamentEnd'], async (callName, args, data) => {
-			if (callName.includes('Battle') || callName.includes('End')) {
-				await this.trackBattleResult(callName, args, data);
-			} else {
-				await this._trackGenericEvent('tournament', 'tournamentInfo', args, data);
-			}
-		}, 'trackTournament', { category: 'battles' });
-
-		// ═════════════════════════════════════════════════════════════════
-		// Phase 11: Comprehensive tracking for previously-unhandled methods
-		// See ~docs/API-Call-Reference.md §15 for full list of captured methods
-		// ═════════════════════════════════════════════════════════════════
-
-		// ── Arena Full State (#112) ─────────────────────────────────────
-		// arenaGetAll returns defense teams, ranks, total win/loss counts,
-		// grand arena coins, and reward timestamps.
-		// NOTE: Many numeric fields are encoded as strings by the server.
-		this.registerHandler('arenaGetAll', async (_call, _args, data) => {
-			await this.storage.setMetadata('arenaStats', {
-				arenaPlace: parseInt(data.arenaPlace, 10) || 0,
-				grandPlace: parseInt(data.grandPlace, 10) || 0,
-				arenaPower: parseInt(data.arenaPower, 10) || 0,
-				grandPower: parseInt(data.grandPower, 10) || 0,
-				totalBattles: data.battles || 0,
-				totalWins: data.wins || 0,
-				winRate: data.battles > 0 ? ((data.wins / data.battles) * 100).toFixed(1) : '0.0',
-				grandCoin: data.grandCoin || 0,
-				arenaHeroes: data.arenaHeroes || [],
-				grandHeroes: data.grandHeroes || [],
-				rewardFlag: data.rewardFlag === '1' || data.rewardFlag === 1,
-				lastUpdate: Date.now(),
-			});
-			console.log(`[OrganizedJihad] Arena stats: rank #${data.arenaPlace}, GA #${data.grandPlace}, ${data.wins}/${data.battles} wins`);
-		}, 'trackArenaStats', { category: 'player' });
-
-		// ── Campaign Mission Progress (#112) ────────────────────────────
-		// missionGetAll returns array of 220 missions with stars, attempts, wins.
-		// We compute campaign progress summary for the dashboard.
-		this.registerHandler('missionGetAll', async (_call, _args, data) => {
-			if (!Array.isArray(data)) return;
-			const total = data.length;
-			const completed = data.filter((m) => m.stars > 0).length;
-			const threeStarred = data.filter((m) => m.stars === 3).length;
-			const totalStars = data.reduce((sum, m) => sum + (m.stars || 0), 0);
-			const maxStars = total * 3;
-			await this.storage.setMetadata('campaignProgress', {
-				totalMissions: total,
-				completedMissions: completed,
-				threeStarMissions: threeStarred,
-				totalStars,
-				maxStars,
-				starPercent: maxStars > 0 ? ((totalStars / maxStars) * 100).toFixed(1) : '0.0',
-				lastUpdate: Date.now(),
-			});
-			console.log(`[OrganizedJihad] Campaign: ${completed}/${total} missions, ${totalStars}/${maxStars} stars (${threeStarred} ★★★)`);
-		}, 'trackCampaignProgress', { category: 'player' });
-
-		// ── Titan Arena Full State (#112) ───────────────────────────────
-		// titanArenaGetStatus returns rank, tier, daily/weekly scores,
-		// your defense team, and 9 matchmaking rivals.
-		this.registerHandler('titanArenaGetStatus', async (_call, _args, data) => {
-			const defenders = data.defenders ? Object.keys(data.defenders).length : 0;
-			const rivals = data.rivals ? Object.keys(data.rivals).length : 0;
-			await this.storage.setMetadata('titanArenaStats', {
-				rank: data.rank || 0,
-				tier: parseInt(data.tier, 10) || 0,
-				maxTier: data.maxTier || 0,
-				dailyScore: data.dailyScore || 0,
-				weeklyScore: data.weeklyScore || 0,
-				status: data.status || 'unknown',
-				canRaid: data.canRaid || false,
-				defenderCount: defenders,
-				rivalCount: rivals,
-				nextDayTs: data.nextDayTs || 0,
-				weekEndTs: data.weekEndTs || 0,
-				lastUpdate: Date.now(),
-			});
-			console.log(`[OrganizedJihad] Titan Arena: rank #${data.rank}, tier ${data.tier}, daily ${data.dailyScore}, weekly ${data.weeklyScore}`);
-		}, 'trackTitanArenaStats', { category: 'player' });
-
-		// ── Battle Pass Progress (#112) ─────────────────────────────────
-		// battlePass_getInfo returns pass ID, XP earned, claimed rewards.
-		// The battlePass sub-object has the core gameplay data.
-		this.registerHandler('battlePass_getInfo', async (_call, _args, data) => {
-			const bp = data.battlePass || data;
-			const rewards = bp.rewards || {};
-			const totalLevels = Object.keys(rewards).length;
-			const freeClaimed = Object.values(rewards).filter((r) => r.free === 1).length;
-			const paidClaimed = Object.values(rewards).filter((r) => r.paid === 1).length;
-			const currentLevel = totalLevels > 0
-				? Math.max(...Object.values(rewards).filter((r) => r.free === 1).map((r) => r.level || 0), 0)
-				: 0;
-			await this.storage.setMetadata('battlePassData', {
-				id: bp.id || data.id || 0,
-				exp: bp.exp || 0,
-				ticket: bp.ticket || 0, // 0=free, 1=silver, 2=gold
-				ticketLabel: bp.ticket === 2 ? 'Gold' : bp.ticket === 1 ? 'Silver' : 'Free',
-				totalLevels,
-				currentLevel,
-				freeClaimed,
-				paidClaimed,
-				startDate: bp.startDate || 0,
-				endDate: bp.endDate || 0,
-				quests: bp.quests || [],
-				lastUpdate: Date.now(),
-			});
-			console.log(`[OrganizedJihad] Battle Pass: Lv${currentLevel} (${bp.exp} XP), ${freeClaimed}/${totalLevels} free claimed`);
-		}, 'trackBattlePass', { category: 'events' });
-
-		// ── CoW Brief Info (#112) ───────────────────────────────────────
-		// crossClanWar_getBriefInfo returns a simpler view than crossClanWar_getInfo
-		// with status, tries remaining, targets, and season timing.
-		// This supplements the main cowData metadata from crossClanWar_getInfo.
-		this.registerHandler('crossClanWar_getBriefInfo', async (_call, _args, data) => {
-			// Merge with existing cowData rather than overwriting
-			const existing = (await this.storage.getMetadata('cowData', null)) || {};
-			await this.storage.setMetadata('cowData', {
-				...existing,
-				heroAttacksRemaining: data.heroTries ?? existing.heroAttacksRemaining ?? 0,
-				titanAttacksRemaining: data.titanTries ?? existing.titanAttacksRemaining ?? 0,
-				heroAttacksMax: 3,
-				titanAttacksMax: 2,
-				isActive: data.hasActiveWar ?? existing.isActive ?? false,
-				status: data.status || existing.status || 'unknown',
-				seasonEndTime: data.seasonEndTime || 0,
-				nextWarTime: data.nextWarTime || 0,
-				currentWarEndTime: data.currentWarEndTime || 0,
-				heroTargets: data.heroTargets ?? 0,
-				titanTargets: data.titanTargets ?? 0,
-				lastUpdate: Date.now(),
-			});
-			console.log(`[OrganizedJihad] CoW brief: heroes ${data.heroTries}/3, titans ${data.titanTries}/2, active: ${data.hasActiveWar}`);
-		}, 'trackCowBrief', { category: 'guild' });
-
-		// ── Guild Activity Stats (#112) ─────────────────────────────────
-		// clanGetActivityStat returns guild-wide activity points and personal stats.
-		this.registerHandler('clanGetActivityStat', async (_call, _args, data) => {
-			await this.storage.setMetadata('guildActivityStats', {
-				clanActivity: data.clanActivity || 0,
-				dungeonActivity: data.dungeonActivity || 0,
-				todayActivity: data.stat?.todayActivity || 0,
-				todayDungeonActivity: data.stat?.todayDungeonActivity || 0,
-				todayItemsActivity: data.stat?.todayItemsActivity || 0,
-				activitySum: data.stat?.activitySum || 0,
-				dungeonActivitySum: data.stat?.dungeonActivitySum || 0,
-				clanWarStat: data.stat?.clanWarStat || 0,
-				adventureStat: data.stat?.adventureStat || 0,
-				activityForRuneAvailable: data.stat?.activityForRuneAvailable || false,
-				lastUpdate: Date.now(),
-			});
-			console.log(`[OrganizedJihad] Guild activity: ${data.stat?.todayActivity || 0} today, ${data.clanActivity || 0} total`);
-		}, 'trackGuildActivity', { category: 'guild' });
-
-		// ── Gacha / Pity Counter (#112) ─────────────────────────────────
-		// gacha_getInfo returns pity counter data (openings count/last/next).
-		// Called with ident: "heroGacha" — may have other gacha types.
-		this.registerHandler('gacha_getInfo', async (_call, args, data) => {
-			const ident = args.ident || 'heroGacha';
-			const openings = data.openings || {};
-			await this.storage.setMetadata(`gacha_${ident}`, {
-				ident,
-				totalOpenings: openings.count || 0,
-				lastPityHit: openings.last || 0,
-				nextPity: openings.next || 0,
-				pityReward: openings.reward || null,
-				pullsUntilPity: (openings.next || 0) - (openings.count || 0),
-				wishlist: data.wishlist || [],
-				nextRefill: data.nextRefill || 0,
-				lastUpdate: Date.now(),
-			});
-			console.log(`[OrganizedJihad] Gacha (${ident}): ${openings.count} total, next pity at ${openings.next} (${(openings.next || 0) - (openings.count || 0)} pulls away)`);
-		}, 'trackGacha', { category: 'player' });
-
-		// ── Saved Team Compositions (#112) ──────────────────────────────
-		// teamGetAll returns 304 saved team slots (arena, grand, guild war, etc.)
-		// Hero IDs < 100, Pet IDs 6000+, Titan IDs 4000+.
-		this.registerHandler('teamGetAll', async (_call, _args, data) => {
-			// Extract the key named teams (skip ~270 invasion_boss_NNN entries)
-			const keyTeams = {};
-			const importantKeys = [
-				'arena', 'mission', 'tower', 'grand',
-				'titan_arena', 'titan_arena_def',
-				'clanDefence_heroes', 'clanDefence_titans',
-				'crossClanDefence_heroes', 'crossClanDefence_titans',
-				'clanRaid_nodes', 'boss_10', 'boss_11', 'boss_12',
-				'clan_pvp_hero', 'clan_pvp_titan', 'challenge', 'challenge_titan',
-				'dungeon_hero', 'dungeon_fire', 'dungeon_water', 'dungeon_earth', 'dungeon_neutral',
-				'brawl', 'brawl_titan', 'adventure_hero', 'titan_mission',
-				'clan_global_pvp', 'clan_global_pvp_titan',
-			];
-			for (const key of importantKeys) {
-				if (data[key]) keyTeams[key] = data[key];
-			}
-			await this.storage.setMetadata('savedTeams', {
-				teams: keyTeams,
-				totalSlots: Object.keys(data).length,
-				lastUpdate: Date.now(),
-			});
-			console.log(`[OrganizedJihad] Teams: ${Object.keys(keyTeams).length} key teams / ${Object.keys(data).length} total slots`);
-		}, 'trackTeams', { category: 'player' });
-
-		// ── Shop State Tracking (#112) ──────────────────────────────────
-		// shopGetAll returns all 26 shops with items, prices, buy status.
-		// We summarize what's available to buy and what's free.
-		this.registerHandler('shopGetAll', async (_call, _args, data) => {
-			const shops = {};
-			for (const [shopId, shop] of Object.entries(data)) {
-				const slots = shop.slots || {};
-				const slotArr = Object.values(slots);
-				const bought = slotArr.filter((s) => s.bought === true || s.bought === 1).length;
-				shops[shopId] = {
-					id: shop.id || parseInt(shopId, 10),
-					totalSlots: slotArr.length,
-					boughtCount: bought,
-					availableCount: slotArr.length - bought,
-					refreshTime: shop.refreshTime || 0,
-					level: shop.level || 0,
-				};
-			}
-			await this.storage.setMetadata('shopData', {
-				shops,
-				shopCount: Object.keys(shops).length,
-				lastUpdate: Date.now(),
-			});
-			console.log(`[OrganizedJihad] Shops: ${Object.keys(shops).length} shops tracked`);
-		}, 'trackShops', { category: 'economy' });
-
-		// ── Friends Info (#112) ─────────────────────────────────────────
-		this.registerHandler('friendsGetInfo', async (_call, _args, data) => {
-			const accounts = data.accounts || [];
-			const users = data.users || [];
-			if (accounts.length > 0 || users.length > 0) {
-				await this.storage.setMetadata('friendsData', {
-					accountCount: accounts.length,
-					userCount: users.length,
-					lastUpdate: Date.now(),
-				});
-			}
-		}, 'trackFriends', { category: 'social' });
-
-		// ── Buffs Info (#112) ───────────────────────────────────────────
-		this.registerHandler('buffs_getInfo', async (_call, _args, data) => {
-			await this.storage.setMetadata('activeBuffs', {
-				buffs: data,
-				lastUpdate: Date.now(),
-			});
-		}, 'trackBuffs', { category: 'player' });
-
-		// ── Ascension Chest (#112) ──────────────────────────────────────
-		this.registerHandler('ascensionChest_getInfo', async (_call, _args, data) => {
-			await this.storage.setMetadata('ascensionChestData', {
-				...data,
-				lastUpdate: Date.now(),
-			});
-		}, 'trackAscensionChest', { category: 'player' });
-
-		// ── Stronghold (#112) ───────────────────────────────────────────
-		this.registerHandler('stronghold_getInfo', async (_call, _args, data) => {
-			await this.storage.setMetadata('strongholdData', {
-				...data,
-				lastUpdate: Date.now(),
-			});
-		}, 'trackStronghold', { category: 'player' });
-
-		// ── Idle / AFK rewards (#112) ───────────────────────────────────
-		this.registerHandler('idle_getAll', async (_call, _args, data) => {
-			await this.storage.setMetadata('idleData', {
-				...data,
-				lastUpdate: Date.now(),
-			});
-		}, 'trackIdle', { category: 'economy' });
-
-		// ── Chat full history (#112) ────────────────────────────────────
-		this.registerHandler('chatGetAll', async (_call, _args, data) => {
-			// chatGetAll returns full chat history — just log it
-			const messages = Array.isArray(data) ? data : (data.messages || []);
-			if (messages.length > 0) {
-				await this._logActivity('chat', `Chat history loaded: ${messages.length} messages`);
-			}
-		}, 'trackChatAll', { category: 'social' });
-
-		// ── Chat talks (DMs) (#112) ─────────────────────────────────────
-		this.registerHandler('chatGetTalks', async (_call, _args, data) => {
-			const talks = Array.isArray(data) ? data : (data.talks || []);
-			await this.storage.setMetadata('chatTalks', {
-				talkCount: talks.length,
-				lastUpdate: Date.now(),
-			});
-		}, 'trackChatTalks', { category: 'social' });
-
-		// ── Role Ascension All (#112) ───────────────────────────────────
-		this.registerHandler('roleAscension_getAll', async (_call, _args, data) => {
-			await this.storage.setMetadata('ascensionData', {
-				data,
-				lastUpdate: Date.now(),
-			});
-		}, 'trackAscensionAll', { category: 'player' });
-
-		// ── Titan Spirit (#112) ─────────────────────────────────────────
-		this.registerHandler('titanSpirit_getAll', async (_call, _args, data) => {
-			await this.storage.setMetadata('titanSpiritData', {
-				data,
-				lastUpdate: Date.now(),
-			});
-		}, 'trackTitanSpirits', { category: 'player' });
-
-		// ═════════════════════════════════════════════════════════════════
-		// Phase 12: Additional guild, war, rankings, and economy handlers
-		// Covers 57+ previously-unhandled API methods from §15 reference
-		// ═════════════════════════════════════════════════════════════════
-
-		// ── Guild Weekly Stats ──────────────────────────────────────────
-		// clanGetWeeklyStat returns per-member weekly activity across 7 days:
-		// activity points, dungeon, adventure, war, prestige, gifts.
-		this.registerHandler('clanGetWeeklyStat', async (_call, _args, data) => {
-			const members = data.stat || [];
-			const summary = members.map((m) => ({
-				userId: m.id,
-				activity: m.activity || [],
-				dungeonActivity: m.dungeonActivity || [],
-				adventureStat: m.adventureStat || [],
-				clanWarStat: m.clanWarStat || [],
-				prestigeStat: m.prestigeStat || [],
-				clanGifts: m.clanGifts || [],
-			}));
-			await this.storage.setMetadata('guildWeeklyStat', {
-				memberCount: summary.length,
-				members: summary,
-				lastUpdate: Date.now(),
-			});
-			console.log(`[OrganizedJihad] Guild weekly stats: ${summary.length} members`);
-		}, 'trackGuildWeeklyStat', { category: 'guild' });
-
-		// ── Guild Activity Log ──────────────────────────────────────────
-		// clanGetLog returns guild history events: joins, points, prestige.
-		this.registerHandler('clanGetLog', async (_call, _args, data) => {
-			const history = data.history || [];
-			if (history.length > 0) {
-				const existing = (await this.storage.getMetadata('guildLog', null)) || {};
-				const allEntries = [...(existing.entries || [])];
-				const seenIds = new Set(allEntries.map((e) => e.id));
-				let newCount = 0;
-				for (const entry of history) {
-					if (!seenIds.has(entry.id)) {
-						allEntries.push({
-							id: entry.id,
-							userId: entry.userId,
-							event: entry.event,
-							ctime: entry.ctime,
-							details: entry.details || null,
-						});
-						newCount++;
-					}
-				}
-				// Keep last 500 entries to avoid unbounded growth
-				const trimmed = allEntries.slice(-500);
-				await this.storage.setMetadata('guildLog', {
-					entries: trimmed,
-					totalTracked: trimmed.length,
-					lastUpdate: Date.now(),
-				});
-				if (newCount > 0) {
-					console.log(`[OrganizedJihad] Guild log: ${newCount} new entries (${trimmed.length} total)`);
-				}
-			}
-		}, 'trackGuildLog', { category: 'guild' });
-
-		// ── Guild War Defense ───────────────────────────────────────────
-		// clanWarGetDefence returns defense slots (userId assignments)
-		// and team compositions (hero/titan units per player).
-		this.registerHandler('clanWarGetDefence', async (_call, _args, data) => {
-			const slots = data.slots || {};
-			const teams = data.teams || {};
-			const defenseData = {
-				slotCount: Object.keys(slots).length,
-				slots,
-				teamCount: Object.keys(teams).length,
-				lastUpdate: Date.now(),
-			};
-			await this.storage.setMetadata('guildWarDefense', defenseData);
-			console.log(`[OrganizedJihad] GW Defense: ${defenseData.slotCount} slots, ${defenseData.teamCount} teams`);
-		}, 'trackGuildWarDefense', { category: 'guild' });
-
-		// ── Guild War Warlord Info ──────────────────────────────────────
-		// clanWarGetWarlordInfo is a superset of clanWarGetDefence,
-		// also including war schedule (season, day, timing).
-		this.registerHandler('clanWarGetWarlordInfo', async (_call, _args, data) => {
-			const warInfo = data.warInfo || {};
-			const defence = data.defence || {};
-			await this.storage.setMetadata('guildWarWarlord', {
-				season: warInfo.season || 0,
-				day: warInfo.day || 0,
-				endTime: warInfo.endTime || 0,
-				nextWarTime: warInfo.nextWarTime || 0,
-				nextLockTime: warInfo.nextLockTime || 0,
-				defenseSlots: Object.keys(defence.slots || {}).length,
-				defenseTeams: Object.keys(defence.teams || {}).length,
-				lastUpdate: Date.now(),
-			});
-			console.log(`[OrganizedJihad] GW Warlord: season ${warInfo.season}, day ${warInfo.day}`);
-		}, 'trackGuildWarWarlord', { category: 'guild' });
-
-		// ── Guild War League ────────────────────────────────────────────
-		// clanWarGetLeagueInfo returns league position, points, and prev results.
-		this.registerHandler('clanWarGetLeagueInfo', async (_call, _args, data) => {
-			const clanData = data.clanData || {};
-			await this.storage.setMetadata('guildWarLeague', {
-				leagueId: clanData.leagueId || 0,
-				position: clanData.position || 0,
-				points: clanData.points || 0,
-				prevLeague: clanData.prevLeague || 0,
-				prevPosition: clanData.prevPosition || 0,
-				prevPoints: clanData.prevPoints || 0,
-				clanPlace: data.clanPlace || 0,
-				lastUpdate: Date.now(),
-			});
-			console.log(`[OrganizedJihad] GW League: pos #${clanData.position}, ${clanData.points} pts, league ${clanData.leagueId}`);
-		}, 'trackGuildWarLeague', { category: 'guild' });
-
-		// ── Guild Online Status ─────────────────────────────────────────
-		this.registerHandler('clanGetOnline', async (_call, _args, data) => {
-			const users = data.users || {};
-			await this.storage.setMetadata('guildOnline', {
-				onlineCount: Object.keys(users).length,
-				users,
-				lastUpdate: Date.now(),
-			});
-		}, 'trackGuildOnline', { category: 'guild' });
-
-		// ── Leaderboards / Rankings ─────────────────────────────────────
-		// topGet returns rankings for various categories (arena, power, CoW, etc.)
-		// args.type determines the leaderboard type.
-		this.registerHandler('topGet', async (_call, args, data) => {
-			const topType = args.type || 'unknown';
-			const top = data.top || [];
-			const myPlace = data.place || 0;
-			const myScore = data.score || 0;
-			const existing = (await this.storage.getMetadata('leaderboards', null)) || {};
-			existing[topType] = {
-				myPlace,
-				myScore,
-				topEntries: top.slice(0, 20).map((t) => ({
-					place: t.place,
-					itemId: t.itemId,
-					score: t.score,
-				})),
-				lastUpdate: Date.now(),
-			};
-			await this.storage.setMetadata('leaderboards', existing);
-			console.log(`[OrganizedJihad] Leaderboard (${topType}): rank #${myPlace}, score ${myScore}`);
-		}, 'trackLeaderboard', { category: 'player' });
-
-		// ── Hero Rating Info ────────────────────────────────────────────
-		// heroRating_getInfo returns community hero ratings (1-5 stars).
-		this.registerHandler('heroRating_getInfo', async (_call, _args, data) => {
-			await this.storage.setMetadata('heroRating', {
-				userRating: data.userRating || {},
-				communityRating: data.rating || {},
-				lastUpdate: Date.now(),
-			});
-		}, 'trackHeroRating', { category: 'player' });
-
-		// ── Event Quests ────────────────────────────────────────────────
-		// questGetEvents returns active event quest chains with timing.
-		this.registerHandler('questGetEvents', async (_call, _args, data) => {
-			const events = Array.isArray(data) ? data : [];
-			const eventSummary = events.map((e) => ({
-				id: e.id,
-				startTime: e.startTime || 0,
-				endTime: e.endTime || 0,
-				originalId: e.originalId || 0,
-				chainCount: (e.questChains || []).length,
-			}));
-			await this.storage.setMetadata('eventQuests', {
-				events: eventSummary,
-				activeCount: eventSummary.length,
-				lastUpdate: Date.now(),
-			});
-			console.log(`[OrganizedJihad] Event quests: ${eventSummary.length} active events`);
-		}, 'trackEventQuests', { category: 'events' });
-
-		// ── Special Offers ──────────────────────────────────────────────
-		// specialOffer_getAll returns current special offers with pricing.
-		this.registerHandler('specialOffer_getAll', async (_call, _args, data) => {
-			const offers = Array.isArray(data) ? data : [];
-			const offerSummary = offers.map((o) => ({
-				id: o.id,
-				type: o.type || o.offerType || 'unknown',
-				endTime: o.endTime || 0,
-				billingCount: (o.billings || []).length,
-			}));
-			await this.storage.setMetadata('specialOffers', {
-				offers: offerSummary,
-				activeCount: offerSummary.length,
-				lastUpdate: Date.now(),
-			});
-		}, 'trackSpecialOffers', { category: 'economy' });
-
-		// ── Cross-Server War Extended ───────────────────────────────────
-		// crossClanWar_getAttackMap returns CoW battlefield map with targets.
-		this.registerHandler('crossClanWar_getAttackMap', async (_call, _args, data) => {
-			await this.storage.setMetadata('cowAttackMap', {
-				...data,
-				lastUpdate: Date.now(),
-			});
-		}, 'trackCowAttackMap', { category: 'guild' });
-
-		// crossClanWar_getDefencePlan returns CoW defense layout.
-		this.registerHandler('crossClanWar_getDefencePlan', async (_call, _args, data) => {
-			await this.storage.setMetadata('cowDefensePlan', {
-				...data,
-				lastUpdate: Date.now(),
-			});
-		}, 'trackCowDefensePlan', { category: 'guild' });
-
-		// crossClanWar_getSettings returns CoW configuration.
-		this.registerHandler('crossClanWar_getSettings', async (_call, _args, data) => {
-			await this.storage.setMetadata('cowSettings', {
-				...data,
-				lastUpdate: Date.now(),
-			});
-		}, 'trackCowSettings', { category: 'guild' });
-
-		// ── Subscription / Billing Info ──────────────────────────────────
-		this.registerHandler('subscriptionGetInfo', async (_call, _args, data) => {
-			await this.storage.setMetadata('subscriptionInfo', {
-				...data,
-				lastUpdate: Date.now(),
-			});
-		}, 'trackSubscription', { category: 'economy' });
-
-		// ── Guild Prestige ──────────────────────────────────────────────
-		this.registerHandler('clan_prestigeGetInfo', async (_call, _args, data) => {
-			await this.storage.setMetadata('guildPrestige', {
-				...data,
-				lastUpdate: Date.now(),
-			});
-		}, 'trackGuildPrestige', { category: 'guild' });
-
-		// ── Clan Raid Subscription / Rating ──────────────────────────────
-		this.registerHandler('clanRaid_ratingInfo', async (_call, _args, data) => {
-			await this.storage.setMetadata('raidRating', {
-				...data,
-				lastUpdate: Date.now(),
-			});
-		}, 'trackRaidRating', { category: 'guild' });
-
-		this.registerHandler('clanRaidSubscription_getInfo', async (_call, _args, data) => {
-			await this.storage.setMetadata('raidSubscription', {
-				...data,
-				lastUpdate: Date.now(),
-			});
-		}, 'trackRaidSubscription', { category: 'guild' });
-
-		// ── Tower State ─────────────────────────────────────────────────
-		// towerGetState returns current tower floor, HP, etc.
-		this.registerHandler('towerGetState', async (_call, _args, data) => {
-			await this.storage.setMetadata('towerState', {
-				floor: data.floor || data.floorNumber || 0,
-				teamHealth: data.teamHealth || {},
-				...data,
-				lastUpdate: Date.now(),
-			});
-		}, 'trackTowerState', { category: 'player' });
-
-		// NOTE: dungeonEnd/titanDungeonEnd already registered in core
-		// battle handlers above as ['dungeonBattle','dungeonEnd'] and
-		// ['titanDungeonBattle','titanDungeonEnd']
-
-		// ── Titan Summoning Circle ──────────────────────────────────────
-		this.registerHandler('titanGetSummoningCircle', async (_call, _args, data) => {
-			await this.storage.setMetadata('titanSummonCircle', {
-				...data,
-				lastUpdate: Date.now(),
-			});
-		}, 'trackTitanSummonCircle', { category: 'player' });
-
-		this.registerHandler('titanUseSummonCircle', async (_call, _args, data) => {
-			await this._logActivity('summon', 'Titan summoning circle used');
-			await this.storage.setMetadata('titanSummonCircle', {
-				...data,
-				lastUpdate: Date.now(),
-			});
-		}, 'trackTitanSummonUse', { category: 'player' });
-
-		// ── Artifact Chest Level ────────────────────────────────────────
-		this.registerHandler(['artifactGetChestLevel', 'titanArtifactGetChest'], async (_call, _args, data) => {
-			await this.storage.setMetadata('artifactChestLevel', {
-				...data,
-				lastUpdate: Date.now(),
-			});
-		}, 'trackArtifactChestLevel', { category: 'player' });
-
-		// ── Team Favor / Banners / Max Upgrade ──────────────────────────
-		this.registerHandler('teamGetFavor', async (_call, _args, data) => {
-			await this.storage.setMetadata('teamFavor', {
-				data,
-				lastUpdate: Date.now(),
-			});
-		}, 'trackTeamFavor', { category: 'player' });
-
-		this.registerHandler('team_getBanners', async (_call, _args, data) => {
-			await this.storage.setMetadata('teamBanners', {
-				data,
-				lastUpdate: Date.now(),
-			});
-		}, 'trackTeamBanners', { category: 'player' });
-
-		// ── Power Tournament ────────────────────────────────────────────
-		this.registerHandler('powerTournament_getState', async (_call, _args, data) => {
-			await this.storage.setMetadata('powerTournament', {
-				...data,
-				lastUpdate: Date.now(),
-			});
-		}, 'trackPowerTournament', { category: 'events' });
-
-		// ── Hall of Fame ────────────────────────────────────────────────
-		this.registerHandler('hallOfFameGetTrophies', async (_call, _args, data) => {
-			await this.storage.setMetadata('hallOfFame', {
-				data,
-				lastUpdate: Date.now(),
-			});
-		}, 'trackHallOfFame', { category: 'player' });
-
-		// ── Season Adventure ────────────────────────────────────────────
-		this.registerHandler('seasonAdventure_getInfo', async (_call, _args, data) => {
-			await this.storage.setMetadata('seasonAdventure', {
-				...data,
-				lastUpdate: Date.now(),
-			});
-		}, 'trackSeasonAdventure', { category: 'events' });
-
-		// ── Solo Adventure ──────────────────────────────────────────────
-		this.registerHandler('adventureSolo_getActiveData', async (_call, _args, data) => {
-			await this.storage.setMetadata('soloAdventure', {
-				hasActive: data.hasActive || false,
-				adventureId: data.adventureId || 0,
-				endTime: data.endTime || 0,
-				turns: data.turns || 0,
-				hasRewards: data.hasRewards || false,
-				lastUpdate: Date.now(),
-			});
-		}, 'trackSoloAdventure', { category: 'events' });
-
-		// ── Inventory Stone Exchange ────────────────────────────────────
-		this.registerHandler('inventoryExchangeTitanStones', async (_call, args, data) => {
-			await this._logActivity('exchange', 'Titan stones exchanged', {
-				args,
-			});
-		}, 'trackTitanStoneExchange', { category: 'economy' });
-
-		// ── Zeppelin Gift ───────────────────────────────────────────────
-		this.registerHandler('zeppelinGiftGet', async (_call, _args, data) => {
-			await this._logActivity('reward', 'Zeppelin gift collected', {
-				reward: data.reward || data,
-			});
-		}, 'trackZeppelinGift', { category: 'economy' });
-
-		// ── Settings (read-only, for reference) ─────────────────────────
-		this.registerHandler('settingsGetAll', async (_call, _args, data) => {
-			await this.storage.setMetadata('gameSettings', {
-				data,
-				lastUpdate: Date.now(),
-			});
-		}, 'trackSettings', { category: 'player' });
-
-		// ── Daily Bonus / Login Info ────────────────────────────────────
-		// dailyBonusGetInfo gives login streak, available rewards, etc.
-		// (The handler for dailyBonusFarm already exists for collecting.)
-		this.registerHandler('dailyBonusGetInfo', async (_call, _args, data) => {
-			await this.storage.setMetadata('dailyBonusInfo', {
-				day: data.day || 0,
-				rewardType: data.rewardType || 0,
-				isAvailable: data.isAvailable || false,
-				...data,
-				lastUpdate: Date.now(),
-			});
-		}, 'trackDailyBonusInfo', { category: 'player' });
-
-		// ── Social Quest / Telegram Quest ───────────────────────────────
-		this.registerHandler('socialQuestGetInfo', async (_call, _args, data) => {
-			await this.storage.setMetadata('socialQuest', {
-				...data,
-				lastUpdate: Date.now(),
-			});
-		}, 'trackSocialQuest', { category: 'social' });
-
-		// ── Chat Info (channel details) ─────────────────────────────────
-		this.registerHandler('chatGetInfo', async (_call, _args, data) => {
-			await this.storage.setMetadata('chatInfo', {
-				...data,
-				lastUpdate: Date.now(),
-			});
-		}, 'trackChatInfo', { category: 'social' });
-
-		// ── Banner / Campaign Story ─────────────────────────────────────
-		this.registerHandler('banner_getAll', async (_call, _args, data) => {
-			await this.storage.setMetadata('banners', {
-				data,
-				lastUpdate: Date.now(),
-			});
-		}, 'trackBanners', { category: 'player' });
-
-		this.registerHandler('campaignStoryGetList', async (_call, _args, data) => {
-			await this.storage.setMetadata('campaignStory', {
-				data,
-				lastUpdate: Date.now(),
-			});
-		}, 'trackCampaignStory', { category: 'player' });
-
-		// ── Event Picker ────────────────────────────────────────────────
-		this.registerHandler('eventPicker_getInfo', async (_call, _args, data) => {
-			await this.storage.setMetadata('eventPicker', {
-				...data,
-				lastUpdate: Date.now(),
-			});
-		}, 'trackEventPicker', { category: 'events' });
-
-		// ── New Year Event ──────────────────────────────────────────────
-		this.registerHandler('newYear_getInfo', async (_call, _args, data) => {
-			await this.storage.setMetadata('newYearEvent', {
-				...data,
-				lastUpdate: Date.now(),
-			});
-		}, 'trackNewYearEvent', { category: 'events' });
-
-		// ── Shop individual state ───────────────────────────────────────
-		this.registerHandler('shopGet', async (_call, args, data) => {
-			const shopId = args.shopId || data.id || 'unknown';
-			const slots = data.slots || {};
-			const slotArr = Object.values(slots);
-			const bought = slotArr.filter((s) => s.bought === true || s.bought === 1).length;
-			const existing = (await this.storage.getMetadata('shopData', null)) || {};
-			const shops = existing.shops || {};
-			shops[shopId] = {
-				id: data.id || parseInt(shopId, 10),
-				totalSlots: slotArr.length,
-				boughtCount: bought,
-				availableCount: slotArr.length - bought,
-				refreshTime: data.refreshTime || 0,
-				availableUntil: data.availableUntil || 0,
-				level: data.level || 0,
-			};
-			await this.storage.setMetadata('shopData', {
-				shops,
-				shopCount: Object.keys(shops).length,
-				lastUpdate: Date.now(),
-			});
-		}, 'trackShopDetails', { category: 'economy' });
-
-		// ── Billing catalog ─────────────────────────────────────────────
-		this.registerHandler(['billingGetAll', 'billingGetLast'], async (_call, _args, data) => {
-			await this.storage.setMetadata('billingCatalog', {
-				data,
-				lastUpdate: Date.now(),
-			});
-		}, 'trackBilling', { category: 'economy' });
-
-		// ── Bundle / Coop Bundle ────────────────────────────────────────
-		this.registerHandler('bundleGetAllAvailableId', async (_call, _args, data) => {
-			await this.storage.setMetadata('bundles', {
-				data,
-				lastUpdate: Date.now(),
-			});
-		}, 'trackBundles', { category: 'economy' });
-
-		this.registerHandler('coopBundle_getInfo', async (_call, _args, data) => {
-			await this.storage.setMetadata('coopBundle', {
-				...data,
-				lastUpdate: Date.now(),
-			});
-		}, 'trackCoopBundle', { category: 'economy' });
-
-		// ── Clan Gifts / Invites ────────────────────────────────────────
-		this.registerHandler('clanGetAvailableDailyGifts', async (_call, _args, data) => {
-			await this.storage.setMetadata('guildDailyGifts', {
-				data,
-				lastUpdate: Date.now(),
-			});
-		}, 'trackGuildDailyGifts', { category: 'guild' });
-
-		this.registerHandler('clanInvites_getUserInbox', async (_call, _args, data) => {
-			await this.storage.setMetadata('guildInvites', {
-				data,
-				lastUpdate: Date.now(),
-			});
-		}, 'trackGuildInvites', { category: 'guild' });
-
-		// ── Guild Activity Reward Table ──────────────────────────────────
-		this.registerHandler('clanGetActivityRewardTable', async (_call, _args, data) => {
-			await this.storage.setMetadata('guildActivityRewards', {
-				data,
-				lastUpdate: Date.now(),
-			});
-		}, 'trackGuildActivityRewards', { category: 'guild' });
-
-		// ── Friend Gifts & Hearts (send/receive) ────────────────────────
-		this.registerHandler('friendSendHearts', async (_call, _args, data) => {
-			await this._logActivity('social', 'Hearts sent to friends');
-		}, 'trackFriendSendHearts', { category: 'social' });
-
-		this.registerHandler('friendGetHearts', async (_call, _args, data) => {
-			await this._logActivity('social', 'Hearts received from friends');
-		}, 'trackFriendGetHearts', { category: 'social' });
-
-		// =============================================================
-		// Phase 13: Second API Samples Analysis (#121)
-		// 30 new API methods discovered in hw-api-samples-2026-02-27 (2).json
-		// =============================================================
-
-		// ── Boss Outland (Outland boss states/chests) ────────────────
-		/** @see https://community.hero-wars.com/discussion/outland-bosses */
-		this.registerHandler('bossGetAll', async (_call, _args, data) => {
-			const bosses = Array.isArray(data) ? data : [];
-			await this.storage.setMetadata('outlandBosses', {
-				bosses: bosses.map((b) => ({
-					id: b.id,
-					bossLevel: b.bossLevel ?? 0,
-					chestNum: b.chestNum ?? 0,
-					chestId: b.chestId ?? 0,
-				})),
-				bossCount: bosses.length,
-				totalChests: bosses.reduce((sum, b) => sum + (b.chestNum ?? 0), 0),
-				lastUpdate: Date.now(),
-			});
-		}, 'trackOutlandBosses', { category: 'pve' });
-
-		// ── Tower Progress (current floor, points, skip eligibility) ─
-		this.registerHandler('towerGetInfo', async (_call, _args, data) => {
-			await this.storage.setMetadata('towerState', {
-				floorNumber: Number(data.floorNumber) || 0,
-				floorType: data.floorType || 'unknown',
-				points: Number(data.points) || 0,
-				maySkipFloor: Number(data.maySkipFloor) || 0,
-				teamLevel: Number(data.teamLevel) || 0,
-				lastUpdate: Date.now(),
-			});
-		}, 'trackTowerState', { category: 'pve' });
-
-		// ── Expedition Slots (active/complete expeditions) ───────────
-		this.registerHandler('expeditionGet', async (_call, _args, data) => {
-			const slots = typeof data === 'object' && data !== null ? Object.values(data) : [];
-			const active = slots.filter((s) => s.status === 1 || s.status === 2);
-			const complete = slots.filter((s) => s.status === 3);
-			await this.storage.setMetadata('expeditionSlots', {
-				slots: slots.map((s) => ({
-					id: s.id,
-					slotId: s.slotId,
-					status: s.status,
-					duration: s.duration ?? 0,
-					endTime: s.endTime ?? 0,
-				})),
-				totalSlots: slots.length,
-				activeCount: active.length,
-				completeCount: complete.length,
-				lastUpdate: Date.now(),
-			});
-		}, 'trackExpeditionSlots', { category: 'pve' });
-
-		// ── Invasion Event Info ──────────────────────────────────────
-		this.registerHandler('invasion_getInfo', async (_call, _args, data) => {
-			await this.storage.setMetadata('invasionData', {
-				id: data.id ?? null,
-				bestPlace: data.bestPlace ?? 0,
-				farmedRewards: Array.isArray(data.farmedRewards) ? data.farmedRewards.length : 0,
-				actions: Array.isArray(data.actions) ? data.actions.map((a) => ({
-					type: a.type,
-					startDate: a.startDate,
-					endDate: a.endDate,
-				})) : [],
-				lastUpdate: Date.now(),
-			});
-		}, 'trackInvasionInfo', { category: 'events' });
-
-		// ── Workshop Buffs (Outland workshop buffs/boosts) ───────────
-		this.registerHandler('workshopBuff_getInfo', async (_call, _args, data) => {
-			const buffs = Array.isArray(data) ? data : [];
-			await this.storage.setMetadata('workshopBuffs', {
-				buffs: buffs.map((b) => ({
-					id: b.id,
-					type: b.type ?? 'unknown',
-					amount: b.amount ?? 0,
-					level: b.level ?? 0,
-					inUse: b.inUse ?? false,
-				})),
-				totalBuffs: buffs.length,
-				activeBuffs: buffs.filter((b) => b.inUse).length,
-				lastUpdate: Date.now(),
-			});
-		}, 'trackWorkshopBuffs', { category: 'pve' });
-
-		// ── Special Battle Pass (event/seasonal battle passes) ───────
-		this.registerHandler('battlePass_getSpecial', async (_call, _args, data) => {
-			const passes = typeof data === 'object' && data !== null ? Object.values(data) : [];
-			const active = passes.filter((p) => {
-				const now = Math.floor(Date.now() / 1000);
-				return p.endDate && p.endDate > now;
-			});
-			await this.storage.setMetadata('battlePassSpecial', {
-				passes: active.map((p) => ({
-					id: p.id,
-					exp: p.exp ?? 0,
-					ticket: p.ticket ?? 0,
-					startDate: p.startDate,
-					endDate: p.endDate,
-				})),
-				activeCount: active.length,
-				lastUpdate: Date.now(),
-			});
-		}, 'trackBattlePassSpecial', { category: 'events' });
-
-		// ── Battle Pass Farm Reward (claimed reward event) ───────────
-		this.registerHandler('battlePass_farmReward', async (_call, _args, data) => {
-			const rewards = Object.entries(data || {}).map(([k, v]) => `${k}: ${v}`).join(', ');
-			await this._logActivity('reward', `Battle Pass reward claimed: ${rewards}`);
-		}, 'trackBattlePassFarmReward', { category: 'economy' });
-
-		// ── Pet Chest Info (pet chest spending/daily pet) ────────────
-		this.registerHandler('pet_getChest', async (_call, _args, data) => {
-			await this.storage.setMetadata('petChest', {
-				starmoneySpent: Number(data.starmoneySpent) || 0,
-				dailyPetId: data.dailyPetId || null,
-				lastUpdate: Date.now(),
-			});
-		}, 'trackPetChest', { category: 'pets' });
-
-		// ── Adventure (Co-op) — Active, Passed, Lobby ───────────────
-		this.registerHandler('adventure_getActiveData', async (_call, _args, data) => {
-			await this.storage.setMetadata('adventureActive', {
-				hasActive: data.hasActive ?? false,
-				hasRewards: data.hasRewards ?? false,
-				lastChatTime: data.lastChatTime ?? null,
-				lastUpdate: Date.now(),
-			});
-		}, 'trackAdventureActive', { category: 'pve' });
-
-		this.registerHandler('adventure_getPassed', async (_call, _args, data) => {
-			const entries = typeof data === 'object' && data !== null ? Object.entries(data) : [];
-			const totalPassed = entries.reduce((sum, [, count]) => sum + (Number(count) || 0), 0);
-			await this.storage.setMetadata('adventurePassed', {
-				adventureMap: data,
-				totalAdventures: entries.length,
-				totalCompletions: totalPassed,
-				lastUpdate: Date.now(),
-			});
-		}, 'trackAdventurePassed', { category: 'pve' });
-
-		this.registerHandler('adventure_find', async (_call, _args, data) => {
-			const lobbies = Array.isArray(data.lobbies) ? data.lobbies : [];
-			await this.storage.setMetadata('adventureLobbies', {
-				lobbyCount: lobbies.length,
-				userCount: Array.isArray(data.users) ? data.users.length : 0,
-				lastUpdate: Date.now(),
-			});
-		}, 'trackAdventureLobbies', { category: 'pve' });
-
-		// ── Solo Adventure ──────────────────────────────────────────
-		this.registerHandler('adventureSolo_getActiveData', async (_call, _args, data) => {
-			await this.storage.setMetadata('adventureSoloActive', {
-				hasActive: data.hasActive ?? false,
-				lastUpdate: Date.now(),
-			});
-		}, 'trackAdventureSoloActive', { category: 'pve' });
-
-		// ── All Chats Summary (channel message counts) ──────────────
-		this.registerHandler('chatsGetAll', async (_call, _args, data) => {
-			const channels = typeof data === 'object' && data !== null ? Object.keys(data) : [];
-			const messageCounts = {};
-			for (const ch of channels) {
-				const chat = data[ch]?.chat;
-				messageCounts[ch] = Array.isArray(chat) ? chat.length : 0;
-			}
-			await this.storage.setMetadata('chatSummary', {
-				channels,
-				messageCounts,
-				totalMessages: Object.values(messageCounts).reduce((s, c) => s + c, 0),
-				lastUpdate: Date.now(),
-			});
-		}, 'trackChatSummary', { category: 'social' });
-
-		// ── Titan Arena — Forgotten check & Chest Rewards ───────────
-		this.registerHandler('titanArenaCheckForgotten', async (_call, _args, data) => {
-			if (data?.result) {
-				await this._logActivity('reminder', 'Forgotten Titan Arena battle detected');
-			}
-		}, 'trackTitanArenaForgotten', { category: 'battles' });
-
-		this.registerHandler('titanArenaGetChestReward', async (_call, _args, data) => {
-			const rewards = Array.isArray(data) ? data : [];
-			if (rewards.length > 0) {
-				await this._logActivity('reward', `Titan Arena chest: ${rewards.length} reward(s)`);
-			}
-		}, 'trackTitanArenaChestReward', { category: 'battles' });
-
-		// ── Cosmetics (Avatars, Frames, Stickers) ───────────────────
-		this.registerHandler('userGetAvailableAvatarFrames', async (_call, _args, data) => {
-			const frames = data?.frames ? Object.keys(data.frames) : [];
-			await this.storage.setMetadata('avatarFrames', {
-				count: frames.length,
-				frameIds: frames.map(Number),
-				lastUpdate: Date.now(),
-			});
-		}, 'trackAvatarFrames', { category: 'cosmetics' });
-
-		this.registerHandler('userGetAvailableAvatars', async (_call, _args, data) => {
-			const avatars = Array.isArray(data) ? data : [];
-			await this.storage.setMetadata('avatars', {
-				count: avatars.length,
-				avatarIds: avatars,
-				lastUpdate: Date.now(),
-			});
-		}, 'trackAvatars', { category: 'cosmetics' });
-
-		this.registerHandler('userGetAvailableStickers', async (_call, _args, data) => {
-			const stickers = Array.isArray(data) ? data : [];
-			await this.storage.setMetadata('stickers', {
-				count: stickers.length,
-				stickerIds: stickers,
-				lastUpdate: Date.now(),
-			});
-		}, 'trackStickers', { category: 'cosmetics' });
-
-		// ── Telegram/Social Quest Info ───────────────────────────────
-		this.registerHandler('telegramQuestGetInfo', async (_call, _args, data) => {
-			const entries = typeof data === 'object' && data !== null ? Object.entries(data) : [];
-			const completed = entries.filter(([, v]) => v === '1' || v === true).length;
-			await this.storage.setMetadata('telegramQuests', {
-				quests: data,
-				totalQuests: entries.length,
-				completedQuests: completed,
-				lastUpdate: Date.now(),
-			});
-		}, 'trackTelegramQuests', { category: 'social' });
-
-		// ── Rewarded Video / Boxy Rewards (Ad rewards) ──────────────
-		this.registerHandler('rewardedVideo_boxyGetInfo', async (_call, _args, data) => {
-			const rewards = Array.isArray(data?.rewards) ? data.rewards : [];
-			const farmed = rewards.filter((r) => r.farmed).length;
-			await this.storage.setMetadata('boxyRewards', {
-				totalSlots: rewards.length,
-				farmedSlots: farmed,
-				remainingSlots: rewards.length - farmed,
-				lastUpdate: Date.now(),
-			});
-		}, 'trackBoxyRewards', { category: 'economy' });
-
-		// ── Sale Showcase ───────────────────────────────────────────
-		this.registerHandler('saleShowcase_rewardInfo', async (_call, _args, data) => {
-			await this.storage.setMetadata('saleShowcase', {
-				nextRefill: data.nextRefill ?? null,
-				hasReward: data.reward != null,
-				lastUpdate: Date.now(),
-			});
-		}, 'trackSaleShowcase', { category: 'economy' });
-
-		// ── Low-value / Config endpoints (suppress "unhandled" noise) ─
-		// These methods return config data, timestamps, or session metadata
-		// that don't warrant individual tracking but should not spam the
-		// unhandled API log.
-
-		/** Server timestamp — fires on every session, no tracking value */
-		this.registerHandler('getTime', async () => {
-			// No-op: server timestamp
-		}, 'ignoreGetTime', { category: 'system' });
-
-		/** Session registration — fires once per login */
-		this.registerHandler('registration', async () => {
-			// No-op: session registration
-		}, 'ignoreRegistration', { category: 'system' });
-
-		/** Tutorial completion flags — static after early game */
-		this.registerHandler('tutorialGetInfo', async () => {
-			// No-op: tutorial flags
-		}, 'ignoreTutorialInfo', { category: 'system' });
-
-		/** A/B test split assignments */
-		this.registerHandler('splitGetAll', async () => {
-			// No-op: A/B test splits
-		}, 'ignoreSplitGetAll', { category: 'system' });
-
-		/** Client stash flags */
-		this.registerHandler('stashClient', async () => {
-			// No-op: client stash flags
-		}, 'ignoreStashClient', { category: 'system' });
-
-		/** Freebie group availability check */
-		this.registerHandler('freebieHaveGroup', async () => {
-			// No-op: freebie group flag
-		}, 'ignoreFreebieHaveGroup', { category: 'system' });
-
-		/** Feature availability flags (which mechanics are enabled) */
-		this.registerHandler('mechanicAvailability', async () => {
-			// No-op: feature flags
-		}, 'ignoreMechanicAvailability', { category: 'system' });
-
-		/** Banned mechanics list (usually empty) */
-		this.registerHandler('mechanicsBan_getInfo', async () => {
-			// No-op: mechanics ban list
-		}, 'ignoreMechanicsBan', { category: 'system' });
-
-		/** Playable character IDs (static roster list) */
-		this.registerHandler('playable_getAvailable', async () => {
-			// No-op: playable character list
-		}, 'ignorePlayableAvailable', { category: 'system' });
-
-		/** Account merge status check */
-		this.registerHandler('userMergeGetStatus', async () => {
-			// No-op: merge status
-		}, 'ignoreUserMergeStatus', { category: 'system' });
+		this._handlerRegistry = createHandlerRegistry();
+		applyDefaultTrackerRegistrars(this);
 	}
 
 	// =====================================================================
@@ -3143,13 +1372,7 @@ class GameTracker {
 	 * @private
 	 */
 	async _trackGenericUpgrade(entityType, upgradeType, args, data) {
-		const entityId = args.heroId || args.titanId || args.petId || args.id || 0;
-		const label = `${entityType} ${upgradeType}`;
-		await this._logActivity('upgrade', `${label} #${entityId}`, {
-			entityType,
-			upgradeType,
-			entityId,
-		});
+		await trackGenericUpgrade(this, entityType, upgradeType, args, data);
 	}
 
 	/**
@@ -3164,11 +1387,7 @@ class GameTracker {
 	 * @private
 	 */
 	async _trackGenericEvent(category, eventType, args, data) {
-		await this._logActivity(category, eventType, {
-			category,
-			eventType,
-			hasReward: !!data.reward,
-		});
+		await trackGenericEvent(this, category, eventType, args, data);
 	}
 
 	/**
@@ -3593,19 +1812,45 @@ class GameTracker {
 		const playerId = (await this.storage.getMetadata('currentPlayerId')) || 'unknown';
 		const timestamp = new Date().toISOString();
 
-		// Normalize: API may return array or object keyed by mail ID
-		const mailArray = Array.isArray(data) ? data : Object.values(data || {});
+		// Normalize across known shapes:
+		// - { letters: [...], users: [...] } (mailGetAll)
+		// - [{...}] direct list
+		// - { id: {...} } keyed object
+		const letters = Array.isArray(data?.letters)
+			? data.letters
+			: (Array.isArray(data) ? data : Object.values(data || {}));
+		const users = Array.isArray(data?.users) ? data.users : [];
+		const userById = {};
+		for (const user of users) {
+			const uid = String(user?.id ?? user?.userId ?? '');
+			if (!uid) continue;
+			userById[uid] = user;
+		}
+
+		const mailArray = Array.isArray(letters) ? letters : [];
 		if (mailArray.length === 0) return;
 
-		const mailItems = mailArray.map((m) => ({
-			mailId: m.id || m.mailId,
-			mailType: m.type || 'unknown',
-			subject: m.subject || m.letter || '',
-			rewards: m.reward || m.rewards || null,
-			receivedAt: m.time ? new Date(m.time * 1000).toISOString() : timestamp,
-			isRead: !!m.isRead,
-			isCollected: !!m.isCollected,
-		}));
+		const mailItems = mailArray.map((m) => {
+			const senderId = m?.senderId ?? m?.fromId ?? m?.userId ?? m?.ownerId ?? null;
+			const sender = senderId !== null ? userById[String(senderId)] : null;
+
+			return {
+				mailId: m?.id ?? m?.mailId ?? null,
+				mailType: m?.type || 'unknown',
+				senderId: senderId !== null ? String(senderId) : '',
+				senderName: m?.senderName || m?.fromName || sender?.name || sender?.title || '',
+				subject: m?.subject || m?.subjectLocaleKey || m?.title || m?.titleLocaleKey || '',
+				messageText: m?.letter || m?.body || m?.text || m?.description || m?.content || '',
+				rewardSummaryText: m?.rewardText || m?.rewardDescription || '',
+				rewards: m?.reward || m?.rewards || null,
+				receivedAt: (m?.time || m?.ctime)
+					? new Date((m.time || m.ctime) * 1000).toISOString()
+					: timestamp,
+				isRead: !!(m?.isRead || m?.read || m?.opened),
+				isCollected: !!(m?.isCollected || m?.farmed || m?.claimed),
+				rawMail: m,
+			};
+		});
 
 		// Store in metadata for UI quick access
 		await this.storage.setMetadata('mailData', {
@@ -3740,6 +1985,19 @@ class GameTracker {
 		if (battleType === 'Adventure' && battle.mission) {
 			await this._recordAdventureGuideEntry(battle);
 		}
+
+		// Persist a focused "last target" metadata snapshot for overlay context
+		// so recommendation context can lock to active combat targets even when
+		// broader mode metadata is sparse or delayed.
+		const lowerCall = String(callName || '').toLowerCase();
+		const modeKey = lowerCall.includes('tournament')
+			? 'toe'
+			: (lowerCall.includes('dungeon')
+				? 'dungeon'
+				: (lowerCall.includes('adventure') ? 'adventure' : ''));
+		if (modeKey) {
+			await this._storeBattleRecommendationLastTarget(modeKey, args, data, callName);
+		}
 	}
 
 	/**
@@ -3828,6 +2086,7 @@ class GameTracker {
 		// Live activity event
 		const arenaOppDisplay = battle.opponentName || `opponent #${battle.opponentId || '?'}`;
 		await this._logActivity('battle', `Arena ${battle.isWin ? 'WIN' : 'LOSS'} vs ${arenaOppDisplay}`, { isWin: battle.isWin });
+		await this._storeBattleRecommendationLastTarget('arena', args, data, 'arenaAttack');
 
 		// Update opponent record (#51 — fixed param order, boolean→string, use IDB store)
 		await this.updateOpponentRecord('Arena', args.enemyUserId, battle.isWin, {
@@ -3928,6 +2187,7 @@ class GameTracker {
 		// Live activity event
 		const titanOppDisplay = battle.opponentName || `opponent #${battle.opponentId || '?'}`;
 		await this._logActivity('battle', `Titan Arena ${battle.isWin ? 'WIN' : 'LOSS'} vs ${titanOppDisplay}`, { isWin: battle.isWin });
+		await this._storeBattleRecommendationLastTarget('titanarena', args, data, 'titanArenaAttack');
 
 		// Track resource rewards from titan arena battle
 		// Titan Arena rewards: gold, titan tokens/potions
@@ -4043,6 +2303,7 @@ class GameTracker {
 		// Live activity event
 		const oppDisplay = battle.opponentName || `opponent #${battle.opponentId || '?'}`;
 		await this._logActivity('battle', `Grand Arena ${battle.isWin ? 'WIN' : 'LOSS'} vs ${oppDisplay}`, { isWin: battle.isWin });
+		await this._storeBattleRecommendationLastTarget('grandarena', args, data, 'grandArenaAttack');
 
 		// Track resource rewards from grand arena battle
 		// Grand Arena rewards: gold, trophies, sometimes emeralds
@@ -4070,16 +2331,7 @@ class GameTracker {
 	 * @private
 	 */
 	async trackGuildWarInfo(data) {
-		const warData = {
-			warId: data.warId || data.war?.id,
-			enemyGuildId: data.enemyClanId || data.enemyClan?.id,
-			enemyGuildName: data.enemyClanName || data.enemyClan?.name,
-			myGuildScore: data.myScore || 0,
-			enemyScore: data.enemyScore || 0,
-			defenders: data.defenders || {},
-			attackers: data.attackers || {},
-			timestamp: Date.now(),
-		};
+		const warData = buildGuildWarInfoMetadata(data);
 
 		await this.storage.setMetadata('currentGuildWar', warData);
 	}
@@ -4092,81 +2344,129 @@ class GameTracker {
 	 * @private
 	 */
 	async trackGuildWarBattle(args, data) {
-		const isWin = data.result?.win || false;
-		const timestamp = new Date().toISOString();
+		await executeGuildWarBattleTracking(this, args, data);
+		await this._storeBattleRecommendationLastTarget('guildwar', args, data, 'clanWarAttack');
+	}
 
-		// Resolve war context from cached data (#131)
-		const currentWar = await this.storage.getMetadata('currentGuildWar', {});
-
-		const battleRecord = {
-			type: 'guildWar',
-			defenderId: args.defenderId,
-			fortId: args.fortId,
-			warId: currentWar.warId || null,
-			enemyGuildName: currentWar.enemyGuildName || null,
-			result: isWin ? 'victory' : 'defeat',
-			myTeam: data.attackers ? this.compressHeroTeam(data.attackers) : null,
-			enemyTeam: data.defenders ? this.compressHeroTeam(data.defenders) : null,
-			reward: data.reward || {},
-			timestamp: Date.now(),
+	/**
+	 * Persist most recent battle target snapshot used by recommendation overlay.
+	 *
+	 * @param {string} modeKey - Recommendation mode key
+	 * @param {Object} args - API call args
+	 * @param {Object} data - API response data
+	 * @param {string} sourceCall - Source API call name
+	 * @returns {Promise<void>}
+	 * @private
+	 */
+	async _storeBattleRecommendationLastTarget(modeKey, args, data, sourceCall) {
+		const normalizedMode = String(modeKey || '').toLowerCase();
+		const keyMap = {
+			arena: 'battleRecommendationLastTargetArena',
+			grandarena: 'battleRecommendationLastTargetGrandArena',
+			titanarena: 'battleRecommendationLastTargetTitanArena',
+			adventure: 'battleRecommendationLastTargetAdventure',
+			dungeon: 'battleRecommendationLastTargetDungeon',
+			toe: 'battleRecommendationLastTargetToe',
+			guildwar: 'battleRecommendationLastTargetGuildWar',
 		};
-
-		const guildWarHistory = await this.storage.getMetadata('guildWarBattleHistory', []);
-		guildWarHistory.push(battleRecord);
-
-		if (guildWarHistory.length > 500) {
-			guildWarHistory.shift();
+		const metadataKey = keyMap[normalizedMode];
+		if (!metadataKey) {
+			return;
 		}
 
-		await this.storage.setMetadata('guildWarBattleHistory', guildWarHistory);
+		const opponentId = Number(
+			args?.targetUserId
+			|| args?.defenderUserId
+			|| args?.enemyUserId
+			|| args?.opponentId
+			|| args?.userId
+			|| args?.target?.id
+			|| args?.defender?.id
+			|| args?.enemy?.id
+			|| data?.target?.id
+			|| data?.defender?.id
+			|| data?.enemy?.id
+			|| 0
+		);
+		const opponentName = String(
+			args?.targetName
+			|| args?.defenderName
+			|| args?.enemyName
+			|| args?.target?.name
+			|| args?.defender?.name
+			|| args?.enemy?.name
+			|| data?.target?.name
+			|| data?.defender?.name
+			|| data?.enemy?.name
+			|| ''
+		);
 
-		// Write to IDB battles store for Battles tab display (#85)
-		// (#131) Include opponentId, warId, and opponent guild name
-		const battle = {
-			battleType: 'GuildWar',
-			opponentId: args.defenderId || null,
-			opponentName: currentWar.enemyGuildName || null,
-			isWin,
-			playerPower: data.attackers ? this.calculateTeamPower(data.attackers) : 0,
-			opponentPower: data.defenders ? this.calculateTeamPower(data.defenders) : 0,
-			playerHeroes: data.attackers ? JSON.stringify(this.compressHeroTeam(data.attackers)) : null,
-			opponentHeroes: data.defenders ? JSON.stringify(this.compressHeroTeam(data.defenders)) : null,
-			rewards: data.reward ? JSON.stringify(data.reward) : null,
-			mission: args.fortId || null,
-			warId: currentWar.warId || null,
-			timestamp,
-		};
+		const defenders = Array.isArray(data?.defenders) ? data.defenders : [];
+		const teams = [];
 
-		if (!this._isBattleDuplicate(battle)) {
-			await this.storage.add('battles', battle);
+		if (Array.isArray(data?.battles) && data.battles.length > 0) {
+			for (let index = 0; index < data.battles.length && teams.length < 3; index += 1) {
+				const row = data.battles[index];
+				if (!Array.isArray(row?.defenders) || row.defenders.length === 0) continue;
+				const power = this.calculateTeamPower(row.defenders);
+				if (!Number.isFinite(power) || power <= 0) continue;
+				teams.push({
+					slot: teams.length + 1,
+					power,
+				});
+			}
 		}
 
-		// Live activity event
-		await this._logActivity('battle', `Guild War ${isWin ? 'WIN' : 'LOSS'} at fort #${args.fortId || '?'}`, { isWin });
+		if (teams.length === 0 && defenders.length > 0) {
+			const power = this.calculateTeamPower(defenders);
+			if (Number.isFinite(power) && power > 0) {
+				teams.push({
+					slot: 1,
+					power,
+				});
+			}
+		}
 
-		// Track guild activity for guild war participation
-		// Hero Wars guild wars are major guild events
-		// See: https://community.hero-wars.com/discussion/guild-war-guide
-		const guildData = await this.storage.getMetadata('guildData', {});
-		await this.trackGuildActivity('war', {
-			guildId: guildData.id || 'unknown',
-			guildName: guildData.name || 'Unknown Guild',
-			fortId: args.fortId,
-			result: battleRecord.result,
-			damage: data.damage || 0,
+		const enemyTeams = Array.isArray(args?.enemyTeams) ? args.enemyTeams : [];
+		for (const row of enemyTeams) {
+			if (teams.length >= 3) break;
+			const heroes = Array.isArray(row?.heroes) ? row.heroes : [];
+			const power = heroes.length > 0
+				? this.calculateTeamPower(heroes)
+				: Number(row?.power || row?.teamPower || 0);
+			if (!Number.isFinite(power) || power <= 0) continue;
+			teams.push({
+				slot: teams.length + 1,
+				power,
+			});
+		}
+
+		const defenderPower = teams.length > 1
+			? teams.reduce((sum, row) => sum + Number(row.power || 0), 0)
+			: (teams.length === 1 ? teams[0].power : 0);
+		const resolvedPower = defenderPower > 0
+			? defenderPower
+			: Number(args?.targetPower || args?.defenderPower || args?.enemyPower || 0);
+
+		let confidence = 0.20;
+		if (Number.isFinite(opponentId) && opponentId > 0) confidence += 0.25;
+		if (opponentName.trim().length > 0) confidence += 0.15;
+		if (Number.isFinite(resolvedPower) && resolvedPower > 0) confidence += 0.20;
+		if (teams.length > 0) confidence += 0.20;
+		if (String(sourceCall || '').toLowerCase().includes('attack') || String(sourceCall || '').toLowerCase().includes('battle')) confidence += 0.05;
+		confidence = Math.max(0, Math.min(1, confidence));
+
+		await this.storage.setMetadata(metadataKey, {
+			mode: normalizedMode,
+			userId: Number.isFinite(opponentId) && opponentId > 0 ? opponentId : null,
+			name: opponentName,
+			power: Number.isFinite(resolvedPower) && resolvedPower > 0 ? resolvedPower : 0,
+			teams,
+			signalConfidence: confidence,
+			confidence,
+			sourceCall,
+			lastUpdate: Date.now(),
 		});
-
-		// Track resource rewards from guild war
-		const rewards = data.reward || {};
-		if (rewards.gold) {
-			await this.trackResourceTransaction('gold', rewards.gold, 'battle', 'guild_war');
-		}
-		if (rewards.guildWarToken) {
-			await this.trackResourceTransaction('guild_war_coins', rewards.guildWarToken, 'battle', 'guild_war');
-		}
-		if (rewards.starmoney) {
-			await this.trackResourceTransaction('emeralds', rewards.starmoney, 'battle', 'guild_war');
-		}
 	}
 
 	/**
@@ -4184,20 +2484,7 @@ class GameTracker {
 		//   bossAttempts: 5       ← max boss attacks per day
 		//   nodes: { "1": {...}, ... "9": {...} }  ← minion nodes
 		//   coins: 800            ← raid coins earned
-		const bossData = {
-			bossLevel: data.boss?.level || 0,
-			currentBoss: data.stats?.currentBoss || '0',
-			clanPoints: data.stats?.points || '0',
-			bossKilled: data.stats?.bossKilled || [],
-			myDamage: parseInt(data.userStats?.damage || '0', 10),
-			myPoints: parseInt(data.userStats?.points || '0', 10),
-			usedHeroes: data.userStats?.usedHeroes || [],
-			attemptsUsed: data.attempts || 0,
-			attemptsMax: data.bossAttempts || 5,
-			coins: data.coins || 0,
-			nodeCount: Object.keys(data.nodes || {}).length,
-			timestamp: Date.now(),
-		};
+		const bossData = buildRaidBossInfoMetadata(data);
 
 		await this.storage.setMetadata('currentRaidBoss', bossData);
 		console.log(`[OrganizedJihad] Raid boss info: Level ${bossData.bossLevel}, boss #${bossData.currentBoss}, attacks ${bossData.attemptsUsed}/${bossData.attemptsMax}, damage ${bossData.myDamage}`);
@@ -4211,70 +2498,7 @@ class GameTracker {
 	 * @private
 	 */
 	async trackRaidBossAttack(args, data) {
-		const timestamp = new Date().toISOString();
-
-		const attackRecord = {
-			bossId: args.bossId,
-			damage: data.damage || 0,
-			myTeam: data.attackers ? this.compressHeroTeam(data.attackers) : null,
-			reward: data.reward || {},
-			timestamp: Date.now(),
-		};
-
-		const raidHistory = await this.storage.getMetadata('raidBossAttackHistory', []);
-		raidHistory.push(attackRecord);
-
-		if (raidHistory.length > 500) {
-			raidHistory.shift();
-		}
-
-		await this.storage.setMetadata('raidBossAttackHistory', raidHistory);
-
-		// Write to IDB battles store for Battles tab display (#85)
-		// Raid boss attacks are always successful (you always deal damage)
-		// (#131) Include damage in the IDB battle record for display
-		const battle = {
-			battleType: 'RaidBoss',
-			isWin: true,
-			damage: data.damage || 0,
-			playerHeroes: data.attackers ? JSON.stringify(this.compressHeroTeam(data.attackers)) : null,
-			opponentHeroes: null,
-			rewards: data.reward ? JSON.stringify(data.reward) : null,
-			mission: args.bossId || null,
-			timestamp,
-		};
-
-		if (!this._isBattleDuplicate(battle)) {
-			await this.storage.add('battles', battle);
-		}
-
-		// Track guild activity for raid boss attacks
-		// Guild raids are cooperative PvE events
-		// See: https://community.hero-wars.com/discussion/guild-raid-boss-guide
-		const guildData = await this.storage.getMetadata('guildData', {});
-		await this.trackGuildActivity('raid', {
-			guildId: guildData.id || 'unknown',
-			guildName: guildData.name || 'Unknown Guild',
-			bossId: args.bossId,
-			damage: data.damage || 0,
-		});
-
-		// Track resource rewards from raid boss
-		const rewards = data.reward || {};
-		if (rewards.gold) {
-			await this.trackResourceTransaction('gold', rewards.gold, 'battle', 'guild_raid');
-		}
-		if (rewards.guildToken || rewards.clanToken) {
-			await this.trackResourceTransaction(
-				'guild_coins',
-				rewards.guildToken || rewards.clanToken,
-				'battle',
-				'guild_raid'
-			);
-		}
-		if (rewards.starmoney) {
-			await this.trackResourceTransaction('emeralds', rewards.starmoney, 'battle', 'guild_raid');
-		}
+		await executeRaidBossAttackTracking(this, args, data);
 	}
 
 	/**
@@ -4328,13 +2552,7 @@ class GameTracker {
 		}
 
 		// ── 1. Write to chests IDB store ────────────────────────────────
-		const chestRecord = {
-			chestType: sourceType,
-			sourceId,
-			quantity,
-			dropCount: drops.length,
-			timestamp,
-		};
+		const chestRecord = buildChestOpeningRecord(sourceType, sourceId, quantity, drops, timestamp);
 
 		let openingId = null;
 		try {
@@ -4345,15 +2563,7 @@ class GameTracker {
 
 		// ── 2. Write all drops in a single IDB transaction (#141) ──────
 		try {
-			const dropRecords = drops.map((drop) => ({
-				timestamp,
-				sourceType,
-				sourceId,
-				itemType: drop.itemType,
-				itemId: String(drop.itemId),
-				quantity: drop.quantity,
-				openingId: openingId || 0,
-			}));
+			const dropRecords = buildConsumableDropRecords(drops, timestamp, sourceType, sourceId, openingId);
 			await this.storage.addBatch('consumableRewards', dropRecords);
 		} catch (err) {
 			console.warn('[OrganizedJihad] Failed to write drop records:', err);
@@ -4362,19 +2572,13 @@ class GameTracker {
 		// ── 3. Mirror to metadata cache (for backward compat) ───────────
 		try {
 			const chestHistory = await this.storage.getMetadata('chestOpeningHistory', []);
-			chestHistory.push({
-				chestId: sourceId,
-				chestType: sourceType,
-				quantity,
-				rewards: drops,
-				timestamp,
-			});
-			if (chestHistory.length > 1000) chestHistory.shift();
-			await this.storage.setMetadata('chestOpeningHistory', chestHistory);
+			const historyEntry = buildChestHistoryEntry(sourceId, sourceType, quantity, drops, timestamp);
+			const nextHistory = appendChestHistory(chestHistory, historyEntry, 1000);
+			await this.storage.setMetadata('chestOpeningHistory', nextHistory);
 		} catch { /* non-critical */ }
 
 		// ── 4. Live activity event ──────────────────────────────────────
-		const typeLabel = this._sourceTypeLabel(sourceType);
+		const typeLabel = sourceTypeLabel(sourceType);
 		await this._logActivity('chest', `${typeLabel} opened: ${sourceId} (${quantity}x, ${drops.length} drops)`);
 
 		// ── 5. Update aggregated drop-rate statistics ────────────────────
@@ -4387,17 +2591,8 @@ class GameTracker {
 
 		// ── 6. Track resource rewards as resource transactions ──────────
 		const chestName = `${sourceType}_${sourceId}`;
-		for (const drop of drops) {
-			if (drop.itemType === 'gold') {
-				await this.trackResourceTransaction('gold', drop.quantity, 'chest', chestName);
-			} else if (drop.itemType === 'starmoney') {
-				await this.trackResourceTransaction('emeralds', drop.quantity, 'chest', chestName);
-			} else if (drop.itemType === 'coin') {
-				// Coin subtypes: 3 = arena, 4 = outland, 5 = tower, 7 = skull
-				const coinNames = { '3': 'arena_coins', '4': 'outland_coins', '5': 'tower_coins', '7': 'skull_coins' };
-				const resName = coinNames[drop.itemId] || `coin_${drop.itemId}`;
-				await this.trackResourceTransaction(resName, drop.quantity, 'chest', chestName);
-			}
+		for (const intent of buildChestResourceTransactionIntents(drops, chestName)) {
+			await this.trackResourceTransaction(intent.resourceType, intent.amount, intent.source, intent.sourceDetail);
 		}
 	}
 
@@ -4427,25 +2622,7 @@ class GameTracker {
 	 * @private
 	 */
 	_normalizeRewards(data) {
-		if (!data || typeof data !== 'object') return [];
-
-		const drops = [];
-
-		// Determine where the rewards live in the response
-		const sources = [];
-		if (data.chestReward) sources.push(data.chestReward);
-		if (data.reward) sources.push(data.reward);
-		if (data.rewards) sources.push(data.rewards);
-		if (data.skullReward) sources.push(data.skullReward);
-
-		// If none of the known keys match, treat the whole response as rewards
-		if (sources.length === 0) sources.push(data);
-
-		for (const src of sources) {
-			this._extractDrops(src, drops);
-		}
-
-		return drops;
+		return normalizeRewardsPayload(data);
 	}
 
 	/**
@@ -4461,53 +2638,7 @@ class GameTracker {
 	 * @private
 	 */
 	_extractDrops(source, drops) {
-		if (!source || typeof source !== 'object') return;
-
-		// Array → extract each element
-		if (Array.isArray(source)) {
-			for (const item of source) {
-				this._extractDrops(item, drops);
-			}
-			return;
-		}
-
-		// Known scalar resource keys (value is the quantity directly)
-		const scalarKeys = new Set(['gold', 'starmoney', 'experience', 'stamina', 'titanExp']);
-
-		// Known category keys (value is { itemId: quantity, ... })
-		const categoryKeys = new Set([
-			'consumable', 'gear', 'coin', 'fragmentHero', 'fragmentTitan',
-			'petCard', 'titanCard', 'scroll', 'artifact', 'titanArtifact',
-			'skinStone', 'titanSkinStone', 'heroSoulStone', 'titanSoulStone',
-		]);
-
-		let hasKnownKey = false;
-
-		for (const [key, value] of Object.entries(source)) {
-			if (scalarKeys.has(key) && typeof value === 'number') {
-				drops.push({ itemType: key, itemId: key, quantity: value });
-				hasKnownKey = true;
-			} else if (categoryKeys.has(key) && typeof value === 'object' && value !== null) {
-				hasKnownKey = true;
-				for (const [itemId, qty] of Object.entries(value)) {
-					drops.push({
-						itemType: key,
-						itemId: String(itemId),
-						quantity: typeof qty === 'number' ? qty : 1,
-					});
-				}
-			}
-		}
-
-		// If no known keys matched, this might be a count-keyed wrapper like
-		// { 500: { consumable: {...} } } — recurse into numeric-keyed values.
-		if (!hasKnownKey) {
-			for (const [key, value] of Object.entries(source)) {
-				if (typeof value === 'object' && value !== null && /^\d+$/.test(key)) {
-					this._extractDrops(value, drops);
-				}
-			}
-		}
+		extractDropsIntoArray(source, drops);
 	}
 
 	/**
@@ -4518,16 +2649,7 @@ class GameTracker {
 	 * @private
 	 */
 	_sourceTypeLabel(sourceType) {
-		const labels = {
-			genericChest: 'Chest',
-			artifactChest: 'Artifact Chest',
-			titanArtifactChest: 'Titan Artifact Chest',
-			petChest: 'Pet Chest',
-			lootBox: 'Loot Box',
-			towerChest: 'Tower Chest',
-			outlandChest: 'Outland Chest',
-		};
-		return labels[sourceType] || sourceType;
+		return sourceTypeLabel(sourceType);
 	}
 
 	/**
@@ -4539,38 +2661,8 @@ class GameTracker {
 	 */
 	async updateChestDropRates(chestRecord) {
 		const dropRates = await this.storage.getMetadata('chestDropRates', {});
-		const chestKey = `${chestRecord.chestType}_${chestRecord.chestId}`;
-
-		if (!dropRates[chestKey]) {
-			dropRates[chestKey] = {
-				chestType: chestRecord.chestType,
-				chestId: chestRecord.chestId,
-				openCount: 0,
-				itemDrops: {},
-			};
-		}
-
-		dropRates[chestKey].openCount += chestRecord.quantity;
-
-		// Count each normalised drop
-		if (Array.isArray(chestRecord.rewards)) {
-			for (const drop of chestRecord.rewards) {
-				const itemKey = `${drop.itemType}_${drop.itemId}`;
-				if (!dropRates[chestKey].itemDrops[itemKey]) {
-					dropRates[chestKey].itemDrops[itemKey] = {
-						type: drop.itemType,
-						id: drop.itemId,
-						name: drop.itemName || itemKey,
-						dropCount: 0,
-						totalAmount: 0,
-					};
-				}
-				dropRates[chestKey].itemDrops[itemKey].dropCount += 1;
-				dropRates[chestKey].itemDrops[itemKey].totalAmount += drop.quantity || 1;
-			}
-		}
-
-		await this.storage.setMetadata('chestDropRates', dropRates);
+		const nextDropRates = applyChestDropRateUpdates(dropRates, chestRecord);
+		await this.storage.setMetadata('chestDropRates', nextDropRates);
 	}
 
 	/**
@@ -4584,16 +2676,7 @@ class GameTracker {
 		const playerId = (await this.storage.getMetadata('currentPlayerId')) || 'unknown';
 		const purchasedAt = new Date().toISOString();
 
-		const purchase = {
-			purchasedAt: purchasedAt,
-			shopType: args.shopType || args.shopId || 'unknown', // arena, guild, tower, merchant, etc.
-			itemId: args.itemId || 'unknown',
-			itemName: data.itemName || args.itemName || `Item_${args.itemId}`,
-			quantity: args.quantity || args.count || 1,
-			costType: args.costType || Object.keys(args.cost || {})[0] || 'unknown', // gold, emeralds, trophies, etc.
-			costAmount: args.costAmount || Object.values(args.cost || {})[0] || 0,
-			playerId: playerId,
-		};
+		const purchase = buildShopPurchaseRecord(args, data, playerId, purchasedAt);
 
 		await this.storage.add('shopPurchases', purchase);
 		console.log(`[OrganizedJihad] Shop purchase tracked: ${purchase.itemName} from ${purchase.shopType}`);
@@ -4604,35 +2687,8 @@ class GameTracker {
 		const cost = args.cost || {};
 		const shopName = `${purchase.shopType}_shop`;
 
-		if (cost.gold || (purchase.costType === 'gold' && purchase.costAmount > 0)) {
-			await this.trackResourceTransaction('gold', -(cost.gold || purchase.costAmount), 'shop', shopName);
-		}
-		if (cost.starmoney || (purchase.costType === 'emeralds' && purchase.costAmount > 0)) {
-			await this.trackResourceTransaction('emeralds', -(cost.starmoney || purchase.costAmount), 'shop', shopName);
-		}
-		if (cost.arenaToken || (purchase.costType === 'arena_coins' && purchase.costAmount > 0)) {
-			await this.trackResourceTransaction(
-				'arena_coins',
-				-(cost.arenaToken || purchase.costAmount),
-				'shop',
-				shopName
-			);
-		}
-		if (cost.guildWarToken || (purchase.costType === 'guild_war_coins' && purchase.costAmount > 0)) {
-			await this.trackResourceTransaction(
-				'guild_war_coins',
-				-(cost.guildWarToken || purchase.costAmount),
-				'shop',
-				shopName
-			);
-		}
-		if (cost.titanPotion || (purchase.costType === 'titan_potion' && purchase.costAmount > 0)) {
-			await this.trackResourceTransaction(
-				'titan_potion',
-				-(cost.titanPotion || purchase.costAmount),
-				'shop',
-				shopName
-			);
+		for (const intent of buildShopResourceSpendIntents(cost, purchase.costType, purchase.costAmount, shopName)) {
+			await this.trackResourceTransaction(intent.resourceType, intent.amount, intent.source, intent.sourceDetail);
 		}
 	}
 
@@ -4651,14 +2707,7 @@ class GameTracker {
 		const playerId = (await this.storage.getMetadata('currentPlayerId')) || 'unknown';
 		const completedAt = new Date().toISOString();
 
-		const quest = {
-			completedAt: completedAt,
-			questType: args.questType || 'daily', // daily, weekly, event
-			questId: args.questId || 'unknown',
-			questName: args.questName || data.questName || `Quest_${args.questId}`,
-			rewardData: JSON.stringify(data.reward || data.rewards || {}),
-			playerId: playerId,
-		};
+		const quest = buildQuestCompletionRecord(args, data, playerId, completedAt);
 
 		await this.storage.add('questCompletions', quest);
 		console.log(`[OrganizedJihad] Quest completed: ${quest.questName} (${quest.questType})`);
@@ -4666,21 +2715,9 @@ class GameTracker {
 		// Track resource rewards from quest completion
 		// Hero Wars quest rewards format: {gold: 1000, starmoney: 50, exp: 100, ...}
 		// See: https://community.hero-wars.com/discussion/quest-rewards-guide
-		const rewards = data.reward || data.rewards || {};
-		if (rewards.gold) {
-			await this.trackResourceTransaction('gold', rewards.gold, 'quest', quest.questName);
-		}
-		if (rewards.starmoney) {
-			await this.trackResourceTransaction('emeralds', rewards.starmoney, 'quest', quest.questName);
-		}
-		if (rewards.arenaToken) {
-			await this.trackResourceTransaction('arena_coins', rewards.arenaToken, 'quest', quest.questName);
-		}
-		if (rewards.guildWarToken) {
-			await this.trackResourceTransaction('guild_war_coins', rewards.guildWarToken, 'quest', quest.questName);
-		}
-		if (rewards.titanPotion) {
-			await this.trackResourceTransaction('titan_potion', rewards.titanPotion, 'quest', quest.questName);
+		const rewards = resolveRewardPayload(data);
+		for (const intent of buildQuestResourceRewardIntents(rewards, quest.questName)) {
+			await this.trackResourceTransaction(intent.resourceType, intent.amount, intent.source, intent.sourceDetail);
 		}
 	}
 
@@ -4691,12 +2728,7 @@ class GameTracker {
 	 * @private
 	 */
 	async trackExpeditionState(data) {
-		const expeditionData = {
-			currentNode: data.currentNode || 0,
-			progress: data.progress || 0,
-			rewards: data.rewards || [],
-			timestamp: Date.now(),
-		};
+		const expeditionData = buildExpeditionStateMetadata(data, Date.now());
 
 		await this.storage.setMetadata('expeditionState', expeditionData);
 	}
@@ -4717,17 +2749,7 @@ class GameTracker {
 		const playerId = (await this.storage.getMetadata('currentPlayerId')) || 'unknown';
 		const timestamp = new Date().toISOString();
 
-		const battle = {
-			timestamp: timestamp,
-			expeditionId: args.expeditionId || args.nodeId || 'unknown',
-			bossId: args.bossId || data.bossId || 'unknown',
-			bossName: data.bossName || `Boss_${args.bossId}`,
-			isWin: data.result?.win || data.win || false,
-			teamComposition: JSON.stringify(data.attackers || data.myTeam || {}),
-			damageDealt: data.damageDealt || data.damage || 0,
-			rewardData: JSON.stringify(data.reward || data.rewards || {}),
-			playerId: playerId,
-		};
+		const battle = buildExpeditionBattleRecord(args, data, playerId, timestamp);
 
 		await this.storage.add('expeditionBattles', battle);
 		console.log(
@@ -4736,17 +2758,9 @@ class GameTracker {
 
 		// Track resource rewards from expedition battles
 		// Expeditions reward gold, items, and sometimes emeralds
-		const rewards = data.reward || data.rewards || {};
-		if (rewards.gold) {
-			await this.trackResourceTransaction('gold', rewards.gold, 'battle', `expedition_${battle.expeditionId}`);
-		}
-		if (rewards.starmoney) {
-			await this.trackResourceTransaction(
-				'emeralds',
-				rewards.starmoney,
-				'battle',
-				`expedition_${battle.expeditionId}`
-			);
+		const rewards = resolveRewardPayload(data);
+		for (const intent of buildExpeditionResourceRewardIntents(rewards, battle.expeditionId)) {
+			await this.trackResourceTransaction(intent.resourceType, intent.amount, intent.source, intent.sourceDetail);
 		}
 	}
 
@@ -4765,47 +2779,18 @@ class GameTracker {
 	async trackMissionProgress(args, data) {
 		const playerId = (await this.storage.getMetadata('currentPlayerId')) || 'unknown';
 		const missionId = `${args.missionId || args.id}_${args.isHeroic ? 'heroic' : 'normal'}`;
-
-		// Try to get existing progress
-		let existing = null;
-		try {
-			existing = await this.storage.get('missionProgress', missionId);
-		} catch (e) {
-			// Doesn't exist yet
-		}
-
-		const newStars = data.stars || 0;
-		const currentStars = existing?.stars || 0;
-
-		const progress = {
-			missionId: missionId,
-			missionName: args.missionName || data.missionName || `Mission_${args.missionId}`,
-			stars: Math.max(newStars, currentStars), // Keep highest stars
-			highestLevel: args.level || existing?.highestLevel || 1,
-			isHeroic: args.isHeroic || false,
-			lastCompleted: new Date().toISOString(),
-			completionCount: (existing?.completionCount || 0) + 1,
-			playerId: playerId,
-		};
+		const existing = await getExistingProgressRecord(this.storage, 'missionProgress', missionId);
+		const progress = buildMissionProgressRecord(args, data, existing, playerId, new Date().toISOString());
 
 		await this.storage.put('missionProgress', progress);
-		console.log(`[OrganizedJihad] Mission progress updated: ${progress.missionName} - ${progress.stars} stars`);
+		console.log(buildMissionProgressLogMessage(progress));
 
 		// Track resource rewards from mission completion
 		// Campaign missions reward gold, experience, and sometimes items
 		// See: https://community.hero-wars.com/discussion/campaign-rewards
-		const rewards = data.reward || data.rewards || {};
-		if (rewards.gold) {
-			await this.trackResourceTransaction('gold', rewards.gold, 'battle', `mission_${progress.missionName}`);
-		}
-		if (rewards.starmoney) {
-			await this.trackResourceTransaction(
-				'emeralds',
-				rewards.starmoney,
-				'battle',
-				`mission_${progress.missionName}`
-			);
-		}
+		const rewards = resolveRewardPayload(data);
+		const intents = buildMissionResourceRewardIntents(rewards, progress.missionName);
+		await executeResourceTransactionIntents(this, intents);
 	}
 
 	/**
@@ -4821,45 +2806,20 @@ class GameTracker {
 	 */
 	async trackTowerProgress(args, data) {
 		const playerId = (await this.storage.getMetadata('currentPlayerId')) || 'unknown';
-		const towerType = args.towerType || args.type || 'regular'; // regular, outland, guild
-
-		// Try to get existing progress
-		let existing = null;
-		try {
-			existing = await this.storage.get('towerProgress', towerType);
-		} catch (e) {
-			// Doesn't exist yet
-		}
-
+		const towerType = resolveTowerType(args); // regular, outland, guild
+		const existing = await getExistingProgressRecord(this.storage, 'towerProgress', towerType);
 		const newFloor = data.floor || args.floor || 1;
-		const currentFloor = existing?.highestFloor || 0;
-
-		const progress = {
-			towerType: towerType,
-			highestFloor: Math.max(newFloor, currentFloor), // Keep highest floor reached
-			lastUpdate: new Date().toISOString(),
-			floorData: JSON.stringify(data.floorDetails || {}),
-			playerId: playerId,
-		};
+		const progress = buildTowerProgressRecord(data, existing, playerId, towerType, newFloor, new Date().toISOString());
 
 		await this.storage.put('towerProgress', progress);
-		console.log(`[OrganizedJihad] Tower progress updated: ${progress.towerType} - floor ${progress.highestFloor}`);
+		console.log(buildTowerProgressLogMessage(progress));
 
 		// Track resource rewards from tower floor completion
 		// Tower rewards vary by floor: gold, items, sometimes emeralds
 		// See: https://community.hero-wars.com/discussion/tower-rewards
-		const rewards = data.reward || data.rewards || {};
-		if (rewards.gold) {
-			await this.trackResourceTransaction('gold', rewards.gold, 'battle', `${towerType}_tower_floor_${newFloor}`);
-		}
-		if (rewards.starmoney) {
-			await this.trackResourceTransaction(
-				'emeralds',
-				rewards.starmoney,
-				'battle',
-				`${towerType}_tower_floor_${newFloor}`
-			);
-		}
+		const rewards = resolveRewardPayload(data);
+		const intents = buildTowerResourceRewardIntents(rewards, towerType, newFloor);
+		await executeResourceTransactionIntents(this, intents);
 	}
 
 	/**
@@ -4877,22 +2837,7 @@ class GameTracker {
 	 * @private
 	 */
 	async trackResourceTransaction(resourceType, amount, source, sourceDetail = '') {
-		const playerId = (await this.storage.getMetadata('currentPlayerId')) || 'unknown';
-		const timestamp = new Date().toISOString();
-
-		const transaction = {
-			timestamp: timestamp,
-			resourceType: resourceType, // gold, emeralds, arena_coins, guild_war_coins, titan_potion, etc.
-			amount: amount, // Positive for gains, negative for spending
-			source: source, // battle, shop, quest, chest, levelup, etc.
-			sourceDetail: sourceDetail, // Additional context
-			playerId: playerId,
-		};
-
-		await this.storage.add('resourceTransactions', transaction);
-		console.log(
-			`[OrganizedJihad] Resource transaction: ${amount > 0 ? '+' : ''}${amount} ${resourceType} from ${source}`
-		);
+		await trackResourceTransactionHelper(this, resourceType, amount, source, sourceDetail);
 	}
 
 	/**
@@ -4908,20 +2853,7 @@ class GameTracker {
 	 * @private
 	 */
 	async trackGuildActivity(activityType, data) {
-		const playerId = (await this.storage.getMetadata('currentPlayerId')) || 'unknown';
-		const timestamp = new Date().toISOString();
-
-		const activity = {
-			timestamp: timestamp,
-			guildId: data.guildId || 'unknown',
-			guildName: data.guildName || `Guild_${data.guildId}`,
-			activityType: activityType, // join, leave, donation, raid, war, chat, etc.
-			activityData: JSON.stringify(data),
-			playerId: playerId,
-		};
-
-		await this.storage.add('guildActivities', activity);
-		console.log(`[OrganizedJihad] Guild activity tracked: ${activity.activityType} in ${activity.guildName}`);
+		await trackGuildActivityHelper(this, activityType, data);
 	}
 
 	/**
@@ -5301,31 +3233,9 @@ class GameTracker {
 	 * @private
 	 */
 	async trackCrossServerWarResults(args, data) {
-		const battles = Array.isArray(data.battles) ? data.battles : (data.results || [data]);
+		const battles = resolveCrossServerBattleResults(data);
 
-		for (const result of battles) {
-			const battle = {
-				battleType: 'CrossServerWar',
-				opponentId: result.defenderId || result.opponentId || args.defenderId || null,
-				opponentName: result.defenderName || null,
-				isWin: result.result?.win ?? result.win ?? false,
-				playerPower: result.attackers ? this.calculateTeamPower(result.attackers) : 0,
-				opponentPower: result.defenders ? this.calculateTeamPower(result.defenders) : 0,
-				playerHeroes: result.attackers ? JSON.stringify(this.compressHeroTeam(result.attackers)) : null,
-				opponentHeroes: result.defenders ? JSON.stringify(this.compressHeroTeam(result.defenders)) : null,
-				rewards: result.reward ? JSON.stringify(result.reward) : null,
-				fortId: result.fortId || args.fortId || null,
-				warId: result.warId || args.warId || null,
-				timestamp: new Date().toISOString(),
-			};
-
-			if (this._isBattleDuplicate(battle)) {
-				console.log('[OrganizedJihad] Skipping duplicate CrossServerWar battle');
-				continue;
-			}
-
-			await this.storage.add('battles', battle);
-		}
+		await persistCrossServerWarBattles(this, args, battles);
 
 		await this._logActivity('battle', `Cross-server war results tracked (${battles.length} battle(s))`);
 		console.log(`[OrganizedJihad] Cross-server war: ${battles.length} battle result(s) tracked`);
@@ -5344,17 +3254,7 @@ class GameTracker {
 	 * @private
 	 */
 	async trackCrossServerWarInfo(data) {
-		const warData = {
-			warId: data.warId || data.id,
-			isCrossServer: true,
-			enemyGuildId: data.enemy?.id || data.enemyClanId,
-			enemyGuildName: data.enemy?.name || data.enemyClanName || 'Unknown',
-			enemyServer: data.enemy?.serverId || data.enemyServerId || null,
-			myScore: data.myScore ?? data.score ?? 0,
-			enemyScore: data.enemyScore ?? data.enemy?.score ?? 0,
-			state: data.state || data.phase,
-			timestamp: Date.now(),
-		};
+		const warData = buildCrossServerWarInfoMetadata(data);
 
 		await this.storage.setMetadata('currentCrossServerWar', warData);
 		console.log(`[OrganizedJihad] Cross-server war info tracked: vs ${warData.enemyGuildName} (server ${warData.enemyServer || '?'})`);
@@ -5367,47 +3267,7 @@ class GameTracker {
 	 * @private
 	 */
 	async trackQuestsData(data) {
-		// questGetAll returns a flat array of ALL quests (daily, guild, battlepass, raid, story).
-		// Quest type identification (from API samples):
-		//   - Daily quests: ID 10001-10999 (tracked via questFarm)
-		//   - Guild quests: ID 20000xxx, reward has `clanQuestsPoints`, has `order` field
-		//   - Battle Pass: ID 1797xxxxxx+, reward has `battlePassExp`
-		//   - Clan Raid: ID 11xxx, has `order` field, consumable rewards
-		//   - Story/regular: everything else
-		// State: 1 = in-progress, 2 = completed/claimable
-		const quests = Array.isArray(data) ? data : [];
-
-		// Categorize quests for dashboard display (#117, #118)
-		const dailyQuests = quests.filter((q) => {
-			const id = q.id || 0;
-			return id >= 10001 && id <= 10999;
-		});
-		const guildQuests = quests.filter((q) => {
-			const id = q.id || 0;
-			return id >= 20000000 && id <= 20999999;
-		});
-
-		// Save categorized quest summary for dashboard
-		await this.storage.setMetadata('questSummary', {
-			dailyTotal: dailyQuests.length,
-			dailyCompleted: dailyQuests.filter((q) => q.state === 2).length,
-			guildTotal: guildQuests.length,
-			guildCompleted: guildQuests.filter((q) => q.state === 2).length,
-			allTotal: quests.length,
-			allCompleted: quests.filter((q) => q.state === 2).length,
-			lastUpdate: Date.now(),
-		});
-
-		// Also save the full quests array for detailed views
-		const questsData = quests.map((quest) => ({
-			id: quest.id,
-			state: quest.state,
-			progress: quest.progress || 0,
-			lastUpdate: Date.now(),
-		}));
-		await this.storage.setMetadata('questsData', questsData);
-
-		console.log(`[OrganizedJihad] Quests: ${dailyQuests.filter((q) => q.state === 2).length}/${dailyQuests.length} daily, ${guildQuests.filter((q) => q.state === 2).length}/${guildQuests.length} guild`);
+		await trackQuestsDataHelper(this, data);
 	}
 
 	/**
@@ -5417,50 +3277,7 @@ class GameTracker {
 	 * @private
 	 */
 	async trackGuildData(data) {
-		const oldGuildData = await this.storage.getMetadata('guildData', {});
-
-		const guildData = {
-			id: data.clan?.id || null,
-			name: data.clan?.name || 'No Guild',
-			level: data.clan?.level || 0,
-			members: Object.keys(data.clan?.members || {}).length,
-			lastUpdate: Date.now(),
-		};
-
-		await this.storage.setMetadata('guildData', guildData);
-
-		// Track guild join/leave events by detecting guild ID changes
-		// Hero Wars allows players to leave and join guilds
-		// See: https://community.hero-wars.com/discussion/guild-management
-		if (oldGuildData.id !== guildData.id) {
-			if (guildData.id && !oldGuildData.id) {
-				// Joined a guild
-				await this.trackGuildActivity('join', {
-					guildId: guildData.id,
-					guildName: guildData.name,
-					guildLevel: guildData.level,
-					memberCount: guildData.members,
-				});
-			} else if (!guildData.id && oldGuildData.id) {
-				// Left a guild
-				await this.trackGuildActivity('leave', {
-					guildId: oldGuildData.id,
-					guildName: oldGuildData.name,
-				});
-			} else if (guildData.id && oldGuildData.id) {
-				// Changed guilds (leave old, join new)
-				await this.trackGuildActivity('leave', {
-					guildId: oldGuildData.id,
-					guildName: oldGuildData.name,
-				});
-				await this.trackGuildActivity('join', {
-					guildId: guildData.id,
-					guildName: guildData.name,
-					guildLevel: guildData.level,
-					memberCount: guildData.members,
-				});
-			}
-		}
+		await trackGuildDataHelper(this, data);
 	}
 
 	/**
@@ -5699,61 +3516,10 @@ class GameTracker {
 			const playerData = await this.storage.getMetadata('playerData', {});
 			const currentPlayerId = playerData.player?.id || 0;
 
-			// Build all guild member records and snapshots, then batch-write (#141)
-			const guildMemberRecords = [];
-			const snapshotRecords = [];
-
-			for (const [memberId, memberInfo] of Object.entries(members)) {
-				// Skip tracking self (already tracked in playerData)
-				if (parseInt(memberId) === currentPlayerId) continue;
-
-				// Build guild member record
-				// Matches GuildMember entity model in database
-				const guildMember = {
-					guildId: guildId,
-					guildName: guildName,
-					playerId: parseInt(memberId),
-					playerName: memberInfo.name || 'Unknown',
-					level: memberInfo.level || 0,
-					teamPower: memberInfo.power || memberInfo.teamPower || 0,
-					guildRank: memberInfo.rank || memberInfo.role || 'member',
-					vipLevel: memberInfo.vipLevel || null,
-					lastOnline: new Date(memberInfo.lastOnlineTime || Date.now()),
-					isOnline: memberInfo.isOnline || false,
-					joinedAt: memberInfo.joinedAt ? new Date(memberInfo.joinedAt) : null,
-					currentContribution: memberInfo.contribution || memberInfo.weeklyContribution || 0,
-					totalContribution: memberInfo.totalContribution || memberInfo.lifetimeContribution || 0,
-					arenaRank: memberInfo.arenaRank || null,
-					grandArenaRank: memberInfo.grandArenaRank || null,
-					titanArenaRank: memberInfo.titanArenaRank || null,
-					prestige: memberInfo.prestige || 0,
-					isActive: true,
-					heroRoster: memberInfo.heroes ? JSON.stringify(memberInfo.heroes) : null,
-					titanRoster: memberInfo.titans ? JSON.stringify(memberInfo.titans) : null,
-				};
-
-				guildMemberRecords.push(guildMember);
-
-				// Create historical snapshot for trend tracking
-				snapshotRecords.push({
-					timestamp: new Date(),
-					playerId: guildMember.playerId,
-					playerName: guildMember.playerName,
-					guildId: guildId,
-					level: guildMember.level,
-					teamPower: guildMember.teamPower,
-					guildRank: guildMember.guildRank,
-					contribution: guildMember.currentContribution,
-					totalContribution: guildMember.totalContribution,
-					prestige: guildMember.prestige,
-					isOnline: guildMember.isOnline,
-					lastOnline: guildMember.lastOnline,
-				});
-			}
+			const trackingPayload = buildGuildMemberSnapshotPayload(data, currentPlayerId);
 
 			// Batch upsert current roster + batch insert snapshots (2 txs total)
-			await this.storage.putBatch('guildMembers', guildMemberRecords);
-			await this.storage.addBatch('guildMemberSnapshots', snapshotRecords);
+			await persistGuildMemberSnapshotPayload(this.storage, trackingPayload);
 
 			console.log(`[OrganizedJihad] Tracked ${Object.keys(members).length} guild members from ${guildName}`);
 		} catch (error) {
@@ -5775,33 +3541,10 @@ class GameTracker {
 				return;
 			}
 
-			const warId = data.war.id || data.war.warId || String(Date.now());
-			const warDate = new Date(data.war.startTime || data.war.date || Date.now());
 			const guildId = data.clan?.id || await this.getStoredGuildId();
-			const participants = data.war.participants || {};
+			const participantCount = await executeGuildWarParticipationTracking(this, data, guildId);
 
-			// Track each member's participation
-			for (const [memberId, participantInfo] of Object.entries(participants)) {
-				const participation = {
-					warId: warId,
-					warDate: warDate,
-					playerId: parseInt(memberId),
-					playerName: participantInfo.name || 'Unknown',
-					guildId: guildId,
-					attacksMade: participantInfo.attacks || participantInfo.attackCount || 0,
-					maxAttacks: participantInfo.maxAttacks || data.war.maxAttacks || 3,
-					totalDamage: participantInfo.damage || participantInfo.totalDamage || 0,
-					fortsDefended: participantInfo.fortsDefended || 0,
-					defensePoints: participantInfo.defensePoints || 0,
-					participated: (participantInfo.attacks || 0) > 0,
-					warResult: data.war.result || null,
-					attackDetails: participantInfo.attackLog ? JSON.stringify(participantInfo.attackLog) : null,
-				};
-
-				await this.storage.add('guildWarParticipations', participation);
-			}
-
-			console.log(`[OrganizedJihad] Tracked Guild War participation for ${Object.keys(participants).length} members`);
+			console.log(`[OrganizedJihad] Tracked Guild War participation for ${participantCount} members`);
 		} catch (error) {
 			console.error('[OrganizedJihad] Error tracking guild war participation:', error);
 		}
@@ -5823,56 +3566,10 @@ class GameTracker {
 				return;
 			}
 
-			const raidId = data.raid.id || data.raid.raidId || String(Date.now());
-			const raidDate = new Date(data.raid.startTime || data.raid.date || Date.now());
 			const guildId = data.clan?.id || await this.getStoredGuildId();
-			const bossName = data.raid.bossName || data.raid.bossType || 'unknown';
-			const bossLevel = data.raid.bossLevel || data.raid.difficulty || 0;
-			const participants = data.raid.participants || {};
+			const participantCount = await executeGuildRaidParticipationTracking(this, data, guildId);
 
-			// Track each member's raid performance
-			for (const [memberId, participantInfo] of Object.entries(participants)) {
-				// Calculate total damage (boss + minions)
-				const bossDamage = participantInfo.bossDamage || 0;
-				const minionDamage = participantInfo.minionDamage || participantInfo.supportDamage || 0;
-				const totalDamage = bossDamage + minionDamage;
-
-				const participation = {
-					raidId: raidId,
-					raidDate: raidDate,
-					playerId: parseInt(memberId),
-					playerName: participantInfo.name || 'Unknown',
-					guildId: guildId,
-					bossName: bossName,
-					bossLevel: bossLevel,
-					bossDamage: bossDamage,
-					minionDamage: minionDamage,
-					totalDamage: totalDamage,
-					attacksMade: participantInfo.attacks || participantInfo.attackCount || 0,
-					maxAttacks: participantInfo.maxAttacks || data.raid.maxAttacks || 3,
-					participated: totalDamage > 0,
-					titaniteEarned: participantInfo.titaniteEarned || participantInfo.reward?.titanite || 0,
-					guildRank: data.raid.guildRank || null,
-					attackDetails: participantInfo.attackLog ? JSON.stringify(participantInfo.attackLog) : null,
-				};
-
-				await this.storage.add('guildRaidParticipations', participation);
-
-				// Track titanite earnings as transaction
-				if (participation.titaniteEarned > 0) {
-					await this.trackTitaniteTransaction(
-						participation.playerId,
-						participation.playerName,
-						guildId,
-						'earned',
-						participation.titaniteEarned,
-						'raid',
-						`${bossName} Level ${bossLevel}`
-					);
-				}
-			}
-
-			console.log(`[OrganizedJihad] Tracked Guild Raid participation for ${Object.keys(participants).length} members`);
+			console.log(`[OrganizedJihad] Tracked Guild Raid participation for ${participantCount} members`);
 		} catch (error) {
 			console.error('[OrganizedJihad] Error tracking guild raid participation:', error);
 		}
@@ -5892,48 +3589,10 @@ class GameTracker {
 				return;
 			}
 
-			const dungeonId = data.dungeon.id || data.dungeon.dungeonId || String(Date.now());
-			const dungeonDate = new Date(data.dungeon.startTime || data.dungeon.date || Date.now());
 			const guildId = data.clan?.id || await this.getStoredGuildId();
-			const dungeonType = data.dungeon.type || data.dungeon.dungeonType || 'unknown';
-			const participants = data.dungeon.participants || {};
+			const participantCount = await executeGuildDungeonParticipationTracking(this, data, guildId);
 
-			// Track each member's dungeon progress
-			for (const [memberId, participantInfo] of Object.entries(participants)) {
-				const participation = {
-					dungeonId: dungeonId,
-					dungeonDate: dungeonDate,
-					playerId: parseInt(memberId),
-					playerName: participantInfo.name || 'Unknown',
-					guildId: guildId,
-					dungeonType: dungeonType,
-					titanChargesUsed: participantInfo.chargesUsed || participantInfo.titanCharges || 0,
-					maxTitanCharges: participantInfo.maxCharges || data.dungeon.maxCharges || 6,
-					battlesFought: participantInfo.battles || participantInfo.battleCount || 0,
-					totalDamage: participantInfo.damage || participantInfo.totalDamage || 0,
-					highestStage: participantInfo.stage || participantInfo.maxStage || 0,
-					participated: (participantInfo.chargesUsed || 0) > 0,
-					titaniteEarned: participantInfo.titaniteEarned || participantInfo.reward?.titanite || 0,
-					titanTeam: participantInfo.titanTeam ? JSON.stringify(participantInfo.titanTeam) : null,
-				};
-
-				await this.storage.add('guildDungeonParticipations', participation);
-
-				// Track titanite earnings as transaction
-				if (participation.titaniteEarned > 0) {
-					await this.trackTitaniteTransaction(
-						participation.playerId,
-						participation.playerName,
-						guildId,
-						'earned',
-						participation.titaniteEarned,
-						'dungeon',
-						`${dungeonType} Stage ${participation.highestStage}`
-					);
-				}
-			}
-
-			console.log(`[OrganizedJihad] Tracked Guild Dungeon participation for ${Object.keys(participants).length} members`);
+			console.log(`[OrganizedJihad] Tracked Guild Dungeon participation for ${participantCount} members`);
 		} catch (error) {
 			console.error('[OrganizedJihad] Error tracking guild dungeon participation:', error);
 		}
@@ -5954,21 +3613,16 @@ class GameTracker {
 	 */
 	async trackTitaniteTransaction(playerId, playerName, guildId, transactionType, amount, source, description = null) {
 		try {
-			const transaction = {
-				timestamp: new Date(),
-				playerId: playerId,
-				playerName: playerName,
-				guildId: guildId,
-				transactionType: transactionType,
-				amount: amount,
-				source: source,
-				purchaseDescription: description,
-				balanceAfter: null, // Could be calculated if we track running balance
-			};
-
-			await this.storage.add('titaniteTransactions', transaction);
-
-			console.log(`[OrganizedJihad] Tracked titanite ${transactionType}: ${amount} from ${source}`);
+			await trackTitaniteTransactionHelper(
+				this,
+				playerId,
+				playerName,
+				guildId,
+				transactionType,
+				amount,
+				source,
+				description
+			);
 		} catch (error) {
 			console.error('[OrganizedJihad] Error tracking titanite transaction:', error);
 		}
@@ -5980,8 +3634,7 @@ class GameTracker {
 	 * @private
 	 */
 	async getStoredGuildId() {
-		const guildData = await this.storage.getMetadata('guildData', {});
-		return guildData.id || 0;
+		return await getStoredGuildIdHelper(this.storage);
 	}
 
 	/**
@@ -6112,43 +3765,8 @@ class GameTracker {
 	 * @returns {Object} Arena data with history and stats
 	 */
 	async getArenaData() {
+		const currentEnemies = await this.storage.getMetadata('currentArenaEnemies', []);
 		const history = await this.storage.getMetadata('arenaBattleHistory', []);
-		const currentEnemies = await this.storage.getMetadata('arenaEnemies', []);
-		const encounters = await this.storage.getMetadata('arenaEncounterHistory', []);
-
-		const stats = this.calculateBattleStats(history);
-
-		return {
-			currentEnemies,
-			history,
-			encounters,
-			stats,
-		};
-	}
-
-	/**
-	 * Get titan arena data
-	 * @returns {Object} Titan arena data
-	 */
-	async getTitanArenaData() {
-		const history = await this.storage.getMetadata('titanArenaBattleHistory', []);
-		const currentEnemies = await this.storage.getMetadata('titanArenaEnemies', []);
-		const stats = this.calculateBattleStats(history);
-
-		return {
-			currentEnemies,
-			history,
-			stats,
-		};
-	}
-
-	/**
-	 * Get grand arena data
-	 * @returns {Object} Grand arena data
-	 */
-	async getGrandArenaData() {
-		const history = await this.storage.getMetadata('grandArenaBattleHistory', []);
-		const currentEnemies = await this.storage.getMetadata('grandArenaEnemies', []);
 		const stats = this.calculateBattleStats(history);
 
 		return {
@@ -6167,11 +3785,7 @@ class GameTracker {
 		const history = await this.storage.getMetadata('guildWarBattleHistory', []);
 		const stats = this.calculateBattleStats(history);
 
-		return {
-			currentWar,
-			history,
-			stats,
-		};
+		return buildGuildWarDataResponse(currentWar, history, stats);
 	}
 
 	/**
@@ -6181,16 +3795,9 @@ class GameTracker {
 	async getRaidBossData() {
 		const currentBoss = await this.storage.getMetadata('currentRaidBoss', null);
 		const history = await this.storage.getMetadata('raidBossAttackHistory', []);
+		const summary = buildRaidBossDamageSummary(history);
 
-		const totalDamage = history.reduce((sum, attack) => sum + attack.damage, 0);
-		const averageDamage = history.length > 0 ? totalDamage / history.length : 0;
-
-		return {
-			currentBoss,
-			history,
-			totalDamage,
-			averageDamage,
-		};
+		return buildRaidBossDataResponse(currentBoss, history, summary);
 	}
 
 	/**
@@ -6542,47 +4149,7 @@ class GameTracker {
 	 * @private
 	 */
 	async trackDailyQuestFarm(args, responseData) {
-		const playerId = await this._getPlayerId();
-		const timestamp = new Date().toISOString();
-		const questId = String(args.questId || args.id || 0);
-		const questIdNum = parseInt(questId, 10);
-
-		// Determine if this is a daily quest (10001-10999) or guild quest
-		const isDailyQuest = questIdNum >= 10000 && questIdNum < 11000;
-
-		if (isDailyQuest) {
-			// Store as daily quest completion
-			const record = {
-				completedAt: timestamp,
-				questDate: new Date().toISOString().split('T')[0], // Date-only portion
-				questId,
-				questName: `Daily Quest ${questId}`,
-				category: null, // Would need quest name mapping
-				activityPoints: responseData?.reward?.activityPoints || 0,
-				rewardData: JSON.stringify(responseData?.reward || responseData || {}),
-				playerId,
-			};
-
-			await this.storage.add('dailyQuestCompletions', record);
-			console.log(`[OrganizedJihad] Daily quest farmed: ${questId}`);
-		} else {
-			// Store as guild quest completion
-			const guildId = (await this.storage.getMetadata('currentGuildId')) || 0;
-			const record = {
-				completedAt: timestamp,
-				questDate: new Date().toISOString().split('T')[0],
-				questId,
-				questName: `Guild Quest ${questId}`,
-				difficulty: null,
-				guildActivityPoints: responseData?.reward?.guildActivityPoints || 0,
-				rewardData: JSON.stringify(responseData?.reward || responseData || {}),
-				playerId,
-				guildId,
-			};
-
-			await this.storage.add('guildQuestCompletions', record);
-			console.log(`[OrganizedJihad] Guild quest farmed: ${questId}`);
-		}
+		await trackDailyQuestFarmHelper(this, args, responseData);
 	}
 
 	/**
@@ -6597,14 +4164,7 @@ class GameTracker {
 	 * @private
 	 */
 	async trackBatchQuestFarm(args, responseData) {
-		const questIds = args.questIds || [];
-
-		// Process each quest ID as a separate farm event
-		for (const questId of questIds) {
-			await this.trackDailyQuestFarm({ questId }, responseData);
-		}
-
-		console.log(`[OrganizedJihad] Batch quest farm: ${questIds.length} quests`);
+		await trackBatchQuestFarmHelper(this, args, responseData);
 	}
 
 	/**
@@ -6619,21 +4179,7 @@ class GameTracker {
 	 * @private
 	 */
 	async trackLoginReward(args, responseData) {
-		const playerId = await this._getPlayerId();
-		const timestamp = new Date().toISOString();
-		const isVip = args.vip || false;
-
-		const record = {
-			claimedAt: timestamp,
-			dayNumber: responseData?.day || responseData?.dayCount || 0,
-			streakLength: responseData?.loginCount || responseData?.streak || 0,
-			isVipBonus: isVip,
-			rewardData: JSON.stringify(responseData?.reward || responseData || {}),
-			playerId,
-		};
-
-		await this.storage.add('loginRewards', record);
-		console.log(`[OrganizedJihad] Login reward claimed: day ${record.dayNumber}, VIP: ${isVip}`);
+		await trackLoginRewardHelper(this, args, responseData);
 	}
 
 	/**
@@ -6648,15 +4194,7 @@ class GameTracker {
 	 * @private
 	 */
 	async trackDailyBonusInfo(responseData) {
-		// Cache the daily bonus info for use when farming
-		if (responseData?.day || responseData?.dayCount) {
-			await this.storage.setMetadata('dailyBonusDay', responseData.day || responseData.dayCount);
-		}
-		if (responseData?.loginCount || responseData?.streak) {
-			await this.storage.setMetadata('dailyBonusStreak', responseData.loginCount || responseData.streak);
-		}
-
-		console.log('[OrganizedJihad] Daily bonus info cached');
+		await trackDailyBonusInfoHelper(this, responseData);
 	}
 
 	/**
@@ -6674,23 +4212,7 @@ class GameTracker {
 	 * @private
 	 */
 	async trackInventoryItemUsage(args, responseData, category, usageContext) {
-		const playerId = await this._getPlayerId();
-		const timestamp = new Date().toISOString();
-
-		const record = {
-			timestamp,
-			itemId: String(args.libId || args.itemId || 'unknown'),
-			itemName: `Item_${args.libId || args.itemId || 'unknown'}`, // Name lookup not available
-			category,
-			quantityUsed: args.amount || 1,
-			quantityRemaining: 0, // Not always available in response
-			usageContext,
-			targetEntity: args.heroId ? resolveHeroName(args.heroId) : (args.titanId ? resolveHeroName(args.titanId) : null),
-			playerId,
-		};
-
-		await this.storage.add('inventoryItemUsages', record);
-		console.log(`[OrganizedJihad] Inventory item used: ${record.itemId} x${record.quantityUsed} for ${usageContext}`);
+		await trackInventoryItemUsageHelper(this, args, responseData, category, usageContext);
 	}
 
 }

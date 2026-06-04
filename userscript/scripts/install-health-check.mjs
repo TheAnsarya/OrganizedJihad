@@ -165,6 +165,7 @@ async function main() {
 	/** @type {EndpointCheck[]} */
 	const checks = [
 		{ name: 'Sync Health', path: '/api/sync/health', required: true },
+		{ name: 'Userscript Handshake', path: '/ui/userscript-handshake', required: true },
 		{ name: 'Projected Item Catalog', path: '/api/sync/projections/item-catalog', required: false },
 		{ name: 'Tool Catalog Filters', path: '/api/sync/tools/catalog/filters', required: false },
 	];
@@ -234,8 +235,10 @@ async function main() {
 	console.log('Result: Required checks failed.');
 	console.log('Next actions:');
 	console.log('1. Start API: dotnet run --project api');
-	console.log('2. Re-run this check: yarn install:check');
+	console.log('2. Re-run this check: yarn install:check --open failed');
 	console.log('3. Open API health URL in browser: ' + `${baseUrl}/api/sync/health`);
+	console.log('4. Open userscript handshake URL in browser: ' + `${baseUrl}/ui/userscript-handshake`);
+	console.log('5. Verify Tampermonkey script is enabled, then load Hero Wars and wait for one sync event.');
 	if (openedUrls.length > 0) {
 		console.log(`Opened ${openedUrls.length} URL(s) in browser (${openMode} mode).`);
 	}
