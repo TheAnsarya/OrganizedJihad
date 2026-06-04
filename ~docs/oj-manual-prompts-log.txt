@@ -623,6 +623,25 @@ merge the pr to main and then continue;
 
 I cleaned up the files, but STOP freaking out when there's an unexpected file; merge the pr to main and then continue;
 
+make sure that the the battle recomendation UI shows up in the game when appropriate (and it's currently showing up only on the News page `https://community.hero-wars.com/feed/all/1` right now, which is wrong, we don't want it there, only on the game) and make sure the apiserver has swagger and logging and add links to both in the userscript "connection" tab and the tray icon context menu items; and the userscript connection tab has nothing to do with the javascript API or the game's API, but they're showing up there, remove them from being added, they belong on the API Log tab; create epics, issues, docs, plans, etc. and then implement them; continue implementing issues for a very long time, work until like 12 issues are done; then prepare for a release; continue;
+
+continue;
+
+The userscript Connnection tab shouldn't be health checks only, it should be everything the userscript calls to the apiserver, but it should not log the game's api, only our apiserver connection api server; continue;
+
+Work through the issues, several issues at a time, finish all the work represented in the issue and update the issues adding to the descriptions and comments and close when completed; work through all of the issues; continue;
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
