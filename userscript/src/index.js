@@ -39,6 +39,7 @@ import GameOverlay from './modules/gameOverlay.js';
 import BattleRecommendationOverlay from './modules/battleRecommendationOverlay.js';
 import DomTargeting from './modules/domTargeting.js';
 import { getConfiguredApiBaseUrl } from './modules/helpers/apiConfig.js';
+import { isLocalApiServerUrl, recordApiServerCall } from './modules/helpers/apiServerCallLog.js';
 import { isGameSurfaceLocation } from './modules/helpers/gameSurfaceGuard.js';
 import NotificationManager from './modules/notificationManager.js';
 import './styles/main.css';
@@ -369,6 +370,48 @@ import './styles/main.css';
 
 		// ─── Initialize sync client (optional) ──────────────────────
 		const configuredApiBaseUrl = getConfiguredApiBaseUrl(prefStorage);
+
+		// Track only userscript -> local API server calls in a dedicated stream.
+		// This intentionally excludes Hero Wars game API traffic.
+		if (!window.__ojApiServerFetchWrapped) {
+			const originalFetch = window.fetch.bind(window);
+			window.fetch = async (input, init = {}) => {
+				const method = String(init?.method || 'GET').toUpperCase();
+				const rawUrl = typeof input === 'string' ? input : String(input?.url || '');
+				const shouldTrack = isLocalApiServerUrl(rawUrl, getConfiguredApiBaseUrl(prefStorage));
+				const startedAt = performance.now();
+
+				try {
+					const response = await originalFetch(input, init);
+					if (shouldTrack) {
+						recordApiServerCall({
+							method,
+							url: rawUrl,
+							status: response.status,
+							statusText: response.statusText || '',
+							ok: response.ok,
+							latencyMs: Math.max(0, Math.round(performance.now() - startedAt)),
+						});
+					}
+					return response;
+				} catch (error) {
+					if (shouldTrack) {
+						recordApiServerCall({
+							method,
+							url: rawUrl,
+							status: 0,
+							statusText: '',
+							ok: false,
+							latencyMs: Math.max(0, Math.round(performance.now() - startedAt)),
+							error: String(error?.message || error || 'Request failed'),
+						});
+					}
+					throw error;
+				}
+			};
+			window.__ojApiServerFetchWrapped = true;
+		}
+
 		const syncClient = new SyncClient(configuredApiBaseUrl);
 		let apiAvailable = false;
 		try {

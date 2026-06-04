@@ -11,6 +11,7 @@
  */
 
 import { decompressHeroStore, decompressTitanStore } from './heroCompression.js';
+import { isLocalApiServerUrl, recordApiServerCall } from './helpers/apiServerCallLog.js';
 
 class SyncClient {
 	constructor(apiUrl = 'http://localhost:5124') {
@@ -493,6 +494,10 @@ class SyncClient {
 			throw new Error('Fetch failed and GM_xmlhttpRequest is unavailable');
 		}
 
+		const startedAt = performance.now();
+		const method = String(options.method || 'GET').toUpperCase();
+		const trackApiServerCall = isLocalApiServerUrl(url, this.apiUrl);
+
 		return await new Promise((resolve, reject) => {
 			try {
 				gmRequest({
@@ -505,6 +510,16 @@ class SyncClient {
 						const status = Number(response?.status || 0);
 						const statusText = String(response?.statusText || '');
 						const responseText = String(response?.responseText || '');
+						if (trackApiServerCall) {
+							recordApiServerCall({
+								method,
+								url,
+								status,
+								statusText,
+								ok: status >= 200 && status < 300,
+								latencyMs: Math.max(0, Math.round(performance.now() - startedAt)),
+							});
+						}
 						resolve({
 							ok: status >= 200 && status < 300,
 							status,
@@ -514,9 +529,31 @@ class SyncClient {
 						});
 					},
 					onerror: (error) => {
+						if (trackApiServerCall) {
+							recordApiServerCall({
+								method,
+								url,
+								status: 0,
+								statusText: '',
+								ok: false,
+								latencyMs: Math.max(0, Math.round(performance.now() - startedAt)),
+								error: String(error?.error || error?.message || 'GM request failed'),
+							});
+						}
 						reject(new Error(String(error?.error || error?.message || 'GM request failed')));
 					},
 					ontimeout: () => {
+						if (trackApiServerCall) {
+							recordApiServerCall({
+								method,
+								url,
+								status: 0,
+								statusText: 'Timeout',
+								ok: false,
+								latencyMs: Math.max(0, Math.round(performance.now() - startedAt)),
+								error: 'GM request timed out',
+							});
+						}
 						reject(new Error('GM request timed out'));
 					},
 				});

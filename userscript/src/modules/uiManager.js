@@ -25,6 +25,7 @@ import {
 } from './helpers/dashboardInsightsBuilders.js';
 import { getCachedApiPayload } from './helpers/cachedApiPayloadHelper.js';
 import { DEFAULT_API_BASE_URL, buildConfiguredApiUrl, getConfiguredApiBaseUrl, normalizeApiBaseUrl } from './helpers/apiConfig.js';
+import { getApiServerCallLog, isLocalApiServerUrl, onApiServerCall } from './helpers/apiServerCallLog.js';
 import { sortData, sortIndicator } from './helpers/dataBrowserSortHelpers.js';
 import { stalenessTag, timeAgo } from './helpers/stalenessHelpers.js';
 import { bindDataBrowserViewInteractions } from './binders/dataBrowserViewOrchestrationBinder.js';
@@ -236,6 +237,8 @@ class UIManager {
 
 		/** @type {{generatedAt: string, unresolvedCount: number, unresolved: Array<object>}} Latest inventory name diagnostics */
 		this._lastInventoryNameDiagnostics = { generatedAt: '', unresolvedCount: 0, unresolved: [] };
+		/** @type {(() => void)|null} */
+		this._unsubscribeApiServerCalls = null;
 	}
 
 	/**
@@ -245,6 +248,13 @@ class UIManager {
 	init() {
 		this.createOverlay();
 		this.attachEventListeners();
+
+		// Keep Connection tab live as local API server calls happen.
+		this._unsubscribeApiServerCalls = onApiServerCall(() => {
+			if (this.isVisible && this.currentView === 'connection') {
+				this.renderView('connection');
+			}
+		});
 
 		if (this.isVisible) {
 			this.show();
@@ -3333,9 +3343,9 @@ class UIManager {
 	/**
 	 * Render connection and server diagnostics view.
 	 *
-	 * Guardrail: this view is intentionally limited to local API
-	 * connectivity/configuration diagnostics. Do not surface game API
-	 * call-stream content here; keep that in the API Log tab.
+	 * Guardrail: this view includes only userscript -> local API server
+	 * traffic and diagnostics. Do not surface Hero Wars game API
+	 * call-stream content here.
 	 *
 	 * @returns {Promise<string>} HTML content
 	 */
@@ -3446,6 +3456,30 @@ class UIManager {
 			? JSON.stringify(uiSettings.data, null, 2)
 			: '';
 
+		const apiServerCalls = getApiServerCallLog()
+			.filter((entry) => isLocalApiServerUrl(String(entry?.url || ''), apiBaseUrl))
+			.slice(-50)
+			.reverse();
+
+		const apiServerCallRows = apiServerCalls.length
+			? apiServerCalls.map((entry) => {
+				const statusIcon = entry.ok ? '✅' : (entry.status > 0 ? '⚠️' : '❌');
+				const statusLabel = entry.status > 0
+					? `HTTP ${entry.status}${entry.statusText ? ` ${this._escapeHtml(entry.statusText)}` : ''}`
+					: this._escapeHtml(entry.error || 'network error');
+				return `
+					<div style="padding:6px 0;border-bottom:1px solid #2d2d2d;">
+						<div style="display:flex;justify-content:space-between;align-items:center;gap:6px;">
+							<strong style="font-size:11px;">${statusIcon} ${this._escapeHtml(entry.method)}</strong>
+							<span class="oj-muted" style="font-size:10px;">${new Date(entry.ts).toLocaleTimeString()} • ${entry.latencyMs}ms</span>
+						</div>
+						<div style="font-size:11px;word-break:break-all;">${this._escapeHtml(entry.path || entry.url)}</div>
+						<div class="oj-muted" style="font-size:10px;">${statusLabel}</div>
+						<div class="oj-muted" style="font-size:10px;word-break:break-all;">${this._escapeHtml(entry.url)}</div>
+					</div>`;
+			}).join('')
+			: '<p class="oj-empty" style="margin:0;">No local API server calls captured yet.</p>';
+
 		return `
 			<div class="oj-settings">
 				<h3>Connection</h3>
@@ -3487,6 +3521,12 @@ class UIManager {
 				<div class="oj-settings-group">
 					<h4>UI Settings Payload</h4>
 					<pre style="max-height:180px;overflow:auto;background:#16161a;border:1px solid #333;padding:8px;border-radius:4px;font-size:11px;color:#bfc7d5;">${this._escapeHtml(settingsPayload || 'No payload available.')}</pre>
+				</div>
+
+				<div class="oj-settings-group">
+					<h4>Local API Server Calls <span class="oj-muted">(Last ${Math.min(apiServerCalls.length, 50)})</span></h4>
+					<p class="oj-muted" style="margin:0 0 8px;font-size:11px;">Shows userscript calls to ${this._escapeHtml(apiBaseUrl)} only (health probes, sync, recommendations, UI endpoints). Game API traffic is excluded.</p>
+					<div style="max-height:260px;overflow:auto;background:#16161a;border:1px solid #333;padding:8px;border-radius:4px;">${apiServerCallRows}</div>
 				</div>
 			</div>
 		`;
@@ -6354,6 +6394,13 @@ class UIManager {
 	 * Called automatically via `_destroyables` on `beforeunload`.
 	 */
 	destroy() {
+		if (this._unsubscribeApiServerCalls) {
+			try {
+				this._unsubscribeApiServerCalls();
+			} catch { /* best-effort */ }
+			this._unsubscribeApiServerCalls = null;
+		}
+
 		// Remove all tracked document-level listeners
 		for (const { event, handler } of this._docListeners) {
 			try {
