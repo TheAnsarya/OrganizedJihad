@@ -1846,11 +1846,11 @@ class BattleRecommendationOverlay {
 	_renderHealthBadge() {
 		switch (this._dataHealth) {
 			case 'cached':
-				return '<span class="oj-bro-badge oj-bro-badge-cached">Cached data</span>';
+				return '<span class="oj-bro-badge oj-bro-badge-cached">Cached fallback</span>';
 			case 'backoff':
-				return '<span class="oj-bro-badge oj-bro-badge-backoff">API retry backoff</span>';
+				return '<span class="oj-bro-badge oj-bro-badge-backoff">Retry backoff</span>';
 			default:
-				return '<span class="oj-bro-badge oj-bro-badge-live">Live</span>';
+				return '<span class="oj-bro-badge oj-bro-badge-live">Live data</span>';
 		}
 	}
 
@@ -1877,10 +1877,12 @@ class BattleRecommendationOverlay {
 		const samples = Number(modeSummary.samples || 0);
 		const friction = Number(modeSummary.suggestedFrictionScale || 0);
 		const isStale = Boolean(modeSummary.isStale);
-		const qualityClass = this._resolveOperationsQualityClass(mae, brier, isStale);
+		const healthStatus = this._resolveOperationsHealthStatus(modeSummary, mae, brier, isStale);
+		const healthLabel = this._resolveOperationsHealthLabel(modeSummary, healthStatus);
+		const qualityClass = this._resolveOperationsQualityClass(healthStatus);
 
 		return `<div class="oj-bro-ops">
-			<div class="oj-bro-ops-title">Ops Metrics <span class="oj-bro-ops-quality ${qualityClass}">${isStale ? 'Stale' : 'Fresh'}</span></div>
+			<div class="oj-bro-ops-title">Ops Metrics <span class="oj-bro-ops-quality ${qualityClass}">${healthLabel}</span></div>
 			<div class="oj-bro-ops-grid">
 				<div class="oj-bro-ops-item"><span>MAE</span><strong>${mae.toFixed(3)}</strong></div>
 				<div class="oj-bro-ops-item"><span>Brier</span><strong>${brier.toFixed(3)}</strong></div>
@@ -1914,17 +1916,66 @@ class BattleRecommendationOverlay {
 	/**
 	 * Resolve css quality class based on operations thresholds.
 	 *
-	 * @param {number} mae - Mean absolute error
-	 * @param {number} brier - Mean Brier score
-	 * @param {boolean} isStale - Staleness flag
+	 * @param {string} status - Canonical operations health status
 	 * @returns {string} css class
 	 * @private
 	 */
-	_resolveOperationsQualityClass(mae, brier, isStale) {
-		if (isStale || mae > 0.22 || brier > 0.28) {
+	_resolveOperationsQualityClass(status) {
+		if (status === 'stale' || status === 'monitor') {
 			return 'oj-bro-ops-quality-warn';
 		}
 		return 'oj-bro-ops-quality-ok';
+	}
+
+	/**
+	 * Resolve canonical operations health status from API row or local fallback thresholds.
+	 *
+	 * @param {object} modeSummary - Mode summary row
+	 * @param {number} mae - Mean absolute error
+	 * @param {number} brier - Mean Brier score
+	 * @param {boolean} isStale - Staleness flag
+	 * @returns {string} status key
+	 * @private
+	 */
+	_resolveOperationsHealthStatus(modeSummary, mae, brier, isStale) {
+		const apiStatus = String(modeSummary?.healthStatus || '').trim().toLowerCase();
+		if (apiStatus === 'healthy' || apiStatus === 'monitor' || apiStatus === 'stale') {
+			return apiStatus;
+		}
+
+		if (isStale) {
+			return 'stale';
+		}
+
+		if (mae > 0.22 || brier > 0.28) {
+			return 'monitor';
+		}
+
+		return 'healthy';
+	}
+
+	/**
+	 * Resolve human label for operations health status.
+	 *
+	 * @param {object} modeSummary - Mode summary row
+	 * @param {string} status - Health status key
+	 * @returns {string} label
+	 * @private
+	 */
+	_resolveOperationsHealthLabel(modeSummary, status) {
+		const apiLabel = String(modeSummary?.healthLabel || '').trim();
+		if (apiLabel) {
+			return this._escapeHtml(apiLabel);
+		}
+
+		switch (status) {
+			case 'stale':
+				return 'Stale';
+			case 'monitor':
+				return 'Needs Attention';
+			default:
+				return 'Healthy';
+		}
 	}
 
 	/**

@@ -2303,6 +2303,11 @@ public class SyncService {
 			var calibration = await GetTeamRecommendationCalibrationAsync(mode, effectiveTrendWindowDays);
 			var isStale = !calibration.LastUpdatedUtc.HasValue
 				|| (generatedAtUtc - calibration.LastUpdatedUtc.Value).TotalDays > 7;
+			var (healthStatus, healthLabel) = ResolveOperationsHealthState(
+				calibration.MeanAbsoluteError,
+				calibration.MeanBrierScore,
+				isStale
+			);
 
 			modes.Add(new TeamRecommendationModeOperationsSummary {
 				Mode = calibration.Mode,
@@ -2312,6 +2317,8 @@ public class SyncService {
 				PredictionBias = calibration.PredictionBias,
 				Samples = calibration.Samples,
 				IsStale = isStale,
+				HealthStatus = healthStatus,
+				HealthLabel = healthLabel,
 				LastUpdatedUtc = calibration.LastUpdatedUtc,
 			});
 		}
@@ -2321,6 +2328,18 @@ public class SyncService {
 			Modes = modes,
 			GeneratedAtUtc = generatedAtUtc,
 		};
+	}
+
+	private static (string Status, string Label) ResolveOperationsHealthState(double mae, double brier, bool isStale) {
+		if (isStale) {
+			return ("stale", "Stale");
+		}
+
+		if (mae > 0.22 || brier > 0.28) {
+			return ("monitor", "Needs Attention");
+		}
+
+		return ("healthy", "Healthy");
 	}
 
 	private static int EstimateTeamPowerFromPreview(string? teamPreview, IReadOnlyDictionary<string, int> heroPowerByName) {

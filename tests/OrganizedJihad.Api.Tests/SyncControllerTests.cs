@@ -1482,6 +1482,12 @@ public class SyncControllerTests : IClassFixture<WebApplicationFactory<Program>>
 		samples.ValueKind.Should().Be(JsonValueKind.Number);
 		first.TryGetProperty("isStale", out var isStale).Should().BeTrue();
 		(new[] { JsonValueKind.True, JsonValueKind.False }).Should().Contain(isStale.ValueKind);
+		first.TryGetProperty("healthStatus", out var healthStatus).Should().BeTrue();
+		healthStatus.ValueKind.Should().Be(JsonValueKind.String);
+		(new[] { "healthy", "monitor", "stale" }).Should().Contain(healthStatus.GetString());
+		first.TryGetProperty("healthLabel", out var healthLabel).Should().BeTrue();
+		healthLabel.ValueKind.Should().Be(JsonValueKind.String);
+		healthLabel.GetString().Should().NotBeNullOrWhiteSpace();
 
 		var invalidResponse = await _client.GetAsync("/api/sync/teams/recommendations/operations-summary?preferredTrendWindowDays=14");
 		invalidResponse.StatusCode.Should().Be(HttpStatusCode.BadRequest);

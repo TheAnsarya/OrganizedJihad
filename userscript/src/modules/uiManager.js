@@ -1674,7 +1674,25 @@ class UIManager {
 		const frictionScale = Number(row.suggestedFrictionScale || 0);
 		const samples = Number(row.samples || 0);
 		const isStale = Boolean(row.isStale);
-		const warn = isStale || mae > 0.22 || brier > 0.28;
+		const healthStatus = (() => {
+			const apiStatus = String(row?.healthStatus || '').trim().toLowerCase();
+			if (apiStatus === 'healthy' || apiStatus === 'monitor' || apiStatus === 'stale') {
+				return apiStatus;
+			}
+			if (isStale) return 'stale';
+			if (mae > 0.22 || brier > 0.28) return 'monitor';
+			return 'healthy';
+		})();
+		const healthLabel = (() => {
+			const apiLabel = String(row?.healthLabel || '').trim();
+			if (apiLabel) return this._escapeHtml(apiLabel);
+			switch (healthStatus) {
+				case 'stale': return 'Stale';
+				case 'monitor': return 'Needs Attention';
+				default: return 'Healthy';
+			}
+		})();
+		const warn = healthStatus === 'stale' || healthStatus === 'monitor';
 		const badgeStyle = warn
 			? 'color:#ffd99a;background:rgba(255,167,38,0.16);border-color:rgba(255,167,38,0.38)'
 			: 'color:#9cefc7;background:rgba(67,160,71,0.16);border-color:rgba(76,175,80,0.38)';
@@ -1682,7 +1700,7 @@ class UIManager {
 		return `<div style="margin:4px 0 8px 0;padding:6px;border:1px solid #2b4a3c;border-radius:6px;background:#15241d">
 			<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:6px">
 				<div style="font-size:10px;color:#9ed0b8;font-weight:700">Ops Diagnostics</div>
-				<div style="font-size:9px;border:1px solid transparent;padding:2px 6px;border-radius:999px;${badgeStyle}">${isStale ? 'Stale' : 'Fresh'}</div>
+				<div style="font-size:9px;border:1px solid transparent;padding:2px 6px;border-radius:999px;${badgeStyle}">${healthLabel}</div>
 			</div>
 			<div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:5px">
 				<div style="font-size:10px;color:#95b7a6;background:#1b2b24;border:1px solid #2f4d3f;border-radius:5px;padding:4px">MAE <strong style="color:#d7f6e9">${mae.toFixed(3)}</strong></div>

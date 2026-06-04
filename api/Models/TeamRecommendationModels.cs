@@ -818,6 +818,16 @@ public class TeamRecommendationModeOperationsSummary {
 	public bool IsStale { get; set; }
 
 	/// <summary>
+	/// Canonical health status key for UI consumers (healthy, monitor, stale).
+	/// </summary>
+	public string HealthStatus { get; set; } = "healthy";
+
+	/// <summary>
+	/// Human-readable health label aligned across overlay/dashboard surfaces.
+	/// </summary>
+	public string HealthLabel { get; set; } = "Healthy";
+
+	/// <summary>
 	/// UTC timestamp of last calibration update for this mode.
 	/// </summary>
 	public DateTime? LastUpdatedUtc { get; set; }
