@@ -1308,6 +1308,105 @@ public class SyncControllerTests : IClassFixture<WebApplicationFactory<Program>>
 	}
 
 	/// <summary>
+	/// Verifies arena simulation endpoint preserves required integrated recommendation fields.
+	/// </summary>
+	[Fact]
+	public async Task ArenaTeamRecommendationSimulation_Should_Expose_Stable_Contract_Shape() {
+		// Arrange
+		var now = DateTime.UtcNow;
+		var syncData = new BrowserSyncData {
+			CurrentSnapshot = new PlayerSnapshot {
+				PlayerId = 88111,
+				PlayerName = "ArenaSimulationContractTester",
+				Timestamp = now,
+				Level = 120,
+				TeamPower = 1300000,
+				Gold = 1000000,
+				Emeralds = 1000,
+			},
+			Heroes = [
+				new Hero { HeroId = 1, HeroName = "Astaroth", Level = 120, Stars = 6, Color = 12, Power = 110000, Timestamp = now, PlayerId = 88111 },
+				new Hero { HeroId = 2, HeroName = "Keira", Level = 120, Stars = 6, Color = 12, Power = 109000, Timestamp = now, PlayerId = 88111 },
+				new Hero { HeroId = 3, HeroName = "Sebastian", Level = 120, Stars = 6, Color = 12, Power = 107000, Timestamp = now, PlayerId = 88111 },
+				new Hero { HeroId = 4, HeroName = "Jet", Level = 120, Stars = 6, Color = 12, Power = 103000, Timestamp = now, PlayerId = 88111 },
+				new Hero { HeroId = 5, HeroName = "Martha", Level = 120, Stars = 6, Color = 12, Power = 101000, Timestamp = now, PlayerId = 88111 },
+			],
+			ArenaBattles = [
+				new ArenaBattle {
+					Timestamp = now.AddMinutes(-45),
+					OpponentId = 7711,
+					OpponentName = "Arena Sim Opponent",
+					OpponentPower = 900000,
+					IsWin = true,
+					RankBefore = 100,
+					RankAfter = 94,
+					OurTeam = "Astaroth,Keira,Sebastian,Jet,Martha",
+					CoinsEarned = 20,
+				},
+				new ArenaBattle {
+					Timestamp = now.AddMinutes(-25),
+					OpponentId = 7712,
+					OpponentName = "Arena Sim Opponent B",
+					OpponentPower = 910000,
+					IsWin = false,
+					RankBefore = 94,
+					RankAfter = 96,
+					OurTeam = "Astaroth,Keira,Sebastian,Jet,Martha",
+					CoinsEarned = 10,
+				}
+			],
+			Titans = []
+		};
+
+		var importResponse = await _client.PostAsJsonAsync("/api/sync/import", syncData);
+		importResponse.StatusCode.Should().Be(HttpStatusCode.OK);
+
+		// Act
+		var response = await _client.GetAsync("/api/sync/teams/recommendations/arena/simulate?objective=balanced&limit=3&minSamples=1&opponentPower=900000");
+
+		// Assert
+		response.StatusCode.Should().Be(HttpStatusCode.OK);
+		using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+		var root = document.RootElement;
+
+		root.TryGetProperty("mode", out var mode).Should().BeTrue();
+		mode.GetString().Should().Be("arena");
+
+		root.TryGetProperty("objective", out var objective).Should().BeTrue();
+		objective.GetString().Should().Be("balanced");
+
+		root.TryGetProperty("opponentPowerUsed", out var opponentPowerUsed).Should().BeTrue();
+		opponentPowerUsed.ValueKind.Should().Be(JsonValueKind.Number);
+
+		root.TryGetProperty("historySampleCount", out var historySampleCount).Should().BeTrue();
+		historySampleCount.ValueKind.Should().Be(JsonValueKind.Number);
+		root.TryGetProperty("historyRecommendationCount", out var historyRecommendationCount).Should().BeTrue();
+		historyRecommendationCount.ValueKind.Should().Be(JsonValueKind.Number);
+		root.TryGetProperty("engineRecommendationCount", out var engineRecommendationCount).Should().BeTrue();
+		engineRecommendationCount.ValueKind.Should().Be(JsonValueKind.Number);
+
+		root.TryGetProperty("recommendations", out var recommendations).Should().BeTrue();
+		recommendations.ValueKind.Should().Be(JsonValueKind.Array);
+		recommendations.GetArrayLength().Should().BeGreaterThan(0);
+
+		var first = recommendations.EnumerateArray().First();
+		first.TryGetProperty("source", out _).Should().BeTrue();
+		first.TryGetProperty("teamPreview", out _).Should().BeTrue();
+		first.TryGetProperty("simulatedWinProbability", out var simulatedWinProbability).Should().BeTrue();
+		simulatedWinProbability.ValueKind.Should().Be(JsonValueKind.Number);
+		first.TryGetProperty("simulationConfidenceLow", out var simulationConfidenceLow).Should().BeTrue();
+		simulationConfidenceLow.ValueKind.Should().Be(JsonValueKind.Number);
+		first.TryGetProperty("simulationConfidenceHigh", out var simulationConfidenceHigh).Should().BeTrue();
+		simulationConfidenceHigh.ValueKind.Should().Be(JsonValueKind.Number);
+		first.TryGetProperty("simulationRuns", out var simulationRuns).Should().BeTrue();
+		simulationRuns.ValueKind.Should().Be(JsonValueKind.Number);
+		first.TryGetProperty("teamPowerEstimate", out var teamPowerEstimate).Should().BeTrue();
+		teamPowerEstimate.ValueKind.Should().Be(JsonValueKind.Number);
+		first.TryGetProperty("opponentPowerUsed", out var rowOpponentPowerUsed).Should().BeTrue();
+		rowOpponentPowerUsed.ValueKind.Should().Be(JsonValueKind.Number);
+	}
+
+	/// <summary>
 	/// Verifies calibration endpoint preserves required contract fields and supported windows.
 	/// </summary>
 	[Fact]

@@ -94,6 +94,8 @@ const BATTLE_RECOMMENDATIONS_PATH = '/api/sync/battles/recommendations';
 
 /** @const {string} Local API path for mode-aware team recommendation engine */
 const TEAM_RECOMMENDATIONS_PATH = '/api/sync/teams/recommendations';
+/** @const {string} Local API path for arena integrated recommendation + simulation */
+const TEAM_RECOMMENDATION_ARENA_SIMULATION_PATH = '/api/sync/teams/recommendations/arena/simulate';
 
 /** @const {string} Local API path for team recommendation profile metadata */
 const TEAM_RECOMMENDATION_PROFILES_PATH = '/api/sync/teams/recommendations/profiles';
@@ -1386,7 +1388,9 @@ class UIManager {
 			const backtest = await this._getTeamRecommendationBacktestPayload(selectedMode, selectedObjective);
 			const calibration = await this._getTeamRecommendationCalibrationPayload(selectedMode, trendWindowDays);
 			const operationsSummary = await this._getTeamRecommendationOperationsSummaryPayload(trendWindowDays);
-			const payload = await this._getTeamRecommendationEnginePayload(selectedMode, selectedObjective, trendWindowDays);
+			const payload = selectedMode === 'arena'
+				? await this._getTeamRecommendationArenaSimulationPayload(selectedObjective, trendWindowDays)
+				: await this._getTeamRecommendationEnginePayload(selectedMode, selectedObjective, trendWindowDays);
 			const recs = Array.isArray(payload?.recommendations) ? payload.recommendations : [];
 			if (recs.length === 0) return '';
 
@@ -1435,6 +1439,7 @@ class UIManager {
 			const operationsSummaryHtml = showOperationsSummary
 				? this._renderTeamRecommendationOperationsSummary(selectedMode, operationsSummary)
 				: '';
+			const recommendationMetaHtml = this._renderTeamRecommendationMeta(selectedMode, payload);
 
 			const rows = renderTeamRecommendationRows({
 				recommendations: recs,
@@ -1453,6 +1458,7 @@ class UIManager {
 				defaultTrendWindowDays,
 				showOperationsSummary,
 				operationsSummaryHtml,
+				recommendationMetaHtml,
 				rowsHtml: rows,
 				escapeHtml: (value) => this._escapeHtml(value),
 			});
@@ -1529,6 +1535,31 @@ class UIManager {
 		const cacheKey = `teamRecommendations:${mode}:${objective}:${trendWindowDays}`;
 		const url = new URL(this._buildApiUrl(TEAM_RECOMMENDATIONS_PATH));
 		url.searchParams.set('mode', mode || 'arena');
+		url.searchParams.set('objective', objective || 'balanced');
+		url.searchParams.set('limit', '3');
+		url.searchParams.set('minSamples', '2');
+		url.searchParams.set('preferredTrendWindowDays', String(Math.max(1, Number(trendWindowDays || 30))));
+
+		return getCachedApiPayload({
+			idbStorage: this.idbStorage,
+			cacheKey,
+			ttlMs: RECOMMENDATIONS_CACHE_TTL_MS,
+			requestUrl: url.toString(),
+			fallbackPayload: null,
+		});
+	}
+
+	/**
+	 * Get Arena integrated recommendation/simulation payload from cache/API.
+	 *
+	 * @param {string} objective - Objective profile
+	 * @param {number} trendWindowDays - Preferred calibration trend window days
+	 * @returns {Promise<object|null>} API payload or cached payload
+	 * @private
+	 */
+	async _getTeamRecommendationArenaSimulationPayload(objective, trendWindowDays = 30) {
+		const cacheKey = `teamRecommendations:arena:simulate:${objective}:${trendWindowDays}`;
+		const url = new URL(this._buildApiUrl(TEAM_RECOMMENDATION_ARENA_SIMULATION_PATH));
 		url.searchParams.set('objective', objective || 'balanced');
 		url.searchParams.set('limit', '3');
 		url.searchParams.set('minSamples', '2');
@@ -1661,6 +1692,38 @@ class UIManager {
 				<div style="font-size:10px;color:#95b7a6;background:#1b2b24;border:1px solid #2f4d3f;border-radius:5px;padding:4px">Samples <strong style="color:#d7f6e9">${samples.toLocaleString()}</strong></div>
 			</div>
 		</div>`;
+	}
+
+	/**
+	 * Render recommendation source-mix/fallback metadata banner.
+	 *
+	 * @param {string} selectedMode - Selected recommendation mode
+	 * @param {object|null} payload - Recommendation payload
+	 * @returns {string} HTML fragment
+	 * @private
+	 */
+	_renderTeamRecommendationMeta(selectedMode, payload) {
+		const mode = String(selectedMode || 'arena').toLowerCase();
+		if (mode !== 'arena') {
+			return '';
+		}
+
+		const historyCount = Number(payload?.historyRecommendationCount || 0);
+		const engineCount = Number(payload?.engineRecommendationCount || 0);
+		const note = typeof payload?.note === 'string' && payload.note.trim()
+			? this._escapeHtml(payload.note)
+			: '';
+
+		if (historyCount <= 0 && engineCount <= 0 && !note) {
+			return '';
+		}
+
+		const sourceMix = `<div style="font-size:10px;color:#9fd8bc">Source mix • history ${historyCount} • engine ${engineCount}</div>`;
+		const noteHtml = note
+			? `<div style="font-size:10px;color:#ffd99a;margin-top:2px">${note}</div>`
+			: '';
+
+		return `<div style="margin:4px 0 8px 0;padding:6px;border:1px solid #2b4a3c;border-radius:6px;background:#15241d">${sourceMix}${noteHtml}</div>`;
 	}
 
 	/**

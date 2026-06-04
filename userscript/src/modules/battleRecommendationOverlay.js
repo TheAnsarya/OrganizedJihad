@@ -15,6 +15,7 @@ import { buildConfiguredApiUrl } from './helpers/apiConfig.js';
 
 const BATTLE_RECOMMENDATIONS_PATH = '/api/sync/battles/recommendations';
 const TEAM_RECOMMENDATIONS_PATH = '/api/sync/teams/recommendations';
+const ARENA_SIMULATION_RECOMMENDATIONS_PATH = '/api/sync/teams/recommendations/arena/simulate';
 const TEAM_RECOMMENDATION_OPERATIONS_SUMMARY_PATH = '/api/sync/teams/recommendations/operations-summary';
 const AUTO_REFRESH_MS = 20000;
 const MAX_BACKOFF_MS = 30000;
@@ -1145,6 +1146,8 @@ class BattleRecommendationOverlay {
 
 			if (contextMode === 'grandarena' && this._context.opponentTeams.length > 1) {
 				payload = await this._fetchGrandArenaSegmentedRecommendations(sequence, minSamples);
+			} else if (contextMode === 'arena') {
+				payload = await this._fetchArenaSimulationRecommendations(sequence, objective, minSamples);
 			} else if (ARENA_FAMILY_MODES.has(contextMode)) {
 				payload = await this._fetchBattleRecommendationsForTarget(sequence, contextMode, minSamples);
 			}
@@ -1176,6 +1179,40 @@ class BattleRecommendationOverlay {
 				this._activeFetchController = null;
 			}
 		}
+	}
+
+	/**
+	 * Fetch Arena-first integrated recommendation/simulation payload.
+	 *
+	 * @param {number} sequence - Request sequence for stale response guard
+	 * @param {string} objective - Recommendation objective
+	 * @param {number} minSamples - Min sample threshold
+	 * @returns {Promise<object|null>} payload
+	 * @private
+	 */
+	async _fetchArenaSimulationRecommendations(sequence, objective, minSamples) {
+		const url = new URL(this._buildApiUrl(ARENA_SIMULATION_RECOMMENDATIONS_PATH));
+		url.searchParams.set('objective', objective);
+		url.searchParams.set('limit', '3');
+		url.searchParams.set('minSamples', String(minSamples));
+		url.searchParams.set('preferredTrendWindowDays', String(this._resolvePreferredTrendWindowDays()));
+
+		if (this._context.opponentId) {
+			url.searchParams.set('opponentId', String(this._context.opponentId));
+		}
+
+		if (this._context.opponentPower) {
+			url.searchParams.set('opponentPower', String(this._context.opponentPower));
+			url.searchParams.set('powerWindow', String(this._resolvePowerWindow('arena', this._context.opponentPower)));
+		}
+
+		const payload = await this._requestJson(url.toString(), sequence);
+		if (!payload) return null;
+
+		return {
+			...payload,
+			sourceType: 'arena-simulate',
+		};
 	}
 
 	/**
@@ -1633,6 +1670,9 @@ class BattleRecommendationOverlay {
 
 		const healthBadge = this._renderHealthBadge();
 		const operationsSummary = this._renderOperationsSummary(this._context.mode);
+		const payloadNote = typeof payload?.note === 'string' && payload.note.trim().length > 0
+			? `<div class="oj-bro-empty" style="margin:6px 0 2px 0">${this._escapeHtml(payload.note)}</div>`
+			: '';
 		const rows = segmented.length > 0
 			? this._renderSegmentedRows(segmented)
 			: this._renderCardRows(cards.slice(0, 3));
@@ -1640,6 +1680,7 @@ class BattleRecommendationOverlay {
 		bodyEl.innerHTML = `
 			<div class="oj-bro-health-row">${healthBadge}</div>
 			${operationsSummary}
+			${payloadNote}
 			${rows}
 		`;
 
@@ -1914,11 +1955,24 @@ class BattleRecommendationOverlay {
 			const winRate = this._resolveWinRate(rec);
 			const confidence = this._resolveConfidence(rec);
 			const score = this._resolveScore(rec);
+			const simulationWinRate = this._resolveSimulationWinRate(rec);
+			const simulationInterval = this._resolveSimulationInterval(rec);
+			const simulationRuns = Number(rec?.simulationRuns || 0);
+			const teamPowerEstimate = Number(rec?.teamPowerEstimate || 0);
+			const opponentPowerUsed = Number(rec?.opponentPowerUsed || 0);
 			const rationale = this._escapeHtml(rec?.rationale || 'No rationale provided.');
+			const simulationLine = simulationWinRate
+				? `<div class="oj-bro-metrics">Sim ${simulationWinRate} • CI ${simulationInterval} • Runs ${simulationRuns > 0 ? simulationRuns : 'n/a'}</div>`
+				: '';
+			const powerLine = (teamPowerEstimate > 0 || opponentPowerUsed > 0)
+				? `<div class="oj-bro-metrics">Power team ${teamPowerEstimate > 0 ? teamPowerEstimate.toLocaleString() : 'n/a'} • opp ${opponentPowerUsed > 0 ? opponentPowerUsed.toLocaleString() : 'n/a'}</div>`
+				: '';
 
 			return `<div class="oj-bro-row" style="margin-top:${index === 0 ? '0' : '6px'}">
 				<div class="oj-bro-row-title">${teamPreview}</div>
 				<div class="oj-bro-metrics">Win ${winRate} • Conf ${confidence} • Score ${score} • ${battles} samples</div>
+				${simulationLine}
+				${powerLine}
 				<div class="oj-bro-rationale">${rationale}</div>
 			</div>`;
 		}).join('');
@@ -1995,6 +2049,39 @@ class BattleRecommendationOverlay {
 			?? 0
 		);
 		return `${(Math.max(0, Math.min(1, candidate)) * 100).toFixed(1)}%`;
+	}
+
+	/**
+	 * Resolve simulation win rate string when simulator fields are present.
+	 *
+	 * @param {object} rec - Recommendation row
+	 * @returns {string} Percent string or empty
+	 * @private
+	 */
+	_resolveSimulationWinRate(rec) {
+		const candidate = Number(rec?.simulatedWinProbability);
+		if (!Number.isFinite(candidate)) {
+			return '';
+		}
+		return `${(Math.max(0, Math.min(1, candidate)) * 100).toFixed(1)}%`;
+	}
+
+	/**
+	 * Resolve simulation confidence interval string when present.
+	 *
+	 * @param {object} rec - Recommendation row
+	 * @returns {string} Interval string or n/a
+	 * @private
+	 */
+	_resolveSimulationInterval(rec) {
+		const low = Number(rec?.simulationConfidenceLow);
+		const high = Number(rec?.simulationConfidenceHigh);
+		if (!Number.isFinite(low) || !Number.isFinite(high)) {
+			return 'n/a';
+		}
+		const lower = `${(Math.max(0, Math.min(1, low)) * 100).toFixed(1)}%`;
+		const upper = `${(Math.max(0, Math.min(1, high)) * 100).toFixed(1)}%`;
+		return `${lower}-${upper}`;
 	}
 
 	/**

@@ -1833,6 +1833,186 @@ public class SyncService {
 	}
 
 	/// <summary>
+	/// Returns Arena-first integrated recommendation and simulation payload for userscript consumers.
+	/// </summary>
+	public async Task<ArenaTeamRecommendationSimulationResponse> GetArenaTeamRecommendationSimulationAsync(
+		string objective = "balanced",
+		int limit = 3,
+		int minSamples = 2,
+		long? opponentId = null,
+		int? opponentPower = null,
+		int powerWindow = 100000,
+		int? preferredTrendWindowDays = null
+	) {
+		var normalizedObjective = TeamRecommendationOrchestrationMath.NormalizeObjective(objective);
+		var safeLimit = TeamRecommendationOrchestrationMath.ResolveRecommendationLimit(limit);
+		var safeMinSamples = Math.Max(1, minSamples);
+
+		var history = await GetBattleRecommendationsAsync(
+			battleType: "arena",
+			opponentId: opponentId,
+			opponentPower: opponentPower,
+			powerWindow: powerWindow,
+			minSamples: safeMinSamples,
+			limit: safeLimit
+		);
+
+		var engine = await GetTeamRecommendationsAsync(
+			mode: "arena",
+			objective: normalizedObjective,
+			limit: safeLimit,
+			minSamples: safeMinSamples,
+			preferredTrendWindowDays: preferredTrendWindowDays
+		);
+
+		await using var context = await _contextFactory.CreateDbContextAsync();
+
+		var latestSnapshot = await context.PlayerSnapshots
+			.AsNoTracking()
+			.OrderByDescending(s => s.Timestamp)
+			.FirstOrDefaultAsync();
+
+		var rosterPlayerId = latestSnapshot?.PlayerId;
+		if (!rosterPlayerId.HasValue) {
+			rosterPlayerId = await context.Heroes
+				.AsNoTracking()
+				.OrderByDescending(h => h.Timestamp)
+				.Select(h => (long?)h.PlayerId)
+				.FirstOrDefaultAsync();
+		}
+
+		var heroQuery = context.Heroes
+			.AsNoTracking()
+			.OrderByDescending(h => h.Timestamp)
+			.Take(3000);
+
+		if (rosterPlayerId.HasValue) {
+			heroQuery = heroQuery
+				.Where(h => h.PlayerId == rosterPlayerId.Value)
+				.OrderByDescending(h => h.Timestamp)
+				.Take(3000);
+		}
+
+		var latestHeroes = await heroQuery.ToListAsync();
+		var heroPowerByName = latestHeroes
+			.Where(h => !string.IsNullOrWhiteSpace(h.HeroName))
+			.GroupBy(h => h.HeroName!, StringComparer.OrdinalIgnoreCase)
+			.ToDictionary(
+				g => g.Key,
+				g => g.OrderByDescending(x => x.Timestamp).ThenByDescending(x => x.Power).First().Power,
+				StringComparer.OrdinalIgnoreCase
+			);
+
+		var inferredOpponentPower = opponentPower
+			?? history.OpponentPower
+			?? ResolveAverageOpponentPower(history.Recommendations)
+			?? latestSnapshot?.TeamPower
+			?? 100000;
+
+		var cards = new List<TeamRecommendationCard>();
+		var historyCardsCount = 0;
+		var engineCardsCount = 0;
+
+		foreach (var rec in history.Recommendations) {
+			var simulation = _battleSimulator.Simulate(new BattleSimulationInput {
+				BattleType = "arena",
+				HistoricalWinRate = Math.Clamp(rec.WinRate, 0d, 1d),
+				WeightedWinRate = Math.Clamp(rec.WeightedWinRate, 0d, 1d),
+				SampleCount = Math.Max(1, rec.Battles),
+				TeamPower = Math.Max(1, EstimateTeamPowerFromPreview(rec.TeamPreview, heroPowerByName)),
+				OpponentPower = Math.Max(1, inferredOpponentPower),
+			}, runs: 1400);
+
+			cards.Add(new TeamRecommendationCard {
+				Source = "history",
+				TeamPreview = rec.TeamPreview,
+				ContextTag = normalizedObjective,
+				ModeProfile = "arena-history-sim",
+				EstimatedWinProbability = Math.Round(Math.Clamp(rec.SimulatedWinProbability, 0d, 1d), 6),
+				ReadinessScore = 0.5d,
+				ConfidenceScore = Math.Round(Math.Clamp(rec.Confidence, 0d, 1d), 6),
+				FinalScore = Math.Round(Math.Clamp(rec.Score, 0d, 1d), 6),
+				SimulatedWinProbability = Math.Round(Math.Clamp(simulation.EstimatedWinProbability, 0d, 1d), 6),
+				SimulationConfidenceLow = Math.Round(Math.Clamp(simulation.ConfidenceLow, 0d, 1d), 6),
+				SimulationConfidenceHigh = Math.Round(Math.Clamp(simulation.ConfidenceHigh, 0d, 1d), 6),
+				SimulationRuns = simulation.Runs,
+				TeamPowerEstimate = EstimateTeamPowerFromPreview(rec.TeamPreview, heroPowerByName),
+				OpponentPowerUsed = inferredOpponentPower,
+				Rationale = string.IsNullOrWhiteSpace(rec.Rationale)
+					? $"Arena historical recommendation with {rec.Battles} samples, simulation refreshed against target power {inferredOpponentPower:N0}."
+					: rec.Rationale,
+			});
+			historyCardsCount++;
+		}
+
+		foreach (var rec in engine.Recommendations) {
+			var estimated = Math.Clamp(rec.EstimatedWinProbability, 0d, 1d);
+			var simulation = _battleSimulator.Simulate(new BattleSimulationInput {
+				BattleType = "arena",
+				HistoricalWinRate = estimated,
+				WeightedWinRate = estimated,
+				SampleCount = Math.Max(1, safeMinSamples),
+				TeamPower = Math.Max(1, EstimateTeamPowerFromPreview(rec.TeamPreview, heroPowerByName)),
+				OpponentPower = Math.Max(1, inferredOpponentPower),
+			}, runs: 1400);
+
+			cards.Add(new TeamRecommendationCard {
+				Source = "engine",
+				TeamPreview = rec.TeamPreview,
+				ContextTag = rec.ContextTag,
+				ModeProfile = rec.ModeProfile,
+				EstimatedWinProbability = Math.Round(estimated, 6),
+				ReadinessScore = Math.Round(Math.Clamp(rec.ReadinessScore, 0d, 1d), 6),
+				ConfidenceScore = Math.Round(Math.Clamp(rec.ConfidenceScore, 0d, 1d), 6),
+				FinalScore = Math.Round(Math.Clamp(rec.FinalScore, 0d, 1d), 6),
+				SimulatedWinProbability = Math.Round(Math.Clamp(simulation.EstimatedWinProbability, 0d, 1d), 6),
+				SimulationConfidenceLow = Math.Round(Math.Clamp(simulation.ConfidenceLow, 0d, 1d), 6),
+				SimulationConfidenceHigh = Math.Round(Math.Clamp(simulation.ConfidenceHigh, 0d, 1d), 6),
+				SimulationRuns = simulation.Runs,
+				TeamPowerEstimate = EstimateTeamPowerFromPreview(rec.TeamPreview, heroPowerByName),
+				OpponentPowerUsed = inferredOpponentPower,
+				Rationale = string.IsNullOrWhiteSpace(rec.Rationale)
+					? $"Arena engine recommendation simulated against target power {inferredOpponentPower:N0}."
+					: rec.Rationale,
+				Provenance = rec.Provenance,
+			});
+			engineCardsCount++;
+		}
+
+		var merged = cards
+			.Where(c => !string.IsNullOrWhiteSpace(c.TeamPreview))
+			.GroupBy(c => c.TeamPreview, StringComparer.OrdinalIgnoreCase)
+			.Select(g => g.OrderByDescending(card => card.FinalScore)
+				.ThenByDescending(card => card.SimulatedWinProbability ?? card.EstimatedWinProbability)
+				.First())
+			.OrderByDescending(card => card.FinalScore)
+			.ThenByDescending(card => card.SimulatedWinProbability ?? card.EstimatedWinProbability)
+			.Take(safeLimit)
+			.ToList();
+
+		return new ArenaTeamRecommendationSimulationResponse {
+			Mode = "arena",
+			Objective = normalizedObjective,
+			OpponentId = opponentId,
+			OpponentPower = opponentPower,
+			OpponentPowerUsed = inferredOpponentPower,
+			PowerWindow = history.PowerWindow,
+			MinSamples = history.MinSamples,
+			Limit = safeLimit,
+			HistorySampleCount = history.SampleCount,
+			HistoryRecommendationCount = historyCardsCount,
+			EngineRecommendationCount = engineCardsCount,
+			Recommendations = merged,
+			Note = historyCardsCount == 0 && engineCardsCount > 0
+				? "Sparse historical arena data; using engine-backed simulated recommendations."
+				: merged.Count == 0
+					? "No recommendation candidates available yet. Play more arena battles to train recommendations."
+					: null,
+			GeneratedAtUtc = DateTime.UtcNow,
+		};
+	}
+
+	/// <summary>
 	/// Returns metadata for Team Recommendation Engine mode/objective profiles.
 	/// </summary>
 	public async Task<TeamRecommendationProfileMetadataResponse> GetTeamRecommendationProfileMetadataAsync() {
@@ -2141,6 +2321,52 @@ public class SyncService {
 			Modes = modes,
 			GeneratedAtUtc = generatedAtUtc,
 		};
+	}
+
+	private static int EstimateTeamPowerFromPreview(string? teamPreview, IReadOnlyDictionary<string, int> heroPowerByName) {
+		var names = ParseTeamPreviewNames(teamPreview);
+		if (names.Count == 0) {
+			return 100000;
+		}
+
+		var total = 0;
+		foreach (var name in names) {
+			if (heroPowerByName.TryGetValue(name, out var power)) {
+				total += power;
+			}
+		}
+
+		if (total <= 0) {
+			return Math.Max(100000, names.Count * 18000);
+		}
+
+		return total;
+	}
+
+	private static List<string> ParseTeamPreviewNames(string? teamPreview) {
+		if (string.IsNullOrWhiteSpace(teamPreview)) {
+			return [];
+		}
+
+		return teamPreview
+			.Split([',', '|', ';', '/'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+			.Where(token => !string.IsNullOrWhiteSpace(token))
+			.Select(token => token.Trim())
+			.Distinct(StringComparer.OrdinalIgnoreCase)
+			.ToList();
+	}
+
+	private static int? ResolveAverageOpponentPower(IReadOnlyList<BattleRecommendationCandidate> recommendations) {
+		var values = recommendations
+			.Select(r => r.AverageOpponentPower)
+			.Where(v => v > 0)
+			.ToList();
+
+		if (values.Count == 0) {
+			return null;
+		}
+
+		return (int)Math.Round(values.Average());
 	}
 
 	/// <summary>

@@ -155,6 +155,40 @@ public class SyncQueryController : ControllerBase {
 		}
 	}
 
+	[HttpGet("teams/recommendations/arena/simulate")]
+	[ProducesResponseType(typeof(ArenaTeamRecommendationSimulationResponse), StatusCodes.Status200OK)]
+	[ProducesResponseType(typeof(object), StatusCodes.Status400BadRequest)]
+	[ProducesResponseType(typeof(object), StatusCodes.Status500InternalServerError)]
+	public async Task<IActionResult> GetArenaTeamRecommendationSimulation(
+		[FromQuery] string objective = "balanced",
+		[FromQuery] int limit = 3,
+		[FromQuery] int minSamples = 2,
+		[FromQuery] long? opponentId = null,
+		[FromQuery] int? opponentPower = null,
+		[FromQuery] int powerWindow = 100000,
+		[FromQuery] int? preferredTrendWindowDays = null
+	) {
+		if (preferredTrendWindowDays.HasValue && preferredTrendWindowDays.Value is not (7 or 30 or 90)) {
+			return BadRequest(new { error = "preferredTrendWindowDays must be one of: 7, 30, 90." });
+		}
+
+		try {
+			var result = await _syncService.GetArenaTeamRecommendationSimulationAsync(
+				objective,
+				limit,
+				minSamples,
+				opponentId,
+				opponentPower,
+				powerWindow,
+				preferredTrendWindowDays
+			);
+			return Ok(result);
+		} catch (Exception ex) {
+			_logger.LogError(ex, "Error retrieving arena team recommendation simulation payload");
+			return StatusCode(500, new { error = ex.Message });
+		}
+	}
+
 	[HttpGet("teams/recommendations/profiles")]
 	[ProducesResponseType(typeof(TeamRecommendationProfileMetadataResponse), StatusCodes.Status200OK)]
 	[ProducesResponseType(typeof(object), StatusCodes.Status500InternalServerError)]

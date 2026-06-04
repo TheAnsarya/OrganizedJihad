@@ -119,7 +119,7 @@ describe('BattleRecommendationOverlay', () => {
 
 		expect(global.fetch).toHaveBeenCalled();
 		const url = global.fetch.mock.calls[0][0];
-		expect(url).toContain('battleType=arena');
+		expect(url).toContain('/api/sync/teams/recommendations/arena/simulate');
 		expect(url).toContain('opponentId=123');
 		expect(url).toContain('opponentPower=450000');
 
@@ -164,6 +164,9 @@ describe('BattleRecommendationOverlay', () => {
 					simulatedWinProbability: 0.74,
 					simulationConfidenceLow: 0.58,
 					simulationConfidenceHigh: 0.80,
+					simulationRuns: 1400,
+					teamPowerEstimate: 520000,
+					opponentPowerUsed: 390000,
 					totalBattles: 9,
 				}],
 			}),
@@ -177,6 +180,41 @@ describe('BattleRecommendationOverlay', () => {
 		const bodyText = document.querySelector('#oj-bro-body')?.textContent || '';
 		expect(bodyText).toContain('Sim Team');
 		expect(bodyText).toContain('74.0%');
+		expect(bodyText).toContain('58.0%-80.0%');
+		expect(bodyText).toContain('Runs 1400');
+		expect(bodyText).toContain('Power team 520,000');
+		expect(bodyText).toContain('opp 390,000');
+
+		overlay.destroy();
+	});
+
+	it('should render API sparse-data note when present in payload', async () => {
+		const idb = makeIdbStorage({
+			arenaEnemies: [{ userId: 78, name: 'Sparse Target', power: 280000 }],
+		});
+		const overlay = new BattleRecommendationOverlay(idb, makePrefStorage());
+		overlay.init();
+
+		global.fetch.mockResolvedValue({
+			ok: true,
+			json: async () => ({
+				note: 'Sparse historical arena data; using engine-backed simulated recommendations.',
+				recommendations: [{
+					teamPreview: 'Sparse Team',
+					estimatedWinProbability: 0.62,
+					confidenceScore: 0.5,
+					finalScore: 0.6,
+				}],
+			}),
+		});
+
+		await overlay.onApiProcessed({
+			calls: [{ name: 'arenaAttack', args: { enemyUserId: 78 } }],
+		});
+		await flushScheduledRefresh();
+
+		const bodyText = document.querySelector('#oj-bro-body')?.textContent || '';
+		expect(bodyText).toContain('Sparse historical arena data; using engine-backed simulated recommendations.');
 
 		overlay.destroy();
 	});
@@ -590,7 +628,7 @@ describe('BattleRecommendationOverlay', () => {
 		await flushScheduledRefresh();
 
 		const url = global.fetch.mock.calls[0][0];
-		expect(url).toContain('battleType=arena');
+		expect(url).toContain('/api/sync/teams/recommendations/arena/simulate');
 		expect(url).not.toContain('opponentId=');
 		expect(url).not.toContain('opponentPower=');
 
@@ -719,7 +757,7 @@ describe('BattleRecommendationOverlay', () => {
 		await flushScheduledRefresh();
 
 		const url = global.fetch.mock.calls[0][0];
-		expect(url).toContain('battleType=arena');
+		expect(url).toContain('/api/sync/teams/recommendations/arena/simulate');
 		expect(url).toContain('opponentId=701');
 		expect(url).toContain('opponentPower=540000');
 

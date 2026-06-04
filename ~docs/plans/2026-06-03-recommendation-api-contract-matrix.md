@@ -1,8 +1,9 @@
 # Recommendation API Contract Matrix
 
 Date: 2026-06-03
-Related Epic: #336
-Related Issue: #338
+Related Epic: #346
+Related Arena Milestone: #345
+Related Platform Issue: #347
 
 ## Objective
 Define stable response expectations for recommendation and simulation API surfaces used by userscript recommendation UIs.
@@ -67,6 +68,45 @@ Recommendation Row Expectations:
 - finalScore: number (0..1)
 - rationale: string (optional)
 - provenance: array (optional)
+
+### GET /api/sync/teams/recommendations/arena/simulate
+Purpose: Arena-first integrated recommendation + simulation endpoint for userscript recco consumers.
+
+Request Query:
+- objective (balanced | offense | defense | speed | sustain)
+- limit (optional)
+- minSamples (optional)
+- opponentId (optional)
+- opponentPower (optional)
+- powerWindow (optional)
+- preferredTrendWindowDays (optional)
+
+Expected Response Fields:
+- mode: "arena"
+- objective: string
+- opponentId: number|null
+- opponentPower: number|null
+- opponentPowerUsed: number
+- powerWindow: number
+- minSamples: number
+- limit: number
+- historySampleCount: number
+- recommendations: array
+- generatedAtUtc: ISO timestamp
+
+Recommendation Row Expectations:
+- source: "history" | "engine"
+- teamPreview: string (required)
+- estimatedWinProbability: number (0..1)
+- simulatedWinProbability: number (0..1)
+- simulationConfidenceLow: number (0..1)
+- simulationConfidenceHigh: number (0..1)
+- simulationRuns: number
+- confidenceScore: number (0..1)
+- finalScore: number (0..1)
+- teamPowerEstimate: number
+- opponentPowerUsed: number
+- rationale: string
 
 ### GET /api/sync/teams/recommendations/profiles
 Purpose: mode/objective options and weight metadata for client controls.
@@ -155,3 +195,4 @@ Mode Summary Row Expectations:
 - Expand response-shape projection endpoints for lightweight dashboard polling.
 - Add explicit compatibility notes for nullable fields and fallback semantics.
 - Add versioning strategy note for breaking vs additive contract changes.
+- Treat arena simulation endpoint as the canonical userscript fast-path while preserving existing endpoints for compatibility.

@@ -20,6 +20,12 @@ export function renderTeamRecommendationRows(params) {
 		const ready = Number(rec.readinessScore || 0);
 		const confidence = Number(rec.confidenceScore || 0);
 		const finalScore = Number(rec.finalScore || 0);
+		const simWin = Number(rec.simulatedWinProbability);
+		const simLow = Number(rec.simulationConfidenceLow);
+		const simHigh = Number(rec.simulationConfidenceHigh);
+		const simRuns = Number(rec.simulationRuns || 0);
+		const teamPowerEstimate = Number(rec.teamPowerEstimate || 0);
+		const opponentPowerUsed = Number(rec.opponentPowerUsed || 0);
 		const profile = escapeHtml(rec.modeProfile || 'default');
 		const topProvenance = Array.isArray(rec.provenance) && rec.provenance.length > 0
 			? rec.provenance[0]
@@ -70,6 +76,16 @@ export function renderTeamRecommendationRows(params) {
 			: '';
 		const preview = escapeHtml(rec.teamPreview || 'Unknown Team');
 		const rationale = escapeHtml(rec.rationale || 'No rationale available.');
+		const hasSimulation = Number.isFinite(simWin);
+		const simulationRange = hasSimulation && Number.isFinite(simLow) && Number.isFinite(simHigh)
+			? `${(Math.max(0, Math.min(1, simLow)) * 100).toFixed(1)}-${(Math.max(0, Math.min(1, simHigh)) * 100).toFixed(1)}%`
+			: 'n/a';
+		const simulationLine = hasSimulation
+			? `<div style="font-size:10px;color:#7f9f92;margin-top:2px">Sim ${(Math.max(0, Math.min(1, simWin)) * 100).toFixed(1)}% • CI ${simulationRange} • Runs ${simRuns > 0 ? simRuns : 'n/a'}</div>`
+			: '';
+		const powerLine = (teamPowerEstimate > 0 || opponentPowerUsed > 0)
+			? `<div style="font-size:10px;color:#7f9f92;margin-top:2px">Power team ${teamPowerEstimate > 0 ? teamPowerEstimate.toLocaleString() : 'n/a'} • opp ${opponentPowerUsed > 0 ? opponentPowerUsed.toLocaleString() : 'n/a'}</div>`
+			: '';
 
 		return `<div style="padding:8px;border:1px solid #2f5a3f;border-radius:8px;background:#182b24;margin-top:${index === 0 ? '0' : '6px'}">
 			<div style="display:flex;justify-content:space-between;align-items:baseline;gap:8px">
@@ -79,6 +95,8 @@ export function renderTeamRecommendationRows(params) {
 			<div style="font-size:10px;color:#7cc1a0;margin-top:2px">profile ${profile}</div>
 			<div style="font-size:11px;color:#9fc7b2;margin-top:4px">Win ${(win * 100).toFixed(1)}% • Ready ${(ready * 100).toFixed(0)}% • Conf ${(confidence * 100).toFixed(0)}% • Final ${(finalScore * 100).toFixed(1)}%</div>
 			<div style="font-size:10px;color:#7f9f92;margin-top:2px">${provenanceText}</div>
+			${simulationLine}
+			${powerLine}
 			<div style="font-size:11px;color:#8c8c8c;margin-top:4px">${rationale}</div>
 			${provenanceRows ? `<details style="margin-top:6px">
 				<summary style="cursor:pointer;font-size:10px;color:#95d5b2">Provenance details</summary>

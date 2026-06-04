@@ -3,6 +3,9 @@
 Date: 2026-06-03
 Status: Active Planning
 Scope: Build a robust recommendations + simulation ecosystem across API and userscript with Arena as the first fully complete capability slice.
+Primary Epic: #346
+Primary Arena Milestone: #345
+Platform Governance Track: #347
 
 ## Goals
 
@@ -83,6 +86,16 @@ Scope A: Backtest and correlation reporting by mode and objective.
 Scope B: Drift and stale-signal monitoring surfaces.
 
 Scope C: Confidence calibration policy and guardrails.
+
+## Issue Mapping
+
+Issue A (#346): Parent epic for ecosystem delivery, acceptance, and phased rollout.
+
+Issue B (#345): Arena 100% capability milestone (first complete production slice).
+
+Issue C (#347): API governance, telemetry schema, and multi-mode onboarding framework.
+
+Issue D (#204): Architecture modernization umbrella this workstream continues under.
 
 ## Delivery Sequence
 

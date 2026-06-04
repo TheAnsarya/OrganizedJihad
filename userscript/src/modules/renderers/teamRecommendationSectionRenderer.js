@@ -17,6 +17,7 @@
  * @param {number} params.defaultTrendWindowDays - Default trend window days
  * @param {boolean} params.showOperationsSummary - Whether operations diagnostics are enabled
  * @param {string} params.operationsSummaryHtml - Pre-rendered operations summary html
+ * @param {string} params.recommendationMetaHtml - Pre-rendered recommendation metadata badges/html
  * @param {string} params.rowsHtml - Pre-rendered card rows html
  * @param {(value: string) => string} params.escapeHtml - HTML escape callback
  * @returns {string} HTML section
@@ -33,6 +34,7 @@ export function renderTeamRecommendationEngineSection(params) {
 	const defaultTrendWindowDays = Number(params?.defaultTrendWindowDays || 30);
 	const showOperationsSummary = params?.showOperationsSummary !== false;
 	const operationsSummaryHtml = params?.operationsSummaryHtml || '';
+	const recommendationMetaHtml = params?.recommendationMetaHtml || '';
 	const rowsHtml = params?.rowsHtml || '';
 	const profileSummary = params?.profileSummary || '';
 	const calibrationSummary = params?.calibrationSummary || '';
@@ -73,6 +75,7 @@ export function renderTeamRecommendationEngineSection(params) {
 			</select>
 		</div>
 		${operationsSummaryHtml}
+		${recommendationMetaHtml}
 		${rowsHtml}
 	</div>`;
 }
