@@ -19,10 +19,6 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\data\OrganizedJihad.Data.csproj" />
-  </ItemGroup>
-
-  <ItemGroup>
     <Content Include="Resources\UiTemplates\**\*.html">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
       <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>

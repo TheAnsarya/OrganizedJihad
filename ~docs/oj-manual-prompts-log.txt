@@ -556,6 +556,90 @@ commit as one
 
 yes do both
 
+[OJ] (Userscript) On the inventory tab you found the names for many (but not all) of the items but you're using the Russian names, not the english ones so maybe make a language selector for the whole Userscript including a globe icon on the main page or tab bar that allows quick language switching, and I use English so make it the default; continue;
+
+The Language button on the top of the userscript should not be a toggle, it should be a drop down so we can have more than two languages; Also the language button should be wider and have the icon next to the two-letter language abbreviation; Also the item names are still in Russian, I know English versions are in the files because they display in english in the game; And also lots of things are still showing placers holders like `Artifact Fragment #1003` or `consumable_53` or `Hero_4044`; continue;
+
+yes do both
+
+continue cleanup and then republish userscript and run installer so i can test it; continue;
+
+yes, do that commit and such, [OJ] (Userscript) The "Mail" tab isn't showing from who, the mail subject line, or what is contained in the mail message or what we expect from the mail message so fix those problems and make the mail tab actually usefulnformative; continue;
+
+[OJ] (Userscript) On the inventory everything is still in russian, what the fuck, fix it make our labels/text show whatever language we chose, with a default of english; The language selection button is nowjust a dropdown box which is super ugly, it should be a regular button with a popout menu showing all the available languages the game supports; but FOCUS on fixing the labels and descriptions of items and heros and titan and stones, etc, and tying them to the various languages, especially making sure english works because that is our default; continue;
+
+For gods sake, why is everything still in russian?
+
+don't filter out the russian cyrillic labels, just chose the english set of names and use those; continue;
+
+Check the code for how the russian names were found and expand it to find the other languages too; contionue;
+
+The battle recommendations are not visible on the game anymore, and haven't worked at all, although the apiserver connection works now, make team recommendations works (UI, simulator, historical data, whatever else) work until when I open and go to attack an arena team recommended teams with probable win percentage shows on screen and helps me build a team; continue;
+
+&&&&&&&&&&&&&&&
+Enter continuous‑work mode.
+Maintain a live task list.
+When you finish a task, immediately update the list and continue with the next one.
+If you are unsure, make a reasonable assumption and proceed.
+Never wait for my confirmation unless I explicitly say ‘pause’.
+Only stop when I say ‘stop’.
+If output is too long for one message, continue automatically in the next message.
+&&&&&&&&&&&&&&&
+
+yes, continue, make that onscreen hint! (do we have a hint display system? make one!) work through lots of slices, make sure every work effort is tied to an issue but don't do super small issues, do larger effort issues; make team recommendations (aka reccos) for arena and the rest, but start with arena as your first 100% capability spot; make issues and docs and such; Make sure there is an entire ecosystem on the apiserver for team recommendations and battle simulation and a robust API for these activities that the userscript calls for recos. This is too much for one session, so make plans and epics and issues and then we'll start implementing them;
+
+continue;
+
+for the apiserver, add openAPI/swagger or whatever is the modern equivalent, everything should be modern standards and practices; also add logging using serilog to a folder with 30 day rotation policy, and add api call logging unless the volume is too high, and debug log calls, and try/catch captures with logging on the api calls (log the method name and call/response); and make epics and issues and docs, etc.; continue working on recos;
+
+continue;
+
+Continue working on battle recommendations and that whole ecosystem, and fix the architecture and UI; continue; do continuous work mode! keep working tasks; continue;
+
+That is too many chat logs, merge them into one log per day, I don't want a million files; Hell,m if you want go back and merge previous logs, one per day; then continue battle recs work; and continue;
+
+git commit everything
+
+&&&&&&&&&&&&&&&
+work through lots of slices, make sure every work effort is tied to an issue but don't do super small issues, do larger effort issues; make team recommendations (aka reccos) for arena and the rest, but start with arena as your first 100% capability spot; make issues and docs and such; Make sure there is an entire ecosystem on the apiserver for team recommendations and battle simulation and a robust API for these activities that the userscript calls for recos. This is too much for one session, so make plans and epics and issues and then start implementing them;
+Enter continuous‑work mode.
+Maintain a live task list.
+When you finish a task, immediately update the list and continue with the next one.
+If you are unsure, make a reasonable assumption and proceed.
+Never wait for my confirmation unless I explicitly say ‘pause’.
+Only stop when I say ‘stop’.
+If output is too long for one message, continue automatically in the next message.
+&&&&&&&&&&&&&&&
+
+git commit everything
+
+work through lots of slices, make sure every work effort is tied to an issue but don't do super small issues, do larger effort issues; make team recommendations (aka reccos) for arena and the rest, but start with arena as your first 100% capability spot; make issues and docs and such; Make sure there is an entire ecosystem on the apiserver for team recommendations and battle simulation and a robust API for these activities that the userscript calls for recos. This is too much for one session, so make plans and epics and issues and then start implementing them;
+
+continue;
+continue;
+continue;
+
+merge the pr to main and then continue;
+
+I cleaned up the files, but STOP freaking out when there's an unexpected file; merge the pr to main and then continue;
+
+
+
+
+
+[OJ] (installer) what do those three toggle buttons do? They don't seem to do anything; what's happening there and should we turn them into action buttons with descriptions? maybe try that;
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -587,7 +671,15 @@ yes do both
 
 
 
-
+&&&&&&&&&&&&&&&
+Enter continuous‑work mode.
+Maintain a live task list.
+When you finish a task, immediately update the list and continue with the next one.
+If you are unsure, make a reasonable assumption and proceed.
+Never wait for my confirmation unless I explicitly say ‘pause’.
+Only stop when I say ‘stop’.
+If output is too long for one message, continue automatically in the next message.
+&&&&&&&&&&&&&&&
 
 
 
