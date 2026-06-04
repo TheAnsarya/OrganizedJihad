@@ -989,6 +989,22 @@ describe('BattleRecommendationOverlay', () => {
 		overlay.destroy();
 	});
 
+	it('should render canonical health badge wording for delivery states', () => {
+		const overlay = new BattleRecommendationOverlay(makeIdbStorage(), makePrefStorage());
+		overlay.init();
+
+		overlay._dataHealth = 'live';
+		expect(overlay._renderHealthBadge()).toContain('Live data');
+
+		overlay._dataHealth = 'cached';
+		expect(overlay._renderHealthBadge()).toContain('Cached fallback');
+
+		overlay._dataHealth = 'backoff';
+		expect(overlay._renderHealthBadge()).toContain('Retry backoff');
+
+		overlay.destroy();
+	});
+
 	it('should render operations diagnostics when operations summary is enabled', async () => {
 		const idb = makeIdbStorage({ arenaEnemies: [{ userId: 10, name: 'A', power: 100000 }] });
 		const overlay = new BattleRecommendationOverlay(idb, makePrefStorage({
@@ -1019,7 +1035,9 @@ describe('BattleRecommendationOverlay', () => {
 		await flushScheduledRefresh();
 
 		const bodyText = document.querySelector('#oj-bro-body')?.textContent || '';
+		expect(bodyText).toContain('Live data');
 		expect(bodyText).toContain('Ops Metrics');
+		expect(bodyText).toContain('Healthy');
 		expect(bodyText).toContain('MAE');
 		expect(bodyText).toContain('0.110');
 		expect(bodyText).toContain('Brier');
@@ -1028,6 +1046,42 @@ describe('BattleRecommendationOverlay', () => {
 		const operationsCall = global.fetch.mock.calls.find((entry) => String(entry?.[0] || '').includes('/api/sync/teams/recommendations/operations-summary'));
 		expect(operationsCall).toBeTruthy();
 		expect(String(operationsCall[0])).toContain('preferredTrendWindowDays=90');
+
+		overlay.destroy();
+	});
+
+	it('should render API-provided operations health labels when present', async () => {
+		const idb = makeIdbStorage({ arenaEnemies: [{ userId: 12, name: 'Label Target', power: 101000 }] });
+		const overlay = new BattleRecommendationOverlay(idb, makePrefStorage({
+			battleRecommendationOverlayShowOps: true,
+		}));
+		overlay.init();
+
+		global.fetch
+			.mockResolvedValueOnce({ ok: true, json: async () => ({ recommendations: [{ teamPreview: 'Watchlist Team', weightedWinRate: 0.56, confidence: 0.45, score: 0.54 }] }) })
+			.mockResolvedValueOnce({
+				ok: true,
+				json: async () => ({
+					preferredTrendWindowDays: 30,
+					modes: [{
+						mode: 'arena',
+						meanAbsoluteError: 0.25,
+						meanBrierScore: 0.31,
+						predictionBias: 0.03,
+						suggestedFrictionScale: 1.11,
+						samples: 19,
+						isStale: false,
+						healthStatus: 'monitor',
+						healthLabel: 'Needs Attention',
+					}],
+				}),
+			});
+
+		await overlay.onApiProcessed({ calls: [{ name: 'arenaAttack', args: { enemyUserId: 12 } }] });
+		await flushScheduledRefresh();
+
+		const bodyText = document.querySelector('#oj-bro-body')?.textContent || '';
+		expect(bodyText).toContain('Needs Attention');
 
 		overlay.destroy();
 	});
