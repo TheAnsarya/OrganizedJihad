@@ -398,11 +398,28 @@
 				</Grid>
 			</Border>
 
-			<WrapPanel Orientation="Horizontal" Margin="0,8,0,2">
+			<TextBlock Text="Install Run Options (applied when you run Step 2/3 or Full Install)" FontWeight="SemiBold" Margin="0,8,0,0" />
+			<WrapPanel Orientation="Horizontal" Margin="0,4,0,2">
 				<primitives:ToggleButton Classes="option-toggle" x:Name="OpenTampermonkeySetupCheckBox" Margin="0,0,16,14" IsChecked="True" Checked="OnOptionToggleChanged" Unchecked="OnOptionToggleChanged" />
 				<primitives:ToggleButton Classes="option-toggle" x:Name="FirstRunDiagnosticsCheckBox" Margin="0,0,16,14" IsChecked="False" Checked="OnOptionToggleChanged" Unchecked="OnOptionToggleChanged" />
 				<primitives:ToggleButton Classes="option-toggle" x:Name="OpenDiagnosticsCheckBox" Margin="0,0,16,14" IsChecked="False" Checked="OnOptionToggleChanged" Unchecked="OnOptionToggleChanged" />
 			</WrapPanel>
+
+			<Border BorderThickness="1" CornerRadius="6" Padding="10" Background="#3a143c">
+				<StackPanel Spacing="8">
+					<TextBlock Text="Quick Actions (run now)" FontWeight="SemiBold" />
+					<Grid ColumnDefinitions="280,*" RowDefinitions="Auto,Auto,Auto">
+						<Button x:Name="ActionOpenTampermonkeySetupButton" Classes="compact-button" Grid.Row="0" Grid.Column="0" Content="Open Tampermonkey Setup Now" Click="OnActionOpenTampermonkeySetupClick" />
+						<TextBlock Grid.Row="0" Grid.Column="1" Margin="10,0,0,0" VerticalAlignment="Center" TextWrapping="Wrap" Opacity="0.85" Text="Opens the browser extension page and setup guide immediately without running install." />
+
+						<Button x:Name="ActionRunDiagnosticsProbeButton" Classes="compact-button" Grid.Row="1" Grid.Column="0" Margin="0,8,0,0" Content="Run API Diagnostics Probe" Click="OnActionRunDiagnosticsProbeClick" />
+						<TextBlock Grid.Row="1" Grid.Column="1" Margin="10,8,0,0" VerticalAlignment="Center" TextWrapping="Wrap" Opacity="0.85" Text="Checks core API UI endpoints now and writes success/failure details to the installer log." />
+
+						<Button x:Name="ActionOpenDiagnosticsPagesButton" Classes="compact-button" Grid.Row="2" Grid.Column="0" Margin="0,8,0,0" Content="Open Diagnostics Pages" Click="OnActionOpenDiagnosticsPagesClick" />
+						<TextBlock Grid.Row="2" Grid.Column="1" Margin="10,8,0,0" VerticalAlignment="Center" TextWrapping="Wrap" Opacity="0.85" Text="Opens health, repair-status, userscript-handshake, and tray-health pages in your selected browser." />
+					</Grid>
+				</StackPanel>
+			</Border>
 
 			<Border BorderThickness="1" CornerRadius="6" Padding="8" Background="#3a143c">
 				<TextBox x:Name="LogTextBox"

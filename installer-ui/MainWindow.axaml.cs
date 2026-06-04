@@ -999,13 +999,13 @@ public partial class MainWindow : Window {
 	private void UpdateOptionToggleLabels() {
 		SetOptionToggleContent(
 			OpenTampermonkeySetupCheckBox,
-			"Tampermonkey import flow");
+			"Tampermonkey import flow (during install)");
 		SetOptionToggleContent(
 			FirstRunDiagnosticsCheckBox,
-			"First-run diagnostics");
+			"First-run diagnostics (during install)");
 		SetOptionToggleContent(
 			OpenDiagnosticsCheckBox,
-			"Open diagnostics pages");
+			"Open diagnostics pages (during install)");
 
 		ApplyToggleButtonVisual(OpenTampermonkeySetupCheckBox);
 		ApplyToggleButtonVisual(FirstRunDiagnosticsCheckBox);
@@ -1055,6 +1055,9 @@ public partial class MainWindow : Window {
 			InstallTampermonkeyButton,
 			InstallApiStepButton,
 			InstallUserscriptStepButton,
+			ActionOpenTampermonkeySetupButton,
+			ActionRunDiagnosticsProbeButton,
+			ActionOpenDiagnosticsPagesButton,
 			InstallButton,
 			OpenInstallRootButton,
 			OpenSetupGuideButton,
@@ -1434,6 +1437,9 @@ public partial class MainWindow : Window {
 		InstallTampermonkeyButton.IsEnabled = !_isInstalling && !_tampermonkeyInstalledForSelection;
 		InstallApiStepButton.IsEnabled = !_isInstalling;
 		InstallUserscriptStepButton.IsEnabled = !_isInstalling;
+		ActionOpenTampermonkeySetupButton.IsEnabled = !_isInstalling;
+		ActionRunDiagnosticsProbeButton.IsEnabled = !_isInstalling;
+		ActionOpenDiagnosticsPagesButton.IsEnabled = !_isInstalling;
 		OpenInstallRootButton.IsEnabled = !_isInstalling;
 		OpenSetupGuideButton.IsEnabled = !_isInstalling;
 		OpenLogFolderButton.IsEnabled = !_isInstalling;
@@ -1447,6 +1453,9 @@ public partial class MainWindow : Window {
 		ApplyStepButtonVisual(InstallTampermonkeyButton);
 		ApplyStepButtonVisual(InstallApiStepButton);
 		ApplyStepButtonVisual(InstallUserscriptStepButton);
+		ApplyStepButtonVisual(ActionOpenTampermonkeySetupButton);
+		ApplyStepButtonVisual(ActionRunDiagnosticsProbeButton);
+		ApplyStepButtonVisual(ActionOpenDiagnosticsPagesButton);
 		ApplyStepButtonVisual(InstallButton);
 		ApplyStepButtonVisual(OpenInstallRootButton);
 		ApplyStepButtonVisual(OpenSetupGuideButton);
@@ -1459,5 +1468,76 @@ public partial class MainWindow : Window {
 			ReinstallTampermonkeyMenuItem.IsVisible = !_isInstalling && _tampermonkeyInstalledForSelection;
 			ReinstallTampermonkeyMenuItem.IsEnabled = !_isInstalling && _tampermonkeyInstalledForSelection;
 		}
+	}
+
+	private void OnActionOpenTampermonkeySetupClick(object? sender, RoutedEventArgs e) {
+		if (_isInstalling) {
+			return;
+		}
+
+		if (BrowserComboBox.SelectedItem is not BrowserOption selectedBrowser) {
+			SetStatus("Status: Select a browser first.");
+			return;
+		}
+
+		AppendLog($"[Installer UI] Quick action: opening Tampermonkey setup resources for {selectedBrowser.Label}.");
+		OpenTampermonkeyStore(selectedBrowser.Argument);
+		OpenUserscriptGuideFromUi();
+	}
+
+	private async void OnActionRunDiagnosticsProbeClick(object? sender, RoutedEventArgs e) {
+		if (_isInstalling) {
+			return;
+		}
+
+		var apiUrl = ApiUrlTextBox.Text?.Trim();
+		if (string.IsNullOrWhiteSpace(apiUrl) || !Uri.TryCreate(apiUrl, UriKind.Absolute, out var uri)) {
+			SetStatus("Status: Enter a valid API URL before running diagnostics.");
+			return;
+		}
+
+		if (!string.Equals(uri.Scheme, Uri.UriSchemeHttp, StringComparison.OrdinalIgnoreCase) && !string.Equals(uri.Scheme, Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase)) {
+			SetStatus("Status: API URL must use http or https.");
+			return;
+		}
+
+		SetStatus("Status: Running diagnostics probe...");
+		AppendLog($"[Installer UI] Quick action: probing diagnostics endpoints at {apiUrl}.");
+		await ProbeApiUiEndpointsAsync(apiUrl);
+		SetStatus("Status: Diagnostics probe completed.");
+	}
+
+	private void OnActionOpenDiagnosticsPagesClick(object? sender, RoutedEventArgs e) {
+		if (_isInstalling) {
+			return;
+		}
+
+		var apiUrl = ApiUrlTextBox.Text?.Trim();
+		if (string.IsNullOrWhiteSpace(apiUrl) || !Uri.TryCreate(apiUrl, UriKind.Absolute, out var uri)) {
+			SetStatus("Status: Enter a valid API URL before opening diagnostics pages.");
+			return;
+		}
+
+		if (!string.Equals(uri.Scheme, Uri.UriSchemeHttp, StringComparison.OrdinalIgnoreCase) && !string.Equals(uri.Scheme, Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase)) {
+			SetStatus("Status: API URL must use http or https.");
+			return;
+		}
+
+		var browserArg = ResolveSelectedBrowserArgument() ?? "edge";
+		var normalizedApiUrl = apiUrl.TrimEnd('/');
+		var endpoints = new[] {
+			"/api/sync/health",
+			"/ui/repair-status",
+			"/ui/userscript-handshake",
+			"/ui/tray-health",
+		};
+
+		AppendLog($"[Installer UI] Quick action: opening diagnostics pages for {normalizedApiUrl}.");
+		foreach (var endpoint in endpoints) {
+			var url = normalizedApiUrl + endpoint;
+			OpenUrlInPreferredBrowser(url, browserArg);
+		}
+
+		SetStatus("Status: Diagnostics pages opened.");
 	}
 }
