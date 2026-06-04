@@ -88,4 +88,40 @@ describe('uiManager team recommendation operations summary', () => {
 
 		expect(html).toContain('Healthy');
 	});
+
+	it('should render arena source mix banner with escaped note', () => {
+		const manager = makeManager();
+		const html = manager._renderTeamRecommendationMeta('arena', {
+			historyRecommendationCount: 3,
+			engineRecommendationCount: 2,
+			note: '<b>fallback active</b>',
+		});
+
+		expect(html).toContain('Source mix');
+		expect(html).toContain('history 3');
+		expect(html).toContain('engine 2');
+		expect(html).toContain('&lt;b&gt;fallback active&lt;/b&gt;');
+	});
+
+	it('should not render source mix banner for non-arena modes', () => {
+		const manager = makeManager();
+		const html = manager._renderTeamRecommendationMeta('guildwar', {
+			historyRecommendationCount: 3,
+			engineRecommendationCount: 2,
+			note: 'ignored outside arena',
+		});
+
+		expect(html).toBe('');
+	});
+
+	it('should not render source mix banner when counts and note are empty', () => {
+		const manager = makeManager();
+		const html = manager._renderTeamRecommendationMeta('arena', {
+			historyRecommendationCount: 0,
+			engineRecommendationCount: 0,
+			note: '   ',
+		});
+
+		expect(html).toBe('');
+	});
 });

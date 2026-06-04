@@ -1424,10 +1424,17 @@ public class SyncControllerTests : IClassFixture<WebApplicationFactory<Program>>
 
 		root.TryGetProperty("historySampleCount", out var historySampleCount).Should().BeTrue();
 		historySampleCount.ValueKind.Should().Be(JsonValueKind.Number);
+		historySampleCount.GetInt32().Should().BeGreaterThanOrEqualTo(0);
 		root.TryGetProperty("historyRecommendationCount", out var historyRecommendationCount).Should().BeTrue();
 		historyRecommendationCount.ValueKind.Should().Be(JsonValueKind.Number);
+		historyRecommendationCount.GetInt32().Should().BeGreaterThanOrEqualTo(0);
 		root.TryGetProperty("engineRecommendationCount", out var engineRecommendationCount).Should().BeTrue();
 		engineRecommendationCount.ValueKind.Should().Be(JsonValueKind.Number);
+		engineRecommendationCount.GetInt32().Should().BeGreaterThanOrEqualTo(0);
+
+		root.TryGetProperty("generatedAtUtc", out var generatedAtUtc).Should().BeTrue();
+		generatedAtUtc.ValueKind.Should().Be(JsonValueKind.String);
+		DateTime.TryParse(generatedAtUtc.GetString(), out _).Should().BeTrue();
 
 		root.TryGetProperty("recommendations", out var recommendations).Should().BeTrue();
 		recommendations.ValueKind.Should().Be(JsonValueKind.Array);
@@ -1438,16 +1445,32 @@ public class SyncControllerTests : IClassFixture<WebApplicationFactory<Program>>
 		first.TryGetProperty("teamPreview", out _).Should().BeTrue();
 		first.TryGetProperty("simulatedWinProbability", out var simulatedWinProbability).Should().BeTrue();
 		simulatedWinProbability.ValueKind.Should().Be(JsonValueKind.Number);
+		simulatedWinProbability.GetDouble().Should().BeGreaterThanOrEqualTo(0).And.BeLessThanOrEqualTo(1);
 		first.TryGetProperty("simulationConfidenceLow", out var simulationConfidenceLow).Should().BeTrue();
 		simulationConfidenceLow.ValueKind.Should().Be(JsonValueKind.Number);
+		simulationConfidenceLow.GetDouble().Should().BeGreaterThanOrEqualTo(0).And.BeLessThanOrEqualTo(1);
 		first.TryGetProperty("simulationConfidenceHigh", out var simulationConfidenceHigh).Should().BeTrue();
 		simulationConfidenceHigh.ValueKind.Should().Be(JsonValueKind.Number);
+		simulationConfidenceHigh.GetDouble().Should().BeGreaterThanOrEqualTo(0).And.BeLessThanOrEqualTo(1);
+		simulationConfidenceHigh.GetDouble().Should().BeGreaterThanOrEqualTo(simulationConfidenceLow.GetDouble());
 		first.TryGetProperty("simulationRuns", out var simulationRuns).Should().BeTrue();
 		simulationRuns.ValueKind.Should().Be(JsonValueKind.Number);
+		simulationRuns.GetInt32().Should().BeGreaterThan(0);
+		first.TryGetProperty("estimatedWinProbability", out var estimatedWinProbability).Should().BeTrue();
+		estimatedWinProbability.ValueKind.Should().Be(JsonValueKind.Number);
+		estimatedWinProbability.GetDouble().Should().BeGreaterThanOrEqualTo(0).And.BeLessThanOrEqualTo(1);
+		first.TryGetProperty("confidenceScore", out var confidenceScore).Should().BeTrue();
+		confidenceScore.ValueKind.Should().Be(JsonValueKind.Number);
+		confidenceScore.GetDouble().Should().BeGreaterThanOrEqualTo(0).And.BeLessThanOrEqualTo(1);
+		first.TryGetProperty("finalScore", out var finalScore).Should().BeTrue();
+		finalScore.ValueKind.Should().Be(JsonValueKind.Number);
+		finalScore.GetDouble().Should().BeGreaterThanOrEqualTo(0).And.BeLessThanOrEqualTo(1);
 		first.TryGetProperty("teamPowerEstimate", out var teamPowerEstimate).Should().BeTrue();
 		teamPowerEstimate.ValueKind.Should().Be(JsonValueKind.Number);
+		teamPowerEstimate.GetDouble().Should().BeGreaterThan(0);
 		first.TryGetProperty("opponentPowerUsed", out var rowOpponentPowerUsed).Should().BeTrue();
 		rowOpponentPowerUsed.ValueKind.Should().Be(JsonValueKind.Number);
+		rowOpponentPowerUsed.GetDouble().Should().BeGreaterThan(0);
 	}
 
 	/// <summary>

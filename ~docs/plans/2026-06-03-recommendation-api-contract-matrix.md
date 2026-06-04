@@ -72,6 +72,11 @@ Recommendation Row Expectations:
 ### GET /api/sync/teams/recommendations/arena/simulate
 Purpose: Arena-first integrated recommendation + simulation endpoint for userscript recco consumers.
 
+Compatibility Role:
+- Canonical fast-path for arena recommendation consumers in userscript.
+- Additive-compatible with existing `/api/sync/teams/recommendations` and `/api/sync/battles/recommendations` routes.
+- Existing recommendation routes remain supported for fallback/backward compatibility.
+
 Request Query:
 - objective (balanced | offense | defense | speed | sustain)
 - limit (optional)
@@ -107,6 +112,14 @@ Recommendation Row Expectations:
 - teamPowerEstimate: number
 - opponentPowerUsed: number
 - rationale: string
+
+Nullable and Fallback Semantics:
+- `opponentId` may be null when recommendations are generated from generalized arena context.
+- `opponentPower` may be null; clients should prefer `opponentPowerUsed` for display and diagnostics.
+- Client fallback order remains stable:
+	1) win probability: `estimatedWinProbability` -> `simulatedWinProbability` -> `weightedWinRate`
+	2) confidence: `confidenceScore` -> `confidence` -> (`simulationConfidenceHigh - simulationConfidenceLow`)
+	3) score: `finalScore` -> `score` -> `weightedWinRate`
 
 ### GET /api/sync/teams/recommendations/profiles
 Purpose: mode/objective options and weight metadata for client controls.
@@ -191,8 +204,13 @@ Mode Summary Row Expectations:
 	3) weightedWinRate
 
 ## Contract Hardening TODOs
-- Add API integration tests per endpoint for required fields and numeric bounds.
+- Add/maintain API integration tests per endpoint for required fields and numeric bounds.
 - Expand response-shape projection endpoints for lightweight dashboard polling.
-- Add explicit compatibility notes for nullable fields and fallback semantics.
+- Add explicit compatibility notes for nullable fields and fallback semantics (arena simulation complete; continue for remaining endpoints).
 - Add versioning strategy note for breaking vs additive contract changes.
-- Treat arena simulation endpoint as the canonical userscript fast-path while preserving existing endpoints for compatibility.
+- Treat arena simulation endpoint as the canonical userscript fast-path while preserving existing endpoints for compatibility (documented).
+
+## Versioning Strategy (Current)
+- Additive fields to existing recommendation payloads are the default compatibility path.
+- Breaking payload/route changes require explicit versioned route introduction.
+- Contract consumers should tolerate additive fields and continue relying on documented fallback orders above.
