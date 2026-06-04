@@ -107,6 +107,7 @@ public partial class MainWindow : Window {
 		}
 
 		UpdateOptionToggleLabels();
+		UpdateInstallOptionSummary(logResult: false);
 		InitializeInteractiveButtonVisuals();
 		ResetLogViewToTopLeft();
 
@@ -121,6 +122,7 @@ public partial class MainWindow : Window {
 
 	private void OnOptionToggleChanged(object? sender, RoutedEventArgs e) {
 		UpdateOptionToggleLabels();
+		UpdateInstallOptionSummary(logResult: true);
 	}
 
 	private async void OnInstallClick(object? sender, RoutedEventArgs e) {
@@ -1010,6 +1012,19 @@ public partial class MainWindow : Window {
 		ApplyToggleButtonVisual(OpenTampermonkeySetupCheckBox);
 		ApplyToggleButtonVisual(FirstRunDiagnosticsCheckBox);
 		ApplyToggleButtonVisual(OpenDiagnosticsCheckBox);
+	}
+
+	private void UpdateInstallOptionSummary(bool logResult) {
+		var tmSetup = OpenTampermonkeySetupCheckBox.IsChecked == true ? "enabled" : "disabled";
+		var firstRunDiag = FirstRunDiagnosticsCheckBox.IsChecked == true ? "enabled" : "disabled";
+		var openDiagPages = OpenDiagnosticsCheckBox.IsChecked == true ? "enabled" : "disabled";
+
+		var summary = $"Current install options: Tampermonkey import flow {tmSetup}; first-run diagnostics {firstRunDiag}; open diagnostics pages {openDiagPages}.";
+		InstallOptionSummaryTextBlock.Text = summary;
+
+		if (logResult) {
+			AppendLog($"[Installer UI] Option state updated: {summary}");
+		}
 	}
 
 	private static void SetOptionToggleContent(ToggleButton? button, string label) {

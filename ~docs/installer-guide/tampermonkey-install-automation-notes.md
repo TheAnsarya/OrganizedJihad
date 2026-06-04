@@ -40,3 +40,19 @@ This is a browser security boundary, not an installer limitation.
 
 - The installer should never claim fully silent userscript install.
 - The installer should describe the expected permission/install prompt clearly to reduce confusion.
+
+## Installer UI behavior clarification (2026-06-04)
+
+The installer now separates two concepts in the UI:
+
+1. Install Run Options
+- These are toggle options that affect what happens when you run Step 2, Step 3, or Run Full Install.
+- Toggling them does not immediately open pages or run checks by itself.
+
+2. Quick Actions (run now)
+- These buttons execute immediately without running full install:
+   - Open Tampermonkey Setup Now
+   - Run API Diagnostics Probe
+   - Open Diagnostics Pages
+
+If users expect immediate behavior, use the Quick Actions buttons. If users want behavior applied during install execution, use the Install Run Options toggles.

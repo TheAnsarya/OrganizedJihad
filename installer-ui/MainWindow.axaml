@@ -404,6 +404,7 @@
 				<primitives:ToggleButton Classes="option-toggle" x:Name="FirstRunDiagnosticsCheckBox" Margin="0,0,16,14" IsChecked="False" Checked="OnOptionToggleChanged" Unchecked="OnOptionToggleChanged" />
 				<primitives:ToggleButton Classes="option-toggle" x:Name="OpenDiagnosticsCheckBox" Margin="0,0,16,14" IsChecked="False" Checked="OnOptionToggleChanged" Unchecked="OnOptionToggleChanged" />
 			</WrapPanel>
+			<TextBlock x:Name="InstallOptionSummaryTextBlock" Margin="0,0,0,8" Opacity="0.86" TextWrapping="Wrap" Text="Current install options: pending" />
 
 			<Border BorderThickness="1" CornerRadius="6" Padding="10" Background="#3a143c">
 				<StackPanel Spacing="8">
