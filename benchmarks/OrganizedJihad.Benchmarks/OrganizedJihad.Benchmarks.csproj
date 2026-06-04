@@ -13,4 +13,8 @@
 		<PackageReference Include="Microsoft.EntityFrameworkCore.InMemory" Version="9.0.10" />
 	</ItemGroup>
 
+	<ItemGroup>
+		<ProjectReference Include="..\..\data\OrganizedJihad.Data.csproj" />
+	</ItemGroup>
+
 </Project>

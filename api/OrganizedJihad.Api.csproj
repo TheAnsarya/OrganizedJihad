@@ -31,4 +31,8 @@
     <None Remove="OrganizedJihad.Api.TrayHost\**\*" />
   </ItemGroup>
 
+  <ItemGroup>
+    <ProjectReference Include="..\data\OrganizedJihad.Data.csproj" />
+  </ItemGroup>
+
 </Project>
