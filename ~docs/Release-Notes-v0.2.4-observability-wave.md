@@ -8,6 +8,7 @@
 	- OpenAPI JSON
 	- Latest API server logs
 - Added local-only endpoint `GET /ui/logs/latest` for fast diagnostics.
+- Hardened `/ui/logs/latest` against active-file locks by using shared-read access and fallback selection across latest candidate logs.
 
 ## Included Validation
 - API focused tests: `SyncControllerTests` pass (33/33)

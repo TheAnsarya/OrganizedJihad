@@ -267,6 +267,50 @@ public class SyncControllerTests : IClassFixture<WebApplicationFactory<Program>>
 	}
 
 	/// <summary>
+	/// Verifies latest API logs endpoint returns plain-text output for local requests.
+	/// </summary>
+	[Fact]
+	public async Task Api_Ui_Latest_Logs_Should_Return_PlainText() {
+		// Act
+		var response = await _client.GetAsync("/ui/logs/latest");
+
+		// Assert
+		response.StatusCode.Should().Be(HttpStatusCode.OK);
+		response.Content.Headers.ContentType.Should().NotBeNull();
+		response.Content.Headers.ContentType!.MediaType.Should().Be("text/plain");
+	}
+
+	/// <summary>
+	/// Verifies latest API logs endpoint includes tail content when a log file exists.
+	/// </summary>
+	[Fact]
+	public async Task Api_Ui_Latest_Logs_Should_Include_Expected_Log_Content() {
+		// Arrange
+		var logsDirectory = Path.Combine(AppContext.BaseDirectory, "Logs");
+		Directory.CreateDirectory(logsDirectory);
+		var marker = $"observability-wave-test-marker-{Guid.NewGuid():N}";
+		var logPath = Path.Combine(logsDirectory, "api-99991231.log");
+		await File.WriteAllTextAsync(logPath, $"line-1{Environment.NewLine}{marker}{Environment.NewLine}line-3");
+		File.SetLastWriteTimeUtc(logPath, DateTime.UtcNow.AddMinutes(1));
+
+		try {
+			// Act
+			var response = await _client.GetAsync("/ui/logs/latest");
+			var body = await response.Content.ReadAsStringAsync();
+
+			// Assert
+			response.StatusCode.Should().Be(HttpStatusCode.OK);
+			body.Should().Contain("Latest API log:");
+			body.Should().Contain(marker);
+		}
+		finally {
+			if (File.Exists(logPath)) {
+				File.Delete(logPath);
+			}
+		}
+	}
+
+	/// <summary>
 	/// Verifies UI settings endpoint rejects non-local API base URLs.
 	/// </summary>
 	[Fact]

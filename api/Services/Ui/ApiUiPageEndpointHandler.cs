@@ -77,21 +77,60 @@ public sealed class ApiUiPageEndpointHandler {
 			return Results.Text("No server logs directory found.", "text/plain", Encoding.UTF8);
 		}
 
-		var latestLogPath = Directory
+		var candidateLogPaths = Directory
 			.GetFiles(logsDirectory, "api-*.log", SearchOption.TopDirectoryOnly)
 			.OrderByDescending(path => File.GetLastWriteTimeUtc(path))
-			.FirstOrDefault();
+			.ToList();
 
-		if (string.IsNullOrWhiteSpace(latestLogPath) || !File.Exists(latestLogPath)) {
+		if (candidateLogPaths.Count == 0) {
 			return Results.Text("No API log files found.", "text/plain", Encoding.UTF8);
 		}
 
-		var allLines = File.ReadAllLines(latestLogPath);
-		var tailLines = allLines.Length <= 400 ? allLines : allLines[^400..];
-		var header = $"Latest API log: {latestLogPath}{Environment.NewLine}Total lines: {allLines.Length}{Environment.NewLine}Showing: {tailLines.Length}{Environment.NewLine}{new string('-', 80)}{Environment.NewLine}";
-		var payload = header + string.Join(Environment.NewLine, tailLines);
+		foreach (var logPath in candidateLogPaths) {
+			if (!File.Exists(logPath)) {
+				continue;
+			}
 
-		return Results.Text(payload, "text/plain", Encoding.UTF8);
+			if (!TryReadTailLines(logPath, 400, out var totalLines, out var tailLines)) {
+				continue;
+			}
+
+			var header = $"Latest API log: {logPath}{Environment.NewLine}Total lines: {totalLines}{Environment.NewLine}Showing: {tailLines.Count}{Environment.NewLine}{new string('-', 80)}{Environment.NewLine}";
+			var payload = header + string.Join(Environment.NewLine, tailLines);
+
+			return Results.Text(payload, "text/plain", Encoding.UTF8);
+		}
+
+		return Results.Text("No readable API log files found.", "text/plain", Encoding.UTF8);
+	}
+
+	private static bool TryReadTailLines(string path, int maxTailLines, out int totalLines, out List<string> tailLines) {
+		totalLines = 0;
+		tailLines = new List<string>();
+
+		try {
+			using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+			using var reader = new StreamReader(stream, Encoding.UTF8, detectEncodingFromByteOrderMarks: true);
+
+			var queue = new Queue<string>(Math.Max(1, maxTailLines));
+			while (reader.ReadLine() is { } line) {
+				totalLines++;
+				if (queue.Count == maxTailLines) {
+					queue.Dequeue();
+				}
+
+				queue.Enqueue(line);
+			}
+
+			tailLines = queue.ToList();
+			return true;
+		}
+		catch (IOException) {
+			return false;
+		}
+		catch (UnauthorizedAccessException) {
+			return false;
+		}
 	}
 
 	private static string? ResolveLogsDirectory() {
