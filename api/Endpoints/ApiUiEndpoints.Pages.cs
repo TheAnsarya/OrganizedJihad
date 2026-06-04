@@ -9,5 +9,8 @@ public static partial class ApiUiEndpoints {
 
 		endpoints.MapGet("/ui/tray-health", (HttpContext context, ApiUiPageEndpointHandler handler) =>
 			handler.GetTrayHealthPageAsync(context));
+
+		endpoints.MapGet("/ui/logs/latest", (HttpContext context, ApiUiPageEndpointHandler handler) =>
+			handler.GetLatestApiLogPage(context));
 	}
 }

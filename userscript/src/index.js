@@ -39,6 +39,7 @@ import GameOverlay from './modules/gameOverlay.js';
 import BattleRecommendationOverlay from './modules/battleRecommendationOverlay.js';
 import DomTargeting from './modules/domTargeting.js';
 import { getConfiguredApiBaseUrl } from './modules/helpers/apiConfig.js';
+import { isGameSurfaceLocation } from './modules/helpers/gameSurfaceGuard.js';
 import NotificationManager from './modules/notificationManager.js';
 import './styles/main.css';
 
@@ -191,6 +192,11 @@ import './styles/main.css';
 	 */
 	async function setupUI() {
 		console.log('[OrganizedJihad] PHASE 2 — Setting up UI...');
+
+		if (!isGameSurfaceLocation(window.location)) {
+			console.log('[OrganizedJihad] Skipping UI/overlay initialization on non-game page:', window.location.href);
+			return;
+		}
 
 		// ─── Status Badge ───────────────────────────────────────────
 		// Floating indicator showing the script is active and counting

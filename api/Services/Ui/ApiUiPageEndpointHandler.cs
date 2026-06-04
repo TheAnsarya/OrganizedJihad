@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using OrganizedJihad.Api.Services.Diagnostics;
 using OrganizedJihad.Data;
+using System.Text;
 
 namespace OrganizedJihad.Api.Services.Ui;
 
@@ -61,5 +62,49 @@ public sealed class ApiUiPageEndpointHandler {
 		var html = _renderer.Render("tray-health.html", _tokenBuilder.BuildTrayHealthTokens(context, healthStatus, handshake, now));
 
 		return Results.Content(html, "text/html");
+	}
+
+	/// <summary>
+	/// Handles GET /ui/logs/latest.
+	/// </summary>
+	public IResult GetLatestApiLogPage(HttpContext context) {
+		if (!_accessPolicy.IsLocalRequest(context)) {
+			return Results.StatusCode(StatusCodes.Status403Forbidden);
+		}
+
+		var logsDirectory = ResolveLogsDirectory();
+		if (string.IsNullOrWhiteSpace(logsDirectory) || !Directory.Exists(logsDirectory)) {
+			return Results.Text("No server logs directory found.", "text/plain", Encoding.UTF8);
+		}
+
+		var latestLogPath = Directory
+			.GetFiles(logsDirectory, "api-*.log", SearchOption.TopDirectoryOnly)
+			.OrderByDescending(path => File.GetLastWriteTimeUtc(path))
+			.FirstOrDefault();
+
+		if (string.IsNullOrWhiteSpace(latestLogPath) || !File.Exists(latestLogPath)) {
+			return Results.Text("No API log files found.", "text/plain", Encoding.UTF8);
+		}
+
+		var allLines = File.ReadAllLines(latestLogPath);
+		var tailLines = allLines.Length <= 400 ? allLines : allLines[^400..];
+		var header = $"Latest API log: {latestLogPath}{Environment.NewLine}Total lines: {allLines.Length}{Environment.NewLine}Showing: {tailLines.Length}{Environment.NewLine}{new string('-', 80)}{Environment.NewLine}";
+		var payload = header + string.Join(Environment.NewLine, tailLines);
+
+		return Results.Text(payload, "text/plain", Encoding.UTF8);
+	}
+
+	private static string? ResolveLogsDirectory() {
+		var appBaseLogs = Path.Combine(AppContext.BaseDirectory, "Logs");
+		if (Directory.Exists(appBaseLogs)) {
+			return appBaseLogs;
+		}
+
+		var cwdLogs = Path.Combine(Directory.GetCurrentDirectory(), "Logs");
+		if (Directory.Exists(cwdLogs)) {
+			return cwdLogs;
+		}
+
+		return null;
 	}
 }

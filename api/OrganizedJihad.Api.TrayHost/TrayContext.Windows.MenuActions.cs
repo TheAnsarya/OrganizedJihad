@@ -8,7 +8,10 @@ internal sealed partial class TrayContext {
 	private ContextMenuStrip BuildMenu() {
 		var menu = new ContextMenuStrip();
 		menu.Items.Add("Open API UI", null, (_, _) => OpenApiUi());
+		menu.Items.Add("Open Swagger UI", null, (_, _) => OpenSwaggerUi());
+		menu.Items.Add("Open OpenAPI JSON", null, (_, _) => OpenOpenApiJson());
 		menu.Items.Add("Open API Health", null, (_, _) => OpenApiHealth());
+		menu.Items.Add("Open API Server Logs", null, (_, _) => OpenApiLogs());
 		menu.Items.Add("Open API Folder", null, (_, _) => OpenApiFolder());
 		menu.Items.Add("Restart API", null, (_, _) => RestartApi());
 		menu.Items.Add("Stop API + Exit", null, (_, _) => StopApiAndExit());
@@ -28,6 +31,30 @@ internal sealed partial class TrayContext {
 		var healthUrl = _options.ApiUrl.TrimEnd('/') + "/ui/tray-health";
 		Process.Start(new ProcessStartInfo {
 			FileName = healthUrl,
+			UseShellExecute = true,
+		});
+	}
+
+	private void OpenSwaggerUi() {
+		var swaggerUrl = _options.ApiUrl.TrimEnd('/') + "/swagger";
+		Process.Start(new ProcessStartInfo {
+			FileName = swaggerUrl,
+			UseShellExecute = true,
+		});
+	}
+
+	private void OpenOpenApiJson() {
+		var openApiJsonUrl = _options.ApiUrl.TrimEnd('/') + "/swagger/v1/swagger.json";
+		Process.Start(new ProcessStartInfo {
+			FileName = openApiJsonUrl,
+			UseShellExecute = true,
+		});
+	}
+
+	private void OpenApiLogs() {
+		var logsUrl = _options.ApiUrl.TrimEnd('/') + "/ui/logs/latest";
+		Process.Start(new ProcessStartInfo {
+			FileName = logsUrl,
 			UseShellExecute = true,
 		});
 	}

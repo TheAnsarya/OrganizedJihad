@@ -119,6 +119,12 @@ const UI_SETTINGS_PATH = '/ui/settings';
 const UI_REPAIR_STATUS_PATH = '/ui/repair-status';
 /** @const {string} Local API path for userscript handshake diagnostics */
 const UI_HANDSHAKE_PATH = '/ui/userscript-handshake';
+/** @const {string} Local API path for Swagger UI */
+const SWAGGER_UI_PATH = '/swagger';
+/** @const {string} Local API path for OpenAPI JSON */
+const OPENAPI_JSON_PATH = '/swagger/v1/swagger.json';
+/** @const {string} Local API path for latest server log snapshot */
+const UI_LOGS_LATEST_PATH = '/ui/logs/latest';
 
 /** @const {string} Local API path for curated external tools catalog */
 const TOOLS_CATALOG_PATH = '/api/sync/tools/catalog';
@@ -294,7 +300,7 @@ class UIManager {
 			// Auto-refresh API Log tab when new calls arrive (debounced)
 			let apiLogTimer = null;
 			this.gameTracker.on('apiLog', () => {
-				if (this.isVisible && (this.currentView === 'apilog' || this.currentView === 'connection')) {
+				if (this.isVisible && this.currentView === 'apilog') {
 					if (apiLogTimer) clearTimeout(apiLogTimer);
 					apiLogTimer = setTimeout(() => {
 						apiLogTimer = null;
@@ -3370,33 +3376,6 @@ class UIManager {
 
 		this._setConnectionNavStatus(apiHealth.ok ? 'online' : (apiHealth.status > 0 || syncStatus?.ok ? 'degraded' : 'offline'));
 
-		const recentCalls = Array.isArray(this.gameTracker?._apiCallLog)
-			? this.gameTracker._apiCallLog.slice(-100).reverse()
-			: [];
-		const recentCallsHtml = recentCalls.length === 0
-			? '<div class="oj-muted" style="font-size:11px;">No recent API calls captured yet.</div>'
-			: recentCalls.map((entry) => {
-				const status = String(entry?.status || 'unknown');
-				const statusClass = status === 'ok'
-					? 'oj-status-ok'
-					: (status === 'error' ? 'oj-status-err' : 'oj-muted');
-				const names = Array.isArray(entry?.callNames) && entry.callNames.length > 0
-					? entry.callNames.join(', ')
-					: '(unknown)';
-				const time = entry?.ts
-					? new Date(entry.ts).toLocaleTimeString()
-					: '--:--:--';
-				return `
-					<div style="padding:6px 0;border-bottom:1px solid #2f2f2f;">
-						<div style="display:flex;justify-content:space-between;gap:8px;align-items:center;">
-							<span class="oj-mono" style="font-size:10px;">${this._escapeHtml(time)}</span>
-							<span class="${statusClass}" style="font-size:10px;text-transform:uppercase;">${this._escapeHtml(status)}</span>
-						</div>
-						<div style="font-size:11px;margin-top:2px;">${this._escapeHtml(names)}</div>
-						<div class="oj-muted" style="font-size:10px;margin-top:1px;">${this._escapeHtml(String(entry?.detail || ''))}</div>
-					</div>`;
-			}).join('');
-
 		const classifyEndpointState = (probe, isCoreHealth = false) => {
 			if (probe?.ok) return 'ok';
 			if (isCoreHealth) {
@@ -3492,16 +3471,12 @@ class UIManager {
 						<button class="oj-btn" id="oj-connection-refresh">Refresh Status</button>
 						<button class="oj-btn" id="oj-connection-open-apilog">Open API Log</button>
 						<button class="oj-btn" id="oj-connection-open-health">Open Health</button>
+						<button class="oj-btn" id="oj-connection-open-swagger">Open Swagger</button>
+						<button class="oj-btn" id="oj-connection-open-openapi">Open OpenAPI JSON</button>
+						<button class="oj-btn" id="oj-connection-open-server-logs">Open Server Logs</button>
 						<button class="oj-btn" id="oj-connection-open-settings">Open UI Settings</button>
 						<button class="oj-btn" id="oj-connection-open-repair">Open Repair Status</button>
 						<button class="oj-btn" id="oj-connection-open-handshake">Open Handshake</button>
-					</div>
-				</div>
-
-				<div class="oj-settings-group">
-					<h4>Recent API Calls (Last 100)</h4>
-					<div style="max-height:260px;overflow:auto;background:#16161a;border:1px solid #333;padding:8px;border-radius:4px;">
-						${recentCallsHtml}
 					</div>
 				</div>
 
@@ -3597,6 +3572,18 @@ class UIManager {
 
 		overlay.querySelector('#oj-connection-open-health')?.addEventListener('click', () => {
 			this._openExternalUrl(this._buildApiUrl(SYNC_HEALTH_PATH));
+		});
+
+		overlay.querySelector('#oj-connection-open-swagger')?.addEventListener('click', () => {
+			this._openExternalUrl(this._buildApiUrl(SWAGGER_UI_PATH));
+		});
+
+		overlay.querySelector('#oj-connection-open-openapi')?.addEventListener('click', () => {
+			this._openExternalUrl(this._buildApiUrl(OPENAPI_JSON_PATH));
+		});
+
+		overlay.querySelector('#oj-connection-open-server-logs')?.addEventListener('click', () => {
+			this._openExternalUrl(this._buildApiUrl(UI_LOGS_LATEST_PATH));
 		});
 
 		overlay.querySelector('#oj-connection-open-settings')?.addEventListener('click', () => {
