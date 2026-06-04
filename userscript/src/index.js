@@ -194,6 +194,9 @@ import './styles/main.css';
 		console.log('[OrganizedJihad] PHASE 2 — Setting up UI...');
 
 		if (!isGameSurfaceLocation(window.location)) {
+			// Guardrail: overlays/panels should never appear on non-game
+			// hero-wars surfaces (community/news/docs). Keep UI init scoped
+			// to actual game runtimes only.
 			console.log('[OrganizedJihad] Skipping UI/overlay initialization on non-game page:', window.location.href);
 			return;
 		}

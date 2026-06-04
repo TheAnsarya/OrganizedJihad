@@ -3333,6 +3333,10 @@ class UIManager {
 	/**
 	 * Render connection and server diagnostics view.
 	 *
+	 * Guardrail: this view is intentionally limited to local API
+	 * connectivity/configuration diagnostics. Do not surface game API
+	 * call-stream content here; keep that in the API Log tab.
+	 *
 	 * @returns {Promise<string>} HTML content
 	 */
 	async renderConnection() {

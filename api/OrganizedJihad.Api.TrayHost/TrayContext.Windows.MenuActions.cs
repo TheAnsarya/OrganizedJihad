@@ -20,7 +20,7 @@ internal sealed partial class TrayContext {
 	}
 
 	private void OpenApiUi() {
-		var uiUrl = _options.ApiUrl.TrimEnd('/') + "/ui";
+		var uiUrl = TrayMenuLinkBuilder.BuildUiUrl(_options.ApiUrl);
 		Process.Start(new ProcessStartInfo {
 			FileName = uiUrl,
 			UseShellExecute = true,
@@ -28,7 +28,7 @@ internal sealed partial class TrayContext {
 	}
 
 	private void OpenApiHealth() {
-		var healthUrl = _options.ApiUrl.TrimEnd('/') + "/ui/tray-health";
+		var healthUrl = TrayMenuLinkBuilder.BuildHealthUrl(_options.ApiUrl);
 		Process.Start(new ProcessStartInfo {
 			FileName = healthUrl,
 			UseShellExecute = true,
@@ -36,7 +36,7 @@ internal sealed partial class TrayContext {
 	}
 
 	private void OpenSwaggerUi() {
-		var swaggerUrl = _options.ApiUrl.TrimEnd('/') + "/swagger";
+		var swaggerUrl = TrayMenuLinkBuilder.BuildSwaggerUrl(_options.ApiUrl);
 		Process.Start(new ProcessStartInfo {
 			FileName = swaggerUrl,
 			UseShellExecute = true,
@@ -44,7 +44,7 @@ internal sealed partial class TrayContext {
 	}
 
 	private void OpenOpenApiJson() {
-		var openApiJsonUrl = _options.ApiUrl.TrimEnd('/') + "/swagger/v1/swagger.json";
+		var openApiJsonUrl = TrayMenuLinkBuilder.BuildOpenApiJsonUrl(_options.ApiUrl);
 		Process.Start(new ProcessStartInfo {
 			FileName = openApiJsonUrl,
 			UseShellExecute = true,
@@ -52,7 +52,7 @@ internal sealed partial class TrayContext {
 	}
 
 	private void OpenApiLogs() {
-		var logsUrl = _options.ApiUrl.TrimEnd('/') + "/ui/logs/latest";
+		var logsUrl = TrayMenuLinkBuilder.BuildLogsUrl(_options.ApiUrl);
 		Process.Start(new ProcessStartInfo {
 			FileName = logsUrl,
 			UseShellExecute = true,
