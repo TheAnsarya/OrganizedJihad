@@ -3,54 +3,210 @@
 <head>
 	<meta charset="utf-8" />
 	<meta name="viewport" content="width=device-width, initial-scale=1" />
-	<title>OrganizedJihad Swagger UI</title>
-	<link rel="stylesheet" href="https://unpkg.com/swagger-ui-dist@5/swagger-ui.css" />
+	<title>OrganizedJihad API Footprint Viewer</title>
 	<style>
+		:root {
+			--bg: #101725;
+			--panel: #1b2b46;
+			--card: #19263b;
+			--ink: #f4f7ff;
+			--muted: #c5d7f5;
+			--line: #334a70;
+			--accent: #9ed6ff;
+		}
+
 		body {
 			margin: 0;
-			background: #101725;
+			background: var(--bg);
+			color: var(--ink);
+			font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
 		}
 
 		.topbar {
 			padding: 10px 14px;
-			background: #1b2b46;
-			color: #f4f7ff;
-			font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+			background: var(--panel);
+			color: var(--ink);
 			display: flex;
 			gap: 10px;
 			align-items: center;
 			justify-content: space-between;
+			border-bottom: 1px solid var(--line);
 		}
 
 		.topbar a {
-			color: #9ed6ff;
+			color: var(--accent);
 			text-decoration: none;
 			font-weight: 600;
+		}
+
+		main {
+			max-width: 1200px;
+			margin: 0 auto;
+			padding: 16px;
+		}
+
+		.summary {
+			background: var(--card);
+			border: 1px solid var(--line);
+			border-radius: 10px;
+			padding: 12px;
+			color: var(--muted);
+		}
+
+		#apiList {
+			display: grid;
+			gap: 10px;
+			margin-top: 12px;
+		}
+
+		.endpoint {
+			background: var(--card);
+			border: 1px solid var(--line);
+			border-radius: 10px;
+			padding: 10px 12px;
+		}
+
+		.method {
+			display: inline-block;
+			min-width: 58px;
+			text-align: center;
+			font-weight: 700;
+			font-size: 12px;
+			padding: 3px 6px;
+			border-radius: 999px;
+			margin-right: 8px;
+		}
+
+		.method.get { background: #1f6f4a; color: #d4ffe9; }
+		.method.post { background: #8a4f1d; color: #ffe7d2; }
+		.method.put { background: #2f547d; color: #d6e9ff; }
+		.method.delete { background: #7a2b2b; color: #ffd8d8; }
+		.method.patch { background: #735b1b; color: #fff3cf; }
+		.method.other { background: #5f5f5f; color: #f0f0f0; }
+
+		.path {
+			font-family: Consolas, 'Courier New', monospace;
+			font-size: 14px;
+		}
+
+		.description {
+			margin-top: 6px;
+			color: var(--muted);
+			font-size: 13px;
+		}
+
+		.error {
+			margin-top: 12px;
+			padding: 10px;
+			border-radius: 8px;
+			background: rgba(122, 43, 43, 0.35);
+			border: 1px solid #9b4242;
+			color: #ffd8d8;
 		}
 	</style>
 </head>
 <body>
 	<div class="topbar">
-		<div>OrganizedJihad API Documentation</div>
+		<div>OrganizedJihad API Footprint Viewer</div>
 		<div>
 			<a href="/ui" target="_blank" rel="noreferrer">Open API UI</a>
 			<span aria-hidden="true">|</span>
 			<a href="/swagger/v1/swagger.json" target="_blank" rel="noreferrer">Open OpenAPI JSON</a>
 		</div>
 	</div>
-	<div id="swagger-ui"></div>
+	<main>
+		<section class="summary">
+			<div id="summaryLine">Loading OpenAPI footprint from /swagger/v1/swagger.json...</div>
+		</section>
+		<section id="apiList" aria-live="polite"></section>
+		<section id="errorBox" class="error" hidden></section>
+	</main>
 
-	<script src="https://unpkg.com/swagger-ui-dist@5/swagger-ui-bundle.js"></script>
 	<script>
-		window.addEventListener('load', function() {
-			SwaggerUIBundle({
-				url: '/swagger/v1/swagger.json',
-				dom_id: '#swagger-ui',
-				deepLinking: true,
-				persistAuthorization: true,
-				displayRequestDuration: true,
-			});
-		});
+		function methodClass(method) {
+			switch (method) {
+				case 'get':
+				case 'post':
+				case 'put':
+				case 'delete':
+				case 'patch':
+					return method;
+				default:
+					return 'other';
+			}
+		}
+
+		function createEndpointCard(method, path, details) {
+			const card = document.createElement('article');
+			card.className = 'endpoint';
+
+			const titleRow = document.createElement('div');
+			const methodChip = document.createElement('span');
+			methodChip.className = 'method ' + methodClass(method);
+			methodChip.textContent = method.toUpperCase();
+
+			const pathNode = document.createElement('span');
+			pathNode.className = 'path';
+			pathNode.textContent = path;
+
+			titleRow.appendChild(methodChip);
+			titleRow.appendChild(pathNode);
+			card.appendChild(titleRow);
+
+			const description = document.createElement('div');
+			description.className = 'description';
+			description.textContent = details.summary || details.description || 'No summary provided.';
+			card.appendChild(description);
+
+			return card;
+		}
+
+		async function renderOpenApiFootprint() {
+			const summaryLine = document.getElementById('summaryLine');
+			const apiList = document.getElementById('apiList');
+			const errorBox = document.getElementById('errorBox');
+
+			try {
+				const response = await fetch('/swagger/v1/swagger.json', { cache: 'no-store' });
+				if (!response.ok) {
+					throw new Error('HTTP ' + response.status);
+				}
+
+				const payload = await response.json();
+				const paths = payload.paths && typeof payload.paths === 'object' ? payload.paths : {};
+				const entries = [];
+
+				for (const path of Object.keys(paths)) {
+					const methods = paths[path];
+					for (const method of Object.keys(methods || {})) {
+						entries.push({
+							method,
+							path,
+							details: methods[method] || {}
+						});
+					}
+				}
+
+				entries.sort((a, b) => {
+					if (a.path === b.path) {
+						return a.method.localeCompare(b.method);
+					}
+					return a.path.localeCompare(b.path);
+				});
+
+				summaryLine.textContent = 'OpenAPI version: ' + (payload.openapi || 'unknown') + ' | Endpoints discovered: ' + entries.length;
+				apiList.innerHTML = '';
+				for (const entry of entries) {
+					apiList.appendChild(createEndpointCard(entry.method, entry.path, entry.details));
+				}
+			} catch (error) {
+				errorBox.hidden = false;
+				errorBox.textContent = 'Could not load OpenAPI footprint: ' + error.message;
+				summaryLine.textContent = 'OpenAPI footprint load failed.';
+			}
+		}
+
+		renderOpenApiFootprint();
 	</script>
 </body>
 </html>

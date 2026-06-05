@@ -210,7 +210,8 @@ public class SyncControllerTests : IClassFixture<WebApplicationFactory<Program>>
 		response.StatusCode.Should().Be(HttpStatusCode.OK);
 		response.Content.Headers.ContentType.Should().NotBeNull();
 		response.Content.Headers.ContentType!.MediaType.Should().Be("text/html");
-		body.Should().Contain("SwaggerUIBundle");
+		body.Should().Contain("API Footprint Viewer");
+		body.Should().Contain("renderOpenApiFootprint");
 		body.Should().Contain("/swagger/v1/swagger.json");
 	}
 

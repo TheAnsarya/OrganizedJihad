@@ -45,5 +45,6 @@ public static partial class ApiUiEndpoints {
 
 		endpoints.MapGet("/swagger/index.html", (HttpContext context, ApiUiPageEndpointHandler handler) =>
 			handler.GetSwaggerUiPage(context));
+
 	}
 }
