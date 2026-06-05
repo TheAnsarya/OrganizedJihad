@@ -41,6 +41,19 @@ This is a browser security boundary, not an installer limitation.
 - The installer should never claim fully silent userscript install.
 - The installer should describe the expected permission/install prompt clearly to reduce confusion.
 
+## Cross-platform runtime note (2026-06-04)
+
+Runtime support now targets Windows, Linux, and macOS release artifacts.
+
+1. API server
+- API server binaries are published for `win-x64`, `linux-x64`, `osx-x64`, and `osx-arm64`.
+- Installer/runtime host starts API directly or via tray host depending on available payload and host capabilities.
+
+2. Tray host
+- Windows uses the WinForms tray implementation.
+- Linux and macOS now use the non-Windows tray runtime host path.
+- If a desktop tray implementation is not available (headless session, restricted desktop shell), runtime host falls back to headless supervision behavior.
+
 ## Installer UI behavior clarification (2026-06-04)
 
 The installer now separates two concepts in the UI:

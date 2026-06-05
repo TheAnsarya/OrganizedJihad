@@ -14,14 +14,26 @@ internal static class Program {
 	}
 }
 #else
+using Avalonia;
+
 namespace OrganizedJihad.Api.TrayHost;
 
 internal static class Program {
 	private static void Main(string[] args) {
 		var options = TrayHostOptions.Parse(args);
-		// Non-Windows supervision loop lives in HeadlessRuntimeHost.
-		using var runtime = new HeadlessRuntimeHost(options);
-		runtime.Run();
+		try {
+			BuildAvaloniaApp(options).StartWithClassicDesktopLifetime(args, Avalonia.Controls.ShutdownMode.OnExplicitShutdown);
+		} catch (Exception ex) {
+			TrayHostRuntimeUtilities.AppendLog(Path.Combine(options.WorkingDirectory, "runtime-host.log"), $"Tray UI startup failed; falling back to headless runtime host: {ex.Message}");
+			using var runtime = new HeadlessRuntimeHost(options);
+			runtime.Run();
+		}
+	}
+
+	private static AppBuilder BuildAvaloniaApp(TrayHostOptions options) {
+		return AppBuilder.Configure(() => new TrayHostNonWindowsApp(options))
+			.UsePlatformDetect()
+			.LogToTrace();
 	}
 }
 #endif

@@ -1,7 +1,7 @@
 param(
 	[string]$Version = '0.2.3',
 	[string]$Configuration = 'Release',
-	[string]$Runtime = 'win-x64',
+	[string]$Runtime = 'win-x64,linux-x64,osx-x64,osx-arm64',
 	[string]$OutputRoot = '.\artifacts',
 	[switch]$SkipMigrationCheck,
 	[switch]$SkipSmokeTest,
