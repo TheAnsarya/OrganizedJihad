@@ -21,6 +21,7 @@ public static class SystemEndpoints {
 				"GET  /ui/tray-health - Local tray health dashboard page",
 				"GET  /ui/daily-report - Daily report JSON payload",
 				"GET  /ui/daily-report/latest - Latest generated daily report JSON payload",
+				"GET  /ui/daily-report/history?limit=30 - Generated daily report history JSON payload",
 				"POST /ui/daily-report/generate - Generate and persist latest daily report JSON payload",
 				"GET  /ui/daily-report/export.csv - Export latest/generated daily report as CSV",
 				"GET  /ui/daily-report-page - Daily report HTML page",

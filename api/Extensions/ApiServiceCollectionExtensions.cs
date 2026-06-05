@@ -21,6 +21,7 @@ public static class ApiServiceCollectionExtensions {
 	public static IServiceCollection AddApiComposition(this IServiceCollection services, IConfiguration configuration) {
 		services.Configure<ApiCallLoggingOptions>(configuration.GetSection("ApiCallLogging"));
 		services.Configure<SwaggerOptions>(configuration.GetSection("Swagger"));
+		services.Configure<DailyReportAutomationOptions>(configuration.GetSection("DailyReportAutomation"));
 
 		services.AddScoped<ApiActionLoggingFilter>();
 
@@ -52,9 +53,11 @@ public static class ApiServiceCollectionExtensions {
 		services.AddSingleton<ApiUiRepairRecommendationBuilder>();
 		services.AddSingleton<ApiUiPageTokenBuilder>();
 		services.AddSingleton<ApiLocalUrlBuilder>();
+		services.AddScoped<ApiUiDailyReportService>();
 		services.AddScoped<ApiUiHealthProbeService>();
 		services.AddSingleton<UserscriptHandshakeDiagnosticsService>();
 		services.AddSingleton<ScheduledTaskProbeService>();
+		services.AddHostedService<ApiUiDailyReportAutomationHostedService>();
 		services.AddScoped<ApiUiSettingsEndpointHandler>();
 		services.AddScoped<ApiUiDiagnosticsEndpointHandler>();
 		services.AddScoped<ApiUiPageEndpointHandler>();

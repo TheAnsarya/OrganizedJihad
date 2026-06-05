@@ -248,6 +248,7 @@ public class SyncControllerTests : IClassFixture<WebApplicationFactory<Program>>
 		body.Should().Contain("Open Health Dashboard");
 		body.Should().Contain("Open Swagger UI");
 		body.Should().Contain("Open Latest Daily Report JSON");
+		body.Should().Contain("Open Daily Report History JSON");
 		body.Should().Contain("Export Daily Report CSV");
 		body.Should().Contain("Generate Daily Report Now");
 		body.Should().Contain("🟢 Good");
@@ -358,6 +359,27 @@ public class SyncControllerTests : IClassFixture<WebApplicationFactory<Program>>
 		var root = document.RootElement;
 		root.TryGetProperty("dateUtc", out _).Should().BeTrue();
 		root.TryGetProperty("checkedUtc", out _).Should().BeTrue();
+	}
+
+	/// <summary>
+	/// Verifies daily report history endpoint returns a history payload with report list.
+	/// </summary>
+	[Fact]
+	public async Task Api_Ui_Daily_Report_History_Should_Return_Payload() {
+		var generateResponse = await _client.PostAsync("/ui/daily-report/generate", content: null);
+		generateResponse.StatusCode.Should().Be(HttpStatusCode.OK);
+
+		var response = await _client.GetAsync("/ui/daily-report/history?limit=10");
+		var json = await response.Content.ReadAsStringAsync();
+
+		response.StatusCode.Should().Be(HttpStatusCode.OK);
+		using var document = JsonDocument.Parse(json);
+		var root = document.RootElement;
+		root.TryGetProperty("generatedAtUtc", out _).Should().BeTrue();
+		root.TryGetProperty("retainedDays", out _).Should().BeTrue();
+		root.TryGetProperty("reports", out var reports).Should().BeTrue();
+		reports.ValueKind.Should().Be(JsonValueKind.Array);
+		reports.GetArrayLength().Should().BeGreaterThan(0);
 	}
 
 	/// <summary>

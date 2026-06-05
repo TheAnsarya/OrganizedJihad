@@ -1,10 +1,10 @@
+using Microsoft.Extensions.Options;
+using OrganizedJihad.Api.Configuration;
 using Microsoft.EntityFrameworkCore;
 using OrganizedJihad.Api.Models.Ui;
 using OrganizedJihad.Api.Services.Diagnostics;
 using OrganizedJihad.Data;
-using OrganizedJihad.Data.Models;
 using System.Text;
-using System.Text.Json;
 
 namespace OrganizedJihad.Api.Services.Ui;
 
@@ -12,13 +12,13 @@ namespace OrganizedJihad.Api.Services.Ui;
 /// Handles API UI page endpoints.
 /// </summary>
 public sealed class ApiUiPageEndpointHandler {
-	private const string LatestDailyReportMetadataKey = "ui_daily_report_latest_v1";
-
 	private readonly ApiUiAccessPolicy _accessPolicy;
 	private readonly ApiUiTemplateRenderer _renderer;
 	private readonly ApiUiPageTokenBuilder _tokenBuilder;
 	private readonly ApiUiHealthProbeService _healthProbe;
 	private readonly UserscriptHandshakeDiagnosticsService _handshakeDiagnostics;
+	private readonly ApiUiDailyReportService _dailyReportService;
+	private readonly DailyReportAutomationOptions _dailyReportOptions;
 	private readonly IDbContextFactory<GameDatabaseContext> _contextFactory;
 
 	/// <summary>
@@ -30,12 +30,16 @@ public sealed class ApiUiPageEndpointHandler {
 		ApiUiPageTokenBuilder tokenBuilder,
 		ApiUiHealthProbeService healthProbe,
 		UserscriptHandshakeDiagnosticsService handshakeDiagnostics,
+		ApiUiDailyReportService dailyReportService,
+		IOptions<DailyReportAutomationOptions> dailyReportOptions,
 		IDbContextFactory<GameDatabaseContext> contextFactory) {
 		_accessPolicy = accessPolicy;
 		_renderer = renderer;
 		_tokenBuilder = tokenBuilder;
 		_healthProbe = healthProbe;
 		_handshakeDiagnostics = handshakeDiagnostics;
+		_dailyReportService = dailyReportService;
+		_dailyReportOptions = dailyReportOptions.Value;
 		_contextFactory = contextFactory;
 	}
 
@@ -117,7 +121,7 @@ public sealed class ApiUiPageEndpointHandler {
 			return Results.StatusCode(StatusCodes.Status403Forbidden);
 		}
 
-		var report = await BuildDailyReportAsync();
+		var report = await _dailyReportService.BuildDailyReportAsync(context.RequestAborted);
 		return Results.Json(report);
 	}
 
@@ -129,7 +133,8 @@ public sealed class ApiUiPageEndpointHandler {
 			return Results.StatusCode(StatusCodes.Status403Forbidden);
 		}
 
-		var report = await LoadStoredDailyReportAsync() ?? await BuildDailyReportAsync();
+		var report = await _dailyReportService.LoadLatestDailyReportAsync(context.RequestAborted)
+			?? await _dailyReportService.BuildDailyReportAsync(context.RequestAborted);
 		return Results.Json(report);
 	}
 
@@ -141,9 +146,25 @@ public sealed class ApiUiPageEndpointHandler {
 			return Results.StatusCode(StatusCodes.Status403Forbidden);
 		}
 
-		var report = await BuildDailyReportAsync();
-		await SaveDailyReportAsync(report);
+		var report = await _dailyReportService.GenerateAndPersistDailyReportAsync(_dailyReportOptions.RetentionDays, context.RequestAborted);
 		return Results.Json(report);
+	}
+
+	/// <summary>
+	/// Handles GET /ui/daily-report/history.
+	/// </summary>
+	public async Task<IResult> GetDailyReportHistoryJsonAsync(HttpContext context, int? limit) {
+		if (!_accessPolicy.IsLocalRequest(context)) {
+			return Results.StatusCode(StatusCodes.Status403Forbidden);
+		}
+
+		var reports = await _dailyReportService.LoadDailyReportHistoryAsync(limit ?? 30, context.RequestAborted);
+		var response = new ApiUiDailyReportHistoryResponse(
+			GeneratedAtUtc: DateTime.UtcNow,
+			RetainedDays: Math.Clamp(_dailyReportOptions.RetentionDays, 1, 365),
+			Reports: reports);
+
+		return Results.Json(response);
 	}
 
 	/// <summary>
@@ -154,8 +175,9 @@ public sealed class ApiUiPageEndpointHandler {
 			return Results.StatusCode(StatusCodes.Status403Forbidden);
 		}
 
-		var report = await LoadStoredDailyReportAsync() ?? await BuildDailyReportAsync();
-		var csv = BuildDailyReportCsv(report);
+		var report = await _dailyReportService.LoadLatestDailyReportAsync(context.RequestAborted)
+			?? await _dailyReportService.BuildDailyReportAsync(context.RequestAborted);
+		var csv = ApiUiDailyReportService.BuildDailyReportCsv(report);
 		var fileName = $"daily-report-{report.DateUtc:yyyy-MM-dd}.csv";
 		return Results.File(Encoding.UTF8.GetBytes(csv), "text/csv", fileName);
 	}
@@ -168,7 +190,7 @@ public sealed class ApiUiPageEndpointHandler {
 			return Results.StatusCode(StatusCodes.Status403Forbidden);
 		}
 
-		var report = await BuildDailyReportAsync();
+		var report = await _dailyReportService.BuildDailyReportAsync(context.RequestAborted);
 		var html = _renderer.Render("daily-report.html", _tokenBuilder.BuildDailyReportTokens(context, report));
 		return Results.Content(html, "text/html");
 	}
@@ -207,141 +229,6 @@ public sealed class ApiUiPageEndpointHandler {
 
 		var html = _renderer.Render("swagger-ui.html", _tokenBuilder.BuildUiTokens(context));
 		return Results.Content(html, "text/html");
-	}
-
-	private async Task<ApiUiDailyReportResponse> BuildDailyReportAsync() {
-		await using var dbContext = await _contextFactory.CreateDbContextAsync();
-		var nowUtc = DateTime.UtcNow;
-		var dayStartUtc = nowUtc.Date;
-		var dayEndUtc = dayStartUtc.AddDays(1);
-
-		var playerSnapshots = await dbContext.PlayerSnapshots.AsNoTracking().CountAsync(item => item.DateCreated >= dayStartUtc && item.DateCreated < dayEndUtc);
-		var arenaBattles = await dbContext.ArenaBattles.AsNoTracking().CountAsync(item => item.DateCreated >= dayStartUtc && item.DateCreated < dayEndUtc);
-		var grandArenaBattles = await dbContext.GrandArenaBattles.AsNoTracking().CountAsync(item => item.DateCreated >= dayStartUtc && item.DateCreated < dayEndUtc);
-		var titanArenaBattles = await dbContext.TitanArenaBattles.AsNoTracking().CountAsync(item => item.DateCreated >= dayStartUtc && item.DateCreated < dayEndUtc);
-		var guildWarBattles = await dbContext.GuildWarBattles.AsNoTracking().CountAsync(item => item.DateCreated >= dayStartUtc && item.DateCreated < dayEndUtc);
-		var raidBossAttacks = await dbContext.RaidBossAttacks.AsNoTracking().CountAsync(item => item.DateCreated >= dayStartUtc && item.DateCreated < dayEndUtc);
-		var expeditionBattles = await dbContext.ExpeditionBattles.AsNoTracking().CountAsync(item => item.DateCreated >= dayStartUtc && item.DateCreated < dayEndUtc);
-		var chestOpenings = await dbContext.ChestOpenings.AsNoTracking().CountAsync(item => item.DateCreated >= dayStartUtc && item.DateCreated < dayEndUtc);
-		var questCompletions = await dbContext.QuestCompletions.AsNoTracking().CountAsync(item => item.DateCreated >= dayStartUtc && item.DateCreated < dayEndUtc);
-		var dailyQuestCompletions = await dbContext.DailyQuestCompletions.AsNoTracking().CountAsync(item => item.DateCreated >= dayStartUtc && item.DateCreated < dayEndUtc);
-		var guildQuestCompletions = await dbContext.GuildQuestCompletions.AsNoTracking().CountAsync(item => item.DateCreated >= dayStartUtc && item.DateCreated < dayEndUtc);
-		var shopPurchases = await dbContext.ShopPurchases.AsNoTracking().CountAsync(item => item.DateCreated >= dayStartUtc && item.DateCreated < dayEndUtc);
-		var resourceTransactions = await dbContext.ResourceTransactions.AsNoTracking().CountAsync(item => item.DateCreated >= dayStartUtc && item.DateCreated < dayEndUtc);
-
-		var heroUpgrades =
-			await dbContext.HeroLevelUpgrades.AsNoTracking().CountAsync(item => item.DateCreated >= dayStartUtc && item.DateCreated < dayEndUtc)
-			+ await dbContext.HeroStarUpgrades.AsNoTracking().CountAsync(item => item.DateCreated >= dayStartUtc && item.DateCreated < dayEndUtc)
-			+ await dbContext.HeroColorUpgrades.AsNoTracking().CountAsync(item => item.DateCreated >= dayStartUtc && item.DateCreated < dayEndUtc)
-			+ await dbContext.HeroSkillUpgrades.AsNoTracking().CountAsync(item => item.DateCreated >= dayStartUtc && item.DateCreated < dayEndUtc)
-			+ await dbContext.HeroArtifactUpgrades.AsNoTracking().CountAsync(item => item.DateCreated >= dayStartUtc && item.DateCreated < dayEndUtc)
-			+ await dbContext.HeroGlyphUpgrades.AsNoTracking().CountAsync(item => item.DateCreated >= dayStartUtc && item.DateCreated < dayEndUtc)
-			+ await dbContext.HeroSkinUpgrades.AsNoTracking().CountAsync(item => item.DateCreated >= dayStartUtc && item.DateCreated < dayEndUtc);
-
-		var titanUpgrades =
-			await dbContext.TitanLevelUpgrades.AsNoTracking().CountAsync(item => item.DateCreated >= dayStartUtc && item.DateCreated < dayEndUtc)
-			+ await dbContext.TitanStarUpgrades.AsNoTracking().CountAsync(item => item.DateCreated >= dayStartUtc && item.DateCreated < dayEndUtc)
-			+ await dbContext.TitanSkillUpgrades.AsNoTracking().CountAsync(item => item.DateCreated >= dayStartUtc && item.DateCreated < dayEndUtc)
-			+ await dbContext.TitanArtifactUpgrades.AsNoTracking().CountAsync(item => item.DateCreated >= dayStartUtc && item.DateCreated < dayEndUtc)
-			+ await dbContext.TitanSkinUpgrades.AsNoTracking().CountAsync(item => item.DateCreated >= dayStartUtc && item.DateCreated < dayEndUtc);
-
-		var inventoryItemUsages = await dbContext.InventoryItemUsages.AsNoTracking().CountAsync(item => item.DateCreated >= dayStartUtc && item.DateCreated < dayEndUtc);
-		var chatMessages = await dbContext.ChatMessages.AsNoTracking().CountAsync(item => item.DateCreated >= dayStartUtc && item.DateCreated < dayEndUtc);
-		var syncTimestampRaw = await dbContext.SyncMetadata.AsNoTracking().Where(item => item.Key == "last_sync_timestamp").Select(item => item.Value).FirstOrDefaultAsync();
-
-		DateTime? lastSyncUtc = null;
-		if (!string.IsNullOrWhiteSpace(syncTimestampRaw) && DateTime.TryParse(syncTimestampRaw, out var parsedSyncUtc)) {
-			lastSyncUtc = DateTime.SpecifyKind(parsedSyncUtc, DateTimeKind.Utc);
-		}
-
-		var battlesTracked = arenaBattles + grandArenaBattles + titanArenaBattles + guildWarBattles + raidBossAttacks + expeditionBattles;
-
-		return new ApiUiDailyReportResponse(
-			DateUtc: dayStartUtc,
-			CheckedUtc: nowUtc,
-			LastSyncUtc: lastSyncUtc,
-			PlayerSnapshots: playerSnapshots,
-			BattlesTracked: battlesTracked,
-			ArenaBattles: arenaBattles,
-			GrandArenaBattles: grandArenaBattles,
-			TitanArenaBattles: titanArenaBattles,
-			GuildWarBattles: guildWarBattles,
-			RaidBossAttacks: raidBossAttacks,
-			ExpeditionBattles: expeditionBattles,
-			ChestOpenings: chestOpenings,
-			QuestCompletions: questCompletions + dailyQuestCompletions + guildQuestCompletions,
-			ShopPurchases: shopPurchases,
-			ResourceTransactions: resourceTransactions,
-			HeroUpgrades: heroUpgrades,
-			TitanUpgrades: titanUpgrades,
-			InventoryItemUsages: inventoryItemUsages,
-			ChatMessages: chatMessages);
-	}
-
-	private async Task<ApiUiDailyReportResponse?> LoadStoredDailyReportAsync() {
-		await using var dbContext = await _contextFactory.CreateDbContextAsync();
-		var payload = await dbContext.SyncMetadata
-			.AsNoTracking()
-			.Where(item => item.Key == LatestDailyReportMetadataKey)
-			.Select(item => item.Value)
-			.FirstOrDefaultAsync();
-
-		if (string.IsNullOrWhiteSpace(payload)) {
-			return null;
-		}
-
-		try {
-			return JsonSerializer.Deserialize<ApiUiDailyReportResponse>(payload);
-		}
-		catch (JsonException) {
-			return null;
-		}
-	}
-
-	private async Task SaveDailyReportAsync(ApiUiDailyReportResponse report) {
-		await using var dbContext = await _contextFactory.CreateDbContextAsync();
-		var json = JsonSerializer.Serialize(report);
-		var existing = await dbContext.SyncMetadata.FirstOrDefaultAsync(item => item.Key == LatestDailyReportMetadataKey);
-
-		if (existing is null) {
-			dbContext.SyncMetadata.Add(new SyncMetadata {
-				Key = LatestDailyReportMetadataKey,
-				Value = json,
-				UpdatedAt = DateTime.UtcNow,
-				Notes = "Latest generated API UI daily report payload",
-			});
-		} else {
-			existing.Value = json;
-			existing.UpdatedAt = DateTime.UtcNow;
-			existing.Notes = "Latest generated API UI daily report payload";
-		}
-
-		await dbContext.SaveChangesAsync();
-	}
-
-	private static string BuildDailyReportCsv(ApiUiDailyReportResponse report) {
-		var sb = new StringBuilder();
-		sb.AppendLine("metric,value");
-		sb.AppendLine($"dateUtc,{report.DateUtc:yyyy-MM-dd}");
-		sb.AppendLine($"checkedUtc,{report.CheckedUtc:u}");
-		sb.AppendLine($"lastSyncUtc,{(report.LastSyncUtc is null ? string.Empty : report.LastSyncUtc.Value.ToString("u"))}");
-		sb.AppendLine($"playerSnapshots,{report.PlayerSnapshots}");
-		sb.AppendLine($"battlesTracked,{report.BattlesTracked}");
-		sb.AppendLine($"arenaBattles,{report.ArenaBattles}");
-		sb.AppendLine($"grandArenaBattles,{report.GrandArenaBattles}");
-		sb.AppendLine($"titanArenaBattles,{report.TitanArenaBattles}");
-		sb.AppendLine($"guildWarBattles,{report.GuildWarBattles}");
-		sb.AppendLine($"raidBossAttacks,{report.RaidBossAttacks}");
-		sb.AppendLine($"expeditionBattles,{report.ExpeditionBattles}");
-		sb.AppendLine($"chestOpenings,{report.ChestOpenings}");
-		sb.AppendLine($"questCompletions,{report.QuestCompletions}");
-		sb.AppendLine($"shopPurchases,{report.ShopPurchases}");
-		sb.AppendLine($"resourceTransactions,{report.ResourceTransactions}");
-		sb.AppendLine($"heroUpgrades,{report.HeroUpgrades}");
-		sb.AppendLine($"titanUpgrades,{report.TitanUpgrades}");
-		sb.AppendLine($"inventoryItemUsages,{report.InventoryItemUsages}");
-		sb.AppendLine($"chatMessages,{report.ChatMessages}");
-		return sb.ToString();
 	}
 
 	private async Task<ApiUiReportingOverviewResponse> BuildReportingOverviewAsync() {

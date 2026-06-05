@@ -19,6 +19,9 @@ public static partial class ApiUiEndpoints {
 		endpoints.MapGet("/ui/daily-report/latest", (HttpContext context, ApiUiPageEndpointHandler handler) =>
 			handler.GetDailyReportLatestJsonAsync(context));
 
+		endpoints.MapGet("/ui/daily-report/history", (HttpContext context, int? limit, ApiUiPageEndpointHandler handler) =>
+			handler.GetDailyReportHistoryJsonAsync(context, limit));
+
 		endpoints.MapPost("/ui/daily-report/generate", (HttpContext context, ApiUiPageEndpointHandler handler) =>
 			handler.GenerateDailyReportJsonAsync(context));
 
