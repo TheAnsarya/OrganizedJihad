@@ -668,8 +668,11 @@ i restarted the api process and nothing happened, are we supposed to be using `S
 
 If we don't have the right dotnet version installed, then install it; after that rebuild the OJ installer and tun it or just reinstall the new apirserver yourself; continue;
 
+continue;
 
+There's no tray icon for the apiserver what happened to it? fix it! I can't the new API UI without it!; continue;
 
+Ok, `http://localhost:5124/docs/` works, but where are the battle team recommendations? where are the all the hero/titan/inventory/mail/actions/events/airship/shop/tower/arena/dungeon/guildraid/ToE/consumables/etc logging/tracking api points in the apiserver? Aren't we tracking everything on the server and only temporarily storing it on the browser? make that effort with issues/etc and implement; work many issues and slices continue;
 
 
 
