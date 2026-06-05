@@ -656,6 +656,24 @@ continue;
 
 Create a new branch for testing/benchmarks/battle-team-recommendations/other work and move to it, DO NOT do general work on the `main` branch, always use a sub-branch (add that to the copilot instructions); Create tests and benchmarks for everything; Create a guide for how the battle team recommendations work (do they live in the userscript or the api server? they're supposed to be in the server); start the remaining roadmap item for additional API/UI reporting visualizations as a new issue slice and implement the first chart/report card page; continue;
 
+That is too many chat logs, merge them into one log per day; go back and merge previous logs, one per day; add to the copilot instructions that we should only have one chat log per day; start the remaining roadmap items; make more tests and benchmarks for the userscript, the apiserver, and the installer; the apiserver has a swagger menu item but the swagger page is 404 so make the swagger documentation work; The 'API UI' menu item opens `http://localhost:5124/ui` and this page needs a health selction that has red=bag/green=good icons and dashboard, and needs a link to the swagger UI; continue;
+
+continue;
+continue;
+continue;
+
+`http://localhost:5124/swagger` still does not work, make swagger work so we can see the whole serverspi api footprint; continue;
+
+i restarted the api process and nothing happened, are we supposed to be using `Scalar UI` and OpenAPI instead of swagger? Use the most modern standards and practices and packages, set it up and remove the uneeded old libraries, you'll need to update the apiserver tray icon context menu as well to just say "API documentation" or something; also it looks like we're still using "preview" dotnet 10 when it's already been release as stable so update our dotnet projects to use the release version; `https://github.com/TheAnsarya/OrganizedJihad/actions/runs/27024198186` this action always fails, fix it!; continue;
+
+If we don't have the right dotnet version installed, then install it; after that rebuild the OJ installer and tun it or just reinstall the new apirserver yourself; continue;
+
+
+
+
+
+
+
 
 
 

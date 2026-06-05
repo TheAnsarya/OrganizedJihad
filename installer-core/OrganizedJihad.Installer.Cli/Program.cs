@@ -231,11 +231,19 @@ internal sealed class InstallerWorkflow {
 		CopyDirectory(source, destination);
 		LogDirectorySnapshot("API payload destination", destination, maxEntries: 12);
 
-		var runtimeHostSource = ResolveOptionalDirectoryCandidate(
+		var runtimeHostSourceCandidates = new[] {
+			Path.Combine(repositoryRoot, "artifacts", "runtime-host-publish-win-x64"),
+			Path.Combine(repositoryRoot, "api", "OrganizedJihad.Api.TrayHost", "bin", "Release", "net10.0-windows10.0.19041.0", "win-x64", "publish"),
+			Path.GetFullPath(Path.Combine(_baseDir, "..", "..", "..", "..", "..", "api", "OrganizedJihad.Api.TrayHost", "bin", "Release", "net10.0-windows10.0.19041.0", "win-x64", "publish")),
 			Path.Combine(_baseDir, "bundled", "runtime-host"),
 			Path.Combine(_baseDir, "bundled", "api-tray"),
 			Path.Combine(_baseDir, "runtime-host"),
-			Path.Combine(_baseDir, "api-tray"));
+			Path.Combine(_baseDir, "api-tray"),
+		};
+
+		LogDirectoryCandidates("Runtime host payload source", runtimeHostSourceCandidates);
+		var runtimeHostSource = ResolveOptionalDirectoryCandidate(
+			runtimeHostSourceCandidates);
 		if (string.IsNullOrWhiteSpace(runtimeHostSource)) {
 			Console.WriteLine("[OJ Installer.Cli] Runtime host payload not found in known bundle locations.");
 		}
