@@ -69,6 +69,8 @@ A two-tier game tracking solution for Hero Wars that captures, stores, and analy
 **Every Copilot session MUST produce or update a session log** in `~docs/copilot-chats/`.
 
 - **File naming**: `YYYY-MM-DD-<short-description>.md` (e.g., `2026-02-21-overlay-window-fixes.md`)
+- **File naming**: `YYYY-MM-DD.md` only (exactly one log file per day)
+- **Consolidation rule**: If multiple files exist for the same date, merge them into that single `YYYY-MM-DD.md` file and remove date-duplicate variants.
 - **Content must include**:
   - Date and session number
   - Summary of what was accomplished
@@ -274,5 +276,5 @@ OrganizedJihad/
 13. 🔄 Comprehensive test coverage (569/16 — heroNames, syncClient, apiMonitor added)
 14. 🔄 Performance benchmarking
 15. 🔄 Refactor: Extract gameTracker.js handler groups into tracker modules (#102)
-16. ⬜ Additional API/UI reporting visualizations
-17. ⬜ Automated daily report generation
+16. 🔄 Additional API/UI reporting visualizations
+17. 🔄 Automated daily report generation

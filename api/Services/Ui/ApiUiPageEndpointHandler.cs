@@ -154,6 +154,18 @@ public sealed class ApiUiPageEndpointHandler {
 		return Results.Content(html, "text/html");
 	}
 
+	/// <summary>
+	/// Handles GET /swagger and /swagger/index.html.
+	/// </summary>
+	public IResult GetSwaggerUiPage(HttpContext context) {
+		if (!_accessPolicy.IsLocalRequest(context)) {
+			return Results.StatusCode(StatusCodes.Status403Forbidden);
+		}
+
+		var html = _renderer.Render("swagger-ui.html", _tokenBuilder.BuildUiTokens(context));
+		return Results.Content(html, "text/html");
+	}
+
 	private async Task<ApiUiDailyReportResponse> BuildDailyReportAsync() {
 		await using var dbContext = await _contextFactory.CreateDbContextAsync();
 		var nowUtc = DateTime.UtcNow;

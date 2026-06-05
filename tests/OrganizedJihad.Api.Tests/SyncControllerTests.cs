@@ -198,6 +198,23 @@ public class SyncControllerTests : IClassFixture<WebApplicationFactory<Program>>
 	}
 
 	/// <summary>
+	/// Verifies local Swagger UI route serves HTML content.
+	/// </summary>
+	[Theory]
+	[InlineData("/swagger")]
+	[InlineData("/swagger/index.html")]
+	public async Task Swagger_Ui_Route_Should_Return_Html(string route) {
+		var response = await _client.GetAsync(route);
+		var body = await response.Content.ReadAsStringAsync();
+
+		response.StatusCode.Should().Be(HttpStatusCode.OK);
+		response.Content.Headers.ContentType.Should().NotBeNull();
+		response.Content.Headers.ContentType!.MediaType.Should().Be("text/html");
+		body.Should().Contain("SwaggerUIBundle");
+		body.Should().Contain("/swagger/v1/swagger.json");
+	}
+
+	/// <summary>
 	/// Verifies middleware preserves caller correlation id and echoes it in response headers.
 	/// </summary>
 	[Fact]
@@ -227,6 +244,11 @@ public class SyncControllerTests : IClassFixture<WebApplicationFactory<Program>>
 		response.Content.Headers.ContentType!.MediaType.Should().Be("text/html");
 		body.Should().Contain("OrganizedJihad API Control");
 		body.Should().Contain("/ui/settings");
+		body.Should().Contain("Health Status Mode");
+		body.Should().Contain("Open Health Dashboard");
+		body.Should().Contain("Open Swagger UI");
+		body.Should().Contain("🟢 Good");
+		body.Should().Contain("🔴 Bad");
 	}
 
 	/// <summary>

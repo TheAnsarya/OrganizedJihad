@@ -15,7 +15,8 @@
 		"test:watch": "jest --watch",
 		"test:coverage": "jest --coverage",
 		"test:verbose": "jest --verbose",
-		"install:check": "node scripts/install-health-check.mjs"
+		"install:check": "node scripts/install-health-check.mjs",
+		"benchmark:compression": "node scripts/benchmark-hero-compression.mjs"
 	},
 	"keywords": [
 		"tampermonkey",

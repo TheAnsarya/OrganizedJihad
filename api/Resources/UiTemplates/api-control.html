@@ -80,6 +80,14 @@
 			color: var(--warn);
 		}
 
+		.bad {
+			color: #ff7272;
+		}
+
+		.good {
+			color: #9ce87a;
+		}
+
 		.actions {
 			display: flex;
 			flex-wrap: wrap;
@@ -103,6 +111,104 @@
 			padding: 2px 6px;
 			border-radius: 6px;
 		}
+
+		.health-mode-row {
+			margin-top: 10px;
+			display: flex;
+			align-items: center;
+			gap: 10px;
+			flex-wrap: wrap;
+		}
+
+		.health-mode-row select {
+			padding: 7px;
+			border-radius: 8px;
+			border: 1px solid var(--line);
+			background: var(--oj-brown-dark);
+			color: var(--ink);
+		}
+
+		.health-legend {
+			display: flex;
+			gap: 8px;
+			flex-wrap: wrap;
+		}
+
+		.health-chip {
+			padding: 4px 8px;
+			border-radius: 999px;
+			font-size: 12px;
+			font-weight: 700;
+			border: 1px solid var(--line);
+		}
+
+		.health-chip.bad {
+			background: rgba(255, 114, 114, 0.2);
+		}
+
+		.health-chip.good {
+			background: rgba(156, 232, 122, 0.2);
+		}
+
+		.summary-line {
+			color: var(--muted);
+		}
+
+		.summary-line.primary {
+			margin-top: 10px;
+		}
+
+		.summary-line.secondary {
+			margin-top: 6px;
+		}
+
+		.settings-intro {
+			margin-bottom: 10px;
+		}
+
+		.settings-grid {
+			display: grid;
+			gap: 8px;
+		}
+
+		.settings-checkbox {
+			display: flex;
+			gap: 8px;
+			align-items: center;
+			color: var(--ink);
+		}
+
+		.settings-field {
+			display: grid;
+			gap: 4px;
+		}
+
+		.settings-field-label {
+			color: var(--ink);
+		}
+
+		.settings-input,
+		.settings-textarea {
+			padding: 8px;
+			border-radius: 8px;
+			border: 1px solid var(--line);
+			background: var(--oj-brown-dark);
+			color: var(--ink);
+		}
+
+		.save-settings-button {
+			cursor: pointer;
+			padding: 9px 12px;
+			border-radius: 8px;
+			border: 1px solid var(--oj-brown-light);
+			background: rgba(212, 130, 29, 0.16);
+			color: var(--accent);
+			font-weight: 600;
+		}
+
+		.settings-status {
+			color: var(--muted);
+		}
 	</style>
 </head>
 <body>
@@ -117,6 +223,18 @@
 				<h2>Service Status</h2>
 				<div id="healthState" class="stat">Checking...</div>
 				<p id="healthDetail">Probing <code>__BASE_URL__/api/sync/health</code></p>
+				<div class="health-mode-row">
+					<label for="healthModeSelect">Health Status Mode</label>
+					<select id="healthModeSelect" aria-label="Health status mode selector">
+						<option value="auto" selected>Auto (probe API)</option>
+						<option value="good">Force Good</option>
+						<option value="bad">Force Bad</option>
+					</select>
+					<div class="health-legend" aria-label="Health status icon legend">
+						<span class="health-chip good">🟢 Good</span>
+						<span class="health-chip bad">🔴 Bad</span>
+					</div>
+				</div>
 			</section>
 
 			<section class="card">
@@ -130,10 +248,12 @@
 				<p>
 					If userscript, API, or tray startup behavior needs repair, rerun installer script from your install bundle.
 				</p>
-				<div id="repairSummary" style="margin-top: 10px; color: var(--muted);">Checking runtime artifacts...</div>
-				<div id="taskSummary" style="margin-top: 6px; color: var(--muted);">Checking startup task status...</div>
-				<div id="handshakeSummary" style="margin-top: 6px; color: var(--muted);">Checking userscript handshake...</div>
+				<div id="repairSummary" class="summary-line primary">Checking runtime artifacts...</div>
+				<div id="taskSummary" class="summary-line secondary">Checking startup task status...</div>
+				<div id="handshakeSummary" class="summary-line secondary">Checking userscript handshake...</div>
 				<div class="actions">
+					<a class="button" href="/ui/tray-health" target="_blank" rel="noreferrer">Open Health Dashboard</a>
+					<a class="button" href="/swagger" target="_blank" rel="noreferrer">Open Swagger UI</a>
 					<a class="button" href="/api/sync/health" target="_blank" rel="noreferrer">Open Health JSON</a>
 					<a class="button" href="/api/sync/last-sync" target="_blank" rel="noreferrer">Open Last Sync JSON</a>
 					<a class="button" href="/api/sync/stats" target="_blank" rel="noreferrer">Open Stats JSON</a>
@@ -142,40 +262,63 @@
 					<a class="button" href="/ui/reporting-overview" target="_blank" rel="noreferrer">Open Reporting Overview JSON</a>
 					<a class="button" href="/ui/reporting-overview-page" target="_blank" rel="noreferrer">Open Reporting Chart Page</a>
 					<a class="button" href="/ui/userscript-handshake" target="_blank" rel="noreferrer">Open Handshake JSON</a>
-					<a class="button" id="openHeroWars" href="https://www.hero-wars.com/" target="_blank" rel="noreferrer">Open Hero Wars</a>
+					<a class="button" id="openHeroWars" href="https://www.hero-wars.com/" target="_blank" rel="noopener noreferrer">Open Hero Wars</a>
 				</div>
 			</section>
 
 			<section class="card">
 				<h2>UI Settings</h2>
-				<p style="margin-bottom: 10px;">Settings are persisted to <code>api-ui-settings.json</code> next to API binaries.</p>
-				<div style="display: grid; gap: 8px;">
-					<label style="display: flex; gap: 8px; align-items: center; color: var(--ink);">
+				<p class="settings-intro">Settings are persisted to <code>api-ui-settings.json</code> next to API binaries.</p>
+				<div class="settings-grid">
+					<label class="settings-checkbox">
 						<input id="autoHealth" type="checkbox" />
 						Auto-load health and sync data when page opens
 					</label>
-					<label style="display: grid; gap: 4px;">
-						<span style="color: var(--ink);">API Base URL</span>
-						<input id="apiBaseUrl" type="text" style="padding: 8px; border-radius: 8px; border: 1px solid var(--line); background: var(--oj-brown-dark); color: var(--ink);" />
+					<label class="settings-field">
+						<span class="settings-field-label">API Base URL</span>
+						<input id="apiBaseUrl" class="settings-input" type="text" />
 					</label>
-					<label style="display: grid; gap: 4px;">
-						<span style="color: var(--ink);">Preferred Hero Wars URL</span>
-						<input id="heroWarsUrl" type="text" style="padding: 8px; border-radius: 8px; border: 1px solid var(--line); background: var(--oj-brown-dark); color: var(--ink);" />
+					<label class="settings-field">
+						<span class="settings-field-label">Preferred Hero Wars URL</span>
+						<input id="heroWarsUrl" class="settings-input" type="text" />
 					</label>
-					<label style="display: grid; gap: 4px;">
-						<span style="color: var(--ink);">Notes</span>
-						<textarea id="uiNotes" rows="3" style="padding: 8px; border-radius: 8px; border: 1px solid var(--line); background: var(--oj-brown-dark); color: var(--ink);"></textarea>
+					<label class="settings-field">
+						<span class="settings-field-label">Notes</span>
+						<textarea id="uiNotes" class="settings-textarea" rows="3"></textarea>
 					</label>
 					<div class="actions">
-						<button id="saveSettings" style="cursor: pointer; padding: 9px 12px; border-radius: 8px; border: 1px solid var(--oj-brown-light); background: rgba(212, 130, 29, 0.16); color: var(--accent); font-weight: 600;">Save Settings</button>
+						<button id="saveSettings" class="save-settings-button">Save Settings</button>
 					</div>
-					<div id="settingsStatus" style="color: var(--muted);">Loading settings...</div>
+					<div id="settingsStatus" class="settings-status">Loading settings...</div>
 				</div>
 			</section>
 		</div>
 	</main>
 
 	<script>
+		function applyHealthDisplay(state, detail, cssClass) {
+			const healthState = document.getElementById('healthState');
+			const healthDetail = document.getElementById('healthDetail');
+			healthState.textContent = state;
+			healthState.className = 'stat ' + cssClass;
+			healthDetail.textContent = detail;
+		}
+
+		function applyHealthModeOverride() {
+			const mode = document.getElementById('healthModeSelect').value;
+			if (mode === 'good') {
+				applyHealthDisplay('🟢 Good', 'Manual mode: forced good status.', 'good');
+				return true;
+			}
+
+			if (mode === 'bad') {
+				applyHealthDisplay('🔴 Bad', 'Manual mode: forced bad status.', 'bad');
+				return true;
+			}
+
+			return false;
+		}
+
 		async function fetchJson(url) {
 			const response = await fetch(url, { cache: 'no-store' });
 			if (!response.ok) {
@@ -185,22 +328,20 @@
 		}
 
 		async function refresh() {
-			const healthState = document.getElementById('healthState');
-			const healthDetail = document.getElementById('healthDetail');
 			const lastSync = document.getElementById('lastSync');
 			const repairSummary = document.getElementById('repairSummary');
 			const taskSummary = document.getElementById('taskSummary');
 			const handshakeSummary = document.getElementById('handshakeSummary');
 
+			if (applyHealthModeOverride()) {
+				return;
+			}
+
 			try {
 				const health = await fetchJson('/api/sync/health');
-				healthState.textContent = 'Online';
-				healthState.className = 'stat ok';
-				healthDetail.textContent = 'API health: ' + JSON.stringify(health);
+				applyHealthDisplay('🟢 Good', 'API health: ' + JSON.stringify(health), 'good');
 			} catch (error) {
-				healthState.textContent = 'Unavailable';
-				healthState.className = 'stat warn';
-				healthDetail.textContent = 'Health probe failed: ' + error.message;
+				applyHealthDisplay('🔴 Bad', 'Health probe failed: ' + error.message, 'bad');
 			}
 
 			try {
@@ -281,6 +422,7 @@
 		}
 
 		document.getElementById('saveSettings').addEventListener('click', saveSettings);
+		document.getElementById('healthModeSelect').addEventListener('change', refresh);
 
 		(async function initialize() {
 			await loadSettings();

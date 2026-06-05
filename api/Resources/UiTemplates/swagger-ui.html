@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en">
+<head>
+	<meta charset="utf-8" />
+	<meta name="viewport" content="width=device-width, initial-scale=1" />
+	<title>OrganizedJihad Swagger UI</title>
+	<link rel="stylesheet" href="https://unpkg.com/swagger-ui-dist@5/swagger-ui.css" />
+	<style>
+		body {
+			margin: 0;
+			background: #101725;
+		}
+
+		.topbar {
+			padding: 10px 14px;
+			background: #1b2b46;
+			color: #f4f7ff;
+			font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+			display: flex;
+			gap: 10px;
+			align-items: center;
+			justify-content: space-between;
+		}
+
+		.topbar a {
+			color: #9ed6ff;
+			text-decoration: none;
+			font-weight: 600;
+		}
+	</style>
+</head>
+<body>
+	<div class="topbar">
+		<div>OrganizedJihad API Documentation</div>
+		<div>
+			<a href="/ui" target="_blank" rel="noreferrer">Open API UI</a>
+			<span aria-hidden="true">|</span>
+			<a href="/swagger/v1/swagger.json" target="_blank" rel="noreferrer">Open OpenAPI JSON</a>
+		</div>
+	</div>
+	<div id="swagger-ui"></div>
+
+	<script src="https://unpkg.com/swagger-ui-dist@5/swagger-ui-bundle.js"></script>
+	<script>
+		window.addEventListener('load', function() {
+			SwaggerUIBundle({
+				url: '/swagger/v1/swagger.json',
+				dom_id: '#swagger-ui',
+				deepLinking: true,
+				persistAuthorization: true,
+				displayRequestDuration: true,
+			});
+		});
+	</script>
+</body>
+</html>
