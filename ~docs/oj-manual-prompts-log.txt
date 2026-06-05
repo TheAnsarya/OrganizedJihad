@@ -630,14 +630,31 @@ continue;
 The userscript Connnection tab shouldn't be health checks only, it should be everything the userscript calls to the apiserver, but it should not log the game's api, only our apiserver connection api server; continue;
 
 Work through the issues, several issues at a time, finish all the work represented in the issue and update the issues adding to the descriptions and comments and close when completed; work through all of the issues; continue;
+Work through the issues, several issues at a time, finish all the work represented in the issue and update the issues adding to the descriptions and comments and close when completed; work through all of the issues; continue;
 
+That is too many chat logs, merge them into one log per day; go back and merge previous logs, one per day; make the userscript tab button area wrap the tab button to multiple rows, noit just one row, so we don't disappear when the width is short; clear the whole issues list by implementing and finishing these issues, but don't close them early, make more issues for the epics and subissues for the work efforts, as you implement everything, complete the work until the list is empty; then continue battle recs and issues work; and continue;
 
+go back through all recent github issues and comments, we posted "\n" as a literal two characters instead of an actual newline;;, fix those descriptions and comments; continue;
 
+Work through the issues, several issues at a time, finish all the work represented in the issue and update the issues adding to the descriptions and comments and close when completed; work through all of the issues; continue;
 
+git commit everything
 
+continue;
+continue;
 
+continue; continue; continue; continue; continue; continue; continue; continue; continue; continue; continue; continue; continue; continue; continue; continue; continue; continue; continue; continue;
 
+Create a new release and push it to github
 
+The new release needs a real description that covers everything that was changed. There is also no built artifacts attached to the release, build the installer with all the new release stuff and attach those built artifacts to the release itself; continue;
+
+I thought we were also releasing for Linux and MacOS. There should be installers for those as well in the release so make them and add them and update the docs/release-description; Does the apiserver and the tray icon also work on Linux and MacOS? If not fix that problem, make the tray icon and apiserver work on the other OS'es (epics/issues/plans/docs/etc.); continue;
+
+continue;
+continue;
+
+Create a new branch for testing/benchmarks/battle-team-recommendations/other work and move to it, DO NOT do general work on the `main` branch, always use a sub-branch (add that to the copilot instructions); Create tests and benchmarks for everything; Create a guide for how the battle team recommendations work (do they live in the userscript or the api server? they're supposed to be in the server); start the remaining roadmap item for additional API/UI reporting visualizations as a new issue slice and implement the first chart/report card page; continue;
 
 
 
@@ -700,6 +717,7 @@ Only stop when I say ‘stop’.
 If output is too long for one message, continue automatically in the next message.
 &&&&&&&&&&&&&&&
 
+That is too many chat logs, merge them into one log per day, I don't want a million files; go back and merge previous logs, one per day; then continue battle recs and issues work; and continue;
 
 
 
