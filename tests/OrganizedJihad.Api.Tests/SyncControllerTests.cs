@@ -319,6 +319,43 @@ public class SyncControllerTests : IClassFixture<WebApplicationFactory<Program>>
 	}
 
 	/// <summary>
+	/// Verifies reporting overview endpoint returns JSON payload with chart points.
+	/// </summary>
+	[Fact]
+	public async Task Api_Ui_Reporting_Overview_Should_Return_Payload() {
+		// Act
+		var response = await _client.GetAsync("/ui/reporting-overview");
+		var json = await response.Content.ReadAsStringAsync();
+
+		// Assert
+		response.StatusCode.Should().Be(HttpStatusCode.OK);
+		using var document = JsonDocument.Parse(json);
+		var root = document.RootElement;
+		root.TryGetProperty("generatedAtUtc", out _).Should().BeTrue();
+		root.TryGetProperty("lastSyncUtc", out _).Should().BeTrue();
+		root.TryGetProperty("dailyPoints", out var dailyPoints).Should().BeTrue();
+		dailyPoints.ValueKind.Should().Be(JsonValueKind.Array);
+		dailyPoints.GetArrayLength().Should().Be(7);
+	}
+
+	/// <summary>
+	/// Verifies reporting overview chart page route serves HTML content.
+	/// </summary>
+	[Fact]
+	public async Task Api_Ui_Reporting_Overview_Page_Should_Return_Html() {
+		// Act
+		var response = await _client.GetAsync("/ui/reporting-overview-page");
+		var body = await response.Content.ReadAsStringAsync();
+
+		// Assert
+		response.StatusCode.Should().Be(HttpStatusCode.OK);
+		response.Content.Headers.ContentType.Should().NotBeNull();
+		response.Content.Headers.ContentType!.MediaType.Should().Be("text/html");
+		body.Should().Contain("Reporting Overview");
+		body.Should().Contain("Open Reporting Overview JSON");
+	}
+
+	/// <summary>
 	/// Verifies latest API logs endpoint includes tail content when a log file exists.
 	/// </summary>
 	[Fact]

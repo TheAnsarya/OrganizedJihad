@@ -45,6 +45,14 @@ A two-tier game tracking solution for Hero Wars that captures, stores, and analy
 3. **Commit messages**: Reference issue number (e.g., `Fix #42: Add battle tracking`)
 4. **Prompt tracking**: Log significant AI-assisted sessions in `~docs/copilot-chats/`
 
+## Mandatory Branch Workflow
+
+- Never perform general implementation work directly on `main`.
+- Always create/switch to a scoped sub-branch first, using issue-aligned naming:
+  - `feature/<issue-number>-description`
+  - `fix/<issue-number>-description`
+- Keep `main` for integration/merge only.
+
 ## AI Workflow Overrides (Repository-Specific)
 
 - `~docs/oj-manual-prompts-log.txt` is a manually maintained file.

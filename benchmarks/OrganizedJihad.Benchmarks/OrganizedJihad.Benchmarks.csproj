@@ -15,6 +15,7 @@
 
 	<ItemGroup>
 		<ProjectReference Include="..\..\data\OrganizedJihad.Data.csproj" />
+		<ProjectReference Include="..\..\api\OrganizedJihad.Api.csproj" />
 	</ItemGroup>
 
 </Project>

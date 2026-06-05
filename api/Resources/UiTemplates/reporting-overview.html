@@ -1,0 +1,252 @@
+<!doctype html>
+<html lang="en">
+<head>
+	<meta charset="utf-8" />
+	<meta name="viewport" content="width=device-width, initial-scale=1" />
+	<title>OrganizedJihad Reporting Overview</title>
+	<style>
+		:root {
+			--bg: #2a1f14;
+			--card: #3a143c;
+			--ink: #fdf3dc;
+			--muted: #d2b583;
+			--line: #90590d;
+			--accent: #d4821d;
+			--chartA: #d4821d;
+			--chartB: #e2a957;
+		}
+
+		* { box-sizing: border-box; }
+
+		body {
+			margin: 0;
+			font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+			background: radial-gradient(circle at top, #3a143c 0%, #2a1f14 60%);
+			color: var(--ink);
+		}
+
+		main {
+			max-width: 1100px;
+			margin: 0 auto;
+			padding: 28px 18px 40px;
+		}
+
+		h1 {
+			margin: 0 0 8px;
+			font-size: 30px;
+		}
+
+		p { margin: 0; color: var(--muted); }
+
+		.card {
+			background: rgba(58, 20, 60, 0.92);
+			border: 1px solid var(--line);
+			border-radius: 12px;
+			padding: 14px;
+			margin-top: 14px;
+		}
+
+		.cards {
+			display: grid;
+			grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+			gap: 12px;
+			margin-top: 14px;
+		}
+
+		.small-card {
+			background: rgba(42, 31, 20, 0.35);
+			border: 1px solid var(--line);
+			border-radius: 10px;
+			padding: 10px;
+		}
+
+		.label {
+			font-size: 12px;
+			color: var(--muted);
+			text-transform: uppercase;
+			letter-spacing: 0.05em;
+		}
+
+		.value {
+			font-size: 28px;
+			font-weight: 700;
+			color: var(--accent);
+			margin-top: 6px;
+		}
+
+		.chart {
+			display: flex;
+			align-items: flex-end;
+			gap: 10px;
+			height: 220px;
+			margin-top: 12px;
+		}
+
+		.bar-group {
+			display: flex;
+			flex-direction: column;
+			align-items: center;
+			justify-content: flex-end;
+			flex: 1;
+			min-width: 0;
+		}
+
+		.bar-wrap {
+			display: flex;
+			gap: 4px;
+			align-items: flex-end;
+			height: 180px;
+		}
+
+		.bar {
+			width: 12px;
+			border-radius: 4px 4px 0 0;
+		}
+
+		.bar.battles { background: var(--chartA); }
+		.bar.resources { background: var(--chartB); }
+
+		.day {
+			font-size: 11px;
+			color: var(--muted);
+			margin-top: 6px;
+			white-space: nowrap;
+		}
+
+		.legend {
+			display: flex;
+			gap: 12px;
+			margin-top: 8px;
+			font-size: 12px;
+			color: var(--muted);
+		}
+
+		.legend .dot {
+			display: inline-block;
+			width: 10px;
+			height: 10px;
+			border-radius: 50%;
+			margin-right: 4px;
+		}
+
+		a.button {
+			display: inline-block;
+			margin-top: 12px;
+			padding: 9px 12px;
+			border-radius: 8px;
+			border: 1px solid var(--line);
+			background: rgba(212, 130, 29, 0.16);
+			color: var(--accent);
+			text-decoration: none;
+			font-weight: 600;
+		}
+	</style>
+</head>
+<body>
+	<main>
+		<h1>Reporting Overview</h1>
+		<p>Seven-day trend cards and first chart surface for API/UI reporting visualizations.</p>
+
+		<section class="card">
+			<div class="cards">
+				<div class="small-card">
+					<div class="label">Total Battles (7d)</div>
+					<div id="totalBattles" class="value">...</div>
+				</div>
+				<div class="small-card">
+					<div class="label">Quest Completions (7d)</div>
+					<div id="totalQuests" class="value">...</div>
+				</div>
+				<div class="small-card">
+					<div class="label">Resource Transactions (7d)</div>
+					<div id="totalResources" class="value">...</div>
+				</div>
+				<div class="small-card">
+					<div class="label">Last Sync UTC</div>
+					<div id="lastSyncUtc" class="value" style="font-size: 15px;">...</div>
+				</div>
+			</div>
+
+			<div class="legend">
+				<span><span class="dot" style="background: var(--chartA);"></span>Battles</span>
+				<span><span class="dot" style="background: var(--chartB);"></span>Resources</span>
+			</div>
+			<div id="trendChart" class="chart"></div>
+			<div id="generatedUtc" class="day" style="margin-top: 10px;">Generated: ...</div>
+			<a class="button" href="/ui/reporting-overview" target="_blank" rel="noreferrer">Open Reporting Overview JSON</a>
+		</section>
+	</main>
+
+	<script>
+		async function fetchOverview() {
+			const response = await fetch('/ui/reporting-overview', { cache: 'no-store' });
+			if (!response.ok) {
+				throw new Error('HTTP ' + response.status);
+			}
+			return await response.json();
+		}
+
+		function renderChart(points) {
+			const chart = document.getElementById('trendChart');
+			chart.innerHTML = '';
+			if (!Array.isArray(points) || points.length === 0) {
+				chart.textContent = 'No data points available.';
+				return;
+			}
+
+			const maxY = Math.max(1, ...points.map(point => Math.max(point.battlesTracked || 0, point.resourceTransactions || 0)));
+			for (const point of points) {
+				const battles = Math.max(0, Number(point.battlesTracked || 0));
+				const resources = Math.max(0, Number(point.resourceTransactions || 0));
+				const battlesHeight = Math.max(2, Math.round((battles / maxY) * 170));
+				const resourcesHeight = Math.max(2, Math.round((resources / maxY) * 170));
+				const date = new Date(point.dateUtc);
+				const label = Number.isNaN(date.getTime())
+					? String(point.dateUtc || '')
+					: date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+
+				const group = document.createElement('div');
+				group.className = 'bar-group';
+
+				const wrap = document.createElement('div');
+				wrap.className = 'bar-wrap';
+
+				const battlesBar = document.createElement('div');
+				battlesBar.className = 'bar battles';
+				battlesBar.style.height = battlesHeight + 'px';
+				battlesBar.title = 'Battles: ' + battles;
+
+				const resourcesBar = document.createElement('div');
+				resourcesBar.className = 'bar resources';
+				resourcesBar.style.height = resourcesHeight + 'px';
+				resourcesBar.title = 'Resources: ' + resources;
+
+				const day = document.createElement('div');
+				day.className = 'day';
+				day.textContent = label;
+
+				wrap.appendChild(battlesBar);
+				wrap.appendChild(resourcesBar);
+				group.appendChild(wrap);
+				group.appendChild(day);
+				chart.appendChild(group);
+			}
+		}
+
+		(async function initialize() {
+			try {
+				const payload = await fetchOverview();
+				const points = Array.isArray(payload.dailyPoints) ? payload.dailyPoints : [];
+				document.getElementById('totalBattles').textContent = points.reduce((sum, p) => sum + Number(p.battlesTracked || 0), 0);
+				document.getElementById('totalQuests').textContent = points.reduce((sum, p) => sum + Number(p.questCompletions || 0), 0);
+				document.getElementById('totalResources').textContent = points.reduce((sum, p) => sum + Number(p.resourceTransactions || 0), 0);
+				document.getElementById('lastSyncUtc').textContent = payload.lastSyncUtc || 'none';
+				document.getElementById('generatedUtc').textContent = 'Generated: ' + (payload.generatedAtUtc || 'unknown');
+				renderChart(points);
+			} catch (error) {
+				document.getElementById('trendChart').textContent = 'Failed to load reporting data: ' + error.message;
+			}
+		})();
+	</script>
+</body>
+</html>

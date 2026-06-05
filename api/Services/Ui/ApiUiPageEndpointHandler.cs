@@ -130,6 +130,30 @@ public sealed class ApiUiPageEndpointHandler {
 		return Results.Content(html, "text/html");
 	}
 
+	/// <summary>
+	/// Handles GET /ui/reporting-overview.
+	/// </summary>
+	public async Task<IResult> GetReportingOverviewJsonAsync(HttpContext context) {
+		if (!_accessPolicy.IsLocalRequest(context)) {
+			return Results.StatusCode(StatusCodes.Status403Forbidden);
+		}
+
+		var overview = await BuildReportingOverviewAsync();
+		return Results.Json(overview);
+	}
+
+	/// <summary>
+	/// Handles GET /ui/reporting-overview-page.
+	/// </summary>
+	public IResult GetReportingOverviewPage(HttpContext context) {
+		if (!_accessPolicy.IsLocalRequest(context)) {
+			return Results.StatusCode(StatusCodes.Status403Forbidden);
+		}
+
+		var html = _renderer.Render("reporting-overview.html", _tokenBuilder.BuildUiTokens(context));
+		return Results.Content(html, "text/html");
+	}
+
 	private async Task<ApiUiDailyReportResponse> BuildDailyReportAsync() {
 		await using var dbContext = await _contextFactory.CreateDbContextAsync();
 		var nowUtc = DateTime.UtcNow;
@@ -197,6 +221,55 @@ public sealed class ApiUiPageEndpointHandler {
 			TitanUpgrades: titanUpgrades,
 			InventoryItemUsages: inventoryItemUsages,
 			ChatMessages: chatMessages);
+	}
+
+	private async Task<ApiUiReportingOverviewResponse> BuildReportingOverviewAsync() {
+		await using var dbContext = await _contextFactory.CreateDbContextAsync();
+		var nowUtc = DateTime.UtcNow;
+		var todayStartUtc = nowUtc.Date;
+		var points = new List<ApiUiReportingDailyPoint>(capacity: 7);
+
+		for (var i = 6; i >= 0; i--) {
+			var dayStartUtc = todayStartUtc.AddDays(-i);
+			var dayEndUtc = dayStartUtc.AddDays(1);
+
+			var arenaBattles = await dbContext.ArenaBattles.AsNoTracking().CountAsync(item => item.DateCreated >= dayStartUtc && item.DateCreated < dayEndUtc);
+			var grandArenaBattles = await dbContext.GrandArenaBattles.AsNoTracking().CountAsync(item => item.DateCreated >= dayStartUtc && item.DateCreated < dayEndUtc);
+			var titanArenaBattles = await dbContext.TitanArenaBattles.AsNoTracking().CountAsync(item => item.DateCreated >= dayStartUtc && item.DateCreated < dayEndUtc);
+			var guildWarBattles = await dbContext.GuildWarBattles.AsNoTracking().CountAsync(item => item.DateCreated >= dayStartUtc && item.DateCreated < dayEndUtc);
+			var raidBossAttacks = await dbContext.RaidBossAttacks.AsNoTracking().CountAsync(item => item.DateCreated >= dayStartUtc && item.DateCreated < dayEndUtc);
+			var expeditionBattles = await dbContext.ExpeditionBattles.AsNoTracking().CountAsync(item => item.DateCreated >= dayStartUtc && item.DateCreated < dayEndUtc);
+
+			var questCompletions = await dbContext.QuestCompletions.AsNoTracking().CountAsync(item => item.DateCreated >= dayStartUtc && item.DateCreated < dayEndUtc)
+				+ await dbContext.DailyQuestCompletions.AsNoTracking().CountAsync(item => item.DateCreated >= dayStartUtc && item.DateCreated < dayEndUtc)
+				+ await dbContext.GuildQuestCompletions.AsNoTracking().CountAsync(item => item.DateCreated >= dayStartUtc && item.DateCreated < dayEndUtc);
+
+			var resourceTransactions = await dbContext.ResourceTransactions.AsNoTracking().CountAsync(item => item.DateCreated >= dayStartUtc && item.DateCreated < dayEndUtc);
+			var chestOpenings = await dbContext.ChestOpenings.AsNoTracking().CountAsync(item => item.DateCreated >= dayStartUtc && item.DateCreated < dayEndUtc);
+
+			points.Add(new ApiUiReportingDailyPoint(
+				DateUtc: dayStartUtc,
+				BattlesTracked: arenaBattles + grandArenaBattles + titanArenaBattles + guildWarBattles + raidBossAttacks + expeditionBattles,
+				QuestCompletions: questCompletions,
+				ResourceTransactions: resourceTransactions,
+				ChestOpenings: chestOpenings));
+		}
+
+		var syncTimestampRaw = await dbContext.SyncMetadata
+			.AsNoTracking()
+			.Where(item => item.Key == "last_sync_timestamp")
+			.Select(item => item.Value)
+			.FirstOrDefaultAsync();
+
+		DateTime? lastSyncUtc = null;
+		if (!string.IsNullOrWhiteSpace(syncTimestampRaw) && DateTime.TryParse(syncTimestampRaw, out var parsedSyncUtc)) {
+			lastSyncUtc = DateTime.SpecifyKind(parsedSyncUtc, DateTimeKind.Utc);
+		}
+
+		return new ApiUiReportingOverviewResponse(
+			GeneratedAtUtc: nowUtc,
+			LastSyncUtc: lastSyncUtc,
+			DailyPoints: points);
 	}
 
 	private static bool TryReadTailLines(string path, int maxTailLines, out int totalLines, out List<string> tailLines) {
