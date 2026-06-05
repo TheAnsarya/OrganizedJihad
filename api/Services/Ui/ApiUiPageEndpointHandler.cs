@@ -2,7 +2,9 @@ using Microsoft.EntityFrameworkCore;
 using OrganizedJihad.Api.Models.Ui;
 using OrganizedJihad.Api.Services.Diagnostics;
 using OrganizedJihad.Data;
+using OrganizedJihad.Data.Models;
 using System.Text;
+using System.Text.Json;
 
 namespace OrganizedJihad.Api.Services.Ui;
 
@@ -10,6 +12,8 @@ namespace OrganizedJihad.Api.Services.Ui;
 /// Handles API UI page endpoints.
 /// </summary>
 public sealed class ApiUiPageEndpointHandler {
+	private const string LatestDailyReportMetadataKey = "ui_daily_report_latest_v1";
+
 	private readonly ApiUiAccessPolicy _accessPolicy;
 	private readonly ApiUiTemplateRenderer _renderer;
 	private readonly ApiUiPageTokenBuilder _tokenBuilder;
@@ -115,6 +119,45 @@ public sealed class ApiUiPageEndpointHandler {
 
 		var report = await BuildDailyReportAsync();
 		return Results.Json(report);
+	}
+
+	/// <summary>
+	/// Handles GET /ui/daily-report/latest.
+	/// </summary>
+	public async Task<IResult> GetDailyReportLatestJsonAsync(HttpContext context) {
+		if (!_accessPolicy.IsLocalRequest(context)) {
+			return Results.StatusCode(StatusCodes.Status403Forbidden);
+		}
+
+		var report = await LoadStoredDailyReportAsync() ?? await BuildDailyReportAsync();
+		return Results.Json(report);
+	}
+
+	/// <summary>
+	/// Handles POST /ui/daily-report/generate.
+	/// </summary>
+	public async Task<IResult> GenerateDailyReportJsonAsync(HttpContext context) {
+		if (!_accessPolicy.IsLocalRequest(context)) {
+			return Results.StatusCode(StatusCodes.Status403Forbidden);
+		}
+
+		var report = await BuildDailyReportAsync();
+		await SaveDailyReportAsync(report);
+		return Results.Json(report);
+	}
+
+	/// <summary>
+	/// Handles GET /ui/daily-report/export.csv.
+	/// </summary>
+	public async Task<IResult> ExportDailyReportCsvAsync(HttpContext context) {
+		if (!_accessPolicy.IsLocalRequest(context)) {
+			return Results.StatusCode(StatusCodes.Status403Forbidden);
+		}
+
+		var report = await LoadStoredDailyReportAsync() ?? await BuildDailyReportAsync();
+		var csv = BuildDailyReportCsv(report);
+		var fileName = $"daily-report-{report.DateUtc:yyyy-MM-dd}.csv";
+		return Results.File(Encoding.UTF8.GetBytes(csv), "text/csv", fileName);
 	}
 
 	/// <summary>
@@ -233,6 +276,72 @@ public sealed class ApiUiPageEndpointHandler {
 			TitanUpgrades: titanUpgrades,
 			InventoryItemUsages: inventoryItemUsages,
 			ChatMessages: chatMessages);
+	}
+
+	private async Task<ApiUiDailyReportResponse?> LoadStoredDailyReportAsync() {
+		await using var dbContext = await _contextFactory.CreateDbContextAsync();
+		var payload = await dbContext.SyncMetadata
+			.AsNoTracking()
+			.Where(item => item.Key == LatestDailyReportMetadataKey)
+			.Select(item => item.Value)
+			.FirstOrDefaultAsync();
+
+		if (string.IsNullOrWhiteSpace(payload)) {
+			return null;
+		}
+
+		try {
+			return JsonSerializer.Deserialize<ApiUiDailyReportResponse>(payload);
+		}
+		catch (JsonException) {
+			return null;
+		}
+	}
+
+	private async Task SaveDailyReportAsync(ApiUiDailyReportResponse report) {
+		await using var dbContext = await _contextFactory.CreateDbContextAsync();
+		var json = JsonSerializer.Serialize(report);
+		var existing = await dbContext.SyncMetadata.FirstOrDefaultAsync(item => item.Key == LatestDailyReportMetadataKey);
+
+		if (existing is null) {
+			dbContext.SyncMetadata.Add(new SyncMetadata {
+				Key = LatestDailyReportMetadataKey,
+				Value = json,
+				UpdatedAt = DateTime.UtcNow,
+				Notes = "Latest generated API UI daily report payload",
+			});
+		} else {
+			existing.Value = json;
+			existing.UpdatedAt = DateTime.UtcNow;
+			existing.Notes = "Latest generated API UI daily report payload";
+		}
+
+		await dbContext.SaveChangesAsync();
+	}
+
+	private static string BuildDailyReportCsv(ApiUiDailyReportResponse report) {
+		var sb = new StringBuilder();
+		sb.AppendLine("metric,value");
+		sb.AppendLine($"dateUtc,{report.DateUtc:yyyy-MM-dd}");
+		sb.AppendLine($"checkedUtc,{report.CheckedUtc:u}");
+		sb.AppendLine($"lastSyncUtc,{(report.LastSyncUtc is null ? string.Empty : report.LastSyncUtc.Value.ToString("u"))}");
+		sb.AppendLine($"playerSnapshots,{report.PlayerSnapshots}");
+		sb.AppendLine($"battlesTracked,{report.BattlesTracked}");
+		sb.AppendLine($"arenaBattles,{report.ArenaBattles}");
+		sb.AppendLine($"grandArenaBattles,{report.GrandArenaBattles}");
+		sb.AppendLine($"titanArenaBattles,{report.TitanArenaBattles}");
+		sb.AppendLine($"guildWarBattles,{report.GuildWarBattles}");
+		sb.AppendLine($"raidBossAttacks,{report.RaidBossAttacks}");
+		sb.AppendLine($"expeditionBattles,{report.ExpeditionBattles}");
+		sb.AppendLine($"chestOpenings,{report.ChestOpenings}");
+		sb.AppendLine($"questCompletions,{report.QuestCompletions}");
+		sb.AppendLine($"shopPurchases,{report.ShopPurchases}");
+		sb.AppendLine($"resourceTransactions,{report.ResourceTransactions}");
+		sb.AppendLine($"heroUpgrades,{report.HeroUpgrades}");
+		sb.AppendLine($"titanUpgrades,{report.TitanUpgrades}");
+		sb.AppendLine($"inventoryItemUsages,{report.InventoryItemUsages}");
+		sb.AppendLine($"chatMessages,{report.ChatMessages}");
+		return sb.ToString();
 	}
 
 	private async Task<ApiUiReportingOverviewResponse> BuildReportingOverviewAsync() {

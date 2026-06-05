@@ -247,6 +247,9 @@ public class SyncControllerTests : IClassFixture<WebApplicationFactory<Program>>
 		body.Should().Contain("Health Status Mode");
 		body.Should().Contain("Open Health Dashboard");
 		body.Should().Contain("Open Swagger UI");
+		body.Should().Contain("Open Latest Daily Report JSON");
+		body.Should().Contain("Export Daily Report CSV");
+		body.Should().Contain("Generate Daily Report Now");
 		body.Should().Contain("🟢 Good");
 		body.Should().Contain("🔴 Bad");
 	}
@@ -321,6 +324,55 @@ public class SyncControllerTests : IClassFixture<WebApplicationFactory<Program>>
 		root.TryGetProperty("battlesTracked", out _).Should().BeTrue();
 		root.TryGetProperty("questCompletions", out _).Should().BeTrue();
 		root.TryGetProperty("resourceTransactions", out _).Should().BeTrue();
+	}
+
+	/// <summary>
+	/// Verifies daily report generate endpoint persists and returns payload.
+	/// </summary>
+	[Fact]
+	public async Task Api_Ui_Daily_Report_Generate_Should_Return_Payload() {
+		var response = await _client.PostAsync("/ui/daily-report/generate", content: null);
+		var json = await response.Content.ReadAsStringAsync();
+
+		response.StatusCode.Should().Be(HttpStatusCode.OK);
+		using var document = JsonDocument.Parse(json);
+		var root = document.RootElement;
+		root.TryGetProperty("dateUtc", out _).Should().BeTrue();
+		root.TryGetProperty("checkedUtc", out _).Should().BeTrue();
+		root.TryGetProperty("battlesTracked", out _).Should().BeTrue();
+	}
+
+	/// <summary>
+	/// Verifies latest daily report endpoint returns persisted/generated payload.
+	/// </summary>
+	[Fact]
+	public async Task Api_Ui_Daily_Report_Latest_Should_Return_Payload() {
+		var generateResponse = await _client.PostAsync("/ui/daily-report/generate", content: null);
+		generateResponse.StatusCode.Should().Be(HttpStatusCode.OK);
+
+		var response = await _client.GetAsync("/ui/daily-report/latest");
+		var json = await response.Content.ReadAsStringAsync();
+
+		response.StatusCode.Should().Be(HttpStatusCode.OK);
+		using var document = JsonDocument.Parse(json);
+		var root = document.RootElement;
+		root.TryGetProperty("dateUtc", out _).Should().BeTrue();
+		root.TryGetProperty("checkedUtc", out _).Should().BeTrue();
+	}
+
+	/// <summary>
+	/// Verifies daily report CSV export route returns CSV content.
+	/// </summary>
+	[Fact]
+	public async Task Api_Ui_Daily_Report_Csv_Export_Should_Return_Csv() {
+		var response = await _client.GetAsync("/ui/daily-report/export.csv");
+		var body = await response.Content.ReadAsStringAsync();
+
+		response.StatusCode.Should().Be(HttpStatusCode.OK);
+		response.Content.Headers.ContentType.Should().NotBeNull();
+		response.Content.Headers.ContentType!.MediaType.Should().Be("text/csv");
+		body.Should().Contain("metric,value");
+		body.Should().Contain("battlesTracked");
 	}
 
 	/// <summary>
