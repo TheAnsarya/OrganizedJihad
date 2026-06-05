@@ -31,6 +31,9 @@ public static partial class ApiUiEndpoints {
 		endpoints.MapGet("/ui/daily-report-page", (HttpContext context, ApiUiPageEndpointHandler handler) =>
 			handler.GetDailyReportPageAsync(context));
 
+		endpoints.MapGet("/ui/daily-report-history-page", (HttpContext context, ApiUiPageEndpointHandler handler) =>
+			handler.GetDailyReportHistoryPage(context));
+
 		endpoints.MapGet("/ui/reporting-overview", (HttpContext context, ApiUiPageEndpointHandler handler) =>
 			handler.GetReportingOverviewJsonAsync(context));
 

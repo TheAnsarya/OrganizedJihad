@@ -196,6 +196,18 @@ public sealed class ApiUiPageEndpointHandler {
 	}
 
 	/// <summary>
+	/// Handles GET /ui/daily-report-history-page.
+	/// </summary>
+	public IResult GetDailyReportHistoryPage(HttpContext context) {
+		if (!_accessPolicy.IsLocalRequest(context)) {
+			return Results.StatusCode(StatusCodes.Status403Forbidden);
+		}
+
+		var html = _renderer.Render("daily-report-history.html", _tokenBuilder.BuildUiTokens(context));
+		return Results.Content(html, "text/html");
+	}
+
+	/// <summary>
 	/// Handles GET /ui/reporting-overview.
 	/// </summary>
 	public async Task<IResult> GetReportingOverviewJsonAsync(HttpContext context) {

@@ -249,6 +249,7 @@ public class SyncControllerTests : IClassFixture<WebApplicationFactory<Program>>
 		body.Should().Contain("Open Swagger UI");
 		body.Should().Contain("Open Latest Daily Report JSON");
 		body.Should().Contain("Open Daily Report History JSON");
+		body.Should().Contain("Open Daily Report History Page");
 		body.Should().Contain("Export Daily Report CSV");
 		body.Should().Contain("Generate Daily Report Now");
 		body.Should().Contain("🟢 Good");
@@ -412,6 +413,21 @@ public class SyncControllerTests : IClassFixture<WebApplicationFactory<Program>>
 		response.Content.Headers.ContentType!.MediaType.Should().Be("text/html");
 		body.Should().Contain("OrganizedJihad Daily Report");
 		body.Should().Contain("Open Daily Report JSON");
+	}
+
+	/// <summary>
+	/// Verifies daily report history page endpoint returns HTML content.
+	/// </summary>
+	[Fact]
+	public async Task Api_Ui_Daily_Report_History_Page_Should_Return_Html() {
+		var response = await _client.GetAsync("/ui/daily-report-history-page");
+		var body = await response.Content.ReadAsStringAsync();
+
+		response.StatusCode.Should().Be(HttpStatusCode.OK);
+		response.Content.Headers.ContentType.Should().NotBeNull();
+		response.Content.Headers.ContentType!.MediaType.Should().Be("text/html");
+		body.Should().Contain("Daily Report History");
+		body.Should().Contain("/ui/daily-report/history?limit=");
 	}
 
 	/// <summary>

@@ -25,6 +25,7 @@ public static class SystemEndpoints {
 				"POST /ui/daily-report/generate - Generate and persist latest daily report JSON payload",
 				"GET  /ui/daily-report/export.csv - Export latest/generated daily report as CSV",
 				"GET  /ui/daily-report-page - Daily report HTML page",
+				"GET  /ui/daily-report-history-page - Daily report history HTML page",
 				"GET  /ui/reporting-overview - Seven-day reporting overview JSON payload",
 				"GET  /ui/reporting-overview-page - Seven-day reporting overview chart page",
 				"GET  /swagger - Local Swagger UI page",

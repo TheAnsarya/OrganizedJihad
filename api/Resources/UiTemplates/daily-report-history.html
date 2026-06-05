@@ -1,0 +1,248 @@
+<!doctype html>
+<html lang="en">
+<head>
+	<meta charset="utf-8" />
+	<meta name="viewport" content="width=device-width, initial-scale=1" />
+	<title>OrganizedJihad Daily Report History</title>
+	<style>
+		:root {
+			--bg: #2a1f14;
+			--card: #3a143c;
+			--ink: #fdf3dc;
+			--muted: #d2b583;
+			--line: #90590d;
+			--accent: #d4821d;
+			--bar: #e2a957;
+		}
+
+		* {
+			box-sizing: border-box;
+		}
+
+		body {
+			margin: 0;
+			font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+			background: radial-gradient(circle at top, #3a143c 0%, #2a1f14 60%);
+			color: var(--ink);
+		}
+
+		main {
+			max-width: 1200px;
+			margin: 0 auto;
+			padding: 28px 18px 40px;
+		}
+
+		h1 {
+			margin: 0 0 8px;
+			font-size: 30px;
+		}
+
+		p {
+			margin: 0;
+			color: var(--muted);
+		}
+
+		.card {
+			background: rgba(58, 20, 60, 0.92);
+			border: 1px solid var(--line);
+			border-radius: 12px;
+			padding: 14px;
+			margin-top: 14px;
+		}
+
+		.actions {
+			display: flex;
+			gap: 8px;
+			flex-wrap: wrap;
+			margin-top: 12px;
+		}
+
+		label {
+			font-size: 14px;
+			color: var(--ink);
+		}
+
+		input[type='number'] {
+			padding: 8px;
+			border-radius: 8px;
+			border: 1px solid var(--line);
+			background: #2a1f14;
+			color: var(--ink);
+			width: 120px;
+		}
+
+		button,
+		a.button {
+			display: inline-block;
+			padding: 9px 12px;
+			border-radius: 8px;
+			border: 1px solid var(--line);
+			background: rgba(212, 130, 29, 0.16);
+			color: var(--accent);
+			text-decoration: none;
+			font-weight: 600;
+			cursor: pointer;
+		}
+
+		.table-wrap {
+			overflow-x: auto;
+			margin-top: 12px;
+		}
+
+		table {
+			width: 100%;
+			border-collapse: collapse;
+		}
+
+		th,
+		td {
+			padding: 8px;
+			border-bottom: 1px solid rgba(144, 89, 13, 0.5);
+			text-align: left;
+			font-size: 14px;
+		}
+
+		th {
+			font-size: 12px;
+			text-transform: uppercase;
+			letter-spacing: 0.04em;
+			color: var(--muted);
+		}
+
+		.metric-cell {
+			min-width: 220px;
+		}
+
+		.bar-rail {
+			height: 8px;
+			border-radius: 999px;
+			background: rgba(42, 31, 20, 0.75);
+			overflow: hidden;
+			margin-top: 6px;
+		}
+
+		.bar-fill {
+			height: 8px;
+			background: var(--bar);
+		}
+
+		#statusLine {
+			margin-top: 8px;
+			color: var(--muted);
+		}
+	</style>
+</head>
+<body>
+	<main>
+		<h1>Daily Report History</h1>
+		<p>Generated report snapshots retained in SyncMetadata for trend checks and quick comparisons.</p>
+
+		<section class="card">
+			<div class="actions">
+				<label for="limitInput">Rows to load</label>
+				<input id="limitInput" type="number" min="1" max="365" value="30" />
+				<button id="refreshButton" type="button">Refresh History</button>
+				<a class="button" id="jsonLink" href="/ui/daily-report/history?limit=30" target="_blank" rel="noreferrer">Open History JSON</a>
+				<a class="button" href="/ui/daily-report/export.csv" target="_blank" rel="noreferrer">Open Latest CSV Export</a>
+			</div>
+			<div id="statusLine">Loading history...</div>
+			<div class="table-wrap">
+				<table>
+					<thead>
+						<tr>
+							<th>Date (UTC)</th>
+							<th>Battles</th>
+							<th>Resources</th>
+							<th>Quests</th>
+							<th class="metric-cell">Battle Density</th>
+							<th>Generated (UTC)</th>
+						</tr>
+					</thead>
+					<tbody id="historyBody"></tbody>
+				</table>
+			</div>
+		</section>
+	</main>
+
+	<script>
+		function clampLimit(value) {
+			const n = Number(value);
+			if (!Number.isFinite(n)) {
+				return 30;
+			}
+
+			return Math.min(365, Math.max(1, Math.trunc(n)));
+		}
+
+		function updateJsonLink(limit) {
+			const jsonLink = document.getElementById('jsonLink');
+			jsonLink.href = '/ui/daily-report/history?limit=' + limit;
+		}
+
+		function renderRows(reports) {
+			const body = document.getElementById('historyBody');
+			body.innerHTML = '';
+
+			if (!Array.isArray(reports) || reports.length === 0) {
+				const tr = document.createElement('tr');
+				const td = document.createElement('td');
+				td.colSpan = 6;
+				td.textContent = 'No history snapshots found.';
+				tr.appendChild(td);
+				body.appendChild(tr);
+				return;
+			}
+
+			const maxBattles = Math.max(1, ...reports.map(report => Number(report.battlesTracked || 0)));
+
+			for (const report of reports) {
+				const battles = Number(report.battlesTracked || 0);
+				const resources = Number(report.resourceTransactions || 0);
+				const quests = Number(report.questCompletions || 0);
+				const densityPercent = Math.max(0, Math.min(100, Math.round((battles / maxBattles) * 100)));
+
+				const tr = document.createElement('tr');
+				tr.innerHTML = [
+					'<td>' + (report.dateUtc || '') + '</td>',
+					'<td>' + battles + '</td>',
+					'<td>' + resources + '</td>',
+					'<td>' + quests + '</td>',
+					'<td class="metric-cell"><div>' + densityPercent + '%</div><div class="bar-rail"><div class="bar-fill" style="width: ' + densityPercent + '%;"></div></div></td>',
+					'<td>' + (report.checkedUtc || '') + '</td>'
+				].join('');
+
+				body.appendChild(tr);
+			}
+		}
+
+		async function loadHistory() {
+			const limitInput = document.getElementById('limitInput');
+			const statusLine = document.getElementById('statusLine');
+			const limit = clampLimit(limitInput.value);
+			limitInput.value = String(limit);
+			updateJsonLink(limit);
+
+			statusLine.textContent = 'Loading history...';
+			try {
+				const response = await fetch('/ui/daily-report/history?limit=' + limit, { cache: 'no-store' });
+				if (!response.ok) {
+					throw new Error('HTTP ' + response.status);
+				}
+
+				const payload = await response.json();
+				const reports = Array.isArray(payload.reports) ? payload.reports : [];
+				renderRows(reports);
+				statusLine.textContent = 'Loaded ' + reports.length + ' snapshot(s). Generated at ' + (payload.generatedAtUtc || 'unknown') + '.';
+			} catch (error) {
+				renderRows([]);
+				statusLine.textContent = 'Failed to load history: ' + error.message;
+			}
+		}
+
+		document.getElementById('refreshButton').addEventListener('click', loadHistory);
+		document.getElementById('limitInput').addEventListener('change', loadHistory);
+
+		loadHistory();
+	</script>
+</body>
+</html>
