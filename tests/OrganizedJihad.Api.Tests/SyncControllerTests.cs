@@ -198,21 +198,21 @@ public class SyncControllerTests : IClassFixture<WebApplicationFactory<Program>>
 	}
 
 	/// <summary>
-	/// Verifies local Swagger UI route serves HTML content.
+	/// Verifies Scalar API documentation route serves HTML content.
 	/// </summary>
 	[Theory]
+	[InlineData("/docs")]
 	[InlineData("/swagger")]
 	[InlineData("/swagger/index.html")]
-	public async Task Swagger_Ui_Route_Should_Return_Html(string route) {
+	public async Task Api_Documentation_Route_Should_Return_Html(string route) {
 		var response = await _client.GetAsync(route);
 		var body = await response.Content.ReadAsStringAsync();
 
 		response.StatusCode.Should().Be(HttpStatusCode.OK);
 		response.Content.Headers.ContentType.Should().NotBeNull();
 		response.Content.Headers.ContentType!.MediaType.Should().Be("text/html");
-		body.Should().Contain("API Footprint Viewer");
-		body.Should().Contain("renderOpenApiFootprint");
-		body.Should().Contain("/swagger/v1/swagger.json");
+		body.Should().Contain("scalar.aspnetcore.js");
+		body.Should().Contain("OrganizedJihad API Documentation");
 	}
 
 	/// <summary>
@@ -247,7 +247,7 @@ public class SyncControllerTests : IClassFixture<WebApplicationFactory<Program>>
 		body.Should().Contain("/ui/settings");
 		body.Should().Contain("Health Status Mode");
 		body.Should().Contain("Open Health Dashboard");
-		body.Should().Contain("Open Swagger UI");
+		body.Should().Contain("Open API Documentation");
 		body.Should().Contain("Open Latest Daily Report JSON");
 		body.Should().Contain("Open Daily Report History JSON");
 		body.Should().Contain("Open Daily Report History Page");

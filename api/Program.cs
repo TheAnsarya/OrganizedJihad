@@ -10,6 +10,7 @@ using OrganizedJihad.Api.Configuration;
 using OrganizedJihad.Api.Endpoints;
 using OrganizedJihad.Api.Extensions;
 using OrganizedJihad.Api.Middleware;
+using Scalar.AspNetCore;
 using Serilog;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -32,6 +33,12 @@ await app.InitializeDatabaseAsync();
 
 if (swaggerOptions.Enabled) {
 	app.MapOpenApi("/swagger/v1/swagger.json");
+	app.MapScalarApiReference("/docs", options => {
+		options.Title = "OrganizedJihad API Documentation";
+		options.OpenApiRoutePattern = "/swagger/{documentName}/swagger.json";
+	});
+	app.MapGet("/swagger", () => Results.Redirect("/docs", false));
+	app.MapGet("/swagger/index.html", () => Results.Redirect("/docs", false));
 }
 
 app.UseSerilogRequestLogging();

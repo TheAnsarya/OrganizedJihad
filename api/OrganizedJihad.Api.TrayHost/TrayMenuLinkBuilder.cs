@@ -5,7 +5,7 @@ internal static class TrayMenuLinkBuilder {
 
 	public static string BuildHealthUrl(string apiUrl) => apiUrl.TrimEnd('/') + "/ui/tray-health";
 
-	public static string BuildSwaggerUrl(string apiUrl) => apiUrl.TrimEnd('/') + "/swagger";
+	public static string BuildDocumentationUrl(string apiUrl) => apiUrl.TrimEnd('/') + "/docs";
 
 	public static string BuildOpenApiJsonUrl(string apiUrl) => apiUrl.TrimEnd('/') + "/swagger/v1/swagger.json";
 

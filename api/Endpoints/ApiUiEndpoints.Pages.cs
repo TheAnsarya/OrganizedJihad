@@ -40,11 +40,5 @@ public static partial class ApiUiEndpoints {
 		endpoints.MapGet("/ui/reporting-overview-page", (HttpContext context, ApiUiPageEndpointHandler handler) =>
 			handler.GetReportingOverviewPage(context));
 
-		endpoints.MapGet("/swagger", (HttpContext context, ApiUiPageEndpointHandler handler) =>
-			handler.GetSwaggerUiPage(context));
-
-		endpoints.MapGet("/swagger/index.html", (HttpContext context, ApiUiPageEndpointHandler handler) =>
-			handler.GetSwaggerUiPage(context));
-
 	}
 }

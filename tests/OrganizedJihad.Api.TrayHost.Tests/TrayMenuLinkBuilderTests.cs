@@ -17,8 +17,8 @@ public class TrayMenuLinkBuilderTests {
 	}
 
 	[Fact]
-	public void BuildSwaggerUrl_Should_Return_Swagger_Path() {
-		TrayMenuLinkBuilder.BuildSwaggerUrl("http://localhost:5124").Should().Be("http://localhost:5124/swagger");
+	public void BuildDocumentationUrl_Should_Return_Docs_Path() {
+		TrayMenuLinkBuilder.BuildDocumentationUrl("http://localhost:5124").Should().Be("http://localhost:5124/docs");
 	}
 
 	[Fact]

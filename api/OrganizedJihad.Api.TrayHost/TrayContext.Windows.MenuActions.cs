@@ -8,7 +8,7 @@ internal sealed partial class TrayContext {
 	private ContextMenuStrip BuildMenu() {
 		var menu = new ContextMenuStrip();
 		menu.Items.Add("Open API UI", null, (_, _) => OpenApiUi());
-		menu.Items.Add("Open Swagger UI", null, (_, _) => OpenSwaggerUi());
+		menu.Items.Add("Open API Documentation", null, (_, _) => OpenApiDocumentation());
 		menu.Items.Add("Open OpenAPI JSON", null, (_, _) => OpenOpenApiJson());
 		menu.Items.Add("Open API Health", null, (_, _) => OpenApiHealth());
 		menu.Items.Add("Open API Server Logs", null, (_, _) => OpenApiLogs());
@@ -35,10 +35,10 @@ internal sealed partial class TrayContext {
 		});
 	}
 
-	private void OpenSwaggerUi() {
-		var swaggerUrl = TrayMenuLinkBuilder.BuildSwaggerUrl(_options.ApiUrl);
+	private void OpenApiDocumentation() {
+		var documentationUrl = TrayMenuLinkBuilder.BuildDocumentationUrl(_options.ApiUrl);
 		Process.Start(new ProcessStartInfo {
-			FileName = swaggerUrl,
+			FileName = documentationUrl,
 			UseShellExecute = true,
 		});
 	}

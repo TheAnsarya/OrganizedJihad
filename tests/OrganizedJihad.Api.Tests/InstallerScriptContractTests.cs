@@ -20,13 +20,13 @@ public class InstallerScriptContractTests {
 	}
 
 	[Fact]
-	public void InstallCmd_Should_Request_Elevation_With_Runas() {
+	public void InstallCmd_Should_Delegate_To_Managed_Installer_Cli() {
 		var scriptPath = GetRepoFilePath("Install-OrganizedJihad.cmd");
 		File.Exists(scriptPath).Should().BeTrue();
 
 		var script = File.ReadAllText(scriptPath);
-		script.Should().Contain("Start-Process", Exactly.Once());
-		script.Should().Contain("-Verb RunAs");
+		script.Should().Contain("dotnet run --project installer-core\\OrganizedJihad.Installer.Cli");
+		script.Should().Contain("--run-install-health-check");
 	}
 
 	[Fact]
@@ -36,8 +36,9 @@ public class InstallerScriptContractTests {
 
 		var script = File.ReadAllText(scriptPath);
 		script.Should().Contain("win-x64,linux-x64,osx-x64,osx-arm64");
-		script.Should().Contain("Test-ApiMigrationPath.ps1");
-		script.Should().Contain("Test-ReleaseSmoke.ps1");
+		script.Should().Contain("installer-core/OrganizedJihad.Release.Cli");
+		script.Should().Contain("--skip-migration-check");
+		script.Should().Contain("--skip-smoke-test");
 	}
 
 	private static string GetRepoFilePath(string fileName) {
