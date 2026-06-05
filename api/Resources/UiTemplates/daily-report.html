@@ -1,0 +1,169 @@
+<!doctype html>
+<html lang="en">
+<head>
+	<meta charset="utf-8" />
+	<meta name="viewport" content="width=device-width, initial-scale=1" />
+	<title>OrganizedJihad Daily Report</title>
+	<style>
+		:root {
+			--bg: #2a1f14;
+			--card: #3a143c;
+			--ink: #fdf3dc;
+			--muted: #d2b583;
+			--line: #90590d;
+			--accent: #d4821d;
+		}
+
+		* {
+			box-sizing: border-box;
+		}
+
+		body {
+			margin: 0;
+			font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+			background: radial-gradient(circle at top, #3a143c 0%, #2a1f14 60%);
+			color: var(--ink);
+		}
+
+		main {
+			max-width: 1100px;
+			margin: 0 auto;
+			padding: 28px 18px 40px;
+		}
+
+		h1 {
+			margin: 0 0 8px;
+			font-size: 30px;
+		}
+
+		p {
+			margin: 0;
+			color: var(--muted);
+		}
+
+		.grid {
+			display: grid;
+			grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+			gap: 12px;
+			margin-top: 18px;
+		}
+
+		.card {
+			background: rgba(58, 20, 60, 0.92);
+			border: 1px solid var(--line);
+			border-radius: 12px;
+			padding: 12px;
+		}
+
+		h2 {
+			margin: 0;
+			font-size: 16px;
+		}
+
+		.stat {
+			font-size: 28px;
+			font-weight: 700;
+			margin-top: 6px;
+			color: var(--accent);
+		}
+
+		.meta {
+			margin-top: 14px;
+			font-size: 14px;
+			line-height: 1.5;
+		}
+
+		a.button {
+			display: inline-block;
+			margin-top: 16px;
+			padding: 9px 12px;
+			border-radius: 8px;
+			border: 1px solid var(--line);
+			background: rgba(212, 130, 29, 0.16);
+			color: var(--accent);
+			text-decoration: none;
+			font-weight: 600;
+		}
+	</style>
+</head>
+<body>
+	<main>
+		<h1>OrganizedJihad Daily Report</h1>
+		<p>UTC date window: __DATE_UTC__</p>
+
+		<div class="grid">
+			<section class="card">
+				<h2>Player Snapshots</h2>
+				<div class="stat">__PLAYER_SNAPSHOTS__</div>
+			</section>
+			<section class="card">
+				<h2>Total Battles</h2>
+				<div class="stat">__BATTLES_TRACKED__</div>
+			</section>
+			<section class="card">
+				<h2>Arena Battles</h2>
+				<div class="stat">__ARENA_BATTLES__</div>
+			</section>
+			<section class="card">
+				<h2>Grand Arena Battles</h2>
+				<div class="stat">__GRAND_ARENA_BATTLES__</div>
+			</section>
+			<section class="card">
+				<h2>Titan Arena Battles</h2>
+				<div class="stat">__TITAN_ARENA_BATTLES__</div>
+			</section>
+			<section class="card">
+				<h2>Guild War Battles</h2>
+				<div class="stat">__GUILD_WAR_BATTLES__</div>
+			</section>
+			<section class="card">
+				<h2>Raid Boss Attacks</h2>
+				<div class="stat">__RAID_BOSS_ATTACKS__</div>
+			</section>
+			<section class="card">
+				<h2>Expedition Battles</h2>
+				<div class="stat">__EXPEDITION_BATTLES__</div>
+			</section>
+			<section class="card">
+				<h2>Chest Openings</h2>
+				<div class="stat">__CHEST_OPENINGS__</div>
+			</section>
+			<section class="card">
+				<h2>Quest Completions</h2>
+				<div class="stat">__QUEST_COMPLETIONS__</div>
+			</section>
+			<section class="card">
+				<h2>Shop Purchases</h2>
+				<div class="stat">__SHOP_PURCHASES__</div>
+			</section>
+			<section class="card">
+				<h2>Resource Transactions</h2>
+				<div class="stat">__RESOURCE_TRANSACTIONS__</div>
+			</section>
+			<section class="card">
+				<h2>Hero Upgrades</h2>
+				<div class="stat">__HERO_UPGRADES__</div>
+			</section>
+			<section class="card">
+				<h2>Titan Upgrades</h2>
+				<div class="stat">__TITAN_UPGRADES__</div>
+			</section>
+			<section class="card">
+				<h2>Inventory Item Usages</h2>
+				<div class="stat">__INVENTORY_ITEM_USAGES__</div>
+			</section>
+			<section class="card">
+				<h2>Chat Messages</h2>
+				<div class="stat">__CHAT_MESSAGES__</div>
+			</section>
+		</div>
+
+		<div class="meta">
+			<div>Last sync UTC: __LAST_SYNC_UTC__</div>
+			<div>Generated UTC: __CHECKED_UTC__</div>
+		</div>
+
+		<a class="button" href="/ui/daily-report" target="_blank" rel="noreferrer">Open Daily Report JSON</a>
+	</main>
+</body>
+</html>

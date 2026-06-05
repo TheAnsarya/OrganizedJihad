@@ -19,6 +19,8 @@ public static class SystemEndpoints {
 			{
 				"GET  /ui - Local web UI for API status/config shell",
 				"GET  /ui/tray-health - Local tray health dashboard page",
+				"GET  /ui/daily-report - Daily report JSON payload",
+				"GET  /ui/daily-report-page - Daily report HTML page",
 				"GET  /ui/settings - Get persisted API UI settings",
 				"POST /ui/settings - Save persisted API UI settings",
 				"GET  /ui/repair-status - Runtime setup/update repair hints",

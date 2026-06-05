@@ -12,5 +12,11 @@ public static partial class ApiUiEndpoints {
 
 		endpoints.MapGet("/ui/logs/latest", (HttpContext context, ApiUiPageEndpointHandler handler) =>
 			handler.GetLatestApiLogPage(context));
+
+		endpoints.MapGet("/ui/daily-report", (HttpContext context, ApiUiPageEndpointHandler handler) =>
+			handler.GetDailyReportJsonAsync(context));
+
+		endpoints.MapGet("/ui/daily-report-page", (HttpContext context, ApiUiPageEndpointHandler handler) =>
+			handler.GetDailyReportPageAsync(context));
 	}
 }

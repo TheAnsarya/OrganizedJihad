@@ -281,6 +281,44 @@ public class SyncControllerTests : IClassFixture<WebApplicationFactory<Program>>
 	}
 
 	/// <summary>
+	/// Verifies daily report endpoint returns JSON payload with expected fields.
+	/// </summary>
+	[Fact]
+	public async Task Api_Ui_Daily_Report_Should_Return_Payload() {
+		// Act
+		var response = await _client.GetAsync("/ui/daily-report");
+		var json = await response.Content.ReadAsStringAsync();
+
+		// Assert
+		response.StatusCode.Should().Be(HttpStatusCode.OK);
+		using var document = JsonDocument.Parse(json);
+		var root = document.RootElement;
+		root.TryGetProperty("dateUtc", out _).Should().BeTrue();
+		root.TryGetProperty("checkedUtc", out _).Should().BeTrue();
+		root.TryGetProperty("lastSyncUtc", out _).Should().BeTrue();
+		root.TryGetProperty("battlesTracked", out _).Should().BeTrue();
+		root.TryGetProperty("questCompletions", out _).Should().BeTrue();
+		root.TryGetProperty("resourceTransactions", out _).Should().BeTrue();
+	}
+
+	/// <summary>
+	/// Verifies daily report page endpoint returns HTML content.
+	/// </summary>
+	[Fact]
+	public async Task Api_Ui_Daily_Report_Page_Should_Return_Html() {
+		// Act
+		var response = await _client.GetAsync("/ui/daily-report-page");
+		var body = await response.Content.ReadAsStringAsync();
+
+		// Assert
+		response.StatusCode.Should().Be(HttpStatusCode.OK);
+		response.Content.Headers.ContentType.Should().NotBeNull();
+		response.Content.Headers.ContentType!.MediaType.Should().Be("text/html");
+		body.Should().Contain("OrganizedJihad Daily Report");
+		body.Should().Contain("Open Daily Report JSON");
+	}
+
+	/// <summary>
 	/// Verifies latest API logs endpoint includes tail content when a log file exists.
 	/// </summary>
 	[Fact]
