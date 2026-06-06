@@ -43,6 +43,45 @@ The userscript only requests recommendation data and renders it in the UI.
 4. API runs simulation/scoring and returns ranked recommendations.
 5. Userscript renders returned payload and health diagnostics labels.
 
+## What userscript calls
+
+Primary battle overlay calls (`userscript/src/modules/battleRecommendationOverlay.js`):
+
+- `GET /api/sync/teams/recommendations/arena/simulate` (arena first-path)
+- `GET /api/sync/battles/recommendations` (arena-family + segmented grand arena)
+- `GET /api/sync/teams/recommendations` (mode-level fallback)
+- `GET /api/sync/teams/recommendations/operations-summary` (optional ops diagnostics)
+
+Dashboard Team Recommendation section (`userscript/src/modules/uiManager.js`) also calls:
+
+- `GET /api/sync/teams/recommendations/profiles`
+- `GET /api/sync/teams/recommendations/backtest`
+- `GET /api/sync/teams/recommendations/calibration`
+- `GET /api/sync/teams/recommendations/preferences`
+- `PUT /api/sync/teams/recommendations/preferences`
+
+## Troubleshooting missing endpoints in /docs
+
+If recommendation endpoints do not appear in `http://localhost:5124/docs/`:
+
+1. Confirm the API process started successfully.
+2. Check for EF migration startup failures (pending model changes can crash startup before docs load).
+3. Validate OpenAPI directly:
+	- `GET /swagger/v1/swagger.json`
+4. Ensure you are querying the currently running instance (stale/older process can expose outdated contracts).
+5. If testing a published binary, republish before smoke checks; stale publish artifacts can expose outdated route maps and cause false 404 results on docs/OpenAPI endpoints.
+
+Expected recommendation routes in OpenAPI:
+
+- `/api/sync/battles/recommendations`
+- `/api/sync/teams/recommendations`
+- `/api/sync/teams/recommendations/arena/simulate`
+- `/api/sync/teams/recommendations/profiles`
+- `/api/sync/teams/recommendations/preferences`
+- `/api/sync/teams/recommendations/backtest`
+- `/api/sync/teams/recommendations/calibration`
+- `/api/sync/teams/recommendations/operations-summary`
+
 ## Why this boundary matters
 
 - Consistency: recommendation logic is centralized and versioned server-side.

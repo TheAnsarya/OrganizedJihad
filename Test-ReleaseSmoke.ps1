@@ -1,7 +1,9 @@
 param(
 	[string]$ApiExecutablePath = '.\api\bin\Release\net10.0\win-x64\publish\OrganizedJihad.Api.exe',
 	[string]$ApiUrl = 'http://localhost:5234',
-	[int]$StartupTimeoutSeconds = 45
+	[int]$StartupTimeoutSeconds = 45,
+	[switch]$SkipOpenApiContractCheck,
+	[switch]$RequireOpenApiContractCheck
 )
 
 Set-StrictMode -Version Latest
@@ -68,6 +70,25 @@ try {
 			throw "Smoke probe failed for $endpoint (HTTP $($response.StatusCode))."
 		}
 		Write-Step "Probe passed: $endpoint"
+	}
+
+	if (-not $SkipOpenApiContractCheck) {
+		$openApiSmokeScript = Join-Path $PSScriptRoot 'Test-OpenApiContractSmoke.ps1'
+		if (-not (Test-Path -Path $openApiSmokeScript)) {
+			throw "Expected OpenAPI smoke script was not found: $openApiSmokeScript"
+		}
+
+		Write-Step 'Running OpenAPI/Scalar contract smoke checks.'
+		try {
+			& $openApiSmokeScript -BaseUrl $ApiUrl
+			Write-Step 'OpenAPI/Scalar contract smoke checks passed.'
+		} catch {
+			if ($RequireOpenApiContractCheck) {
+				throw
+			}
+
+			Write-Warning "OpenAPI/Scalar contract smoke checks failed but are non-blocking in this run: $($_.Exception.Message)"
+		}
 	}
 
 	Write-Step 'Release smoke test passed.'
