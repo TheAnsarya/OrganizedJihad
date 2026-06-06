@@ -198,6 +198,68 @@ public class SyncControllerTests : IClassFixture<WebApplicationFactory<Program>>
 	}
 
 	/// <summary>
+	/// Verifies OpenAPI includes all recommendation/import routes used by userscript/API consumers.
+	/// </summary>
+	[Fact]
+	public async Task OpenApi_Document_Should_Include_Recommendation_And_Import_Routes() {
+		var response = await _client.GetAsync("/swagger/v1/swagger.json");
+		response.StatusCode.Should().Be(HttpStatusCode.OK);
+
+		var body = await response.Content.ReadAsStringAsync();
+		using var document = JsonDocument.Parse(body);
+		var paths = document.RootElement.GetProperty("paths");
+
+		var requiredPaths = new[] {
+			"/api/sync/import",
+			"/api/sync/battles/recommendations",
+			"/api/sync/teams/recommendations",
+			"/api/sync/teams/recommendations/arena/simulate",
+			"/api/sync/teams/recommendations/profiles",
+			"/api/sync/teams/recommendations/preferences",
+			"/api/sync/teams/recommendations/backtest",
+			"/api/sync/teams/recommendations/calibration",
+			"/api/sync/teams/recommendations/operations-summary",
+		};
+
+		foreach (var requiredPath in requiredPaths) {
+			paths.TryGetProperty(requiredPath, out _).Should().BeTrue($"{requiredPath} must be published in OpenAPI");
+		}
+	}
+
+	/// <summary>
+	/// Verifies BrowserSyncData OpenAPI schema retains key telemetry fields required by userscript sync payloads.
+	/// </summary>
+	[Fact]
+	public async Task OpenApi_Document_Should_Include_BrowserSyncData_Required_Properties() {
+		var response = await _client.GetAsync("/swagger/v1/swagger.json");
+		response.StatusCode.Should().Be(HttpStatusCode.OK);
+
+		var body = await response.Content.ReadAsStringAsync();
+		using var document = JsonDocument.Parse(body);
+		var properties = document.RootElement
+			.GetProperty("components")
+			.GetProperty("schemas")
+			.GetProperty("BrowserSyncData")
+			.GetProperty("properties");
+
+		var requiredProperties = new[] {
+			"arenaBattles",
+			"heroes",
+			"titans",
+			"currentInventory",
+			"inventoryItemUsages",
+			"equipmentChanges",
+			"mailMessages",
+			"mailRewards",
+			"airshipGifts",
+		};
+
+		foreach (var requiredProperty in requiredProperties) {
+			properties.TryGetProperty(requiredProperty, out _).Should().BeTrue($"BrowserSyncData.{requiredProperty} must remain in OpenAPI schema");
+		}
+	}
+
+	/// <summary>
 	/// Verifies Scalar API documentation route serves HTML content.
 	/// </summary>
 	[Theory]
@@ -1218,6 +1280,97 @@ public class SyncControllerTests : IClassFixture<WebApplicationFactory<Program>>
 	}
 
 	/// <summary>
+	/// Verifies tracking coverage endpoint returns grouped per-domain counts and recommendation route hints.
+	/// </summary>
+	[Fact]
+	public async Task TrackingCoverage_Should_Return_Grouped_Domain_Counts_And_Recommendation_Endpoints() {
+		// Arrange
+		var now = DateTime.UtcNow;
+		var syncData = new BrowserSyncData {
+			CurrentSnapshot = new PlayerSnapshot {
+				PlayerId = 8811,
+				PlayerName = "CoverageTester",
+				Timestamp = now,
+				Level = 120,
+				TeamPower = 1300000,
+				Gold = 1400000,
+				Emeralds = 2000,
+			},
+			Heroes = [
+				new Hero {
+					HeroId = 1,
+					HeroName = "Astaroth",
+					Level = 120,
+					Stars = 6,
+					Color = 12,
+					Power = 110000,
+					Timestamp = now,
+					PlayerId = 8811,
+				}
+			],
+			Titans = [
+				new Titan {
+					TitanId = 101,
+					TitanName = "Angus",
+					Level = 120,
+					Stars = 6,
+					Power = 90000,
+					Timestamp = now,
+					PlayerId = 8811,
+				}
+			],
+			ArenaBattles = [
+				new ArenaBattle {
+					Timestamp = now.AddMinutes(-5),
+					OpponentId = 991,
+					OpponentName = "CoverageOpponent",
+					OpponentPower = 1000000,
+					IsWin = true,
+					RankBefore = 120,
+					RankAfter = 115,
+					OurTeam = "Astaroth",
+					CoinsEarned = 20,
+				}
+			],
+			GrandArenaBattles = [],
+			TitanArenaBattles = [],
+		};
+
+		var importResponse = await _client.PostAsJsonAsync("/api/sync/import", syncData);
+		importResponse.StatusCode.Should().Be(HttpStatusCode.OK);
+
+		// Act
+		var response = await _client.GetAsync("/api/sync/tracking/coverage");
+		var json = await response.Content.ReadAsStringAsync();
+
+		// Assert
+		response.StatusCode.Should().Be(HttpStatusCode.OK);
+		using var document = JsonDocument.Parse(json);
+		var root = document.RootElement;
+
+		root.TryGetProperty("generatedAtUtc", out _).Should().BeTrue();
+		root.TryGetProperty("domainTotals", out var domainTotals).Should().BeTrue();
+		domainTotals.TryGetProperty("combat", out var combatTotal).Should().BeTrue();
+		combatTotal.GetInt32().Should().BeGreaterThanOrEqualTo(1);
+
+		root.TryGetProperty("domainEntities", out var domainEntities).Should().BeTrue();
+		domainEntities.TryGetProperty("roster", out var rosterEntities).Should().BeTrue();
+		rosterEntities.TryGetProperty("heroes", out var heroesCount).Should().BeTrue();
+		heroesCount.GetInt32().Should().BeGreaterThanOrEqualTo(1);
+
+		root.TryGetProperty("grandTotal", out var grandTotal).Should().BeTrue();
+		grandTotal.GetInt32().Should().BeGreaterThan(0);
+
+		root.TryGetProperty("recommendationEndpoints", out var recommendationEndpoints).Should().BeTrue();
+		recommendationEndpoints.ValueKind.Should().Be(JsonValueKind.Array);
+		recommendationEndpoints.EnumerateArray().Select(item => item.GetString()).Should().Contain("GET /api/sync/teams/recommendations");
+
+		root.TryGetProperty("knownCoverageGaps", out var knownGaps).Should().BeTrue();
+		knownGaps.ValueKind.Should().Be(JsonValueKind.Array);
+		knownGaps.EnumerateArray().Select(item => item.GetString()).Should().Contain("tower-of-eternity-dedicated-model");
+	}
+
+	/// <summary>
 	/// Verifies Team Recommendation backtest endpoint returns calibration metrics for arena mode.
 	/// </summary>
 	[Fact]
@@ -1748,5 +1901,235 @@ public class SyncControllerTests : IClassFixture<WebApplicationFactory<Program>>
 		invalidResponse.StatusCode.Should().Be(HttpStatusCode.BadRequest);
 		var invalidBody = await invalidResponse.Content.ReadAsStringAsync();
 		invalidBody.Should().Contain("preferredTrendWindowDays must be one of: 7, 30, 90");
+	}
+
+	/// <summary>
+	/// Verifies shop purchases endpoint returns persisted purchases and applies basic filtering.
+	/// </summary>
+	[Fact]
+	public async Task ShopPurchases_Should_Return_Filtered_Results() {
+		var now = DateTime.UtcNow;
+		var syncData = new BrowserSyncData {
+			CurrentSnapshot = new PlayerSnapshot {
+				PlayerId = 90111,
+				PlayerName = "ShopPurchaseTester",
+				Timestamp = now,
+				Level = 120,
+				TeamPower = 1200000,
+			},
+			Heroes = [],
+			Titans = [],
+			ShopPurchases = [
+				new ShopPurchase {
+					PurchasedAt = now.AddMinutes(-10),
+					ShopType = "tower",
+					ItemId = "item_1",
+					ItemName = "Tower Item",
+					Quantity = 3,
+					CostType = "tower_coins",
+					CostAmount = 120,
+					PlayerId = 90111,
+				},
+				new ShopPurchase {
+					PurchasedAt = now.AddMinutes(-5),
+					ShopType = "arena",
+					ItemId = "item_2",
+					ItemName = "Arena Item",
+					Quantity = 1,
+					CostType = "arena_coins",
+					CostAmount = 200,
+					PlayerId = 90111,
+				}
+			]
+		};
+
+		var importResponse = await _client.PostAsJsonAsync("/api/sync/import", syncData);
+		importResponse.StatusCode.Should().Be(HttpStatusCode.OK);
+
+		var response = await _client.GetAsync("/api/sync/shop-purchases?shopType=tower&playerId=90111&limit=10");
+		response.StatusCode.Should().Be(HttpStatusCode.OK);
+
+		using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+		var root = document.RootElement;
+		root.ValueKind.Should().Be(JsonValueKind.Array);
+		root.GetArrayLength().Should().BeGreaterThan(0);
+
+		var first = root.EnumerateArray().First();
+		first.TryGetProperty("shopType", out var shopType).Should().BeTrue();
+		shopType.GetString().Should().Be("tower");
+		first.TryGetProperty("playerId", out var playerId).Should().BeTrue();
+		playerId.GetInt64().Should().Be(90111);
+	}
+
+	/// <summary>
+	/// Verifies mission progress endpoint returns persisted mission records and supports filtering.
+	/// </summary>
+	[Fact]
+	public async Task MissionProgress_Should_Return_Filtered_Results() {
+		var now = DateTime.UtcNow;
+		var syncData = new BrowserSyncData {
+			CurrentSnapshot = new PlayerSnapshot {
+				PlayerId = 90222,
+				PlayerName = "MissionProgressTester",
+				Timestamp = now,
+				Level = 120,
+				TeamPower = 1250000,
+			},
+			Heroes = [],
+			Titans = [],
+			MissionProgress = [
+				new MissionProgress {
+					MissionId = "3-1",
+					MissionName = "Campaign 3-1",
+					Stars = 3,
+					HighestLevel = 1,
+					IsHeroic = false,
+					LastCompleted = now.AddHours(-1),
+					CompletionCount = 4,
+					PlayerId = 90222,
+				},
+				new MissionProgress {
+					MissionId = "3-2",
+					MissionName = "Campaign 3-2",
+					Stars = 2,
+					HighestLevel = 1,
+					IsHeroic = false,
+					LastCompleted = now.AddHours(-2),
+					CompletionCount = 1,
+					PlayerId = 90222,
+				}
+			]
+		};
+
+		var importResponse = await _client.PostAsJsonAsync("/api/sync/import", syncData);
+		importResponse.StatusCode.Should().Be(HttpStatusCode.OK);
+
+		var response = await _client.GetAsync("/api/sync/mission-progress?missionId=3-1&playerId=90222&limit=10");
+		response.StatusCode.Should().Be(HttpStatusCode.OK);
+
+		using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+		var root = document.RootElement;
+		root.ValueKind.Should().Be(JsonValueKind.Array);
+		root.GetArrayLength().Should().Be(1);
+
+		var first = root.EnumerateArray().First();
+		first.TryGetProperty("missionId", out var missionId).Should().BeTrue();
+		missionId.GetString().Should().Be("3-1");
+		first.TryGetProperty("playerId", out var playerId).Should().BeTrue();
+		playerId.GetInt64().Should().Be(90222);
+	}
+
+	/// <summary>
+	/// Verifies mail and mail reward endpoints return persisted rows with filtering.
+	/// </summary>
+	[Fact]
+	public async Task MailEndpoints_Should_Return_Filtered_Results() {
+		var now = DateTime.UtcNow;
+		var syncData = new BrowserSyncData {
+			CurrentSnapshot = new PlayerSnapshot {
+				PlayerId = 90333,
+				PlayerName = "MailTester",
+				Timestamp = now,
+				Level = 120,
+				TeamPower = 1280000,
+			},
+			Heroes = [],
+			Titans = [],
+			MailMessages = [
+				new MailMessage {
+					PlayerId = 90333,
+					MailId = "mail-1",
+					MailType = "system",
+					SenderId = "0",
+					SenderName = "System",
+					Subject = "Compensation",
+					MessageText = "Thanks for playing",
+					RewardSummaryText = "gold + emeralds",
+					ReceivedAt = now.AddMinutes(-15),
+					IsRead = false,
+					IsCollected = false,
+				},
+			],
+			MailRewards = [
+				new MailReward {
+					PlayerId = 90333,
+					MailId = "mail-1",
+					MailType = "mailCollect",
+					RewardType = "gold",
+					RewardId = "gold",
+					Quantity = 50000,
+					Timestamp = now.AddMinutes(-10),
+				}
+			]
+		};
+
+		var importResponse = await _client.PostAsJsonAsync("/api/sync/import", syncData);
+		importResponse.StatusCode.Should().Be(HttpStatusCode.OK);
+
+		var mailResponse = await _client.GetAsync("/api/sync/mail?playerId=90333&mailId=mail-1&limit=10");
+		mailResponse.StatusCode.Should().Be(HttpStatusCode.OK);
+		using var mailDocument = JsonDocument.Parse(await mailResponse.Content.ReadAsStringAsync());
+		var mailRoot = mailDocument.RootElement;
+		mailRoot.ValueKind.Should().Be(JsonValueKind.Array);
+		mailRoot.GetArrayLength().Should().Be(1);
+		var mailRow = mailRoot.EnumerateArray().First();
+		mailRow.TryGetProperty("mailId", out var mailId).Should().BeTrue();
+		mailId.GetString().Should().Be("mail-1");
+
+		var rewardResponse = await _client.GetAsync("/api/sync/mail/rewards?playerId=90333&mailId=mail-1&rewardType=gold&limit=10");
+		rewardResponse.StatusCode.Should().Be(HttpStatusCode.OK);
+		using var rewardDocument = JsonDocument.Parse(await rewardResponse.Content.ReadAsStringAsync());
+		var rewardRoot = rewardDocument.RootElement;
+		rewardRoot.ValueKind.Should().Be(JsonValueKind.Array);
+		rewardRoot.GetArrayLength().Should().Be(1);
+		var rewardRow = rewardRoot.EnumerateArray().First();
+		rewardRow.TryGetProperty("rewardType", out var rewardType).Should().BeTrue();
+		rewardType.GetString().Should().Be("gold");
+	}
+
+	/// <summary>
+	/// Verifies airship endpoint returns persisted zeppelin gift rows with filtering.
+	/// </summary>
+	[Fact]
+	public async Task Airship_Should_Return_Filtered_Results() {
+		var now = DateTime.UtcNow;
+		var syncData = new BrowserSyncData {
+			CurrentSnapshot = new PlayerSnapshot {
+				PlayerId = 90444,
+				PlayerName = "AirshipTester",
+				Timestamp = now,
+				Level = 120,
+				TeamPower = 1290000,
+			},
+			Heroes = [],
+			Titans = [],
+			AirshipGifts = [
+				new AirshipGift {
+					PlayerId = 90444,
+					GiftId = "zep-1",
+					SourceType = "zeppelinGiftGet",
+					RewardSummaryText = "2 reward row(s)",
+					RewardsJson = "[{\"itemType\":\"gold\",\"itemId\":\"gold\",\"quantity\":5000}]",
+					Timestamp = now.AddMinutes(-3),
+				}
+			]
+		};
+
+		var importResponse = await _client.PostAsJsonAsync("/api/sync/import", syncData);
+		importResponse.StatusCode.Should().Be(HttpStatusCode.OK);
+
+		var response = await _client.GetAsync("/api/sync/airship?playerId=90444&giftId=zep-1&sourceType=zeppelinGiftGet&limit=10");
+		response.StatusCode.Should().Be(HttpStatusCode.OK);
+
+		using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+		var root = document.RootElement;
+		root.ValueKind.Should().Be(JsonValueKind.Array);
+		root.GetArrayLength().Should().Be(1);
+
+		var first = root.EnumerateArray().First();
+		first.TryGetProperty("giftId", out var giftId).Should().BeTrue();
+		giftId.GetString().Should().Be("zep-1");
+		first.TryGetProperty("sourceType", out var sourceType).Should().BeTrue();
+		sourceType.GetString().Should().Be("zeppelinGiftGet");
 	}
 }

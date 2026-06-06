@@ -281,6 +281,21 @@ public class SyncService {
 					counts.GuildActivities = await ImportGuildActivitiesAsync(context, data.GuildActivities);
 				}
 
+				// Import mailbox messages
+				if (data.MailMessages != null) {
+					counts.MailMessages = await ImportMailMessagesAsync(context, data.MailMessages);
+				}
+
+				// Import mailbox reward claim rows
+				if (data.MailRewards != null) {
+					counts.MailRewards = await ImportMailRewardsAsync(context, data.MailRewards);
+				}
+
+				// Import airship gift claim rows
+				if (data.AirshipGifts != null) {
+					counts.AirshipGifts = await ImportAirshipGiftsAsync(context, data.AirshipGifts);
+				}
+
 				// === Import Hero Upgrade Events ===
 
 				if (data.HeroLevelUpgrades != null) {
@@ -937,6 +952,62 @@ public class SyncService {
 
 			if (!exists) {
 				context.GuildActivities.Add(activity);
+				imported++;
+			}
+		}
+
+		await context.SaveChangesAsync();
+		return imported;
+	}
+
+	private async Task<int> ImportMailMessagesAsync(GameDatabaseContext context, List<MailMessage> messages) {
+		int imported = 0;
+		foreach (var message in messages) {
+			var exists = await context.MailMessages
+				.AnyAsync(m => m.PlayerId == message.PlayerId &&
+							   m.MailId == message.MailId &&
+							   m.ReceivedAt == message.ReceivedAt);
+
+			if (!exists) {
+				context.MailMessages.Add(message);
+				imported++;
+			}
+		}
+
+		await context.SaveChangesAsync();
+		return imported;
+	}
+
+	private async Task<int> ImportMailRewardsAsync(GameDatabaseContext context, List<MailReward> rewards) {
+		int imported = 0;
+		foreach (var reward in rewards) {
+			var exists = await context.MailRewards
+				.AnyAsync(r => r.PlayerId == reward.PlayerId &&
+							   r.MailId == reward.MailId &&
+							   r.RewardType == reward.RewardType &&
+							   r.RewardId == reward.RewardId &&
+							   r.Timestamp == reward.Timestamp);
+
+			if (!exists) {
+				context.MailRewards.Add(reward);
+				imported++;
+			}
+		}
+
+		await context.SaveChangesAsync();
+		return imported;
+	}
+
+	private async Task<int> ImportAirshipGiftsAsync(GameDatabaseContext context, List<AirshipGift> gifts) {
+		int imported = 0;
+		foreach (var gift in gifts) {
+			var exists = await context.AirshipGifts
+				.AnyAsync(g => g.PlayerId == gift.PlayerId &&
+							   g.GiftId == gift.GiftId &&
+							   g.Timestamp == gift.Timestamp);
+
+			if (!exists) {
+				context.AirshipGifts.Add(gift);
 				imported++;
 			}
 		}
@@ -2450,6 +2521,9 @@ public class SyncService {
 			TotalExpeditionBattles = await context.ExpeditionBattles.CountAsync(),
 			TotalResourceTransactions = await context.ResourceTransactions.CountAsync(),
 			TotalGuildActivities = await context.GuildActivities.CountAsync(),
+			TotalMailMessages = await context.MailMessages.CountAsync(),
+			TotalMailRewards = await context.MailRewards.CountAsync(),
+			TotalAirshipGifts = await context.AirshipGifts.CountAsync(),
 
 			// Hero Upgrade Tracking
 			TotalHeroLevelUpgrades = await context.HeroLevelUpgrades.CountAsync(),

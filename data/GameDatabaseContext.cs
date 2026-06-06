@@ -154,6 +154,24 @@ public class GameDatabaseContext : DbContext {
 	/// </summary>
 	public DbSet<GuildActivity> GuildActivities { get; set; }
 
+	/// <summary>
+	/// Mailbox message snapshots captured from the game mailbox.
+	/// Immutable historical records for mail analytics/auditing.
+	/// </summary>
+	public DbSet<MailMessage> MailMessages { get; set; }
+
+	/// <summary>
+	/// Reward claim rows collected from mailbox actions.
+	/// Immutable historical records for reward/economy analysis.
+	/// </summary>
+	public DbSet<MailReward> MailRewards { get; set; }
+
+	/// <summary>
+	/// Airship (zeppelin) gift claim events.
+	/// Immutable historical records for airship reward analytics.
+	/// </summary>
+	public DbSet<AirshipGift> AirshipGifts { get; set; }
+
 	// === Chat and Communication Tracking ===
 
 	/// <summary>
@@ -747,6 +765,37 @@ public class GameDatabaseContext : DbContext {
 			entity.HasIndex(e => e.Timestamp);
 			entity.HasIndex(e => new { e.HeroId, e.Timestamp });
 			entity.HasIndex(e => new { e.PlayerId, e.Timestamp });
+		});
+
+		// === Mail Tracking Configurations ===
+
+		// Configure MailMessage
+		// Composite index on PlayerId + MailId + ReceivedAt for dedupe and inbox history.
+		// Index on ReceivedAt for recency queries.
+		modelBuilder.Entity<MailMessage>(entity => {
+			entity.HasKey(e => e.Id);
+			entity.HasIndex(e => new { e.PlayerId, e.MailId, e.ReceivedAt });
+			entity.HasIndex(e => e.ReceivedAt);
+		});
+
+		// Configure MailReward
+		// Composite index for dedupe by reward dimensions.
+		// Index on Timestamp for recency queries.
+		modelBuilder.Entity<MailReward>(entity => {
+			entity.HasKey(e => e.Id);
+			entity.HasIndex(e => new { e.PlayerId, e.MailId, e.RewardType, e.RewardId, e.Timestamp });
+			entity.HasIndex(e => e.Timestamp);
+		});
+
+		// === Airship Tracking Configurations ===
+
+		// Configure AirshipGift
+		// Composite index on PlayerId + GiftId + Timestamp for dedupe.
+		// Index on Timestamp for recency queries.
+		modelBuilder.Entity<AirshipGift>(entity => {
+			entity.HasKey(e => e.Id);
+			entity.HasIndex(e => new { e.PlayerId, e.GiftId, e.Timestamp });
+			entity.HasIndex(e => e.Timestamp);
 		});
 	}
 }

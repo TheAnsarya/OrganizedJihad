@@ -226,6 +226,43 @@ class SyncClient {
 				getSince('guildActivities'),
 			]);
 
+			const [mailData, mailRewards, airshipData] = await Promise.all([
+				storage.getMetadata('mailData', null),
+				hasLastSync
+					? storage.getByIndexRange('mailRewards', 'timestamp', { lower: lastSync, lowerOpen: true })
+					: storage.getAll('mailRewards'),
+				storage.getMetadata('airshipData', null),
+			]);
+
+			const mailMessages = Array.isArray(mailData?.items)
+				? mailData.items.map((item) => ({
+					playerId: Number(mailData.playerId || item.playerId || 0),
+					mailId: String(item.mailId || ''),
+					mailType: String(item.mailType || 'unknown'),
+					senderId: String(item.senderId || ''),
+					senderName: String(item.senderName || ''),
+					subject: String(item.subject || ''),
+					messageText: String(item.messageText || ''),
+					rewardSummaryText: String(item.rewardSummaryText || ''),
+					rewardsJson: item.rewards ? JSON.stringify(item.rewards) : null,
+					receivedAt: item.receivedAt || mailData.timestamp || new Date().toISOString(),
+					isRead: !!item.isRead,
+					isCollected: !!item.isCollected,
+					rawMailJson: item.rawMail ? JSON.stringify(item.rawMail) : null,
+				}))
+				: [];
+
+			const airshipGifts = Array.isArray(airshipData?.gifts)
+				? airshipData.gifts.map((gift) => ({
+					playerId: Number(gift.playerId || airshipData.playerId || 0),
+					giftId: String(gift.giftId || ''),
+					sourceType: String(gift.sourceType || 'zeppelinGiftGet'),
+					rewardSummaryText: String(gift.rewardSummaryText || ''),
+					rewardsJson: JSON.stringify(gift.rewards || []),
+					timestamp: gift.timestamp || new Date().toISOString(),
+				}))
+				: [];
+
 			// Phase 8: Gather upgrade, daily activity, and inventory tracking data
 			// Stores with `timestamp` index use incremental query;
 			// stores with `completedAt`/`claimedAt` indexes use those instead.
@@ -294,6 +331,9 @@ class SyncClient {
 				expeditionBattles,
 				resourceTransactions,
 				guildActivities,
+				mailMessages,
+				mailRewards,
+				airshipGifts,
 				// Phase 8 - Hero Upgrade Tracking
 				heroLevelUpgrades,
 				heroStarUpgrades,
@@ -341,6 +381,9 @@ class SyncClient {
 				expeditionBattles: expeditionBattles.length,
 				resourceTransactions: resourceTransactions.length,
 				guildActivities: guildActivities.length,
+				mailMessages: mailMessages.length,
+				mailRewards: mailRewards.length,
+				airshipGifts: airshipGifts.length,
 				// Phase 8 counts
 				heroUpgrades: heroUpgrades.length,
 				titanUpgrades: titanUpgrades.length,

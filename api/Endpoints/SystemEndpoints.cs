@@ -40,9 +40,20 @@ public static class SystemEndpoints {
 				"POST /api/sync/import - Import data from browser",
 				"GET  /api/sync/last-sync - Get last sync timestamp",
 				"GET  /api/sync/stats - Get database statistics",
+				"GET  /api/sync/tracking/coverage - Get grouped per-domain tracking coverage counts",
 				"GET  /api/sync/snapshots?limit=10 - Get recent snapshots",
 				"GET  /api/sync/battles?limit=20 - Get recent battles",
-				"GET  /api/sync/opponents - Get all opponents"
+				"GET  /api/sync/opponents - Get all opponents",
+				"GET  /api/sync/mission-progress?limit=100 - Get mission progress history",
+				"GET  /api/sync/shop-purchases?limit=100 - Get shop purchase history",
+				"GET  /api/sync/tower-progress?limit=100 - Get tower/dungeon progression",
+				"GET  /api/sync/guild-activities?limit=100 - Get guild activity history",
+				"GET  /api/sync/chat-messages?limit=100 - Get chat message history",
+				"GET  /api/sync/mail?limit=100 - Get mailbox message history",
+				"GET  /api/sync/mail/rewards?limit=100 - Get mailbox reward claim history",
+				"GET  /api/sync/airship?limit=100 - Get airship/zeppelin gift history",
+				"GET  /api/sync/expeditions?limit=100 - Get expedition battle history",
+				"GET  /api/sync/guild-participation?limit=100 - Get guild war/raid/dungeon participation"
 			}
 		});
 

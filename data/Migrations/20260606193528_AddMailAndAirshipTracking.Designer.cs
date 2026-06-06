@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using OrganizedJihad.Data;
 
@@ -10,9 +11,11 @@ using OrganizedJihad.Data;
 namespace OrganizedJihad.Data.Migrations
 {
     [DbContext(typeof(GameDatabaseContext))]
-    partial class GameDatabaseContextModelSnapshot : ModelSnapshot
+    [Migration("20260606193528_AddMailAndAirshipTracking")]
+    partial class AddMailAndAirshipTracking
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder.HasAnnotation("ProductVersion", "9.0.10");
