@@ -55,7 +55,10 @@ describe('BattleRecommendationOverlay', () => {
 	});
 
 	it('should auto-show hidden overlay when arena combat context arrives', async () => {
-		const prefs = makePrefStorage({ battleRecommendationOverlayVisible: false });
+		const prefs = makePrefStorage({
+			battleRecommendationOverlayVisible: false,
+			battleRecommendationOverlayAutoShow: true,
+		});
 		const overlay = new BattleRecommendationOverlay(makeIdbStorage(), prefs);
 		overlay.init();
 

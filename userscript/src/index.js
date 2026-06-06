@@ -231,6 +231,22 @@ import './styles/main.css';
 		}
 
 		/**
+		 * Creates compact battle recommendation toggle button near main badge.
+		 *
+		 * @returns {HTMLButtonElement} Toggle button element
+		 */
+		function createBattleRecoToggleButton() {
+			const button = document.createElement('button');
+			button.id = 'oj-battle-reco-toggle-btn';
+			button.type = 'button';
+			button.setAttribute('aria-label', 'Toggle battle recommendations overlay');
+			button.title = 'Battle recommendations overlay (Alt+R)';
+			button.textContent = '◉';
+			document.body.appendChild(button);
+			return button;
+		}
+
+		/**
 		 * Updates the status badge with the current API call count.
 		 * Transitions from yellow "Listening" to green "N calls" state.
 		 *
@@ -309,10 +325,38 @@ import './styles/main.css';
 				0%, 100% { opacity: 1; }
 				50% { opacity: 0.4; }
 			}
+			#oj-battle-reco-toggle-btn {
+				position: fixed;
+				top: 12px;
+				left: 430px;
+				width: 28px;
+				height: 28px;
+				border-radius: 50%;
+				border: 1px solid rgba(200, 150, 255, 0.28);
+				background: #2a1031;
+				color: #c6a8ff;
+				font-size: 13px;
+				line-height: 1;
+				cursor: pointer;
+				z-index: 999998;
+				box-shadow: 0 2px 12px rgba(59, 20, 61, 0.5);
+				transition: all 0.2s ease;
+				padding: 0;
+			}
+			#oj-battle-reco-toggle-btn:hover {
+				background: #3a1444;
+				transform: translateY(-1px);
+			}
+			#oj-battle-reco-toggle-btn.oj-bro-toggle-active {
+				background: #173625;
+				border-color: rgba(76, 175, 80, 0.55);
+				color: #9ff3b0;
+			}
 		`;
 		document.head.appendChild(badgeStyles);
 
 		const statusBadge = createStatusBadge();
+		const battleRecoToggleBtn = createBattleRecoToggleButton();
 
 		// ─── Global Error Handlers ──────────────────────────────────
 		// Catch any uncaught errors/rejections from our code and
@@ -440,6 +484,15 @@ import './styles/main.css';
 		const battleRecommendationOverlay = new BattleRecommendationOverlay(idbStorage, prefStorage);
 		battleRecommendationOverlay.init();
 
+		const syncBattleRecoToggleState = (isVisible) => {
+			if (!battleRecoToggleBtn) return;
+			battleRecoToggleBtn.classList.toggle('oj-bro-toggle-active', Boolean(isVisible));
+			battleRecoToggleBtn.title = Boolean(isVisible)
+				? 'Hide battle recommendations overlay (Alt+R)'
+				: 'Show battle recommendations overlay (Alt+R)';
+		};
+		battleRecommendationOverlay.setVisibilityChangedCallback(syncBattleRecoToggleState);
+
 		// Initialize DOM targeting for game-aware positioning (#50)
 		const domTargeting = new DomTargeting({
 			prefStorage,
@@ -521,6 +574,11 @@ import './styles/main.css';
 			} else {
 				uiManager.show();
 			}
+		});
+
+		battleRecoToggleBtn.addEventListener('click', (event) => {
+			event.preventDefault();
+			battleRecommendationOverlay.toggle();
 		});
 
 		// ─── Finish Initialization ──────────────────────────────────

@@ -158,9 +158,9 @@ class BattleRecommendationOverlay {
 		/** @type {HTMLDivElement|null} */
 		this.panel = null;
 		/** @type {boolean} */
-		this.isVisible = this.prefStorage.get('battleRecommendationOverlayVisible', true);
+		this.isVisible = this.prefStorage.get('battleRecommendationOverlayVisible', false);
 		/** @type {boolean} */
-		this._autoShowOnCombatContext = this.prefStorage.get('battleRecommendationOverlayAutoShow', true);
+		this._autoShowOnCombatContext = this.prefStorage.get('battleRecommendationOverlayAutoShow', false);
 		/** @type {number} */
 		this._autoShowNoticeUntil = 0;
 		/** @type {boolean} */
@@ -237,6 +237,7 @@ class BattleRecommendationOverlay {
 		this._onVisibilityChange = this._onVisibilityChange.bind(this);
 		this._onMouseMove = this._onMouseMove.bind(this);
 		this._onMouseUp = this._onMouseUp.bind(this);
+		this._onVisibilityChanged = null;
 	}
 
 	/**
@@ -253,9 +254,21 @@ class BattleRecommendationOverlay {
 			this.panel.style.display = 'none';
 		}
 
+		this._notifyVisibilityChanged();
+
 		if (this.isVisible) {
 			this._scheduleRefresh(250);
 		}
+	}
+
+	/**
+	 * Register callback invoked whenever overlay visibility changes.
+	 *
+	 * @param {(isVisible:boolean) => void|null} callback - Visibility callback
+	 */
+	setVisibilityChangedCallback(callback) {
+		this._onVisibilityChanged = typeof callback === 'function' ? callback : null;
+		this._notifyVisibilityChanged();
 	}
 
 	/**
@@ -310,6 +323,7 @@ class BattleRecommendationOverlay {
 					this.panel.style.display = 'block';
 					this._clampPanelToViewport();
 				}
+				this._notifyVisibilityChanged();
 				this._showHint('Recommendations panel auto-opened for combat context.', 'info', 7000, 'auto-open');
 			}
 		}
@@ -404,7 +418,7 @@ class BattleRecommendationOverlay {
 			const url = new URL(this._buildApiUrl(TEAM_RECOMMENDATION_OPERATIONS_SUMMARY_PATH));
 			url.searchParams.set('preferredTrendWindowDays', String(preferredTrendWindowDays));
 
-			const response = await fetch(url.toString(), { signal: this._activeFetchController?.signal });
+			const response = await this._request(url.toString(), { signal: this._activeFetchController?.signal });
 			if (!response.ok) {
 				throw new Error(`HTTP ${response.status}`);
 			}
@@ -432,6 +446,7 @@ class BattleRecommendationOverlay {
 		if (this.panel) {
 			this.panel.style.display = this.isVisible ? 'block' : 'none';
 		}
+		this._notifyVisibilityChanged();
 		if (!this.isVisible && this._refreshTimer) {
 			clearTimeout(this._refreshTimer);
 			this._refreshTimer = null;
@@ -1328,7 +1343,7 @@ class BattleRecommendationOverlay {
 	 * @private
 	 */
 	async _requestJson(url, sequence) {
-		const response = await fetch(url, { signal: this._activeFetchController?.signal });
+		const response = await this._request(url, { signal: this._activeFetchController?.signal });
 		if (!response.ok) {
 			throw new Error(`HTTP ${response.status}`);
 		}
@@ -1337,6 +1352,93 @@ class BattleRecommendationOverlay {
 			return null;
 		}
 		return payload;
+	}
+
+	/**
+	 * Execute HTTP request with fetch-first strategy and Tampermonkey fallback.
+	 *
+	 * @param {string} url - Absolute URL
+	 * @param {{method?:string, headers?:Object, body?:string, signal?:AbortSignal}} options - Request options
+	 * @returns {Promise<{ok:boolean,status:number,statusText:string,json:Function,text:Function}>}
+	 * @private
+	 */
+	async _request(url, options = {}) {
+		try {
+			return await fetch(url, options);
+		} catch (fetchError) {
+			try {
+				return await this._requestWithTampermonkey(url, options);
+			} catch (gmError) {
+				if (String(gmError?.message || '').includes('unavailable')) {
+					throw fetchError;
+				}
+				throw gmError;
+			}
+		}
+	}
+
+	/**
+	 * Execute HTTP request via Tampermonkey cross-origin API.
+	 *
+	 * @param {string} url - Absolute URL
+	 * @param {{method?:string, headers?:Object, body?:string}} options - Request options
+	 * @returns {Promise<{ok:boolean,status:number,statusText:string,json:Function,text:Function}>}
+	 * @private
+	 */
+	async _requestWithTampermonkey(url, options = {}) {
+		const gmRequest = typeof GM_xmlhttpRequest === 'function'
+			? GM_xmlhttpRequest
+			: (typeof window !== 'undefined' && typeof window.GM_xmlhttpRequest === 'function'
+				? window.GM_xmlhttpRequest
+				: null);
+
+		if (!gmRequest) {
+			throw new Error('GM_xmlhttpRequest unavailable');
+		}
+
+		const method = String(options?.method || 'GET').toUpperCase();
+		const headers = options?.headers || {};
+		const body = options?.body;
+
+		return await new Promise((resolve, reject) => {
+			gmRequest({
+				method,
+				url,
+				headers,
+				data: body,
+				responseType: 'text',
+				onload: (response) => {
+					const status = Number(response?.status || 0);
+					const statusText = String(response?.statusText || '');
+					const text = typeof response?.responseText === 'string'
+						? response.responseText
+						: String(response?.response || '');
+					resolve({
+						ok: status >= 200 && status < 300,
+						status,
+						statusText,
+						json: async () => JSON.parse(text || '{}'),
+						text: async () => text,
+					});
+				},
+				onerror: (error) => reject(new Error(error?.error || error?.message || 'GM request failed')),
+				ontimeout: () => reject(new Error('GM request timed out')),
+			});
+		});
+	}
+
+	/**
+	 * Notify visibility listeners about current panel state.
+	 *
+	 * @private
+	 */
+	_notifyVisibilityChanged() {
+		if (typeof this._onVisibilityChanged !== 'function') return;
+		try {
+			this._onVisibilityChanged(Boolean(this.isVisible));
+		} catch {
+			// best effort callback
+		}
 	}
 
 	/**
