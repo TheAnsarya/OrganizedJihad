@@ -224,6 +224,38 @@ describe('BattleRecommendationOverlay', () => {
 		overlay.destroy();
 	});
 
+	it('should render hero avatar icons from recommendation team preview names', async () => {
+		const idb = makeIdbStorage({
+			arenaEnemies: [{ userId: 79, name: 'Avatar Target', power: 300000 }],
+		});
+		const overlay = new BattleRecommendationOverlay(idb, makePrefStorage());
+		overlay.init();
+
+		global.fetch.mockResolvedValue({
+			ok: true,
+			json: async () => ({
+				recommendations: [{
+					teamPreview: 'Galahad, Astaroth, Thea, Keira, Faceless',
+					weightedWinRate: 0.66,
+					confidence: 0.59,
+					score: 0.69,
+					battles: 14,
+				}],
+			}),
+		});
+
+		await overlay.onApiProcessed({
+			calls: [{ name: 'arenaAttack', args: { enemyUserId: 79 } }],
+		});
+		await flushScheduledRefresh();
+
+		const icons = document.querySelectorAll('.oj-bro-team-icon');
+		expect(icons.length).toBeGreaterThanOrEqual(5);
+		expect(icons[0].getAttribute('src')).toContain('hero_icons');
+
+		overlay.destroy();
+	});
+
 	it('should create segmented grand arena requests for opponent teams', async () => {
 		const idb = makeIdbStorage({
 			grandArenaEnemies: [{ userId: 88, name: 'GrandTarget', teams: [{ power: 150000 }, { power: 160000 }, { power: 170000 }] }],

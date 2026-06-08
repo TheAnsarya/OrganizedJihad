@@ -1624,6 +1624,24 @@
 	line-height: 1.2;
 }
 
+.oj-bro-team-icons {
+	display: flex;
+	align-items: center;
+	gap: 4px;
+	margin-top: 5px;
+	flex-wrap: wrap;
+}
+
+.oj-bro-team-icon {
+	width: 20px;
+	height: 20px;
+	border-radius: 6px;
+	border: 1px solid rgba(173, 255, 220, 0.35);
+	background: rgba(7, 15, 12, 0.6);
+	object-fit: cover;
+	box-shadow: 0 0 0 1px rgba(11, 36, 25, 0.35);
+}
+
 .oj-bro-metrics {
 	font-size: 10px;
 	color: #99cdb2;

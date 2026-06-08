@@ -12,6 +12,7 @@
  */
 
 import { buildConfiguredApiUrl, getApiBaseUrlCandidates } from './helpers/apiConfig.js';
+import HERO_NAMES, { resolveHeroName } from './heroNames.js';
 
 const BATTLE_RECOMMENDATIONS_PATH = '/api/sync/battles/recommendations';
 const TEAM_RECOMMENDATIONS_PATH = '/api/sync/teams/recommendations';
@@ -145,6 +146,23 @@ const ENGINE_MODE_MAP = Object.freeze({
 	dungeon: 'dungeon',
 	toe: 'toe',
 });
+
+const HERO_NAME_TO_ID = Object.freeze(
+	Object.entries(HERO_NAMES).reduce((acc, [id, name]) => {
+		const normalized = normalizeEntityNameToken(name);
+		if (normalized && !(normalized in acc)) {
+			acc[normalized] = Number(id);
+		}
+		return acc;
+	}, {})
+);
+
+function normalizeEntityNameToken(value) {
+	return String(value || '')
+		.trim()
+		.toLowerCase()
+		.replace(/[^a-z0-9]+/g, '');
+}
 
 class BattleRecommendationOverlay {
 	/**
@@ -2263,6 +2281,7 @@ class BattleRecommendationOverlay {
 	_renderCardRows(cards) {
 		return cards.map((rec, index) => {
 			const teamPreview = this._escapeHtml(rec?.teamPreview || rec?.TeamPreview || rec?.team || 'Unknown Team');
+			const avatars = this._renderTeamAvatarStrip(rec);
 			const battles = Number(rec?.battles || rec?.sampleSize || rec?.totalBattles || rec?.sampleCount || 0);
 			const winRate = this._resolveWinRate(rec);
 			const confidence = this._resolveConfidence(rec);
@@ -2282,12 +2301,139 @@ class BattleRecommendationOverlay {
 
 			return `<div class="oj-bro-row" style="margin-top:${index === 0 ? '0' : '6px'}">
 				<div class="oj-bro-row-title">${teamPreview}</div>
+				${avatars}
 				<div class="oj-bro-metrics">Win ${winRate} • Conf ${confidence} • Score ${score} • ${battles} samples</div>
 				${simulationLine}
 				${powerLine}
 				<div class="oj-bro-rationale">${rationale}</div>
 			</div>`;
 		}).join('');
+	}
+
+	/**
+	 * Render compact avatar strip for a recommendation card.
+	 *
+	 * @param {object} rec - Recommendation row
+	 * @returns {string} HTML
+	 * @private
+	 */
+	_renderTeamAvatarStrip(rec) {
+		const heroIds = this._extractRecommendationHeroIds(rec).slice(0, 5);
+		if (heroIds.length === 0) {
+			return '';
+		}
+
+		const avatars = heroIds.map((heroId) => {
+			const resolvedId = Number(heroId);
+			if (!Number.isFinite(resolvedId) || resolvedId <= 0) {
+				return '';
+			}
+
+			const avatarUrl = this._resolveAvatarUrl(resolvedId);
+			const name = this._escapeHtml(resolveHeroName(resolvedId));
+			return `<img class="oj-bro-team-icon" src="${avatarUrl}" alt="${name}" title="${name}" loading="lazy" onerror="this.style.display='none'">`;
+		}).join('');
+
+		if (!avatars) {
+			return '';
+		}
+
+		return `<div class="oj-bro-team-icons">${avatars}</div>`;
+	}
+
+	/**
+	 * Resolve avatar URL for hero/titan/pet entity ids.
+	 *
+	 * @param {number} entityId - Hero/titan/pet id
+	 * @returns {string} Avatar URL
+	 * @private
+	 */
+	_resolveAvatarUrl(entityId) {
+		if (entityId >= 4000 && entityId < 5000) {
+			return `https://calc2.hw-assist.com/static/assets/images/titan_icons/titan_icon_${entityId}.png`;
+		}
+
+		const iconId = entityId >= 7000 ? entityId - 7000 : entityId;
+		return `https://calc2.hw-assist.com/static/assets/images/hero_icons/${String(iconId).padStart(4, '0')}.png`;
+	}
+
+	/**
+	 * Extract hero/titan ids from recommendation payload variants.
+	 *
+	 * @param {object} rec - Recommendation row
+	 * @returns {number[]} Ordered unique ids
+	 * @private
+	 */
+	_extractRecommendationHeroIds(rec) {
+		const seen = new Set();
+		const ids = [];
+
+		const pushId = (raw) => {
+			const id = Number(raw);
+			if (!Number.isFinite(id) || id <= 0 || seen.has(id)) {
+				return;
+			}
+			seen.add(id);
+			ids.push(id);
+		};
+
+		const idLists = [
+			rec?.heroIds,
+			rec?.HeroIds,
+			rec?.teamHeroIds,
+			rec?.TeamHeroIds,
+			rec?.recommendedHeroIds,
+			rec?.RecommendedHeroIds,
+			rec?.teamIds,
+			rec?.TeamIds,
+		];
+
+		for (const list of idLists) {
+			if (!Array.isArray(list)) continue;
+			for (const entry of list) {
+				pushId(entry);
+			}
+		}
+
+		const heroRows = [rec?.heroes, rec?.Heroes, rec?.team, rec?.Team];
+		for (const list of heroRows) {
+			if (!Array.isArray(list)) continue;
+			for (const row of list) {
+				if (typeof row === 'number' || typeof row === 'string') {
+					pushId(row);
+					continue;
+				}
+
+				if (row && typeof row === 'object') {
+					pushId(row.heroId || row.id || row.entityId);
+				}
+			}
+		}
+
+		if (ids.length > 0) {
+			return ids;
+		}
+
+		const preview = String(rec?.teamPreview || rec?.TeamPreview || rec?.team || '');
+		if (!preview) {
+			return ids;
+		}
+
+		const tokens = preview
+			.split(/[,|]/)
+			.map((token) => token.trim())
+			.filter(Boolean);
+
+		for (const token of tokens) {
+			const normalized = normalizeEntityNameToken(token);
+			if (!normalized) continue;
+			const mappedId = HERO_NAME_TO_ID[normalized];
+			if (mappedId) {
+				pushId(mappedId);
+			}
+		}
+
+		return ids;
 	}
 
 	/**
