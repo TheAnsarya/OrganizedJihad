@@ -1642,6 +1642,47 @@
 	box-shadow: 0 0 0 1px rgba(11, 36, 25, 0.35);
 }
 
+.oj-bro-tags {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 4px;
+	margin-top: 5px;
+}
+
+.oj-bro-tag {
+	font-size: 9px;
+	line-height: 1;
+	padding: 3px 6px;
+	border-radius: 999px;
+	border: 1px solid transparent;
+	background: rgba(255, 255, 255, 0.05);
+	color: #cceede;
+}
+
+.oj-bro-tag-confidence {
+	background: rgba(67, 160, 71, 0.16);
+	border-color: rgba(76, 175, 80, 0.35);
+	color: #9cefc7;
+}
+
+.oj-bro-tag-sample {
+	background: rgba(79, 163, 255, 0.16);
+	border-color: rgba(79, 163, 255, 0.35);
+	color: #b6deff;
+}
+
+.oj-bro-tag-sim {
+	background: rgba(156, 39, 176, 0.16);
+	border-color: rgba(156, 39, 176, 0.35);
+	color: #e3b7f7;
+}
+
+.oj-bro-tag-source {
+	background: rgba(255, 167, 38, 0.16);
+	border-color: rgba(255, 167, 38, 0.35);
+	color: #ffd99a;
+}
+
 .oj-bro-metrics {
 	font-size: 10px;
 	color: #99cdb2;

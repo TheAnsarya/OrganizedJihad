@@ -1952,9 +1952,15 @@ class BattleRecommendationOverlay {
 		const payloadNote = typeof payload?.note === 'string' && payload.note.trim().length > 0
 			? `<div class="oj-bro-empty" style="margin:6px 0 2px 0">${this._escapeHtml(payload.note)}</div>`
 			: '';
+		const sourceType = String(payload?.sourceType || '').trim();
 		const rows = segmented.length > 0
-			? this._renderSegmentedRows(segmented)
-			: this._renderCardRows(cards.slice(0, 3));
+			? this._renderSegmentedRows(segmented, sourceType)
+			: this._renderCardRows(
+				cards.slice(0, 3).map((rec) => ({
+					...rec,
+					sourceType: rec?.sourceType || sourceType,
+				}))
+			);
 
 		bodyEl.innerHTML = `
 			<div class="oj-bro-health-row">${healthBadge}</div>
@@ -2282,6 +2288,7 @@ class BattleRecommendationOverlay {
 		return cards.map((rec, index) => {
 			const teamPreview = this._escapeHtml(rec?.teamPreview || rec?.TeamPreview || rec?.team || 'Unknown Team');
 			const avatars = this._renderTeamAvatarStrip(rec);
+			const tags = this._renderRecommendationTags(rec);
 			const battles = Number(rec?.battles || rec?.sampleSize || rec?.totalBattles || rec?.sampleCount || 0);
 			const winRate = this._resolveWinRate(rec);
 			const confidence = this._resolveConfidence(rec);
@@ -2302,12 +2309,62 @@ class BattleRecommendationOverlay {
 			return `<div class="oj-bro-row" style="margin-top:${index === 0 ? '0' : '6px'}">
 				<div class="oj-bro-row-title">${teamPreview}</div>
 				${avatars}
+				${tags}
 				<div class="oj-bro-metrics">Win ${winRate} • Conf ${confidence} • Score ${score} • ${battles} samples</div>
 				${simulationLine}
 				${powerLine}
 				<div class="oj-bro-rationale">${rationale}</div>
 			</div>`;
 		}).join('');
+	}
+
+	/**
+	 * Render compact quality/source tags for a recommendation card.
+	 *
+	 * @param {object} rec - Recommendation row
+	 * @returns {string} HTML
+	 * @private
+	 */
+	_renderRecommendationTags(rec) {
+		const tags = [];
+		const confidenceRaw = Number(rec?.confidence ?? rec?.confidenceScore ?? 0);
+		const sampleCount = Number(rec?.battles || rec?.sampleSize || rec?.totalBattles || rec?.sampleCount || 0);
+		const simulationRuns = Number(rec?.simulationRuns || 0);
+		const sourceType = String(rec?.sourceType || rec?.source || '').trim().toLowerCase();
+
+		if (Number.isFinite(confidenceRaw) && confidenceRaw > 0) {
+			const confidenceLabel = confidenceRaw >= 0.7
+				? 'High confidence'
+				: confidenceRaw >= 0.45
+					? 'Medium confidence'
+					: 'Low confidence';
+			tags.push(`<span class="oj-bro-tag oj-bro-tag-confidence" title="Confidence score ${(Math.max(0, Math.min(1, confidenceRaw)) * 100).toFixed(0)}%">${confidenceLabel}</span>`);
+		}
+
+		if (sampleCount > 0) {
+			const sampleLabel = sampleCount >= 30
+				? 'Strong sample'
+				: sampleCount >= 10
+					? 'Growing sample'
+					: 'Sparse sample';
+			tags.push(`<span class="oj-bro-tag oj-bro-tag-sample" title="${sampleCount} historical matches">${sampleLabel}</span>`);
+		}
+
+		if (simulationRuns > 0 || Number.isFinite(Number(rec?.simulatedWinProbability))) {
+			tags.push('<span class="oj-bro-tag oj-bro-tag-sim">Simulator</span>');
+		}
+
+		if (sourceType.includes('engine')) {
+			tags.push('<span class="oj-bro-tag oj-bro-tag-source">Engine fallback</span>');
+		} else if (sourceType.includes('battle')) {
+			tags.push('<span class="oj-bro-tag oj-bro-tag-source">Battle history</span>');
+		}
+
+		if (tags.length === 0) {
+			return '';
+		}
+
+		return `<div class="oj-bro-tags">${tags.join('')}</div>`;
 	}
 
 	/**
@@ -2443,13 +2500,16 @@ class BattleRecommendationOverlay {
 	 * @returns {string} HTML
 	 * @private
 	 */
-	_renderSegmentedRows(segments) {
+	_renderSegmentedRows(segments, defaultSourceType = '') {
 		return segments.map((segment) => {
 			const power = Number(segment?.opponentPower || 0).toLocaleString();
 			const title = `Team ${Number(segment?.slot || 0)} • target ${power}`;
 			const cards = Array.isArray(segment?.recommendations) ? segment.recommendations : [];
 			const rows = cards.length > 0
-				? this._renderCardRows(cards)
+				? this._renderCardRows(cards.map((rec) => ({
+					...rec,
+					sourceType: rec?.sourceType || segment?.sourceType || defaultSourceType,
+				})))
 				: '<div class="oj-bro-empty">No team-slot recommendation yet.</div>';
 			return `<div class="oj-bro-segment">
 				<div class="oj-bro-segment-title">${this._escapeHtml(title)}</div>
