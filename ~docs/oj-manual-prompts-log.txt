@@ -674,6 +674,62 @@ There's no tray icon for the apiserver what happened to it? fix it! I can't the 
 
 Ok, `http://localhost:5124/docs/` works, but where are the battle team recommendations? where are the all the hero/titan/inventory/mail/actions/events/airship/shop/tower/arena/dungeon/guildraid/ToE/consumables/etc logging/tracking api points in the apiserver? Aren't we tracking everything on the server and only temporarily storing it on the browser? make that effort with issues/etc and implement; work many issues and slices continue;
 
+continue;
+continue;
+continue;
+
+team recommendations is not working in the game; open up the file that explains how team recs works and what code is called; fix the userscript code so it actually fetches and shows a recommendation; add a battle rec small open/close circle button next to the main organized jihad button so the battle rec overlay isn't always visible and in the way; issues/docs/etc; continue;
+
+[OJ] (apiserver) Where are the team recommendation api endpoints? I'm not seeing them in `http://localhost:5124/docs/` what is the userscript calling fix the apiserver functionality and the inclusion in the openapi/scaler docs endpoint; yes, make the battle recs hidden by default because we have the button; so ensure the api and logic for recommendations and also accepting data from the userscript about battles and heros and titans and inventory, etc ; and also the database that contains all these data points, make sure the data project has all the necessary tables and build scripts and method/function surface area and that the db actually runs during the server startup; continue;
+
+continue;
+continue;
+continue;
+continue;
+
+git commit everything in logical groups; build the apiserver and userscript and installer and run the installer so I can update the apiserver and userscript for testing; run the installer after everything is built and packaged together; continue;
+
+I never saw the installer, make sure everything is built and tun the installer so I can install the apiserver and userscript
+
+The battle team recs overlay shows up automatically and I don't want it to, also the button we added to open and close the team recs is not there, where is it? And the battle recs UI still says the API is unavailable but the api server is running, what's the disconnect? is the address wrong or something? fix it!; continue;
+
+The user script in the installer is v0.9.240 which is the same as before, did that bundle get updated?
+
+rerun the installer with the updated script
+
+run the installer, damnit! open the exe so I can install!
+
+Battle recs button should be to the left of the OrganizedJihad button because the OJ button changes width; The API calls from battle recs are apparently still wrong: "API temporarily unavailable. Retrying with backoff." so check to make sure the address is the correct default or update it from the installer/userscript and also make sure the calls are going to the correct commands in the apiserver; continue working; then when done, rebuild and run the installer again so we can update the apiserver and userscript; continue;
+
+The user script in the installer is v0.9.248 which is the same as before, did that bundle get updated? I thought we updated the pipeline to rebuild the userscript bundle for the installer every time; Battle recs button should be to the left of the OrganizedJihad button because the OJ button changes width; The API calls from battle recs are apparently still wrong: "API temporarily unavailable. Retrying with backoff." so check to make sure the address is the correct default or update it from the installer/userscript and also make sure the calls are going to the correct commands in the apiserver; continue working; then when done, rebuild and run the installer again so we can update the apiserver and userscript; continue;
+
+FOCUS ENTIRELY ON: The API calls from battle recs are apparently still wrong: "API temporarily unavailable. Retrying with backoff." make it work with apiserver. If the saved address in the browser is wrong then fix it; do everything you can to give me a single actual team recommendation in game, I haven't seen shit; continue;
+
+install the new versions of the apiserver and userscript in operagx or rebuild/rerun the installer so I can do it manually; continue;
+
+NOPE! installer still has 0.09.254 which was the last version, the installer build process should take the userscript code and bundle the latest version every time, same with the api server; fix it, rebuild the installer with the most current code, run the installer for me;
+
+[OJ] (apiserver) `http://localhost:5124/docs/` still doesn't show the battle team recs api endpoints, make all apiserver controllers visible in the api docs; don't just used logged battles to generate battle team recs, we already found internet sources of information for which heros counter who and titan team counters; I also don't see the api endpoints that save current hero/titan/etc state (like heros' level, items, glyphs, artifacts, etc);;; [OJ] (Userscript) make sure we're pushing all data and current hero/titan/etc state (like heros' level, items, glyphs, artifacts, etc) all saved in the database, create new tables and migration scripts if needed and controller endpoints that accept the state and saves it; continue;
+
+The Team recs have a message after the rec that says "Bootstrap fallback recommendation for arena. Sync heroes/titans and battle history to replace this with calibrated recommendations." but how do I sync these things? Is there a sync button somewhere? shouldn't these things auto-sync? [OJ] (Userscript) The script is regularly freezing the browser, review the code to make it more efficient and rework code that blocks the UI thread, do not block the UI thread, use the most modern standards and practices and patterns and add tests and benchmarks; continue; 
+
+do that; continue;
+
+git commit everything and continue working on battle team recs, including adding the avatar icons to the recs; continue;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 

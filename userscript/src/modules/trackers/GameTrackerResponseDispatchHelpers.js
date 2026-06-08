@@ -5,6 +5,8 @@
  * payload projection, and status synthesis.
  */
 
+import { yieldToMainThread } from '../helpers/cooperativeScheduler.js';
+
 /**
  * Build dependency-aware ordered result list from raw API results.
  *
@@ -61,8 +63,20 @@ export async function dispatchSortedResults(tracker, sortedResults, callMap, cal
 	const dispatched = [];
 	const unhandled = [];
 	const errors = [];
+	let processed = 0;
+	const yieldFrequency = Number.isFinite(tracker?._cooperativeYieldEvery)
+		? tracker._cooperativeYieldEvery
+		: 6;
+	const cooperativeYield = typeof tracker?._cooperativeYield === 'function'
+		? tracker._cooperativeYield
+		: yieldToMainThread;
 
 	for (const result of sortedResults) {
+		processed++;
+		if (yieldFrequency > 0 && processed % yieldFrequency === 0) {
+			await cooperativeYield();
+		}
+
 		const callName = callMap[result.ident];
 		const args = callArgs[result.ident];
 		const responseData = result.result?.response;

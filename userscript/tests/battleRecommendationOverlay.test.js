@@ -138,6 +138,7 @@ describe('BattleRecommendationOverlay', () => {
 
 		global.fetch
 			.mockResolvedValueOnce({ ok: true, json: async () => ({ recommendations: [] }) })
+			.mockResolvedValueOnce({ ok: true, json: async () => ({ recommendations: [] }) })
 			.mockResolvedValueOnce({ ok: true, json: async () => ({ recommendations: [{ teamPreview: 'Fallback Team', estimatedWinProbability: 0.7, confidenceScore: 0.6, finalScore: 0.72, sampleSize: 8 }] }) });
 
 		await overlay.onApiProcessed({
@@ -145,9 +146,10 @@ describe('BattleRecommendationOverlay', () => {
 		});
 		await flushScheduledRefresh();
 
-		expect(global.fetch).toHaveBeenCalledTimes(2);
-		expect(global.fetch.mock.calls[1][0]).toContain('/api/sync/teams/recommendations');
-		expect(global.fetch.mock.calls[1][0]).toContain('objective=offense');
+		expect(global.fetch).toHaveBeenCalledTimes(3);
+		expect(global.fetch.mock.calls[1][0]).toContain('/api/sync/battles/recommendations');
+		expect(global.fetch.mock.calls[2][0]).toContain('/api/sync/teams/recommendations');
+		expect(global.fetch.mock.calls[2][0]).toContain('objective=offense');
 
 		overlay.destroy();
 	});
@@ -988,6 +990,29 @@ describe('BattleRecommendationOverlay', () => {
 
 		const body = document.querySelector('#oj-bro-body')?.textContent || '';
 		expect(body).toContain('Stable');
+
+		overlay.destroy();
+	});
+
+	it('should not enter backoff when API responds successfully with empty recommendations', async () => {
+		const idb = makeIdbStorage({ arenaEnemies: [{ userId: 11, name: 'Sparse', power: 120000 }] });
+		const overlay = new BattleRecommendationOverlay(idb, makePrefStorage());
+		overlay.init();
+
+		global.fetch
+			.mockResolvedValueOnce({ ok: true, json: async () => ({ recommendations: [] }) })
+			.mockResolvedValueOnce({ ok: true, json: async () => ({ recommendations: [] }) })
+			.mockResolvedValueOnce({ ok: true, json: async () => ({ recommendations: [] }) });
+
+		await overlay.onApiProcessed({ calls: [{ name: 'arenaAttack', args: { enemyUserId: 11 } }] });
+		await flushScheduledRefresh();
+
+		expect(global.fetch).toHaveBeenCalledTimes(3);
+		expect(overlay._dataHealth).toBe('live');
+		expect(overlay._renderHealthBadge()).toContain('Live data');
+
+		const hint = document.querySelector('#oj-bro-hints')?.textContent || '';
+		expect(hint).toContain('API connected');
 
 		overlay.destroy();
 	});

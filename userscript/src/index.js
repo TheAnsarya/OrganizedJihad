@@ -146,11 +146,11 @@ import './styles/main.css';
 
 				// Delegate to PHASE 2 UI callback (badge, overlay, etc.)
 				if (onApiProcessed) {
-					try {
-						await onApiProcessed(request, response, callSnapshot);
-					} catch (e) {
-						console.warn('[OrganizedJihad] onApiProcessed callback error:', e);
-					}
+					Promise.resolve()
+						.then(() => onApiProcessed(request, response, callSnapshot))
+						.catch((e) => {
+							console.warn('[OrganizedJihad] onApiProcessed callback error:', e);
+						});
 				}
 
 				return result;
@@ -241,7 +241,7 @@ import './styles/main.css';
 			button.type = 'button';
 			button.setAttribute('aria-label', 'Toggle battle recommendations overlay');
 			button.title = 'Battle recommendations overlay (Alt+R)';
-			button.textContent = '◉';
+			button.textContent = 'R';
 			document.body.appendChild(button);
 			return button;
 		}
@@ -261,6 +261,10 @@ import './styles/main.css';
 				badge.classList.add('oj-badge-active');
 				dot.classList.add('oj-badge-dot-active');
 				text.textContent = `OrganizedJihad: ${count}`;
+			}
+
+			if (typeof window._ojBattleRecoToggleReposition === 'function') {
+				window._ojBattleRecoToggleReposition();
 			}
 		}
 
@@ -331,14 +335,18 @@ import './styles/main.css';
 				left: 430px;
 				width: 28px;
 				height: 28px;
+				display: inline-flex;
+				align-items: center;
+				justify-content: center;
 				border-radius: 50%;
 				border: 1px solid rgba(200, 150, 255, 0.28);
 				background: #2a1031;
-				color: #c6a8ff;
-				font-size: 13px;
+				color: #f2deff;
+				font-size: 14px;
+				font-weight: 700;
 				line-height: 1;
 				cursor: pointer;
-				z-index: 999998;
+				z-index: 1000001;
 				box-shadow: 0 2px 12px rgba(59, 20, 61, 0.5);
 				transition: all 0.2s ease;
 				padding: 0;
@@ -357,6 +365,22 @@ import './styles/main.css';
 
 		const statusBadge = createStatusBadge();
 		const battleRecoToggleBtn = createBattleRecoToggleButton();
+
+		const positionBattleRecoToggleButton = () => {
+			if (!battleRecoToggleBtn || !statusBadge) return;
+			const badgeRect = statusBadge.getBoundingClientRect();
+			const size = 28;
+			const spacing = 8;
+			let left = Math.round(badgeRect.left - spacing - size);
+			const top = Math.max(8, Math.round(badgeRect.top + ((badgeRect.height - size) / 2)));
+			left = Math.max(8, Math.min(window.innerWidth - size - 8, left));
+
+			battleRecoToggleBtn.style.left = `${left}px`;
+			battleRecoToggleBtn.style.top = `${top}px`;
+		};
+		positionBattleRecoToggleButton();
+		window.addEventListener('resize', positionBattleRecoToggleButton);
+		window._ojBattleRecoToggleReposition = positionBattleRecoToggleButton;
 
 		// ─── Global Error Handlers ──────────────────────────────────
 		// Catch any uncaught errors/rejections from our code and
@@ -474,11 +498,15 @@ import './styles/main.css';
 		const goalsManager = new GoalsManager(prefStorage);
 		const calendarManager = new CalendarManager(prefStorage);
 		const suggestionsEngine = new SuggestionsEngine(prefStorage, gameTracker, goalsManager);
-		const uiManager = new UIManager(prefStorage, idbStorage, gameTracker, goalsManager, calendarManager, suggestionsEngine);
+		const uiManager = new UIManager(prefStorage, idbStorage, gameTracker, goalsManager, calendarManager, suggestionsEngine, syncClient);
 
 		// Initialize game overlay (floating hero completion panel, toggle via Alt+H)
 		const gameOverlay = new GameOverlay(idbStorage, prefStorage);
 		gameOverlay.init();
+
+		// Startup preference guard: keep battle recommendations hidden unless explicitly opened.
+		prefStorage.set('battleRecommendationOverlayVisible', false);
+		prefStorage.set('battleRecommendationOverlayAutoShow', false);
 
 		// Initialize battle recommendation overlay (floating in-game helper, Alt+R)
 		const battleRecommendationOverlay = new BattleRecommendationOverlay(idbStorage, prefStorage);
@@ -574,6 +602,7 @@ import './styles/main.css';
 			} else {
 				uiManager.show();
 			}
+			positionBattleRecoToggleButton();
 		});
 
 		battleRecoToggleBtn.addEventListener('click', (event) => {
@@ -636,6 +665,9 @@ import './styles/main.css';
 		}
 		if (window._ojGlobalRejectionHandler) {
 			window.removeEventListener('unhandledrejection', window._ojGlobalRejectionHandler);
+		}
+		if (window._ojBattleRecoToggleReposition) {
+			window.removeEventListener('resize', window._ojBattleRecoToggleReposition);
 		}
 		for (const mod of _destroyables) {
 			try {

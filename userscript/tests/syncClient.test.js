@@ -83,7 +83,9 @@ describe('SyncClient constructor', () => {
 	test('should use default API URL', () => {
 		const client = new SyncClient();
 		expect(client.apiUrl).toBe('http://localhost:5124');
-		expect(client.syncEndpoint).toBe('http://localhost:5124/api/sync/import');
+		expect(client.stateSyncEndpoint).toBe('http://localhost:5124/api/sync/state/import');
+		expect(client.legacySyncEndpoint).toBe('http://localhost:5124/api/sync/import');
+		expect(client.syncEndpoint).toBe('http://localhost:5124/api/sync/state/import');
 		expect(client.healthEndpoint).toBe('http://localhost:5124/api/sync/health');
 		expect(client.lastSyncEndpoint).toBe('http://localhost:5124/api/sync/last-sync');
 		expect(client.statsEndpoint).toBe('http://localhost:5124/api/sync/stats');
@@ -92,7 +94,9 @@ describe('SyncClient constructor', () => {
 	test('should accept custom API URL', () => {
 		const client = new SyncClient('http://example.com:9000');
 		expect(client.apiUrl).toBe('http://example.com:9000');
-		expect(client.syncEndpoint).toBe('http://example.com:9000/api/sync/import');
+		expect(client.stateSyncEndpoint).toBe('http://example.com:9000/api/sync/state/import');
+		expect(client.legacySyncEndpoint).toBe('http://example.com:9000/api/sync/import');
+		expect(client.syncEndpoint).toBe('http://example.com:9000/api/sync/state/import');
 	});
 });
 

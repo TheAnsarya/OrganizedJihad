@@ -11,7 +11,7 @@
  * @module battleRecommendationOverlay
  */
 
-import { buildConfiguredApiUrl } from './helpers/apiConfig.js';
+import { buildConfiguredApiUrl, getApiBaseUrlCandidates } from './helpers/apiConfig.js';
 
 const BATTLE_RECOMMENDATIONS_PATH = '/api/sync/battles/recommendations';
 const TEAM_RECOMMENDATIONS_PATH = '/api/sync/teams/recommendations';
@@ -206,6 +206,8 @@ class BattleRecommendationOverlay {
 		this._dataHealth = 'live';
 		/** @type {number|null} */
 		this._refreshTimer = null;
+		/** @type {string} */
+		this._lastRequestError = '';
 		/** @type {number} */
 		this._lastContextPriority = 0;
 		/** @type {number} */
@@ -238,6 +240,7 @@ class BattleRecommendationOverlay {
 		this._onMouseMove = this._onMouseMove.bind(this);
 		this._onMouseUp = this._onMouseUp.bind(this);
 		this._onVisibilityChanged = null;
+
 	}
 
 	/**
@@ -1139,6 +1142,8 @@ class BattleRecommendationOverlay {
 	 */
 	async _fetchRecommendations() {
 		let usedEngineFallback = false;
+		let hadSuccessfulResponse = false;
+		let lastSuccessfulPayload = null;
 		const now = Date.now();
 		if (now < this._nextAllowedRequestAt) {
 			this._dataHealth = 'backoff';
@@ -1158,18 +1163,52 @@ class BattleRecommendationOverlay {
 
 		try {
 			let payload = null;
+			const fetchSource = async (fetcher, sourceLabel) => {
+				const result = await this._safeRecommendationFetch(fetcher, sourceLabel);
+				if (result.success) {
+					hadSuccessfulResponse = true;
+					if (result.payload && typeof result.payload === 'object') {
+						lastSuccessfulPayload = result.payload;
+					}
+				}
+				return result;
+			};
 
 			if (contextMode === 'grandarena' && this._context.opponentTeams.length > 1) {
-				payload = await this._fetchGrandArenaSegmentedRecommendations(sequence, minSamples);
+				const segmentedResult = await fetchSource(
+					() => this._fetchGrandArenaSegmentedRecommendations(sequence, minSamples),
+					'grand-arena-segmented'
+				);
+				payload = segmentedResult.payload;
 			} else if (contextMode === 'arena') {
-				payload = await this._fetchArenaSimulationRecommendations(sequence, objective, minSamples);
+				const arenaSimulationResult = await fetchSource(
+					() => this._fetchArenaSimulationRecommendations(sequence, objective, minSamples),
+					'arena-simulate'
+				);
+				payload = arenaSimulationResult.payload;
+
+				if (!this._hasRecommendations(payload)) {
+					const arenaBattleFallbackResult = await fetchSource(
+						() => this._fetchBattleRecommendationsForTarget(sequence, contextMode, minSamples),
+						'arena-battle-fallback'
+					);
+					payload = arenaBattleFallbackResult.payload;
+				}
 			} else if (ARENA_FAMILY_MODES.has(contextMode)) {
-				payload = await this._fetchBattleRecommendationsForTarget(sequence, contextMode, minSamples);
+				const arenaFamilyResult = await fetchSource(
+					() => this._fetchBattleRecommendationsForTarget(sequence, contextMode, minSamples),
+					'arena-family-battle'
+				);
+				payload = arenaFamilyResult.payload;
 			}
 
 			if (!this._hasRecommendations(payload)) {
 				usedEngineFallback = true;
-				payload = await this._fetchModeEngineRecommendations(sequence, mode, objective, minSamples);
+				const modeEngineResult = await fetchSource(
+					() => this._fetchModeEngineRecommendations(sequence, mode, objective, minSamples),
+					'mode-engine'
+				);
+				payload = modeEngineResult.payload;
 			}
 
 			if (sequence !== this._requestSequence) {
@@ -1184,15 +1223,44 @@ class BattleRecommendationOverlay {
 				return payload;
 			}
 
-			this._recordFetchFailure();
-			return this._lastSuccessfulPayload;
-		} catch {
+			if (hadSuccessfulResponse) {
+				const emptyPayload = lastSuccessfulPayload || {
+					recommendations: [],
+					note: 'No recommendation candidates yet. Play more battles and sync roster snapshots to train recommendations.',
+				};
+				this._recordFetchNoRecommendations(emptyPayload);
+				return emptyPayload;
+			}
+
 			this._recordFetchFailure();
 			return this._lastSuccessfulPayload;
 		} finally {
 			if (this._activeFetchController) {
 				this._activeFetchController = null;
 			}
+		}
+	}
+
+	/**
+	 * Execute recommendation source fetch and return null on source-specific failure.
+	 *
+	 * @param {() => Promise<object|null>} fetcher - Source fetch callback
+	 * @param {string} sourceLabel - Source label for diagnostics
+	 * @returns {Promise<object|null>} payload or null
+	 * @private
+	 */
+	async _safeRecommendationFetch(fetcher, sourceLabel) {
+		try {
+			return {
+				success: true,
+				payload: await fetcher(),
+			};
+		} catch (error) {
+			this._lastRequestError = `${sourceLabel}: ${String(error?.message || error || 'request failed')}`;
+			return {
+				success: false,
+				payload: null,
+			};
 		}
 	}
 
@@ -1363,6 +1431,40 @@ class BattleRecommendationOverlay {
 	 * @private
 	 */
 	async _request(url, options = {}) {
+		const candidates = this._buildApiRequestCandidates(url);
+		let lastError = null;
+
+		for (const candidateUrl of candidates) {
+			try {
+				const response = await this._requestSingle(candidateUrl, options);
+
+				if (response.ok) {
+					this._persistSuccessfulApiBase(candidateUrl);
+					return response;
+				}
+
+				if (response.status === 404 && candidateUrl !== candidates[candidates.length - 1]) {
+					continue;
+				}
+
+				return response;
+			} catch (error) {
+				lastError = error;
+			}
+		}
+
+		throw lastError || new Error('API request failed');
+	}
+
+	/**
+	 * Execute one request URL with fetch-first and Tampermonkey fallback.
+	 *
+	 * @param {string} url - Absolute URL
+	 * @param {{method?:string, headers?:Object, body?:string, signal?:AbortSignal}} options - Request options
+	 * @returns {Promise<{ok:boolean,status:number,statusText:string,json:Function,text:Function}>}
+	 * @private
+	 */
+	async _requestSingle(url, options = {}) {
 		try {
 			return await fetch(url, options);
 		} catch (fetchError) {
@@ -1374,6 +1476,46 @@ class BattleRecommendationOverlay {
 				}
 				throw gmError;
 			}
+		}
+	}
+
+	/**
+	 * Build candidate request URLs from configured and local fallback API origins.
+	 *
+	 * @param {string} rawUrl - Original absolute URL
+	 * @returns {string[]} Candidate absolute URLs
+	 * @private
+	 */
+	_buildApiRequestCandidates(rawUrl) {
+		try {
+			const parsed = new URL(rawUrl);
+			const suffix = `${parsed.pathname}${parsed.search}${parsed.hash}`;
+			const candidates = getApiBaseUrlCandidates(this.prefStorage).map((base) => `${base}${suffix}`);
+			if (!candidates.includes(rawUrl)) {
+				candidates.unshift(rawUrl);
+			}
+			return candidates;
+		} catch {
+			return [rawUrl];
+		}
+	}
+
+	/**
+	 * Persist resolved working API base URL so future requests use the recovered origin.
+	 *
+	 * @param {string} url - Successful absolute URL
+	 * @private
+	 */
+	_persistSuccessfulApiBase(url) {
+		try {
+			const parsed = new URL(url);
+			const recoveredBase = `${parsed.protocol}//${parsed.host}`;
+			const currentBase = this.prefStorage.get('apiBaseUrl', '');
+			if (recoveredBase && recoveredBase !== currentBase) {
+				this.prefStorage.set('apiBaseUrl', recoveredBase);
+			}
+		} catch {
+			// best effort
 		}
 	}
 
@@ -1452,10 +1594,26 @@ class BattleRecommendationOverlay {
 		this._consecutiveFailures = 0;
 		this._nextAllowedRequestAt = 0;
 		this._dataHealth = 'live';
+		this._lastRequestError = '';
 		this._lastSuccessfulPayload = payload;
 		if (hadFailures) {
 			this._showHint('Recommendation API connection recovered.', 'info', 4500, 'api-recovered');
 		}
+	}
+
+	/**
+	 * Record successful API reachability when no recommendation cards are currently available.
+	 *
+	 * @param {object} payload - Successful no-data payload
+	 * @private
+	 */
+	_recordFetchNoRecommendations(payload) {
+		this._consecutiveFailures = 0;
+		this._nextAllowedRequestAt = 0;
+		this._dataHealth = 'live';
+		this._lastRequestError = '';
+		this._lastSuccessfulPayload = payload;
+		this._showHint('API connected. No recommendation samples yet for this context.', 'warning', DEFAULT_HINT_TTL_MS, 'api-no-recommendations');
 	}
 
 	/**
@@ -1473,7 +1631,8 @@ class BattleRecommendationOverlay {
 			return;
 		}
 
-		this._showHint('API temporarily unavailable. Retrying with backoff.', 'error', DEFAULT_HINT_TTL_MS, 'api-backoff');
+		const detail = this._lastRequestError ? ` (${this._lastRequestError})` : '';
+		this._showHint(`API temporarily unavailable. Retrying with backoff.${detail}`, 'error', DEFAULT_HINT_TTL_MS, 'api-backoff');
 	}
 
 	/**

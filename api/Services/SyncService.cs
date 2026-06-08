@@ -1706,6 +1706,51 @@ public class SyncService {
 
 		var now = DateTime.UtcNow;
 		var recommendations = BattleRecommendationMath.BuildCandidates(samples, normalizedType, _battleSimulator, opponentPower, minSamples, limit, now);
+		string? note = null;
+
+		if (recommendations.Count == 0) {
+			var engineFallback = await GetTeamRecommendationsAsync(
+				mode: normalizedType,
+				objective: "balanced",
+				limit: limit,
+				minSamples: Math.Max(1, minSamples),
+				preferredTrendWindowDays: null,
+				includeHistorical: false
+			);
+
+			recommendations = engineFallback.Recommendations
+				.Where(card => !string.IsNullOrWhiteSpace(card.TeamPreview))
+				.Take(limit)
+				.Select(card => {
+					var simulated = card.SimulatedWinProbability ?? card.EstimatedWinProbability;
+					var confidenceHalfWindow = Math.Max(0.03, (1d - Math.Clamp(card.ConfidenceScore, 0d, 1d)) * 0.10);
+					return new BattleRecommendationCandidate {
+						TeamKey = BattleRecommendationMath.NormalizeTeamKey(card.TeamPreview),
+						TeamPreview = card.TeamPreview,
+						Battles = 0,
+						Wins = 0,
+						Losses = 0,
+						WinRate = Math.Round(Math.Clamp(card.EstimatedWinProbability, 0d, 1d), 4),
+						WeightedWinRate = Math.Round(Math.Clamp(card.EstimatedWinProbability, 0d, 1d), 4),
+						Confidence = Math.Round(Math.Clamp(card.ConfidenceScore, 0d, 1d), 4),
+						Score = Math.Round(Math.Clamp(card.FinalScore, 0d, 1d), 4),
+						SimulatedWinProbability = Math.Round(Math.Clamp(simulated, 0d, 1d), 4),
+						SimulationRuns = card.SimulationRuns ?? 0,
+						SimulationConfidenceLow = Math.Round(Math.Clamp(simulated - confidenceHalfWindow, 0d, 1d), 4),
+						SimulationConfidenceHigh = Math.Round(Math.Clamp(simulated + confidenceHalfWindow, 0d, 1d), 4),
+						AverageOpponentPower = opponentPower ?? card.OpponentPowerUsed ?? 0,
+						LastSeen = now,
+						Rationale = string.IsNullOrWhiteSpace(card.Rationale)
+							? "Engine/external fallback recommendation generated from synced roster and curated counter-signal sources."
+							: card.Rationale,
+					};
+				})
+				.ToList();
+
+			if (recommendations.Count > 0) {
+				note = "Sparse historical battle samples. Returning engine/external counter-signal fallback recommendations.";
+			}
+		}
 
 		return new BattleRecommendationResponse {
 			BattleType = normalizedType,
@@ -1717,6 +1762,7 @@ public class SyncService {
 			SampleCount = sampleCount,
 			BaselineWinRate = Math.Round(baselineWinRate, 4),
 			Recommendations = recommendations,
+			Note = note,
 			GeneratedAtUtc = now
 		};
 	}
@@ -1729,7 +1775,8 @@ public class SyncService {
 		string objective = "balanced",
 		int limit = 3,
 		int minSamples = 2,
-		int? preferredTrendWindowDays = null
+		int? preferredTrendWindowDays = null,
+		bool includeHistorical = true
 	) {
 		var normalizedMode = TeamRecommendationOrchestrationMath.NormalizeMode(mode);
 		var normalizedObjective = TeamRecommendationOrchestrationMath.NormalizeObjective(objective);
@@ -1828,7 +1875,7 @@ public class SyncService {
 
 		var cards = new List<TeamRecommendationCard>();
 
-		if (normalizedMode is "arena" or "grandarena") {
+		if (includeHistorical && (normalizedMode is "arena" or "grandarena")) {
 			var historical = await GetBattleRecommendationsAsync(
 				normalizedMode,
 				opponentId: null,
@@ -1886,6 +1933,13 @@ public class SyncService {
 			.Take(safeLimit)
 			.ToList();
 
+		if (ranked.Count == 0) {
+			var rosterFallbackCard = BuildRosterFallbackRecommendationCard(latestHeroes, latestTitans, normalizedMode, normalizedObjective, profile.ProfileName);
+			if (rosterFallbackCard != null) {
+				ranked.Add(rosterFallbackCard);
+			}
+		}
+
 		return new TeamRecommendationEngineResponse {
 			Mode = normalizedMode,
 			Objective = normalizedObjective,
@@ -1900,6 +1954,101 @@ public class SyncService {
 			},
 			Recommendations = ranked,
 			GeneratedAtUtc = DateTime.UtcNow,
+		};
+	}
+
+	/// <summary>
+	/// Builds a minimum viable roster-based recommendation card when history/synthetic scoring returns no rows.
+	/// </summary>
+	/// <param name="latestHeroes">Latest known hero roster snapshots</param>
+	/// <param name="latestTitans">Latest known titan roster snapshots</param>
+	/// <param name="mode">Normalized recommendation mode</param>
+	/// <param name="objective">Normalized recommendation objective</param>
+	/// <param name="profileName">Active scoring profile name</param>
+	/// <returns>Fallback recommendation card or null when no roster names exist</returns>
+	private static TeamRecommendationCard? BuildRosterFallbackRecommendationCard(
+		IReadOnlyList<Hero> latestHeroes,
+		IReadOnlyList<Titan> latestTitans,
+		string mode,
+		string objective,
+		string profileName
+	) {
+		var heroNames = latestHeroes
+			.Select(h => h.HeroName)
+			.Where(name => !string.IsNullOrWhiteSpace(name))
+			.Select(name => name.Trim())
+			.Distinct(StringComparer.OrdinalIgnoreCase)
+			.Take(5)
+			.ToList();
+
+		if (heroNames.Count > 0) {
+			return new TeamRecommendationCard {
+				Source = "roster-fallback",
+				TeamPreview = string.Join(", ", heroNames),
+				ContextTag = objective,
+				ModeProfile = profileName,
+				EstimatedWinProbability = 0.50,
+				ReadinessScore = 0.55,
+				ConfidenceScore = 0.30,
+				FinalScore = 0.50,
+				Rationale = $"Fallback roster recommendation for {mode}. More battle history will improve ranking quality.",
+				Provenance = [new TeamRecommendationProvenance {
+					SourceType = "roster",
+					SourceName = "latest-hero-roster",
+					Confidence = 0.30,
+					Detail = "Generated from the strongest available synced heroes when historical recommendation candidates were unavailable.",
+				}],
+			};
+		}
+
+		var titanNames = latestTitans
+			.Select(t => t.TitanName)
+			.Where(name => !string.IsNullOrWhiteSpace(name))
+			.Select(name => name.Trim())
+			.Distinct(StringComparer.OrdinalIgnoreCase)
+			.Take(5)
+			.ToList();
+
+		if (titanNames.Count > 0) {
+			return new TeamRecommendationCard {
+				Source = "roster-fallback",
+				TeamPreview = string.Join(", ", titanNames),
+				ContextTag = objective,
+				ModeProfile = profileName,
+				EstimatedWinProbability = 0.50,
+				ReadinessScore = 0.50,
+				ConfidenceScore = 0.25,
+				FinalScore = 0.48,
+				Rationale = $"Titan roster fallback recommendation for {mode}. Sync additional battles for calibrated win-rate guidance.",
+				Provenance = [new TeamRecommendationProvenance {
+					SourceType = "roster",
+					SourceName = "latest-titan-roster",
+					Confidence = 0.25,
+					Detail = "Generated from synced titans because hero candidates were unavailable.",
+				}],
+			};
+		}
+
+		var bootstrapPreview = mode == "titanarena"
+			? "Araji, Hyperion, Eden, Nova, Sigurd"
+			: "Astaroth, Keira, Nebula, Sebastian, Martha";
+
+		return new TeamRecommendationCard {
+			Source = "bootstrap-fallback",
+			TeamPreview = bootstrapPreview,
+			ContextTag = objective,
+			ModeProfile = profileName,
+			EstimatedWinProbability = 0.50,
+			ReadinessScore = 0.35,
+			ConfidenceScore = 0.20,
+			FinalScore = 0.45,
+			Rationale = $"Bootstrap fallback recommendation for {mode}. Sync heroes/titans and battle history to replace this with calibrated recommendations.",
+			Provenance = [new TeamRecommendationProvenance {
+				SourceType = "fallback",
+				SourceName = "bootstrap-template",
+				Confidence = 0.20,
+				Detail = "Returned because no synced roster or historical recommendation candidates were available yet.",
+			}],
 		};
 	}
 

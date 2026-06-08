@@ -162,14 +162,16 @@ class UIManager {
 	 * @param {import('./goalsManager.js').default} goalsManager - Goals management
 	 * @param {import('./calendarManager.js').default} calendarManager - Calendar management
 	 * @param {import('./suggestionsEngine.js').default} suggestionsEngine - Suggestions engine
+	 * @param {import('./syncClient.js').default|null} [syncClient=null] - Optional sync client for manual sync actions
 	 */
-	constructor(prefStorage, idbStorage, gameTracker, goalsManager, calendarManager, suggestionsEngine) {
+	constructor(prefStorage, idbStorage, gameTracker, goalsManager, calendarManager, suggestionsEngine, syncClient = null) {
 		this.prefStorage = prefStorage;
 		this.idbStorage = idbStorage;
 		this.gameTracker = gameTracker;
 		this.goalsManager = goalsManager;
 		this.calendarManager = calendarManager;
 		this.suggestionsEngine = suggestionsEngine;
+		this.syncClient = syncClient;
 
 		this.isVisible = this.prefStorage.get('uiVisible', false);
 		this.currentView = this.prefStorage.get('defaultTab', 'dashboard');
@@ -3783,6 +3785,15 @@ class UIManager {
 				</div>
 
 				<div class="oj-settings-group">
+					<h4>Sync</h4>
+					<p class="oj-muted" style="margin:0 0 8px;font-size:11px">Auto-sync runs on startup and every 15 minutes when API is reachable.</p>
+					<div class="oj-btn-row">
+						<button class="oj-btn" id="oj-sync-now">\uD83D\uDD04 Sync Now</button>
+					</div>
+					<div id="oj-sync-status" style="font-size:11px;color:#aaa;margin-top:8px">Loading sync status...</div>
+				</div>
+
+				<div class="oj-settings-group">
 					<h4>API Sample Collector</h4>
 					<p class="oj-muted" style="margin:0 0 8px;font-size:11px">
 						Captures one complete, untruncated API response per method.
@@ -3847,6 +3858,8 @@ class UIManager {
 			overlay: this.overlay,
 			gameTracker: this.gameTracker,
 			prefStorage: this.prefStorage,
+			syncClient: this.syncClient,
+			idbStorage: this.idbStorage,
 			downloadJson: (data, prefix) => this._downloadJson(data, prefix),
 			refreshStorageStats: () => this._loadStorageStats(),
 		});

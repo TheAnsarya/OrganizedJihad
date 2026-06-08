@@ -6,6 +6,10 @@
 
 /** @const {string} Default local API base URL */
 export const DEFAULT_API_BASE_URL = 'http://localhost:5124';
+const LOCAL_API_BASE_CANDIDATES = Object.freeze([
+	DEFAULT_API_BASE_URL,
+	'http://127.0.0.1:5124',
+]);
 
 /**
  * Normalize API base URL into a safe absolute http(s) URL without trailing slash.
@@ -57,4 +61,23 @@ export function buildConfiguredApiUrl(prefStorage, path) {
 	if (!path) return baseUrl;
 	if (/^https?:\/\//i.test(path)) return path;
 	return `${baseUrl}${path.startsWith('/') ? '' : '/'}${path}`;
+}
+
+/**
+ * Resolve local API base URL candidates in preferred order.
+ *
+ * @param {import('../storageManager.js').default|null|undefined} prefStorage - Preference storage wrapper
+ * @returns {string[]} Normalized unique base URLs
+ */
+export function getApiBaseUrlCandidates(prefStorage) {
+	const configured = getConfiguredApiBaseUrl(prefStorage);
+	const merged = [...LOCAL_API_BASE_CANDIDATES, configured];
+	const unique = [];
+	for (const value of merged) {
+		const normalized = normalizeApiBaseUrl(value);
+		if (!unique.includes(normalized)) {
+			unique.push(normalized);
+		}
+	}
+	return unique;
 }

@@ -41,8 +41,34 @@ public class SyncImportController : ControllerBase {
 	[ProducesResponseType(typeof(SyncResponse), StatusCodes.Status200OK)]
 	[ProducesResponseType(typeof(SyncResponse), StatusCodes.Status500InternalServerError)]
 	public async Task<ActionResult<SyncResponse>> ImportData([FromBody] BrowserSyncData data) {
+		return await ImportStateDataInternal(data, "import");
+	}
+
+	/// <summary>
+	/// Explicit state ingest endpoint for current roster/snapshot payloads.
+	/// Accepts the same BrowserSyncData contract as /api/sync/import.
+	/// </summary>
+	[HttpPost("state/import")]
+	[ProducesResponseType(typeof(SyncResponse), StatusCodes.Status200OK)]
+	[ProducesResponseType(typeof(SyncResponse), StatusCodes.Status500InternalServerError)]
+	public async Task<ActionResult<SyncResponse>> ImportStateData([FromBody] BrowserSyncData data) {
+		return await ImportStateDataInternal(data, "state/import");
+	}
+
+	/// <summary>
+	/// Alias endpoint focused on hero/titan/pet/inventory roster state ingestion.
+	/// Accepts BrowserSyncData payloads and forwards to standard sync import logic.
+	/// </summary>
+	[HttpPost("state/roster")]
+	[ProducesResponseType(typeof(SyncResponse), StatusCodes.Status200OK)]
+	[ProducesResponseType(typeof(SyncResponse), StatusCodes.Status500InternalServerError)]
+	public async Task<ActionResult<SyncResponse>> ImportRosterState([FromBody] BrowserSyncData data) {
+		return await ImportStateDataInternal(data, "state/roster");
+	}
+
+	private async Task<ActionResult<SyncResponse>> ImportStateDataInternal(BrowserSyncData data, string sourceRouteLabel) {
 		try {
-			_logger.LogInformation("Receiving sync data from browser at {Time}", DateTime.UtcNow);
+			_logger.LogInformation("Receiving sync data from route {RouteLabel} at {Time}", sourceRouteLabel, DateTime.UtcNow);
 
 			var counts = await _syncService.ImportBrowserDataAsync(data);
 

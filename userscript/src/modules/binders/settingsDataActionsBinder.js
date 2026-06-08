@@ -10,6 +10,8 @@
  * @param {HTMLElement} params.overlay - UI overlay root
  * @param {object} params.gameTracker - GameTracker instance
  * @param {{ clearAll: Function }} params.prefStorage - Preference storage
+ * @param {object} [params.syncClient] - SyncClient instance
+ * @param {object} [params.idbStorage] - IndexedDB storage for sync metadata and payload source
  * @param {(data: object, prefix: string) => void} params.downloadJson - JSON download helper
  * @param {() => void} params.refreshStorageStats - Reload storage stats callback
  */
@@ -17,9 +19,88 @@ export function bindSettingsDataActions(params) {
 	const overlay = params?.overlay;
 	const gameTracker = params?.gameTracker;
 	const prefStorage = params?.prefStorage;
+	const syncClient = params?.syncClient;
+	const idbStorage = params?.idbStorage;
 	const downloadJson = params?.downloadJson;
 	const refreshStorageStats = params?.refreshStorageStats;
 	if (!overlay || !gameTracker || !prefStorage || typeof downloadJson !== 'function') return;
+
+	const syncStatusEl = overlay.querySelector('#oj-sync-status');
+	let syncStatusSequence = 0;
+	const setSyncStatus = (text, state = 'neutral') => {
+		if (!syncStatusEl) return;
+		syncStatusSequence++;
+		syncStatusEl.textContent = text;
+		syncStatusEl.style.color = state === 'error'
+			? '#ffb4b4'
+			: state === 'ok'
+				? '#9bf1b2'
+				: '#aaa';
+	};
+
+	const refreshSyncStatus = async () => {
+		if (!idbStorage || !syncStatusEl) return;
+		const sequenceAtStart = ++syncStatusSequence;
+		try {
+			const [lastSync, syncStatus] = await Promise.all([
+				idbStorage.getMetadata('lastSync', null),
+				idbStorage.getMetadata('syncStatus', null),
+			]);
+			if (sequenceAtStart !== syncStatusSequence) return;
+
+			if (syncStatus?.ok) {
+				syncStatusEl.textContent = `Last sync: ${lastSync || syncStatus.timestamp || 'unknown'} (${syncStatus.message || 'ok'})`;
+				syncStatusEl.style.color = '#9bf1b2';
+				return;
+			}
+
+			if (syncStatus?.ok === false) {
+				syncStatusEl.textContent = `Last sync failed: ${syncStatus.timestamp || 'unknown'} (${syncStatus.message || 'error'})`;
+				syncStatusEl.style.color = '#ffb4b4';
+				return;
+			}
+
+			if (lastSync) {
+				syncStatusEl.textContent = `Last sync: ${lastSync}`;
+				syncStatusEl.style.color = '#aaa';
+				return;
+			}
+
+			syncStatusEl.textContent = 'No sync has run yet in this browser profile.';
+			syncStatusEl.style.color = '#aaa';
+		} catch {
+			if (sequenceAtStart !== syncStatusSequence) return;
+			syncStatusEl.textContent = 'Sync status unavailable.';
+			syncStatusEl.style.color = '#ffb4b4';
+		}
+	};
+
+	void refreshSyncStatus();
+
+	const syncNowBtn = overlay.querySelector('#oj-sync-now');
+	if (syncNowBtn && syncClient && idbStorage) {
+		syncNowBtn.addEventListener('click', async () => {
+			syncNowBtn.disabled = true;
+			syncNowBtn.textContent = '⏳ Syncing...';
+			setSyncStatus('Manual sync in progress...', 'neutral');
+
+			try {
+				const result = await syncClient.syncWithRetry(idbStorage);
+				const importedTotal = Object.values(result?.importedCounts || {}).reduce(
+					(acc, value) => acc + Number(value || 0),
+					0
+				);
+				setSyncStatus(`Manual sync complete. Imported ${importedTotal} records.`, 'ok');
+				refreshStorageStats?.();
+				void refreshSyncStatus();
+			} catch (err) {
+				setSyncStatus(`Manual sync failed: ${err?.message || String(err)}`, 'error');
+			} finally {
+				syncNowBtn.disabled = false;
+				syncNowBtn.textContent = '🔄 Sync Now';
+			}
+		});
+	}
 
 	// Export curated data
 	const exportBtn = overlay.querySelector('#oj-export-data');
