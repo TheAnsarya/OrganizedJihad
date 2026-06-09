@@ -25,7 +25,7 @@ import {
 } from './helpers/dashboardInsightsBuilders.js';
 import { getCachedApiPayload } from './helpers/cachedApiPayloadHelper.js';
 import { DEFAULT_API_BASE_URL, buildConfiguredApiUrl, getConfiguredApiBaseUrl, normalizeApiBaseUrl } from './helpers/apiConfig.js';
-import { getApiServerCallLog, isLocalApiServerUrl, onApiServerCall } from './helpers/apiServerCallLog.js';
+import { getApiServerCallLog, getApiServerInFlightCalls, isLocalApiServerUrl, onApiServerCall } from './helpers/apiServerCallLog.js';
 import { yieldEvery, yieldToMainThread } from './helpers/cooperativeScheduler.js';
 import { sortData, sortIndicator } from './helpers/dataBrowserSortHelpers.js';
 import { stalenessTag, timeAgo } from './helpers/stalenessHelpers.js';
@@ -121,6 +121,10 @@ const UI_SETTINGS_PATH = '/ui/settings';
 const UI_REPAIR_STATUS_PATH = '/ui/repair-status';
 /** @const {string} Local API path for userscript handshake diagnostics */
 const UI_HANDSHAKE_PATH = '/ui/userscript-handshake';
+/** @const {string} Local API path for API/userscript runtime version diagnostics */
+const UI_RUNTIME_VERSIONS_PATH = '/ui/runtime-versions';
+/** @const {string} Local API path for Scalar docs UI */
+const DOCS_UI_PATH = '/docs';
 /** @const {string} Local API path for Swagger UI */
 const SWAGGER_UI_PATH = '/swagger';
 /** @const {string} Local API path for OpenAPI JSON */
@@ -203,6 +207,7 @@ class UIManager {
 			chests:    { page: 0, sortField: 'timestamp', sortDir: 'desc', filter: '' },
 			inventory: { page: 0, sortField: 'name', sortDir: 'asc', filter: '' },
 			mail:      { page: 0, sortField: 'receivedAt', sortDir: 'desc', filter: '' },
+			connection:{ page: 0, sortField: 'timestamp', sortDir: 'desc', filter: '', subTab: 'overview' },
 		};
 
 		/**
@@ -242,6 +247,12 @@ class UIManager {
 		this._lastInventoryNameDiagnostics = { generatedAt: '', unresolvedCount: 0, unresolved: [] };
 		/** @type {(() => void)|null} */
 		this._unsubscribeApiServerCalls = null;
+		/** @type {number|null} */
+		this._connectionLiveRefreshTimer = null;
+		/** @type {number} */
+		this._connectionTelemetryLastPersistTs = 0;
+		/** @type {Array<{label:string,total:number,uptimePercent:number,timestamp:number}>} */
+		this._connectionHistoryChartPoints = [];
 	}
 
 	/**
@@ -253,10 +264,18 @@ class UIManager {
 		this.attachEventListeners();
 
 		// Keep Connection tab live as local API server calls happen.
-		this._unsubscribeApiServerCalls = onApiServerCall(() => {
-			if (this.isVisible && this.currentView === 'connection') {
-				this.renderView('connection');
+		this._unsubscribeApiServerCalls = onApiServerCall((entry) => {
+			void this._persistConnectionTelemetrySample().catch(() => undefined);
+
+			if (!this.isVisible || this.currentView !== 'connection') {
+				return;
 			}
+
+			if (this._isConnectionProbePath(String(entry?.path || ''))) {
+				return;
+			}
+
+			this._queueConnectionLiveRefresh();
 		});
 
 		if (this.isVisible) {
@@ -741,6 +760,211 @@ class UIManager {
 		if (this._connectionNavStatus === next) return;
 		this._connectionNavStatus = next;
 		this._updateNavButtonLabels();
+	}
+
+	/**
+	 * Determine whether a path belongs to connection-tab self probes.
+	 *
+	 * @param {string} path - Request path
+	 * @returns {boolean} True when path is a probe endpoint
+	 * @private
+	 */
+	_isConnectionProbePath(path) {
+		if (!path) return false;
+		const normalized = String(path).toLowerCase();
+		return normalized.startsWith(SYNC_HEALTH_PATH)
+			|| normalized.startsWith(UI_SETTINGS_PATH)
+			|| normalized.startsWith(UI_REPAIR_STATUS_PATH)
+			|| normalized.startsWith(UI_HANDSHAKE_PATH)
+			|| normalized.startsWith(UI_RUNTIME_VERSIONS_PATH);
+	}
+
+	/**
+	 * Queue a debounced live refresh for connection diagnostics.
+	 *
+	 * @private
+	 */
+	_queueConnectionLiveRefresh() {
+		if (this._connectionLiveRefreshTimer) {
+			clearTimeout(this._connectionLiveRefreshTimer);
+		}
+
+		this._connectionLiveRefreshTimer = setTimeout(() => {
+			this._connectionLiveRefreshTimer = null;
+			if (this.isVisible && this.currentView === 'connection') {
+				this.renderView('connection');
+			}
+		}, 250);
+	}
+
+	/**
+	 * Persist a coarse-grained local API telemetry sample for long-window trends.
+	 *
+	 * @returns {Promise<void>}
+	 * @private
+	 */
+	async _persistConnectionTelemetrySample() {
+		const now = Date.now();
+		if (now - this._connectionTelemetryLastPersistTs < 60_000) {
+			return;
+		}
+
+		const apiBaseUrl = this._getApiBaseUrl();
+		let apiOrigin = apiBaseUrl;
+		try {
+			apiOrigin = new URL(apiBaseUrl).origin;
+		} catch {
+			apiOrigin = apiBaseUrl;
+		}
+
+		const calls = getApiServerCallLog()
+			.filter((entry) => isLocalApiServerUrl(String(entry?.url || ''), apiBaseUrl))
+			.slice(-100);
+
+		const totalCalls = calls.length;
+		const successCalls = calls.filter((entry) => entry.ok).length;
+		const failureCalls = totalCalls - successCalls;
+		const avgLatencyMs = totalCalls > 0
+			? Math.round(calls.reduce((sum, entry) => sum + Math.max(0, Number(entry.latencyMs || 0)), 0) / totalCalls)
+			: 0;
+
+		await this.idbStorage.add('apiServerTelemetry', {
+			timestamp: new Date(now).toISOString(),
+			apiOrigin,
+			totalCalls,
+			successCalls,
+			failureCalls,
+			avgLatencyMs,
+			windowSeconds: 60,
+		});
+
+		await this.idbStorage.pruneOldest('apiServerTelemetry', 'timestamp', 2_000);
+		this._connectionTelemetryLastPersistTs = now;
+	}
+
+	/**
+	 * Load persisted telemetry history for the configured API origin.
+	 *
+	 * @param {number} maxPoints - Maximum historical points to return
+	 * @returns {Promise<Array<{timestamp:number,totalCalls:number,successCalls:number,failureCalls:number,avgLatencyMs:number}>>}
+	 * @private
+	 */
+	async _loadConnectionTelemetryHistory(maxPoints = 288) {
+		const apiBaseUrl = this._getApiBaseUrl();
+		let apiOrigin = apiBaseUrl;
+		try {
+			apiOrigin = new URL(apiBaseUrl).origin;
+		} catch {
+			apiOrigin = apiBaseUrl;
+		}
+
+		const all = await this.idbStorage.getByIndex('apiServerTelemetry', 'apiOrigin', apiOrigin);
+		const normalized = all
+			.map((entry) => ({
+				timestamp: Date.parse(String(entry?.timestamp || '')),
+				totalCalls: Math.max(0, Number(entry?.totalCalls || 0)),
+				successCalls: Math.max(0, Number(entry?.successCalls || 0)),
+				failureCalls: Math.max(0, Number(entry?.failureCalls || 0)),
+				avgLatencyMs: Math.max(0, Number(entry?.avgLatencyMs || 0)),
+			}))
+			.filter((entry) => Number.isFinite(entry.timestamp) && entry.timestamp > 0)
+			.sort((a, b) => a.timestamp - b.timestamp);
+
+		if (normalized.length <= maxPoints) {
+			return normalized;
+		}
+
+		return normalized.slice(-maxPoints);
+	}
+
+	/**
+	 * Render Connection sub-tab usage/uptime chart.
+	 *
+	 * @private
+	 */
+	_drawConnectionHistoryChart() {
+		const canvas = this.overlay?.querySelector('#oj-connection-history-chart');
+		if (!(canvas instanceof HTMLCanvasElement)) {
+			return;
+		}
+
+		const points = this._connectionHistoryChartPoints || [];
+		const ctx = canvas.getContext('2d');
+		if (!ctx) {
+			return;
+		}
+
+		const cssWidth = canvas.clientWidth || 720;
+		const cssHeight = 180;
+		const dpr = window.devicePixelRatio || 1;
+		canvas.width = Math.max(1, Math.round(cssWidth * dpr));
+		canvas.height = Math.max(1, Math.round(cssHeight * dpr));
+		canvas.style.height = `${cssHeight}px`;
+		ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+		ctx.clearRect(0, 0, cssWidth, cssHeight);
+		ctx.fillStyle = '#11131a';
+		ctx.fillRect(0, 0, cssWidth, cssHeight);
+
+		if (points.length === 0) {
+			ctx.fillStyle = '#9aa4b5';
+			ctx.font = '12px Segoe UI';
+			ctx.fillText('No persisted usage history yet.', 12, 26);
+			return;
+		}
+
+		const left = 32;
+		const right = cssWidth - 12;
+		const top = 12;
+		const bottom = cssHeight - 24;
+		const width = Math.max(1, right - left);
+		const height = Math.max(1, bottom - top);
+
+		const maxCalls = Math.max(1, ...points.map((point) => point.total));
+
+		ctx.strokeStyle = '#2a3344';
+		ctx.lineWidth = 1;
+		for (let i = 0; i <= 4; i++) {
+			const y = top + (height * i) / 4;
+			ctx.beginPath();
+			ctx.moveTo(left, y);
+			ctx.lineTo(right, y);
+			ctx.stroke();
+		}
+
+		ctx.strokeStyle = '#4fa3ff';
+		ctx.lineWidth = 2;
+		ctx.beginPath();
+		points.forEach((point, index) => {
+			const x = left + (index / Math.max(1, points.length - 1)) * width;
+			const y = bottom - (Math.max(0, point.total) / maxCalls) * height;
+			if (index === 0) {
+				ctx.moveTo(x, y);
+			} else {
+				ctx.lineTo(x, y);
+			}
+		});
+		ctx.stroke();
+
+		ctx.strokeStyle = '#78d98b';
+		ctx.lineWidth = 2;
+		ctx.beginPath();
+		points.forEach((point, index) => {
+			const x = left + (index / Math.max(1, points.length - 1)) * width;
+			const uptime = Math.max(0, Math.min(100, Number(point.uptimePercent || 0)));
+			const y = bottom - (uptime / 100) * height;
+			if (index === 0) {
+				ctx.moveTo(x, y);
+			} else {
+				ctx.lineTo(x, y);
+			}
+		});
+		ctx.stroke();
+
+		ctx.fillStyle = '#9aa4b5';
+		ctx.font = '10px Segoe UI';
+		ctx.fillText(`Calls (max ${maxCalls})`, left, cssHeight - 8);
+		ctx.fillText('Uptime %', right - 58, cssHeight - 8);
 	}
 
 	/**
@@ -3249,12 +3473,21 @@ class UIManager {
 	 */
 	async _probeConnectionAbsoluteUrl(url) {
 		const startedAt = performance.now();
+		const controller = new AbortController();
+		const timeoutId = setTimeout(() => {
+			try {
+				controller.abort();
+			} catch {
+				// best effort
+			}
+		}, 5000);
 		try {
 			await yieldToMainThread();
 			const response = await fetch(url, {
 				method: 'GET',
 				headers: { 'Accept': 'application/json' },
 				cache: 'no-store',
+				signal: controller.signal,
 			});
 			let data = null;
 			try {
@@ -3273,6 +3506,7 @@ class UIManager {
 				error: '',
 			};
 		} catch (err) {
+			clearTimeout(timeoutId);
 			const gmResult = await this._probeConnectionWithTampermonkey(url, startedAt);
 			if (gmResult) {
 				return gmResult;
@@ -3287,6 +3521,8 @@ class UIManager {
 				data: null,
 				error: String(err?.message || err || 'Request failed'),
 			};
+		} finally {
+			clearTimeout(timeoutId);
 		}
 	}
 
@@ -3370,11 +3606,12 @@ class UIManager {
 	 */
 	async renderConnection() {
 		const apiBaseUrl = this._getApiBaseUrl();
-		let [apiHealth, uiSettings, repairStatus, handshake] = await Promise.all([
+		let [apiHealth, uiSettings, repairStatus, handshake, runtimeVersions] = await Promise.all([
 			this._probeConnectionEndpoint(SYNC_HEALTH_PATH),
 			this._probeConnectionEndpoint(UI_SETTINGS_PATH),
 			this._probeConnectionEndpoint(UI_REPAIR_STATUS_PATH),
 			this._probeConnectionEndpoint(UI_HANDSHAKE_PATH),
+			this._probeConnectionEndpoint(UI_RUNTIME_VERSIONS_PATH),
 		]);
 
 		let syncStatus = {};
@@ -3480,6 +3717,113 @@ class UIManager {
 			.slice(-50)
 			.reverse();
 
+		const apiServerCallsChronological = apiServerCalls.slice().reverse();
+		const failedCalls = apiServerCalls.filter((entry) => !entry.ok);
+		const inFlightCalls = getApiServerInFlightCalls()
+			.filter((entry) => isLocalApiServerUrl(String(entry?.url || ''), apiBaseUrl))
+			.sort((a, b) => b.ts - a.ts);
+
+		const endpointTotals = {};
+		for (const entry of apiServerCallsChronological) {
+			const path = String(entry?.path || '/');
+			if (!endpointTotals[path]) {
+				endpointTotals[path] = { total: 0, success: 0, failure: 0, latestTs: 0 };
+			}
+			endpointTotals[path].total += 1;
+			endpointTotals[path].success += entry.ok ? 1 : 0;
+			endpointTotals[path].failure += entry.ok ? 0 : 1;
+			endpointTotals[path].latestTs = Math.max(endpointTotals[path].latestTs, Number(entry.ts || 0));
+		}
+
+		const endpointRows = Object.entries(endpointTotals)
+			.sort(([, a], [, b]) => b.total - a.total)
+			.slice(0, 25);
+
+		const callsTotal = apiServerCallsChronological.length;
+		const callsSuccess = apiServerCallsChronological.filter((entry) => entry.ok).length;
+		const callsFailure = callsTotal - callsSuccess;
+		const avgLatency = callsTotal
+			? Math.round(apiServerCallsChronological.reduce((sum, entry) => sum + Math.max(0, Number(entry.latencyMs || 0)), 0) / callsTotal)
+			: 0;
+		const latencySorted = apiServerCallsChronological
+			.map((entry) => Math.max(0, Number(entry.latencyMs || 0)))
+			.sort((a, b) => a - b);
+		const p95Latency = latencySorted.length ? latencySorted[Math.max(0, Math.floor((latencySorted.length - 1) * 0.95))] : 0;
+
+		let historyPoints = [];
+		try {
+			historyPoints = await this._loadConnectionTelemetryHistory(288);
+		} catch {
+			historyPoints = [];
+		}
+
+		if (historyPoints.length === 0) {
+			const now = Date.now();
+			const bucketSizeMs = 5 * 60 * 1000;
+			const bucketCount = 12;
+			historyPoints = Array.from({ length: bucketCount }, (_, index) => {
+				const bucketEnd = now - ((bucketCount - 1 - index) * bucketSizeMs);
+				const bucketStart = bucketEnd - bucketSizeMs;
+				const entries = apiServerCallsChronological.filter((entry) => {
+					const ts = Number(entry.ts || 0);
+					return ts > bucketStart && ts <= bucketEnd;
+				});
+				const totalCalls = entries.length;
+				const successCalls = entries.filter((entry) => entry.ok).length;
+				const failureCalls = totalCalls - successCalls;
+				const avgLatencyMs = totalCalls > 0
+					? Math.round(entries.reduce((sum, entry) => sum + Math.max(0, Number(entry.latencyMs || 0)), 0) / totalCalls)
+					: 0;
+				return {
+					timestamp: bucketEnd,
+					totalCalls,
+					successCalls,
+					failureCalls,
+					avgLatencyMs,
+				};
+			});
+		}
+
+		const usageBuckets = historyPoints.map((point) => {
+			const total = Math.max(0, Number(point.totalCalls || 0));
+			const ok = Math.max(0, Number(point.successCalls || 0));
+			const uptimePercent = total > 0 ? Math.round((ok / total) * 100) : 0;
+			const timestamp = Number(point.timestamp || 0);
+			return {
+				label: timestamp > 0
+					? new Date(timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+					: '—',
+				total,
+				uptimePercent,
+				timestamp,
+			};
+		});
+
+		this._connectionHistoryChartPoints = usageBuckets;
+
+		const benchmarkEndpoints = [
+			{ label: 'Health', path: SYNC_HEALTH_PATH, probe: apiHealth },
+			{ label: 'UI Settings', path: UI_SETTINGS_PATH, probe: uiSettings },
+			{ label: 'Repair', path: UI_REPAIR_STATUS_PATH, probe: repairStatus },
+			{ label: 'Handshake', path: UI_HANDSHAKE_PATH, probe: handshake },
+			{ label: 'Versions', path: UI_RUNTIME_VERSIONS_PATH, probe: runtimeVersions },
+		];
+
+		const connectionState = this._viewState.connection || { subTab: 'overview' };
+		const activeSubTab = String(connectionState.subTab || 'overview');
+
+		const runtimeVersionSummary = runtimeVersions.ok && runtimeVersions.data
+			? {
+				apiVersion: String(runtimeVersions.data.apiVersion || 'unknown'),
+				apiBuild: String(runtimeVersions.data.apiInformationalVersion || 'unknown'),
+				userscriptVersion: String(runtimeVersions.data.userscriptVersion || 'unknown'),
+			}
+			: {
+				apiVersion: 'unavailable',
+				apiBuild: 'unavailable',
+				userscriptVersion: 'unavailable',
+			};
+
 		const apiServerCallRows = apiServerCalls.length
 			? apiServerCalls.map((entry) => {
 				const statusIcon = entry.ok ? '✅' : (entry.status > 0 ? '⚠️' : '❌');
@@ -3498,6 +3842,135 @@ class UIManager {
 					</div>`;
 			}).join('')
 			: '<p class="oj-empty" style="margin:0;">No local API server calls captured yet.</p>';
+
+		const apiServerErrorRows = failedCalls.length
+			? failedCalls.slice(0, 50).map((entry) => {
+				const errorLabel = entry.status > 0
+					? `HTTP ${entry.status}${entry.statusText ? ` ${this._escapeHtml(entry.statusText)}` : ''}`
+					: this._escapeHtml(entry.error || 'network error');
+				return `
+					<div style="padding:6px 0;border-bottom:1px solid #2d2d2d;">
+						<div style="display:flex;justify-content:space-between;align-items:center;gap:6px;">
+							<strong style="font-size:11px;color:#ffb4b4;">❌ ${this._escapeHtml(entry.method)} ${this._escapeHtml(entry.path || '/')}</strong>
+							<span class="oj-muted" style="font-size:10px;">${new Date(entry.ts).toLocaleTimeString()} • ${entry.latencyMs}ms</span>
+						</div>
+						<div class="oj-muted" style="font-size:10px;word-break:break-all;">${this._escapeHtml(entry.url)}</div>
+						<div style="font-size:11px;color:#ffcece;">${errorLabel}</div>
+					</div>`;
+			}).join('')
+			: '<p class="oj-empty" style="margin:0;">No local API server errors captured yet.</p>';
+
+		const endpointDistributionRows = endpointRows.length
+			? endpointRows.map(([path, stats]) => {
+				const pct = callsTotal > 0 ? Math.max(1, Math.round((stats.total / callsTotal) * 100)) : 0;
+				const successPct = stats.total > 0 ? Math.round((stats.success / stats.total) * 100) : 0;
+				return `
+					<div style="padding:6px 0;border-bottom:1px solid #2d2d2d;">
+						<div style="display:flex;justify-content:space-between;gap:8px;align-items:center;">
+							<strong style="font-size:11px;word-break:break-all;">${this._escapeHtml(path)}</strong>
+							<span class="oj-muted" style="font-size:10px;">${stats.total} calls</span>
+						</div>
+						<div style="margin-top:4px;background:#1b1f29;border:1px solid #2f3a4a;border-radius:999px;height:8px;overflow:hidden;">
+							<div style="height:100%;width:${pct}%;background:linear-gradient(90deg,#4fa3ff,#7ac8ff);"></div>
+						</div>
+						<div class="oj-muted" style="font-size:10px;margin-top:2px;">Share: ${pct}% • Success: ${successPct}% • Last call: ${stats.latestTs ? new Date(stats.latestTs).toLocaleTimeString() : '—'}</div>
+					</div>`;
+			}).join('')
+			: '<p class="oj-empty" style="margin:0;">No endpoint usage data yet.</p>';
+
+		const historySummary = usageBuckets.length
+			? `${usageBuckets.length} persisted points • window ${this._escapeHtml(usageBuckets[0]?.label || '—')} → ${this._escapeHtml(usageBuckets[usageBuckets.length - 1]?.label || '—')}`
+			: 'No historical points yet.';
+
+		const inFlightRows = inFlightCalls.length
+			? inFlightCalls.map((entry) => `
+				<div style="padding:6px 0;border-bottom:1px solid #2d2d2d;">
+					<div style="display:flex;justify-content:space-between;gap:8px;align-items:center;">
+						<strong style="font-size:11px;color:#ffe39a;">⏳ ${this._escapeHtml(entry.method)} ${this._escapeHtml(entry.path || '/')}</strong>
+						<span class="oj-muted" style="font-size:10px;">${Math.max(0, Math.round((Date.now() - Number(entry.ts || 0)) / 1000))}s open</span>
+					</div>
+					<div class="oj-muted" style="font-size:10px;word-break:break-all;">${this._escapeHtml(entry.url)}</div>
+				</div>`).join('')
+			: '<p class="oj-empty" style="margin:0;">No in-flight local API calls right now.</p>';
+
+		const benchmarkRows = benchmarkEndpoints.map((entry) => {
+			const probe = entry.probe || {};
+			const badgeColor = probe.ok ? '#8ef1b0' : '#ffc0c0';
+			const badgeBg = probe.ok ? '#1e4d2b' : '#4d1e1e';
+			return `
+				<div style="padding:6px 0;border-bottom:1px solid #2d2d2d;">
+					<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;">
+						<strong style="font-size:11px;">${this._escapeHtml(entry.label)}</strong>
+						<span style="font-size:10px;padding:2px 8px;border-radius:999px;background:${badgeBg};color:${badgeColor};border:1px solid #3a3a3a;">${probe.ok ? 'OK' : 'FAIL'}</span>
+					</div>
+					<div class="oj-muted" style="font-size:10px;">${this._escapeHtml(entry.path)} • ${Number(probe.latencyMs || 0)}ms • ${probe.status ? `HTTP ${probe.status}` : this._escapeHtml(probe.error || 'no response')}</div>
+				</div>`;
+		}).join('');
+
+		const connectionSubTabs = [
+			['overview', 'Overview'],
+			['calls', 'Recent API Calls'],
+			['errors', 'Recent Errors'],
+			['endpoints', 'Endpoints'],
+			['history', 'Usage/Uptime'],
+			['inflight', 'Open Calls'],
+			['benchmark', 'Test/Benchmark'],
+		];
+
+		const subTabButtons = connectionSubTabs.map(([key, label]) => {
+			const active = activeSubTab === key ? 'oj-pill-active' : '';
+			return `<button class="oj-pill oj-pill-btn ${active}" data-connection-subtab="${key}">${label}</button>`;
+		}).join(' ');
+
+		let subTabPanelHtml = '';
+		switch (activeSubTab) {
+			case 'calls':
+				subTabPanelHtml = `<div style="max-height:320px;overflow:auto;background:#16161a;border:1px solid #333;padding:8px;border-radius:4px;">${apiServerCallRows}</div>`;
+				break;
+			case 'errors':
+				subTabPanelHtml = `<div style="max-height:320px;overflow:auto;background:#16161a;border:1px solid #333;padding:8px;border-radius:4px;">${apiServerErrorRows}</div>`;
+				break;
+			case 'endpoints':
+				subTabPanelHtml = `<div style="max-height:320px;overflow:auto;background:#16161a;border:1px solid #333;padding:8px;border-radius:4px;">${endpointDistributionRows}</div>`;
+				break;
+			case 'history':
+				subTabPanelHtml = `
+					<div style="background:#16161a;border:1px solid #333;padding:8px;border-radius:4px;">
+						<div class="oj-muted" style="font-size:11px;margin-bottom:6px;">${historySummary}</div>
+						<canvas id="oj-connection-history-chart" style="width:100%;display:block;border:1px solid #2f3a4a;border-radius:4px;"></canvas>
+						<div class="oj-muted" style="font-size:10px;margin-top:6px;">Blue line = call volume, green line = uptime percentage.</div>
+					</div>`;
+				break;
+			case 'inflight':
+				subTabPanelHtml = `<div style="max-height:320px;overflow:auto;background:#16161a;border:1px solid #333;padding:8px;border-radius:4px;">${inFlightRows}</div>`;
+				break;
+			case 'benchmark':
+				subTabPanelHtml = `<div style="max-height:320px;overflow:auto;background:#16161a;border:1px solid #333;padding:8px;border-radius:4px;">${benchmarkRows}</div>`;
+				break;
+			case 'overview':
+			default:
+				subTabPanelHtml = `
+					<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:8px;">
+						<div class="oj-card" style="padding:8px;background:#16161a;border:1px solid #333;border-radius:4px;">
+							<div class="oj-muted" style="font-size:10px;">Userscript version</div>
+							<div style="font-size:14px;font-weight:700;color:#8ef1b0;">${this._escapeHtml(runtimeVersionSummary.userscriptVersion)}</div>
+						</div>
+						<div class="oj-card" style="padding:8px;background:#16161a;border:1px solid #333;border-radius:4px;">
+							<div class="oj-muted" style="font-size:10px;">API version</div>
+							<div style="font-size:14px;font-weight:700;color:#9fd6ff;">${this._escapeHtml(runtimeVersionSummary.apiVersion)}</div>
+						</div>
+						<div class="oj-card" style="padding:8px;background:#16161a;border:1px solid #333;border-radius:4px;">
+							<div class="oj-muted" style="font-size:10px;">Recent calls</div>
+							<div style="font-size:14px;font-weight:700;color:#f7d47d;">${callsTotal}</div>
+						</div>
+						<div class="oj-card" style="padding:8px;background:#16161a;border:1px solid #333;border-radius:4px;">
+							<div class="oj-muted" style="font-size:10px;">Avg / P95 latency</div>
+							<div style="font-size:14px;font-weight:700;color:#f7d47d;">${avgLatency}ms / ${Math.round(p95Latency)}ms</div>
+						</div>
+					</div>
+					<p class="oj-muted" style="margin:8px 0 0;font-size:11px;">API build: ${this._escapeHtml(runtimeVersionSummary.apiBuild)}</p>`;
+				break;
+		}
 
 		return `
 			<div class="oj-settings">
@@ -3528,12 +4001,14 @@ class UIManager {
 						<button class="oj-btn" id="oj-connection-refresh">Refresh Status</button>
 						<button class="oj-btn" id="oj-connection-open-apilog">Open API Log</button>
 						<button class="oj-btn" id="oj-connection-open-health">Open Health</button>
+						<button class="oj-btn" id="oj-connection-open-docs">Open Docs</button>
 						<button class="oj-btn" id="oj-connection-open-swagger">Open Swagger</button>
 						<button class="oj-btn" id="oj-connection-open-openapi">Open OpenAPI JSON</button>
 						<button class="oj-btn" id="oj-connection-open-server-logs">Open Server Logs</button>
 						<button class="oj-btn" id="oj-connection-open-settings">Open UI Settings</button>
 						<button class="oj-btn" id="oj-connection-open-repair">Open Repair Status</button>
 						<button class="oj-btn" id="oj-connection-open-handshake">Open Handshake</button>
+						<button class="oj-btn" id="oj-connection-open-versions">Open Runtime Versions</button>
 					</div>
 				</div>
 
@@ -3543,9 +4018,11 @@ class UIManager {
 				</div>
 
 				<div class="oj-settings-group">
-					<h4>Local API Server Calls <span class="oj-muted">(Last ${Math.min(apiServerCalls.length, 50)})</span></h4>
+					<h4>Local API Server Telemetry</h4>
 					<p class="oj-muted" style="margin:0 0 8px;font-size:11px;">Shows userscript calls to ${this._escapeHtml(apiBaseUrl)} only (health probes, sync, recommendations, UI endpoints). Game API traffic is excluded.</p>
-					<div style="max-height:260px;overflow:auto;background:#16161a;border:1px solid #333;padding:8px;border-radius:4px;">${apiServerCallRows}</div>
+					<div class="oj-pills" style="margin:0 0 8px;display:flex;gap:6px;flex-wrap:wrap;">${subTabButtons}</div>
+					<div class="oj-muted" style="font-size:11px;margin:0 0 8px;">Summary: ${callsSuccess}/${callsTotal} successful • ${callsFailure} failed • ${inFlightCalls.length} open • avg ${avgLatency}ms</div>
+					${subTabPanelHtml}
 				</div>
 			</div>
 		`;
@@ -3629,12 +4106,30 @@ class UIManager {
 			this.renderView('connection');
 		});
 
+		overlay.querySelectorAll('[data-connection-subtab]').forEach((button) => {
+			button.addEventListener('click', () => {
+				const nextSubTab = String(button?.dataset?.connectionSubtab || 'overview');
+				const state = this._viewState.connection || { subTab: 'overview' };
+				if (state.subTab === nextSubTab) {
+					return;
+				}
+
+				state.subTab = nextSubTab;
+				this._viewState.connection = state;
+				this.renderView('connection');
+			});
+		});
+
 		overlay.querySelector('#oj-connection-open-apilog')?.addEventListener('click', () => {
 			this.switchView('apilog');
 		});
 
 		overlay.querySelector('#oj-connection-open-health')?.addEventListener('click', () => {
 			this._openExternalUrl(this._buildApiUrl(SYNC_HEALTH_PATH));
+		});
+
+		overlay.querySelector('#oj-connection-open-docs')?.addEventListener('click', () => {
+			this._openExternalUrl(this._buildApiUrl(DOCS_UI_PATH));
 		});
 
 		overlay.querySelector('#oj-connection-open-swagger')?.addEventListener('click', () => {
@@ -3660,6 +4155,12 @@ class UIManager {
 		overlay.querySelector('#oj-connection-open-handshake')?.addEventListener('click', () => {
 			this._openExternalUrl(this._buildApiUrl(UI_HANDSHAKE_PATH));
 		});
+
+		overlay.querySelector('#oj-connection-open-versions')?.addEventListener('click', () => {
+			this._openExternalUrl(this._buildApiUrl(UI_RUNTIME_VERSIONS_PATH));
+		});
+
+		this._drawConnectionHistoryChart();
 	}
 
 	/**
@@ -6484,6 +6985,11 @@ class UIManager {
 				this._unsubscribeApiServerCalls();
 			} catch { /* best-effort */ }
 			this._unsubscribeApiServerCalls = null;
+		}
+
+		if (this._connectionLiveRefreshTimer) {
+			clearTimeout(this._connectionLiveRefreshTimer);
+			this._connectionLiveRefreshTimer = null;
 		}
 
 		// Remove all tracked document-level listeners

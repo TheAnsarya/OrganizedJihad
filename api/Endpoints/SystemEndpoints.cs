@@ -34,6 +34,7 @@ public static class SystemEndpoints {
 				"GET  /swagger/v1/swagger.json - OpenAPI JSON document",
 				"GET  /ui/settings - Get persisted API UI settings",
 				"POST /ui/settings - Save persisted API UI settings",
+				"GET  /ui/runtime-versions - API + installed userscript version diagnostics",
 				"GET  /ui/repair-status - Runtime setup/update repair hints",
 				"GET  /ui/userscript-handshake - Userscript handshake diagnostics",
 				"GET  /api/sync/health - Health check",

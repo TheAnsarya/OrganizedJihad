@@ -217,11 +217,11 @@ internal sealed class InstallerWorkflow {
 	private void InstallApiPayload() {
 		var repositoryRoot = ResolveRepositoryRoot();
 		var sourceCandidates = new[] {
-			Path.Combine(repositoryRoot, "artifacts", "api-publish-win-x64"),
-			Path.Combine(repositoryRoot, "api", "bin", "Release", "net10.0", "win-x64", "publish"),
 			Path.Combine(_baseDir, "bundled", "api"),
 			Path.Combine(_baseDir, "api"),
 			Path.GetFullPath(Path.Combine(_baseDir, "..", "..", "..", "..", "..", "api", "bin", "Release", "net10.0", "win-x64", "publish")),
+			Path.Combine(repositoryRoot, "artifacts", "api-publish-win-x64"),
+			Path.Combine(repositoryRoot, "api", "bin", "Release", "net10.0", "win-x64", "publish"),
 		};
 
 		LogDirectoryCandidates("API payload source", sourceCandidates);
@@ -232,13 +232,13 @@ internal sealed class InstallerWorkflow {
 		LogDirectorySnapshot("API payload destination", destination, maxEntries: 12);
 
 		var runtimeHostSourceCandidates = new[] {
-			Path.Combine(repositoryRoot, "artifacts", "runtime-host-publish-win-x64"),
-			Path.Combine(repositoryRoot, "api", "OrganizedJihad.Api.TrayHost", "bin", "Release", "net10.0-windows10.0.19041.0", "win-x64", "publish"),
-			Path.GetFullPath(Path.Combine(_baseDir, "..", "..", "..", "..", "..", "api", "OrganizedJihad.Api.TrayHost", "bin", "Release", "net10.0-windows10.0.19041.0", "win-x64", "publish")),
 			Path.Combine(_baseDir, "bundled", "runtime-host"),
 			Path.Combine(_baseDir, "bundled", "api-tray"),
 			Path.Combine(_baseDir, "runtime-host"),
 			Path.Combine(_baseDir, "api-tray"),
+			Path.Combine(repositoryRoot, "artifacts", "runtime-host-publish-win-x64"),
+			Path.Combine(repositoryRoot, "api", "OrganizedJihad.Api.TrayHost", "bin", "Release", "net10.0-windows10.0.19041.0", "win-x64", "publish"),
+			Path.GetFullPath(Path.Combine(_baseDir, "..", "..", "..", "..", "..", "api", "OrganizedJihad.Api.TrayHost", "bin", "Release", "net10.0-windows10.0.19041.0", "win-x64", "publish")),
 		};
 
 		LogDirectoryCandidates("Runtime host payload source", runtimeHostSourceCandidates);

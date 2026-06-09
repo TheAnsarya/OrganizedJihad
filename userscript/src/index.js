@@ -39,7 +39,7 @@ import GameOverlay from './modules/gameOverlay.js';
 import BattleRecommendationOverlay from './modules/battleRecommendationOverlay.js';
 import DomTargeting from './modules/domTargeting.js';
 import { getConfiguredApiBaseUrl } from './modules/helpers/apiConfig.js';
-import { isLocalApiServerUrl, recordApiServerCall } from './modules/helpers/apiServerCallLog.js';
+import { finishApiServerCall, isLocalApiServerUrl, recordApiServerCall, startApiServerCall } from './modules/helpers/apiServerCallLog.js';
 import { isGameSurfaceLocation } from './modules/helpers/gameSurfaceGuard.js';
 import NotificationManager from './modules/notificationManager.js';
 import './styles/main.css';
@@ -448,6 +448,7 @@ import './styles/main.css';
 				const rawUrl = typeof input === 'string' ? input : String(input?.url || '');
 				const shouldTrack = isLocalApiServerUrl(rawUrl, getConfiguredApiBaseUrl(prefStorage));
 				const startedAt = performance.now();
+				const callId = shouldTrack ? startApiServerCall({ method, url: rawUrl }) : null;
 
 				try {
 					const response = await originalFetch(input, init);
@@ -460,6 +461,7 @@ import './styles/main.css';
 							ok: response.ok,
 							latencyMs: Math.max(0, Math.round(performance.now() - startedAt)),
 						});
+						finishApiServerCall(callId);
 					}
 					return response;
 				} catch (error) {
@@ -473,6 +475,7 @@ import './styles/main.css';
 							latencyMs: Math.max(0, Math.round(performance.now() - startedAt)),
 							error: String(error?.message || error || 'Request failed'),
 						});
+						finishApiServerCall(callId);
 					}
 					throw error;
 				}

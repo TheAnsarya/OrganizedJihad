@@ -56,7 +56,8 @@ describe('uiManager Connection view', () => {
 		expect(html).toContain('Open Swagger');
 		expect(html).toContain('Open OpenAPI JSON');
 		expect(html).toContain('Open Server Logs');
-		expect(html).toContain('Local API Server Calls');
+		expect(html).toContain('Local API Server Telemetry');
+		expect(html).toContain('Open Runtime Versions');
 		expect(html).toContain('/api/sync/health');
 		expect(html).not.toContain('battleStart');
 		expect(html).not.toContain('api.hero-wars.com');

@@ -1,6 +1,8 @@
 using Microsoft.EntityFrameworkCore;
+using OrganizedJihad.Api.Models.Ui;
 using OrganizedJihad.Api.Services.Diagnostics;
 using OrganizedJihad.Data;
+using System.Reflection;
 
 namespace OrganizedJihad.Api.Services.Ui;
 
@@ -102,6 +104,25 @@ public sealed class ApiUiDiagnosticsEndpointHandler {
 	}
 
 	/// <summary>
+	/// Handles GET /ui/runtime-versions.
+	/// </summary>
+	public IResult GetRuntimeVersions(HttpContext context) {
+		if (!_accessPolicy.IsLocalRequest(context)) {
+			return Results.StatusCode(StatusCodes.Status403Forbidden);
+		}
+
+		var userscriptPath = Path.Combine(_runtimePaths.InstallRoot, "userscript", "organized-jihad.user.js");
+		var response = new ApiUiRuntimeVersionsResponse(
+			ApiVersion: ResolveApiAssemblyVersion(),
+			ApiInformationalVersion: ResolveApiInformationalVersion(),
+			UserscriptVersion: ResolveUserscriptVersion(userscriptPath),
+			UserscriptPath: userscriptPath,
+			CheckedUtc: DateTime.UtcNow);
+
+		return Results.Ok(response);
+	}
+
+	/// <summary>
 	/// Handles GET /ui/userscript-file.
 	/// </summary>
 	public IResult GetUserscriptFileAsync(HttpContext context) {
@@ -127,5 +148,47 @@ public sealed class ApiUiDiagnosticsEndpointHandler {
 
 		_logger.LogInformation("Userscript install endpoint requested. Serving file from {Path}", userscriptPath);
 		return Results.File(userscriptPath, "application/javascript; charset=utf-8", enableRangeProcessing: false);
+	}
+
+	private static string ResolveApiAssemblyVersion() {
+		var version = Assembly.GetEntryAssembly()?.GetName().Version;
+		return version is null ? "unknown" : version.ToString();
+	}
+
+	private static string ResolveApiInformationalVersion() {
+		var informational = Assembly
+			.GetEntryAssembly()?
+			.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?
+			.InformationalVersion;
+
+		return string.IsNullOrWhiteSpace(informational) ? "unknown" : informational;
+	}
+
+	private static string ResolveUserscriptVersion(string userscriptPath) {
+		if (!File.Exists(userscriptPath)) {
+			return "missing";
+		}
+
+		try {
+			foreach (var line in File.ReadLines(userscriptPath).Take(80)) {
+				if (!line.Contains("@version", StringComparison.OrdinalIgnoreCase)) {
+					continue;
+				}
+
+				var markerIndex = line.IndexOf("@version", StringComparison.OrdinalIgnoreCase);
+				if (markerIndex < 0) {
+					continue;
+				}
+
+				var value = line[(markerIndex + "@version".Length)..].Trim();
+				if (!string.IsNullOrWhiteSpace(value)) {
+					return value;
+				}
+			}
+		} catch {
+			return "unreadable";
+		}
+
+		return "unknown";
 	}
 }
