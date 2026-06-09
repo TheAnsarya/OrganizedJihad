@@ -26,7 +26,7 @@ import {
 import { getCachedApiPayload } from './helpers/cachedApiPayloadHelper.js';
 import { DEFAULT_API_BASE_URL, buildConfiguredApiUrl, getConfiguredApiBaseUrl, normalizeApiBaseUrl } from './helpers/apiConfig.js';
 import { getApiServerCallLog, isLocalApiServerUrl, onApiServerCall } from './helpers/apiServerCallLog.js';
-import { yieldToMainThread } from './helpers/cooperativeScheduler.js';
+import { yieldEvery, yieldToMainThread } from './helpers/cooperativeScheduler.js';
 import { sortData, sortIndicator } from './helpers/dataBrowserSortHelpers.js';
 import { stalenessTag, timeAgo } from './helpers/stalenessHelpers.js';
 import { bindDataBrowserViewInteractions } from './binders/dataBrowserViewOrchestrationBinder.js';
@@ -2089,12 +2089,16 @@ class UIManager {
 			const all = decompressHeroStore(raw);
 			if (all.length === 0) return [];
 			const byId = {};
+			let i = 0;
 			for (const h of all) {
+				i += 1;
 				const key = h.heroId || h.id;
 				if (!byId[key] || (h.timestamp || '') > (byId[key].timestamp || '')) {
 					byId[key] = h;
 				}
+				await yieldEvery(i, 250);
 			}
+			await yieldToMainThread();
 			return Object.values(byId);
 		} catch {
 			return [];
@@ -2118,7 +2122,9 @@ class UIManager {
 			]);
 
 			const parsedInventory = this._parseRawInventory(inventoryData || {});
+			await yieldToMainThread();
 			const requirementItemMeta = ProjectedItemCatalogResolver.buildRuntimeMetaMap(parsedInventory);
+			await yieldToMainThread();
 			const requirementsProjection = HeroMaterialRequirementsCalculator.calculateProjectedRequirements({
 				heroes,
 				heroUpgrades,
@@ -4418,11 +4424,15 @@ class UIManager {
 			allBattles = await this.idbStorage.getAll('battles', FETCH_LIMIT_LARGE);
 		} catch { /* empty */ }
 
+		await yieldToMainThread();
+
 		allBattles.sort((a, b) => {
 			const ta = a.timestamp ? new Date(a.timestamp).getTime() : 0;
 			const tb = b.timestamp ? new Date(b.timestamp).getTime() : 0;
 			return tb - ta;
 		});
+
+		await yieldToMainThread();
 
 		return allBattles;
 	}
