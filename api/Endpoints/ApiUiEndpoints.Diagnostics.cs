@@ -10,6 +10,9 @@ public static partial class ApiUiEndpoints {
 		endpoints.MapGet("/ui/userscript-handshake", (HttpContext context, ApiUiDiagnosticsEndpointHandler handler) =>
 			handler.GetUserscriptHandshakeAsync(context));
 
+		endpoints.MapGet("/ui/runtime-versions", (HttpContext context, ApiUiDiagnosticsEndpointHandler handler) =>
+			handler.GetRuntimeVersions(context));
+
 		endpoints.MapGet("/ui/userscript-file", (HttpContext context, ApiUiDiagnosticsEndpointHandler handler) =>
 			handler.GetUserscriptFileAsync(context));
 

@@ -254,6 +254,16 @@
 			</section>
 
 			<section class="card">
+				<h2>Runtime Versions</h2>
+				<div id="apiVersion" class="summary-line primary">API version: checking...</div>
+				<div id="apiInformationalVersion" class="summary-line secondary">API build: checking...</div>
+				<div id="userscriptVersion" class="summary-line secondary">Installed userscript: checking...</div>
+				<div class="actions">
+					<a class="button" href="/ui/runtime-versions" target="_blank" rel="noreferrer">Open Runtime Versions JSON</a>
+				</div>
+			</section>
+
+			<section class="card">
 				<h2>Setup / Update</h2>
 				<p>
 					If userscript, API, or tray startup behavior needs repair, rerun installer script from your install bundle.
@@ -347,6 +357,9 @@
 			const repairSummary = document.getElementById('repairSummary');
 			const taskSummary = document.getElementById('taskSummary');
 			const handshakeSummary = document.getElementById('handshakeSummary');
+			const apiVersion = document.getElementById('apiVersion');
+			const apiInformationalVersion = document.getElementById('apiInformationalVersion');
+			const userscriptVersion = document.getElementById('userscriptVersion');
 
 			if (applyHealthModeOverride()) {
 				return;
@@ -368,6 +381,17 @@
 				}
 			} catch {
 				lastSync.textContent = 'Unknown';
+			}
+
+			try {
+				const versions = await fetchJson('/ui/runtime-versions');
+				apiVersion.textContent = 'API version: ' + (versions.apiVersion || 'unknown');
+				apiInformationalVersion.textContent = 'API build: ' + (versions.apiInformationalVersion || 'unknown');
+				userscriptVersion.textContent = 'Installed userscript: ' + (versions.userscriptVersion || 'unknown');
+			} catch {
+				apiVersion.textContent = 'API version: unavailable';
+				apiInformationalVersion.textContent = 'API build: unavailable';
+				userscriptVersion.textContent = 'Installed userscript: unavailable';
 			}
 
 			try {

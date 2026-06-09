@@ -12,7 +12,7 @@
  */
 
 import { decompressHeroStore, decompressTitanStore } from './heroCompression.js';
-import { isLocalApiServerUrl, recordApiServerCall } from './helpers/apiServerCallLog.js';
+import { finishApiServerCall, isLocalApiServerUrl, recordApiServerCall, startApiServerCall } from './helpers/apiServerCallLog.js';
 import { yieldToMainThread } from './helpers/cooperativeScheduler.js';
 
 class SyncClient {
@@ -577,6 +577,7 @@ class SyncClient {
 		const startedAt = performance.now();
 		const method = String(options.method || 'GET').toUpperCase();
 		const trackApiServerCall = isLocalApiServerUrl(url, this.apiUrl);
+		const callId = trackApiServerCall ? startApiServerCall({ method, url }) : null;
 
 		return await new Promise((resolve, reject) => {
 			try {
@@ -599,6 +600,7 @@ class SyncClient {
 								ok: status >= 200 && status < 300,
 								latencyMs: Math.max(0, Math.round(performance.now() - startedAt)),
 							});
+							finishApiServerCall(callId);
 						}
 						resolve({
 							ok: status >= 200 && status < 300,
@@ -619,6 +621,7 @@ class SyncClient {
 								latencyMs: Math.max(0, Math.round(performance.now() - startedAt)),
 								error: String(error?.error || error?.message || 'GM request failed'),
 							});
+							finishApiServerCall(callId);
 						}
 						reject(new Error(String(error?.error || error?.message || 'GM request failed')));
 					},
@@ -633,11 +636,15 @@ class SyncClient {
 								latencyMs: Math.max(0, Math.round(performance.now() - startedAt)),
 								error: 'GM request timed out',
 							});
+							finishApiServerCall(callId);
 						}
 						reject(new Error('GM request timed out'));
 					},
 				});
 			} catch (error) {
+				if (trackApiServerCall) {
+					finishApiServerCall(callId);
+				}
 				reject(error);
 			}
 		});

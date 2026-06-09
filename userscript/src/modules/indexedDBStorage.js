@@ -51,7 +51,7 @@
 class IndexedDBStorage {
 	constructor() {
 		this.dbName = 'OrganizedJihad';
-		this.version = 11; // v11: Added adventureGuide store for node recommendations (#131)
+		this.version = 12; // v12: Added apiServerTelemetry store for persistent Connection history charting
 		this.db = null;
 		/**
 		 * True when the browser has closed the connection (via db.onclose) or
@@ -512,6 +512,14 @@ class IndexedDBStorage {
 					guideStore.createIndex('nodeId', 'nodeId', { unique: false });
 					guideStore.createIndex('timestamp', 'timestamp', { unique: false });
 					guideStore.createIndex('isWin', 'isWin', { unique: false });
+				}
+
+				// Persistent userscript -> local API server telemetry history for
+				// the Connection tab time-series chart and uptime trending.
+				if (!db.objectStoreNames.contains('apiServerTelemetry')) {
+					const telemetryStore = db.createObjectStore('apiServerTelemetry', { keyPath: 'id', autoIncrement: true });
+					telemetryStore.createIndex('timestamp', 'timestamp', { unique: false });
+					telemetryStore.createIndex('apiOrigin', 'apiOrigin', { unique: false });
 				}
 			};
 		});
