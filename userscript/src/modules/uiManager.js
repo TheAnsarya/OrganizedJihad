@@ -2121,7 +2121,7 @@ class UIManager {
 				this.idbStorage.getMetadata('inventoryData', {}).catch(() => ({})),
 			]);
 
-			const parsedInventory = this._parseRawInventory(inventoryData || {});
+			const parsedInventory = await this._parseRawInventory(inventoryData || {});
 			await yieldToMainThread();
 			const requirementItemMeta = ProjectedItemCatalogResolver.buildRuntimeMetaMap(parsedInventory);
 			await yieldToMainThread();
@@ -2320,14 +2320,14 @@ class UIManager {
 		}
 
 		const { types, typeLabels, typeIcons } = this._getBattleTypeMetadata();
-		const byType = this._buildBattleTypeCounts(allBattles);
+		const byType = await this._buildBattleTypeCounts(allBattles);
 		const pills = this._renderBattleSubTabPills(vs, allBattles, byType, types, typeLabels, typeIcons);
 		const {
 			filtered,
 			fWins,
 			fLosses,
 			fWinRate,
-		} = this._filterBattlesForView(allBattles, vs);
+		} = await this._filterBattlesForView(allBattles, vs);
 
 		// Paginate
 		const totalCount = filtered.length;
@@ -2335,7 +2335,7 @@ class UIManager {
 		vs.page = Math.min(vs.page, totalPages - 1);
 		const pageItems = filtered.slice(vs.page * this.PAGE_SIZE, (vs.page + 1) * this.PAGE_SIZE);
 
-		const rows = this._renderBattleRows(pageItems, typeLabels);
+		const rows = await this._renderBattleRows(pageItems, typeLabels);
 
 		// Adventure Guide panel — shown on Adventure sub-tab (#131)
 		let adventureGuideHtml = '';
@@ -2659,7 +2659,7 @@ class UIManager {
 		const typePills = this._renderChestTypePills(chests, sourceLabels);
 		let dropRateHtml = this._renderChestDropRatesFromMetadata(dropRates, sourceLabels);
 		if (!dropRateHtml) {
-			dropRateHtml = this._renderChestDropRatesFromRawDrops(allDrops, chests, sourceLabels);
+			dropRateHtml = await this._renderChestDropRatesFromRawDrops(allDrops, chests, sourceLabels);
 		}
 
 
@@ -2667,8 +2667,8 @@ class UIManager {
 			pageItems,
 			totalCount,
 			totalPages,
-		} = this._buildChestHistoryViewModel(chests, vs);
-		const rows = this._renderChestOpeningRows(pageItems, sourceLabels);
+		} = await this._buildChestHistoryViewModel(chests, vs);
+		const rows = await this._renderChestOpeningRows(pageItems, sourceLabels);
 
 		return `
 			<div class="oj-chests" data-browser="chests">
@@ -2724,7 +2724,7 @@ class UIManager {
 		const totalCount = items.length;
 		const totalPages = Math.max(1, Math.ceil(totalCount / this.PAGE_SIZE));
 		vs.page = Math.min(vs.page, totalPages - 1);
-		const { categoryCount, groupHtml } = this._renderInventoryGroupSections(items);
+		const { categoryCount, groupHtml } = await this._renderInventoryGroupSections(items);
 		const nameDiagnosticsHtml = this._renderInventoryNameDiagnosticsSection();
 
 		const sortInd = (field) => this._sortIndicator(vs.sortField, vs.sortDir, field);
@@ -2754,7 +2754,7 @@ class UIManager {
 	 * @returns {Array<{itemId: string, name: string, category: string, count: number}>}
 	 * @private
 	 */
-	_parseRawInventory(rawData, itemNameCatalog = {}) {
+	async _parseRawInventory(rawData, itemNameCatalog = {}) {
 		const items = [];
 		const unresolved = [];
 
@@ -2780,12 +2780,14 @@ class UIManager {
 			coin: { category: 'resource', prefix: 'Coin' },
 		};
 
+		let rowIndex = 0;
 		for (const [apiKey, entries] of Object.entries(rawData)) {
 			if (!entries || typeof entries !== 'object') continue;
 
 			const catInfo = categories[apiKey] || { category: apiKey, prefix: apiKey };
 
 			for (const [itemId, qty] of Object.entries(entries)) {
+				rowIndex += 1;
 				if (qty <= 0) continue;
 
 				const name = this._resolveInventoryItemName(apiKey, itemId, catInfo, itemNameCatalog);
@@ -2823,6 +2825,8 @@ class UIManager {
 					category: catInfo.category,
 					count: Number(qty) || 0,
 				});
+
+				await yieldEvery(rowIndex, 300);
 			}
 		}
 
@@ -2834,6 +2838,7 @@ class UIManager {
 
 		// Sort by category then by count descending
 		items.sort((a, b) => a.category.localeCompare(b.category) || b.count - a.count);
+		await yieldToMainThread();
 		return items;
 	}
 
@@ -4462,14 +4467,17 @@ class UIManager {
 		return { types, typeLabels, typeIcons };
 	}
 
-	_buildBattleTypeCounts(allBattles) {
+	async _buildBattleTypeCounts(allBattles) {
 		/** @type {Record<string, {count: number, wins: number}>} */
 		const byType = {};
+		let i = 0;
 		for (const battle of allBattles) {
+			i += 1;
 			const type = battle.battleType || 'Other';
 			if (!byType[type]) byType[type] = { count: 0, wins: 0 };
 			byType[type].count++;
 			if (battle.isWin === true) byType[type].wins++;
+			await yieldEvery(i, 400);
 		}
 		return byType;
 	}
@@ -4496,20 +4504,35 @@ class UIManager {
 		}).join(' ');
 	}
 
-	_filterBattlesForView(allBattles, vs) {
+	async _filterBattlesForView(allBattles, vs) {
 		let filtered = vs.subTab === 'all'
 			? allBattles
 			: allBattles.filter((battle) => battle.battleType === vs.subTab);
 
 		if (vs.filter) {
 			const q = vs.filter.toLowerCase();
-			filtered = filtered.filter((battle) => {
+			const result = [];
+			let i = 0;
+			for (const battle of filtered) {
+				i += 1;
 				const opp = (battle.opponentName || battle.defenderId || battle.opponentId || '').toString().toLowerCase();
-				return opp.includes(q);
-			});
+				if (opp.includes(q)) {
+					result.push(battle);
+				}
+				await yieldEvery(i, 400);
+			}
+			filtered = result;
 		}
 
-		const fWins = filtered.filter((battle) => battle.isWin === true).length;
+		let fWins = 0;
+		let i = 0;
+		for (const battle of filtered) {
+			i += 1;
+			if (battle.isWin === true) {
+				fWins += 1;
+			}
+			await yieldEvery(i, 500);
+		}
 		const fLosses = filtered.length - fWins;
 		const fWinRate = filtered.length > 0 ? ((fWins / filtered.length) * 100).toFixed(1) : '0.0';
 		return { filtered, fWins, fLosses, fWinRate };
@@ -4568,8 +4591,10 @@ class UIManager {
 		return { roundResultsHtml, powerHtml, playerTeamHtml, opponentTeamHtml, hasDetail };
 	}
 
-	_renderBattleRows(pageItems, typeLabels) {
-		return pageItems.map((battle, index) => {
+	async _renderBattleRows(pageItems, typeLabels) {
+		const rows = [];
+		for (let index = 0; index < pageItems.length; index += 1) {
+			const battle = pageItems[index];
 			const time = battle.timestamp ? new Date(battle.timestamp).toLocaleString() : '\u2014';
 			const result = battle.isWin === true
 				? '<span class="oj-win">WIN</span>'
@@ -4595,7 +4620,7 @@ class UIManager {
 			const { roundResultsHtml, powerHtml, playerTeamHtml, opponentTeamHtml, hasDetail } = this._buildBattleDetailFragments(battle);
 			const battleId = this._buildBattleDetailId(battle, index);
 
-			return `
+			rows.push(`
 				<tr class="${hasDetail ? 'oj-battle-row' : ''}" data-battle-id="${battleId}">
 					<td class="oj-mono">${time}</td>
 					<td>${type}</td>
@@ -4615,8 +4640,11 @@ class UIManager {
 						</div>
 					</td>
 				</tr>` : ''}
-			`;
-		}).join('');
+			`);
+			await yieldEvery(index + 1, 25);
+		}
+
+		return rows.join('');
 	}
 
 	async _loadTitansRoster() {
@@ -4873,7 +4901,7 @@ class UIManager {
 		try {
 			const rawData = await this.idbStorage.getMetadata('inventoryData', null);
 			if (rawData && typeof rawData === 'object') {
-				items = this._parseRawInventory(rawData, itemNameCatalog);
+				items = await this._parseRawInventory(rawData, itemNameCatalog);
 			}
 		} catch { /* empty */ }
 
@@ -4884,7 +4912,7 @@ class UIManager {
 					const rawData = typeof snapshots[0].inventoryData === 'string'
 						? JSON.parse(snapshots[0].inventoryData)
 						: snapshots[0].inventoryData;
-					items = this._parseRawInventory(rawData, itemNameCatalog);
+					items = await this._parseRawInventory(rawData, itemNameCatalog);
 				}
 			} catch { /* empty */ }
 		}
@@ -5624,12 +5652,15 @@ class UIManager {
 		`;
 	}
 
-	_renderInventoryGroupSections(items) {
+	async _renderInventoryGroupSections(items) {
 		const grouped = {};
+		let i = 0;
 		for (const item of items) {
+			i += 1;
 			const cat = item.category || item.type || 'Uncategorized';
 			if (!grouped[cat]) grouped[cat] = [];
 			grouped[cat].push(item);
+			await yieldEvery(i, 300);
 		}
 
 		const catLabels = {
@@ -5649,9 +5680,10 @@ class UIManager {
 			Uncategorized: '\uD83D\uDCE6 Other',
 		};
 
-		const groupHtml = Object.entries(grouped)
-			.sort(([a], [b]) => a.localeCompare(b))
-			.map(([cat, catItems]) => {
+		const sortedGroups = Object.entries(grouped).sort(([a], [b]) => a.localeCompare(b));
+		const groupSections = [];
+		for (let groupIndex = 0; groupIndex < sortedGroups.length; groupIndex += 1) {
+			const [cat, catItems] = sortedGroups[groupIndex];
 				const label = catLabels[cat] || `\uD83D\uDCE6 ${cat}`;
 				const itemRows = catItems.map((item) => {
 					const name = this._escapeHtml(item.name || item.itemName || `Item #${item.itemId || item.id}`);
@@ -5664,7 +5696,7 @@ class UIManager {
 					`;
 				}).join('');
 
-				return `
+				groupSections.push(`
 					<div class="oj-inv-group">
 						<div class="oj-inv-group-header" data-inv-cat="${this._escapeHtml(cat)}">
 							<span>${label}</span>
@@ -5675,8 +5707,10 @@ class UIManager {
 							<tbody>${itemRows}</tbody>
 						</table>
 					</div>
-				`;
-			}).join('');
+				`);
+				await yieldEvery(groupIndex + 1, 5);
+		}
+		const groupHtml = groupSections.join('');
 
 		return { categoryCount: Object.keys(grouped).length, groupHtml };
 	}
@@ -5890,6 +5924,7 @@ class UIManager {
 			const tb = typeof b.timestamp === 'number' ? b.timestamp : new Date(b.timestamp || 0).getTime();
 			return tb - ta;
 		});
+		await yieldToMainThread();
 
 		return { chests, dropRates, allDrops, dropsLoaded };
 	}
@@ -5950,11 +5985,13 @@ class UIManager {
 		return `<div class="oj-drop-rates"><h3>\uD83D\uDCCA Drop Rate Analysis</h3>${tables.join('')}</div>`;
 	}
 
-	_renderChestDropRatesFromRawDrops(allDrops, chests, sourceLabels) {
+	async _renderChestDropRatesFromRawDrops(allDrops, chests, sourceLabels) {
 		if (!Array.isArray(allDrops) || allDrops.length === 0) return '';
 
 		const grouped = {};
+		let i = 0;
 		for (const drop of allDrops) {
+			i += 1;
 			const key = `${drop.sourceType}_${drop.sourceId}`;
 			if (!grouped[key]) {
 				grouped[key] = { sourceType: drop.sourceType, sourceId: drop.sourceId, openCount: 0, items: {} };
@@ -5965,15 +6002,21 @@ class UIManager {
 			}
 			grouped[key].items[itemKey].count++;
 			grouped[key].items[itemKey].totalQty += drop.quantity || 0;
+			await yieldEvery(i, 400);
 		}
 
+		i = 0;
 		for (const chest of chests) {
+			i += 1;
 			const key = `${chest.chestType}_${chest.sourceId || chest.chestId || 'unknown'}`;
 			if (grouped[key]) grouped[key].openCount += (chest.quantity || 1);
+			await yieldEvery(i, 400);
 		}
 
 		const tables = [];
-		for (const [key, info] of Object.entries(grouped)) {
+		const groupedEntries = Object.entries(grouped);
+		for (let groupIndex = 0; groupIndex < groupedEntries.length; groupIndex += 1) {
+			const [key, info] = groupedEntries[groupIndex];
 			const label = sourceLabels[info.sourceType] || info.sourceType || key;
 			const opens = info.openCount || Object.values(info.items).reduce((s, i) => Math.max(s, i.count), 0);
 			const items = Object.values(info.items).sort((a, b) => b.count - a.count);
@@ -6001,20 +6044,27 @@ class UIManager {
 					</table>
 				</div>
 			`);
+			await yieldEvery(groupIndex + 1, 5);
 		}
 
 		if (tables.length === 0) return '';
 		return `<div class="oj-drop-rates"><h3>\uD83D\uDCCA Drop Rate Analysis</h3>${tables.join('')}</div>`;
 	}
 
-	_buildChestHistoryViewModel(chests, vs) {
+	async _buildChestHistoryViewModel(chests, vs) {
 		let filteredChests = chests;
 		if (vs.filter) {
 			const q = vs.filter.toLowerCase();
-			filteredChests = chests.filter((chest) => {
+			const filtered = [];
+			for (let i = 0; i < chests.length; i += 1) {
+				const chest = chests[i];
 				const type = (chest.chestType || chest.type || '').toLowerCase();
-				return type.includes(q);
-			});
+				if (type.includes(q)) {
+					filtered.push(chest);
+				}
+				await yieldEvery(i + 1, 400);
+			}
+			filteredChests = filtered;
 		}
 
 		const totalCount = filteredChests.length;
@@ -6024,8 +6074,10 @@ class UIManager {
 		return { pageItems, totalCount, totalPages };
 	}
 
-	_renderChestOpeningRows(pageItems, sourceLabels) {
-		return pageItems.map((chest) => {
+	async _renderChestOpeningRows(pageItems, sourceLabels) {
+		const rows = [];
+		for (let i = 0; i < pageItems.length; i += 1) {
+			const chest = pageItems[i];
 			const time = chest.timestamp
 				? new Date(typeof chest.timestamp === 'number' ? chest.timestamp : chest.timestamp).toLocaleString()
 				: '\u2014';
@@ -6043,7 +6095,7 @@ class UIManager {
 				rewardDetail = this._escapeHtml(chest.rewardSummary);
 			}
 
-			return `
+			rows.push(`
 				<tr>
 					<td class="oj-mono">${time}</td>
 					<td>${type}</td>
@@ -6051,8 +6103,11 @@ class UIManager {
 					<td class="oj-num">${chest.quantity || 1}</td>
 					<td class="oj-reward-list">${rewardDetail}</td>
 				</tr>
-			`;
-		}).join('');
+			`);
+			await yieldEvery(i + 1, 25);
+		}
+
+		return rows.join('');
 	}
 
 	async _loadResourcesDataset() {
