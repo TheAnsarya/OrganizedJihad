@@ -545,6 +545,7 @@ class SyncClient {
 	 * @private
 	 */
 	async _request(url, options = {}) {
+		await yieldToMainThread();
 		try {
 			return await fetch(url, options);
 		} catch (fetchError) {

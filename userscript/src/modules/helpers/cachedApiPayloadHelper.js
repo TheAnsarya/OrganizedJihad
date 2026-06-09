@@ -2,6 +2,8 @@
  * Shared cache-first API payload helper.
  */
 
+import { yieldToMainThread } from './cooperativeScheduler.js';
+
 /**
  * Execute HTTP request with fetch-first strategy and Tampermonkey fallback.
  *
@@ -10,6 +12,7 @@
  * @returns {Promise<{ok:boolean,status:number,statusText:string,json:Function,text:Function}>}
  */
 async function requestWithFallback(url, options = {}) {
+	await yieldToMainThread();
 	try {
 		return await fetch(url, options);
 	} catch (fetchError) {
@@ -106,6 +109,7 @@ export async function getCachedApiPayload(params) {
 	try {
 		const response = await requestWithFallback(requestUrl);
 		if (!response.ok) throw new Error(`HTTP ${response.status}`);
+		await yieldToMainThread();
 		const payload = await response.json();
 		await idbStorage.setMetadata(cacheKey, { timestamp: now, payload });
 		return payload;

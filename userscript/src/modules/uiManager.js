@@ -26,6 +26,7 @@ import {
 import { getCachedApiPayload } from './helpers/cachedApiPayloadHelper.js';
 import { DEFAULT_API_BASE_URL, buildConfiguredApiUrl, getConfiguredApiBaseUrl, normalizeApiBaseUrl } from './helpers/apiConfig.js';
 import { getApiServerCallLog, isLocalApiServerUrl, onApiServerCall } from './helpers/apiServerCallLog.js';
+import { yieldToMainThread } from './helpers/cooperativeScheduler.js';
 import { sortData, sortIndicator } from './helpers/dataBrowserSortHelpers.js';
 import { stalenessTag, timeAgo } from './helpers/stalenessHelpers.js';
 import { bindDataBrowserViewInteractions } from './binders/dataBrowserViewOrchestrationBinder.js';
@@ -1341,9 +1342,11 @@ class UIManager {
 		}
 
 		try {
+			await yieldToMainThread();
 			const response = await fetch(requestUrl);
 			if (!response.ok) throw new Error(`HTTP ${response.status}`);
 
+			await yieldToMainThread();
 			const payload = await response.json();
 			await this.idbStorage.setMetadata(cacheKey, { timestamp: now, payload });
 			return payload;
@@ -1501,6 +1504,7 @@ class UIManager {
 		}
 
 		try {
+			await yieldToMainThread();
 			const response = await fetch(this._buildApiUrl(TEAM_RECOMMENDATION_PREFERENCES_PATH), {
 				method: 'PUT',
 				headers: { 'Content-Type': 'application/json' },
@@ -3235,6 +3239,7 @@ class UIManager {
 	async _probeConnectionAbsoluteUrl(url) {
 		const startedAt = performance.now();
 		try {
+			await yieldToMainThread();
 			const response = await fetch(url, {
 				method: 'GET',
 				headers: { 'Accept': 'application/json' },
@@ -3242,6 +3247,7 @@ class UIManager {
 			});
 			let data = null;
 			try {
+				await yieldToMainThread();
 				data = await response.json();
 			} catch {
 				data = null;
@@ -3981,6 +3987,7 @@ class UIManager {
 	 */
 	async _checkLocalApiHealth() {
 		try {
+			await yieldToMainThread();
 			const response = await fetch(this._buildApiUrl(SYNC_HEALTH_PATH), {
 				method: 'GET',
 				headers: { 'Accept': 'application/json' },
