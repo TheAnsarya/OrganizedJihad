@@ -45,6 +45,14 @@ A two-tier game tracking solution for Hero Wars that captures, stores, and analy
 3. **Commit messages**: Reference issue number (e.g., `Fix #42: Add battle tracking`)
 4. **Prompt tracking**: Log significant AI-assisted sessions in `~docs/copilot-chats/`
 
+## Mandatory Branch Workflow
+
+- Never perform general implementation work directly on `main`.
+- Always create/switch to a scoped sub-branch first, using issue-aligned naming:
+  - `feature/<issue-number>-description`
+  - `fix/<issue-number>-description`
+- Keep `main` for integration/merge only.
+
 ## AI Workflow Overrides (Repository-Specific)
 
 - `~docs/oj-manual-prompts-log.txt` is a manually maintained file.
@@ -61,6 +69,8 @@ A two-tier game tracking solution for Hero Wars that captures, stores, and analy
 **Every Copilot session MUST produce or update a session log** in `~docs/copilot-chats/`.
 
 - **File naming**: `YYYY-MM-DD-<short-description>.md` (e.g., `2026-02-21-overlay-window-fixes.md`)
+- **File naming**: `YYYY-MM-DD.md` only (exactly one log file per day)
+- **Consolidation rule**: If multiple files exist for the same date, merge them into that single `YYYY-MM-DD.md` file and remove date-duplicate variants.
 - **Content must include**:
   - Date and session number
   - Summary of what was accomplished
@@ -266,5 +276,5 @@ OrganizedJihad/
 13. 🔄 Comprehensive test coverage (569/16 — heroNames, syncClient, apiMonitor added)
 14. 🔄 Performance benchmarking
 15. 🔄 Refactor: Extract gameTracker.js handler groups into tracker modules (#102)
-16. ⬜ Additional API/UI reporting visualizations
-17. ⬜ Automated daily report generation
+16. 🔄 Additional API/UI reporting visualizations
+17. ✅ Automated daily report generation

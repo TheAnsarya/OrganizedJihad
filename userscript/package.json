@@ -1,6 +1,6 @@
 {
 	"name": "organized-jihad",
-	"version": "0.9.240",
+	"version": "0.9.261",
 	"description": "TamperMonkey userscript for tracking Hero Wars game data with UI overlay",
 	"main": "dist/organized-jihad.user.js",
 	"type": "module",
@@ -15,7 +15,9 @@
 		"test:watch": "jest --watch",
 		"test:coverage": "jest --coverage",
 		"test:verbose": "jest --verbose",
-		"install:check": "node scripts/install-health-check.mjs"
+		"install:check": "node scripts/install-health-check.mjs",
+		"benchmark:compression": "node scripts/benchmark-hero-compression.mjs",
+		"benchmark:dispatch": "node scripts/benchmark-dispatch-cooperative.mjs"
 	},
 	"keywords": [
 		"tampermonkey",

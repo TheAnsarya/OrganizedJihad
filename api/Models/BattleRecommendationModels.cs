@@ -53,6 +53,11 @@ public class BattleRecommendationResponse {
 	public List<BattleRecommendationCandidate> Recommendations { get; set; } = [];
 
 	/// <summary>
+	/// Optional note describing fallback behavior or sparse-data context.
+	/// </summary>
+	public string? Note { get; set; }
+
+	/// <summary>
 	/// UTC timestamp when recommendations were generated.
 	/// </summary>
 	public DateTime GeneratedAtUtc { get; set; }

@@ -37,7 +37,7 @@ internal sealed class TrayHostNonWindowsApp : Application {
 	private void BuildTrayIcon() {
 		var menu = new NativeMenu();
 		menu.Add(BuildMenuItem("Open API UI", (_, _) => OpenUrl(TrayMenuLinkBuilder.BuildUiUrl(_options.ApiUrl))));
-		menu.Add(BuildMenuItem("Open Swagger UI", (_, _) => OpenUrl(TrayMenuLinkBuilder.BuildSwaggerUrl(_options.ApiUrl))));
+		menu.Add(BuildMenuItem("Open API Documentation", (_, _) => OpenUrl(TrayMenuLinkBuilder.BuildDocumentationUrl(_options.ApiUrl))));
 		menu.Add(BuildMenuItem("Open OpenAPI JSON", (_, _) => OpenUrl(TrayMenuLinkBuilder.BuildOpenApiJsonUrl(_options.ApiUrl))));
 		menu.Add(BuildMenuItem("Open API Health", (_, _) => OpenUrl(TrayMenuLinkBuilder.BuildHealthUrl(_options.ApiUrl))));
 		menu.Add(BuildMenuItem("Open API Server Logs", (_, _) => OpenUrl(TrayMenuLinkBuilder.BuildLogsUrl(_options.ApiUrl))));

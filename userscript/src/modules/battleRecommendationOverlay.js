@@ -11,7 +11,8 @@
  * @module battleRecommendationOverlay
  */
 
-import { buildConfiguredApiUrl } from './helpers/apiConfig.js';
+import { buildConfiguredApiUrl, getApiBaseUrlCandidates } from './helpers/apiConfig.js';
+import HERO_NAMES, { resolveHeroName } from './heroNames.js';
 
 const BATTLE_RECOMMENDATIONS_PATH = '/api/sync/battles/recommendations';
 const TEAM_RECOMMENDATIONS_PATH = '/api/sync/teams/recommendations';
@@ -146,6 +147,23 @@ const ENGINE_MODE_MAP = Object.freeze({
 	toe: 'toe',
 });
 
+const HERO_NAME_TO_ID = Object.freeze(
+	Object.entries(HERO_NAMES).reduce((acc, [id, name]) => {
+		const normalized = normalizeEntityNameToken(name);
+		if (normalized && !(normalized in acc)) {
+			acc[normalized] = Number(id);
+		}
+		return acc;
+	}, {})
+);
+
+function normalizeEntityNameToken(value) {
+	return String(value || '')
+		.trim()
+		.toLowerCase()
+		.replace(/[^a-z0-9]+/g, '');
+}
+
 class BattleRecommendationOverlay {
 	/**
 	 * @param {import('./indexedDBStorage.js').default} idbStorage - IndexedDB storage wrapper
@@ -158,9 +176,9 @@ class BattleRecommendationOverlay {
 		/** @type {HTMLDivElement|null} */
 		this.panel = null;
 		/** @type {boolean} */
-		this.isVisible = this.prefStorage.get('battleRecommendationOverlayVisible', true);
+		this.isVisible = this.prefStorage.get('battleRecommendationOverlayVisible', false);
 		/** @type {boolean} */
-		this._autoShowOnCombatContext = this.prefStorage.get('battleRecommendationOverlayAutoShow', true);
+		this._autoShowOnCombatContext = this.prefStorage.get('battleRecommendationOverlayAutoShow', false);
 		/** @type {number} */
 		this._autoShowNoticeUntil = 0;
 		/** @type {boolean} */
@@ -206,6 +224,8 @@ class BattleRecommendationOverlay {
 		this._dataHealth = 'live';
 		/** @type {number|null} */
 		this._refreshTimer = null;
+		/** @type {string} */
+		this._lastRequestError = '';
 		/** @type {number} */
 		this._lastContextPriority = 0;
 		/** @type {number} */
@@ -237,6 +257,8 @@ class BattleRecommendationOverlay {
 		this._onVisibilityChange = this._onVisibilityChange.bind(this);
 		this._onMouseMove = this._onMouseMove.bind(this);
 		this._onMouseUp = this._onMouseUp.bind(this);
+		this._onVisibilityChanged = null;
+
 	}
 
 	/**
@@ -253,9 +275,21 @@ class BattleRecommendationOverlay {
 			this.panel.style.display = 'none';
 		}
 
+		this._notifyVisibilityChanged();
+
 		if (this.isVisible) {
 			this._scheduleRefresh(250);
 		}
+	}
+
+	/**
+	 * Register callback invoked whenever overlay visibility changes.
+	 *
+	 * @param {(isVisible:boolean) => void|null} callback - Visibility callback
+	 */
+	setVisibilityChangedCallback(callback) {
+		this._onVisibilityChanged = typeof callback === 'function' ? callback : null;
+		this._notifyVisibilityChanged();
 	}
 
 	/**
@@ -310,6 +344,7 @@ class BattleRecommendationOverlay {
 					this.panel.style.display = 'block';
 					this._clampPanelToViewport();
 				}
+				this._notifyVisibilityChanged();
 				this._showHint('Recommendations panel auto-opened for combat context.', 'info', 7000, 'auto-open');
 			}
 		}
@@ -404,7 +439,7 @@ class BattleRecommendationOverlay {
 			const url = new URL(this._buildApiUrl(TEAM_RECOMMENDATION_OPERATIONS_SUMMARY_PATH));
 			url.searchParams.set('preferredTrendWindowDays', String(preferredTrendWindowDays));
 
-			const response = await fetch(url.toString(), { signal: this._activeFetchController?.signal });
+			const response = await this._request(url.toString(), { signal: this._activeFetchController?.signal });
 			if (!response.ok) {
 				throw new Error(`HTTP ${response.status}`);
 			}
@@ -432,6 +467,7 @@ class BattleRecommendationOverlay {
 		if (this.panel) {
 			this.panel.style.display = this.isVisible ? 'block' : 'none';
 		}
+		this._notifyVisibilityChanged();
 		if (!this.isVisible && this._refreshTimer) {
 			clearTimeout(this._refreshTimer);
 			this._refreshTimer = null;
@@ -1124,6 +1160,8 @@ class BattleRecommendationOverlay {
 	 */
 	async _fetchRecommendations() {
 		let usedEngineFallback = false;
+		let hadSuccessfulResponse = false;
+		let lastSuccessfulPayload = null;
 		const now = Date.now();
 		if (now < this._nextAllowedRequestAt) {
 			this._dataHealth = 'backoff';
@@ -1143,18 +1181,52 @@ class BattleRecommendationOverlay {
 
 		try {
 			let payload = null;
+			const fetchSource = async (fetcher, sourceLabel) => {
+				const result = await this._safeRecommendationFetch(fetcher, sourceLabel);
+				if (result.success) {
+					hadSuccessfulResponse = true;
+					if (result.payload && typeof result.payload === 'object') {
+						lastSuccessfulPayload = result.payload;
+					}
+				}
+				return result;
+			};
 
 			if (contextMode === 'grandarena' && this._context.opponentTeams.length > 1) {
-				payload = await this._fetchGrandArenaSegmentedRecommendations(sequence, minSamples);
+				const segmentedResult = await fetchSource(
+					() => this._fetchGrandArenaSegmentedRecommendations(sequence, minSamples),
+					'grand-arena-segmented'
+				);
+				payload = segmentedResult.payload;
 			} else if (contextMode === 'arena') {
-				payload = await this._fetchArenaSimulationRecommendations(sequence, objective, minSamples);
+				const arenaSimulationResult = await fetchSource(
+					() => this._fetchArenaSimulationRecommendations(sequence, objective, minSamples),
+					'arena-simulate'
+				);
+				payload = arenaSimulationResult.payload;
+
+				if (!this._hasRecommendations(payload)) {
+					const arenaBattleFallbackResult = await fetchSource(
+						() => this._fetchBattleRecommendationsForTarget(sequence, contextMode, minSamples),
+						'arena-battle-fallback'
+					);
+					payload = arenaBattleFallbackResult.payload;
+				}
 			} else if (ARENA_FAMILY_MODES.has(contextMode)) {
-				payload = await this._fetchBattleRecommendationsForTarget(sequence, contextMode, minSamples);
+				const arenaFamilyResult = await fetchSource(
+					() => this._fetchBattleRecommendationsForTarget(sequence, contextMode, minSamples),
+					'arena-family-battle'
+				);
+				payload = arenaFamilyResult.payload;
 			}
 
 			if (!this._hasRecommendations(payload)) {
 				usedEngineFallback = true;
-				payload = await this._fetchModeEngineRecommendations(sequence, mode, objective, minSamples);
+				const modeEngineResult = await fetchSource(
+					() => this._fetchModeEngineRecommendations(sequence, mode, objective, minSamples),
+					'mode-engine'
+				);
+				payload = modeEngineResult.payload;
 			}
 
 			if (sequence !== this._requestSequence) {
@@ -1169,15 +1241,44 @@ class BattleRecommendationOverlay {
 				return payload;
 			}
 
-			this._recordFetchFailure();
-			return this._lastSuccessfulPayload;
-		} catch {
+			if (hadSuccessfulResponse) {
+				const emptyPayload = lastSuccessfulPayload || {
+					recommendations: [],
+					note: 'No recommendation candidates yet. Play more battles and sync roster snapshots to train recommendations.',
+				};
+				this._recordFetchNoRecommendations(emptyPayload);
+				return emptyPayload;
+			}
+
 			this._recordFetchFailure();
 			return this._lastSuccessfulPayload;
 		} finally {
 			if (this._activeFetchController) {
 				this._activeFetchController = null;
 			}
+		}
+	}
+
+	/**
+	 * Execute recommendation source fetch and return null on source-specific failure.
+	 *
+	 * @param {() => Promise<object|null>} fetcher - Source fetch callback
+	 * @param {string} sourceLabel - Source label for diagnostics
+	 * @returns {Promise<object|null>} payload or null
+	 * @private
+	 */
+	async _safeRecommendationFetch(fetcher, sourceLabel) {
+		try {
+			return {
+				success: true,
+				payload: await fetcher(),
+			};
+		} catch (error) {
+			this._lastRequestError = `${sourceLabel}: ${String(error?.message || error || 'request failed')}`;
+			return {
+				success: false,
+				payload: null,
+			};
 		}
 	}
 
@@ -1328,7 +1429,7 @@ class BattleRecommendationOverlay {
 	 * @private
 	 */
 	async _requestJson(url, sequence) {
-		const response = await fetch(url, { signal: this._activeFetchController?.signal });
+		const response = await this._request(url, { signal: this._activeFetchController?.signal });
 		if (!response.ok) {
 			throw new Error(`HTTP ${response.status}`);
 		}
@@ -1337,6 +1438,167 @@ class BattleRecommendationOverlay {
 			return null;
 		}
 		return payload;
+	}
+
+	/**
+	 * Execute HTTP request with fetch-first strategy and Tampermonkey fallback.
+	 *
+	 * @param {string} url - Absolute URL
+	 * @param {{method?:string, headers?:Object, body?:string, signal?:AbortSignal}} options - Request options
+	 * @returns {Promise<{ok:boolean,status:number,statusText:string,json:Function,text:Function}>}
+	 * @private
+	 */
+	async _request(url, options = {}) {
+		const candidates = this._buildApiRequestCandidates(url);
+		let lastError = null;
+
+		for (const candidateUrl of candidates) {
+			try {
+				const response = await this._requestSingle(candidateUrl, options);
+
+				if (response.ok) {
+					this._persistSuccessfulApiBase(candidateUrl);
+					return response;
+				}
+
+				if (response.status === 404 && candidateUrl !== candidates[candidates.length - 1]) {
+					continue;
+				}
+
+				return response;
+			} catch (error) {
+				lastError = error;
+			}
+		}
+
+		throw lastError || new Error('API request failed');
+	}
+
+	/**
+	 * Execute one request URL with fetch-first and Tampermonkey fallback.
+	 *
+	 * @param {string} url - Absolute URL
+	 * @param {{method?:string, headers?:Object, body?:string, signal?:AbortSignal}} options - Request options
+	 * @returns {Promise<{ok:boolean,status:number,statusText:string,json:Function,text:Function}>}
+	 * @private
+	 */
+	async _requestSingle(url, options = {}) {
+		try {
+			return await fetch(url, options);
+		} catch (fetchError) {
+			try {
+				return await this._requestWithTampermonkey(url, options);
+			} catch (gmError) {
+				if (String(gmError?.message || '').includes('unavailable')) {
+					throw fetchError;
+				}
+				throw gmError;
+			}
+		}
+	}
+
+	/**
+	 * Build candidate request URLs from configured and local fallback API origins.
+	 *
+	 * @param {string} rawUrl - Original absolute URL
+	 * @returns {string[]} Candidate absolute URLs
+	 * @private
+	 */
+	_buildApiRequestCandidates(rawUrl) {
+		try {
+			const parsed = new URL(rawUrl);
+			const suffix = `${parsed.pathname}${parsed.search}${parsed.hash}`;
+			const candidates = getApiBaseUrlCandidates(this.prefStorage).map((base) => `${base}${suffix}`);
+			if (!candidates.includes(rawUrl)) {
+				candidates.unshift(rawUrl);
+			}
+			return candidates;
+		} catch {
+			return [rawUrl];
+		}
+	}
+
+	/**
+	 * Persist resolved working API base URL so future requests use the recovered origin.
+	 *
+	 * @param {string} url - Successful absolute URL
+	 * @private
+	 */
+	_persistSuccessfulApiBase(url) {
+		try {
+			const parsed = new URL(url);
+			const recoveredBase = `${parsed.protocol}//${parsed.host}`;
+			const currentBase = this.prefStorage.get('apiBaseUrl', '');
+			if (recoveredBase && recoveredBase !== currentBase) {
+				this.prefStorage.set('apiBaseUrl', recoveredBase);
+			}
+		} catch {
+			// best effort
+		}
+	}
+
+	/**
+	 * Execute HTTP request via Tampermonkey cross-origin API.
+	 *
+	 * @param {string} url - Absolute URL
+	 * @param {{method?:string, headers?:Object, body?:string}} options - Request options
+	 * @returns {Promise<{ok:boolean,status:number,statusText:string,json:Function,text:Function}>}
+	 * @private
+	 */
+	async _requestWithTampermonkey(url, options = {}) {
+		const gmRequest = typeof GM_xmlhttpRequest === 'function'
+			? GM_xmlhttpRequest
+			: (typeof window !== 'undefined' && typeof window.GM_xmlhttpRequest === 'function'
+				? window.GM_xmlhttpRequest
+				: null);
+
+		if (!gmRequest) {
+			throw new Error('GM_xmlhttpRequest unavailable');
+		}
+
+		const method = String(options?.method || 'GET').toUpperCase();
+		const headers = options?.headers || {};
+		const body = options?.body;
+
+		return await new Promise((resolve, reject) => {
+			gmRequest({
+				method,
+				url,
+				headers,
+				data: body,
+				responseType: 'text',
+				onload: (response) => {
+					const status = Number(response?.status || 0);
+					const statusText = String(response?.statusText || '');
+					const text = typeof response?.responseText === 'string'
+						? response.responseText
+						: String(response?.response || '');
+					resolve({
+						ok: status >= 200 && status < 300,
+						status,
+						statusText,
+						json: async () => JSON.parse(text || '{}'),
+						text: async () => text,
+					});
+				},
+				onerror: (error) => reject(new Error(error?.error || error?.message || 'GM request failed')),
+				ontimeout: () => reject(new Error('GM request timed out')),
+			});
+		});
+	}
+
+	/**
+	 * Notify visibility listeners about current panel state.
+	 *
+	 * @private
+	 */
+	_notifyVisibilityChanged() {
+		if (typeof this._onVisibilityChanged !== 'function') return;
+		try {
+			this._onVisibilityChanged(Boolean(this.isVisible));
+		} catch {
+			// best effort callback
+		}
 	}
 
 	/**
@@ -1350,10 +1612,26 @@ class BattleRecommendationOverlay {
 		this._consecutiveFailures = 0;
 		this._nextAllowedRequestAt = 0;
 		this._dataHealth = 'live';
+		this._lastRequestError = '';
 		this._lastSuccessfulPayload = payload;
 		if (hadFailures) {
 			this._showHint('Recommendation API connection recovered.', 'info', 4500, 'api-recovered');
 		}
+	}
+
+	/**
+	 * Record successful API reachability when no recommendation cards are currently available.
+	 *
+	 * @param {object} payload - Successful no-data payload
+	 * @private
+	 */
+	_recordFetchNoRecommendations(payload) {
+		this._consecutiveFailures = 0;
+		this._nextAllowedRequestAt = 0;
+		this._dataHealth = 'live';
+		this._lastRequestError = '';
+		this._lastSuccessfulPayload = payload;
+		this._showHint('API connected. No recommendation samples yet for this context.', 'warning', DEFAULT_HINT_TTL_MS, 'api-no-recommendations');
 	}
 
 	/**
@@ -1371,7 +1649,8 @@ class BattleRecommendationOverlay {
 			return;
 		}
 
-		this._showHint('API temporarily unavailable. Retrying with backoff.', 'error', DEFAULT_HINT_TTL_MS, 'api-backoff');
+		const detail = this._lastRequestError ? ` (${this._lastRequestError})` : '';
+		this._showHint(`API temporarily unavailable. Retrying with backoff.${detail}`, 'error', DEFAULT_HINT_TTL_MS, 'api-backoff');
 	}
 
 	/**
@@ -1673,9 +1952,15 @@ class BattleRecommendationOverlay {
 		const payloadNote = typeof payload?.note === 'string' && payload.note.trim().length > 0
 			? `<div class="oj-bro-empty" style="margin:6px 0 2px 0">${this._escapeHtml(payload.note)}</div>`
 			: '';
+		const sourceType = String(payload?.sourceType || '').trim();
 		const rows = segmented.length > 0
-			? this._renderSegmentedRows(segmented)
-			: this._renderCardRows(cards.slice(0, 3));
+			? this._renderSegmentedRows(segmented, sourceType)
+			: this._renderCardRows(
+				cards.slice(0, 3).map((rec) => ({
+					...rec,
+					sourceType: rec?.sourceType || sourceType,
+				}))
+			);
 
 		bodyEl.innerHTML = `
 			<div class="oj-bro-health-row">${healthBadge}</div>
@@ -2002,6 +2287,8 @@ class BattleRecommendationOverlay {
 	_renderCardRows(cards) {
 		return cards.map((rec, index) => {
 			const teamPreview = this._escapeHtml(rec?.teamPreview || rec?.TeamPreview || rec?.team || 'Unknown Team');
+			const avatars = this._renderTeamAvatarStrip(rec);
+			const tags = this._renderRecommendationTags(rec);
 			const battles = Number(rec?.battles || rec?.sampleSize || rec?.totalBattles || rec?.sampleCount || 0);
 			const winRate = this._resolveWinRate(rec);
 			const confidence = this._resolveConfidence(rec);
@@ -2021,6 +2308,8 @@ class BattleRecommendationOverlay {
 
 			return `<div class="oj-bro-row" style="margin-top:${index === 0 ? '0' : '6px'}">
 				<div class="oj-bro-row-title">${teamPreview}</div>
+				${avatars}
+				${tags}
 				<div class="oj-bro-metrics">Win ${winRate} • Conf ${confidence} • Score ${score} • ${battles} samples</div>
 				${simulationLine}
 				${powerLine}
@@ -2030,19 +2319,197 @@ class BattleRecommendationOverlay {
 	}
 
 	/**
+	 * Render compact quality/source tags for a recommendation card.
+	 *
+	 * @param {object} rec - Recommendation row
+	 * @returns {string} HTML
+	 * @private
+	 */
+	_renderRecommendationTags(rec) {
+		const tags = [];
+		const confidenceRaw = Number(rec?.confidence ?? rec?.confidenceScore ?? 0);
+		const sampleCount = Number(rec?.battles || rec?.sampleSize || rec?.totalBattles || rec?.sampleCount || 0);
+		const simulationRuns = Number(rec?.simulationRuns || 0);
+		const sourceType = String(rec?.sourceType || rec?.source || '').trim().toLowerCase();
+
+		if (Number.isFinite(confidenceRaw) && confidenceRaw > 0) {
+			const confidenceLabel = confidenceRaw >= 0.7
+				? 'High confidence'
+				: confidenceRaw >= 0.45
+					? 'Medium confidence'
+					: 'Low confidence';
+			tags.push(`<span class="oj-bro-tag oj-bro-tag-confidence" title="Confidence score ${(Math.max(0, Math.min(1, confidenceRaw)) * 100).toFixed(0)}%">${confidenceLabel}</span>`);
+		}
+
+		if (sampleCount > 0) {
+			const sampleLabel = sampleCount >= 30
+				? 'Strong sample'
+				: sampleCount >= 10
+					? 'Growing sample'
+					: 'Sparse sample';
+			tags.push(`<span class="oj-bro-tag oj-bro-tag-sample" title="${sampleCount} historical matches">${sampleLabel}</span>`);
+		}
+
+		if (simulationRuns > 0 || Number.isFinite(Number(rec?.simulatedWinProbability))) {
+			tags.push('<span class="oj-bro-tag oj-bro-tag-sim">Simulator</span>');
+		}
+
+		if (sourceType.includes('engine')) {
+			tags.push('<span class="oj-bro-tag oj-bro-tag-source">Engine fallback</span>');
+		} else if (sourceType.includes('battle')) {
+			tags.push('<span class="oj-bro-tag oj-bro-tag-source">Battle history</span>');
+		}
+
+		if (tags.length === 0) {
+			return '';
+		}
+
+		return `<div class="oj-bro-tags">${tags.join('')}</div>`;
+	}
+
+	/**
+	 * Render compact avatar strip for a recommendation card.
+	 *
+	 * @param {object} rec - Recommendation row
+	 * @returns {string} HTML
+	 * @private
+	 */
+	_renderTeamAvatarStrip(rec) {
+		const heroIds = this._extractRecommendationHeroIds(rec).slice(0, 5);
+		if (heroIds.length === 0) {
+			return '';
+		}
+
+		const avatars = heroIds.map((heroId) => {
+			const resolvedId = Number(heroId);
+			if (!Number.isFinite(resolvedId) || resolvedId <= 0) {
+				return '';
+			}
+
+			const avatarUrl = this._resolveAvatarUrl(resolvedId);
+			const name = this._escapeHtml(resolveHeroName(resolvedId));
+			return `<img class="oj-bro-team-icon" src="${avatarUrl}" alt="${name}" title="${name}" loading="lazy" onerror="this.style.display='none'">`;
+		}).join('');
+
+		if (!avatars) {
+			return '';
+		}
+
+		return `<div class="oj-bro-team-icons">${avatars}</div>`;
+	}
+
+	/**
+	 * Resolve avatar URL for hero/titan/pet entity ids.
+	 *
+	 * @param {number} entityId - Hero/titan/pet id
+	 * @returns {string} Avatar URL
+	 * @private
+	 */
+	_resolveAvatarUrl(entityId) {
+		if (entityId >= 4000 && entityId < 5000) {
+			return `https://calc2.hw-assist.com/static/assets/images/titan_icons/titan_icon_${entityId}.png`;
+		}
+
+		const iconId = entityId >= 7000 ? entityId - 7000 : entityId;
+		return `https://calc2.hw-assist.com/static/assets/images/hero_icons/${String(iconId).padStart(4, '0')}.png`;
+	}
+
+	/**
+	 * Extract hero/titan ids from recommendation payload variants.
+	 *
+	 * @param {object} rec - Recommendation row
+	 * @returns {number[]} Ordered unique ids
+	 * @private
+	 */
+	_extractRecommendationHeroIds(rec) {
+		const seen = new Set();
+		const ids = [];
+
+		const pushId = (raw) => {
+			const id = Number(raw);
+			if (!Number.isFinite(id) || id <= 0 || seen.has(id)) {
+				return;
+			}
+			seen.add(id);
+			ids.push(id);
+		};
+
+		const idLists = [
+			rec?.heroIds,
+			rec?.HeroIds,
+			rec?.teamHeroIds,
+			rec?.TeamHeroIds,
+			rec?.recommendedHeroIds,
+			rec?.RecommendedHeroIds,
+			rec?.teamIds,
+			rec?.TeamIds,
+		];
+
+		for (const list of idLists) {
+			if (!Array.isArray(list)) continue;
+			for (const entry of list) {
+				pushId(entry);
+			}
+		}
+
+		const heroRows = [rec?.heroes, rec?.Heroes, rec?.team, rec?.Team];
+		for (const list of heroRows) {
+			if (!Array.isArray(list)) continue;
+			for (const row of list) {
+				if (typeof row === 'number' || typeof row === 'string') {
+					pushId(row);
+					continue;
+				}
+
+				if (row && typeof row === 'object') {
+					pushId(row.heroId || row.id || row.entityId);
+				}
+			}
+		}
+
+		if (ids.length > 0) {
+			return ids;
+		}
+
+		const preview = String(rec?.teamPreview || rec?.TeamPreview || rec?.team || '');
+		if (!preview) {
+			return ids;
+		}
+
+		const tokens = preview
+			.split(/[,|]/)
+			.map((token) => token.trim())
+			.filter(Boolean);
+
+		for (const token of tokens) {
+			const normalized = normalizeEntityNameToken(token);
+			if (!normalized) continue;
+			const mappedId = HERO_NAME_TO_ID[normalized];
+			if (mappedId) {
+				pushId(mappedId);
+			}
+		}
+
+		return ids;
+	}
+
+	/**
 	 * Render Grand Arena segmented recommendation rows.
 	 *
 	 * @param {Array<object>} segments - Segment list
 	 * @returns {string} HTML
 	 * @private
 	 */
-	_renderSegmentedRows(segments) {
+	_renderSegmentedRows(segments, defaultSourceType = '') {
 		return segments.map((segment) => {
 			const power = Number(segment?.opponentPower || 0).toLocaleString();
 			const title = `Team ${Number(segment?.slot || 0)} • target ${power}`;
 			const cards = Array.isArray(segment?.recommendations) ? segment.recommendations : [];
 			const rows = cards.length > 0
-				? this._renderCardRows(cards)
+				? this._renderCardRows(cards.map((rec) => ({
+					...rec,
+					sourceType: rec?.sourceType || segment?.sourceType || defaultSourceType,
+				})))
 				: '<div class="oj-bro-empty">No team-slot recommendation yet.</div>';
 			return `<div class="oj-bro-segment">
 				<div class="oj-bro-segment-title">${this._escapeHtml(title)}</div>

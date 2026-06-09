@@ -4,6 +4,7 @@
  *
  * API Documentation: http://localhost:5124/api/sync
  * Endpoints:
+ * - POST /api/sync/state/import - Explicit full-state ingest endpoint
  * - POST /api/sync/import - Import data from browser
  * - GET /api/sync/health - API health check
  * - GET /api/sync/last-sync - Last sync timestamp
@@ -12,11 +13,14 @@
 
 import { decompressHeroStore, decompressTitanStore } from './heroCompression.js';
 import { isLocalApiServerUrl, recordApiServerCall } from './helpers/apiServerCallLog.js';
+import { yieldToMainThread } from './helpers/cooperativeScheduler.js';
 
 class SyncClient {
 	constructor(apiUrl = 'http://localhost:5124') {
 		this.apiUrl = apiUrl;
-		this.syncEndpoint = `${apiUrl}/api/sync/import`;
+		this.stateSyncEndpoint = `${apiUrl}/api/sync/state/import`;
+		this.legacySyncEndpoint = `${apiUrl}/api/sync/import`;
+		this.syncEndpoint = this.stateSyncEndpoint;
 		this.healthEndpoint = `${apiUrl}/api/sync/health`;
 		this.lastSyncEndpoint = `${apiUrl}/api/sync/last-sync`;
 		this.statsEndpoint = `${apiUrl}/api/sync/stats`;
@@ -108,6 +112,7 @@ class SyncClient {
 		console.log('[OrganizedJihad] Starting sync to server...');
 
 		try {
+			await yieldToMainThread();
 			// ── Determine incremental boundary ─────────────────────────
 			const lastSync = await storage.getMetadata('lastSync', null);
 			const hasLastSync = !!lastSync;
@@ -138,6 +143,7 @@ class SyncClient {
 				getSince('chests', 'timestamp', 'epoch'), // chests store uses Date.now() (numeric)
 				getSince('consumableRewards', 'timestamp', 'epoch'),
 			]);
+			await yieldToMainThread();
 
 			const toIso = (value) => {
 				const asNumber = Number(value);
@@ -174,6 +180,7 @@ class SyncClient {
 				storage.getAll('goals'),
 				storage.getAll('events'),
 			]);
+			await yieldToMainThread();
 
 			// Categorize battles by type in a single pass (#136)
 			// Object.groupBy returns { key: [items] } — missing keys default to []
@@ -198,6 +205,7 @@ class SyncClient {
 			const heroes = decompressHeroStore(heroesRaw);
 			const titansRaw = await getSince('titans');
 			const titans = decompressTitanStore(titansRaw);
+			await yieldToMainThread();
 			const pets = await getSince('pets');
 			const inventorySnapshots = await getSince('inventory');
 			const currentInventory =
@@ -226,6 +234,43 @@ class SyncClient {
 				getSince('guildActivities'),
 			]);
 
+			const [mailData, mailRewards, airshipData] = await Promise.all([
+				storage.getMetadata('mailData', null),
+				hasLastSync
+					? storage.getByIndexRange('mailRewards', 'timestamp', { lower: lastSync, lowerOpen: true })
+					: storage.getAll('mailRewards'),
+				storage.getMetadata('airshipData', null),
+			]);
+
+			const mailMessages = Array.isArray(mailData?.items)
+				? mailData.items.map((item) => ({
+					playerId: Number(mailData.playerId || item.playerId || 0),
+					mailId: String(item.mailId || ''),
+					mailType: String(item.mailType || 'unknown'),
+					senderId: String(item.senderId || ''),
+					senderName: String(item.senderName || ''),
+					subject: String(item.subject || ''),
+					messageText: String(item.messageText || ''),
+					rewardSummaryText: String(item.rewardSummaryText || ''),
+					rewardsJson: item.rewards ? JSON.stringify(item.rewards) : null,
+					receivedAt: item.receivedAt || mailData.timestamp || new Date().toISOString(),
+					isRead: !!item.isRead,
+					isCollected: !!item.isCollected,
+					rawMailJson: item.rawMail ? JSON.stringify(item.rawMail) : null,
+				}))
+				: [];
+
+			const airshipGifts = Array.isArray(airshipData?.gifts)
+				? airshipData.gifts.map((gift) => ({
+					playerId: Number(gift.playerId || airshipData.playerId || 0),
+					giftId: String(gift.giftId || ''),
+					sourceType: String(gift.sourceType || 'zeppelinGiftGet'),
+					rewardSummaryText: String(gift.rewardSummaryText || ''),
+					rewardsJson: JSON.stringify(gift.rewards || []),
+					timestamp: gift.timestamp || new Date().toISOString(),
+				}))
+				: [];
+
 			// Phase 8: Gather upgrade, daily activity, and inventory tracking data
 			// Stores with `timestamp` index use incremental query;
 			// stores with `completedAt`/`claimedAt` indexes use those instead.
@@ -236,6 +281,7 @@ class SyncClient {
 					getSince('inventoryItemUsages'),
 					getSince('equipmentChanges'),
 				]);
+			await yieldToMainThread();
 
 			const [dailyQuestCompletions, guildQuestCompletions, loginRewards] =
 				await Promise.all([
@@ -294,6 +340,9 @@ class SyncClient {
 				expeditionBattles,
 				resourceTransactions,
 				guildActivities,
+				mailMessages,
+				mailRewards,
+				airshipGifts,
 				// Phase 8 - Hero Upgrade Tracking
 				heroLevelUpgrades,
 				heroStarUpgrades,
@@ -316,6 +365,7 @@ class SyncClient {
 				inventoryItemUsages,
 				equipmentChanges,
 			};
+			await yieldToMainThread();
 
 			console.log('[OrganizedJihad] Sync payload:', {
 				snapshots: currentSnapshot ? 1 : 0,
@@ -341,6 +391,9 @@ class SyncClient {
 				expeditionBattles: expeditionBattles.length,
 				resourceTransactions: resourceTransactions.length,
 				guildActivities: guildActivities.length,
+				mailMessages: mailMessages.length,
+				mailRewards: mailRewards.length,
+				airshipGifts: airshipGifts.length,
 				// Phase 8 counts
 				heroUpgrades: heroUpgrades.length,
 				titanUpgrades: titanUpgrades.length,
@@ -351,14 +404,8 @@ class SyncClient {
 				equipmentChanges: equipmentChanges.length,
 			});
 
-			// Send to API
-			const response = await this._request(this.syncEndpoint, {
-				method: 'POST',
-				headers: {
-					'Content-Type': 'application/json',
-				},
-				body: JSON.stringify(syncData),
-			});
+			// Send to API (state endpoint first, fallback to legacy import)
+			const response = await this._postSyncPayload(syncData);
 
 			if (!response.ok) {
 				const errorText = await response.text();
@@ -384,6 +431,38 @@ class SyncClient {
 			console.error('[OrganizedJihad] Sync failed:', error);
 			throw error;
 		}
+	}
+
+	/**
+	 * Post sync payload to API with compatibility fallback.
+	 *
+	 * @param {object} syncData - BrowserSyncData payload
+	 * @returns {Promise<{ok:boolean,status:number,statusText:string,json:Function,text:Function}>}
+	 * @private
+	 */
+	async _postSyncPayload(syncData) {
+		const requestOptions = {
+			method: 'POST',
+			headers: {
+				'Content-Type': 'application/json',
+			},
+			body: JSON.stringify(syncData),
+		};
+
+		let response = await this._request(this.stateSyncEndpoint, requestOptions);
+		if (response.status === 404 || response.status === 405) {
+			response = await this._request(this.legacySyncEndpoint, requestOptions);
+			if (response.ok) {
+				this.syncEndpoint = this.legacySyncEndpoint;
+			}
+			return response;
+		}
+
+		if (response.ok) {
+			this.syncEndpoint = this.stateSyncEndpoint;
+		}
+
+		return response;
 	}
 
 	/**
@@ -466,6 +545,7 @@ class SyncClient {
 	 * @private
 	 */
 	async _request(url, options = {}) {
+		await yieldToMainThread();
 		try {
 			return await fetch(url, options);
 		} catch (fetchError) {

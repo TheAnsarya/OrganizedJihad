@@ -139,6 +139,21 @@ public class BrowserSyncData {
 	/// </summary>
 	public List<GuildActivity>? GuildActivities { get; set; }
 
+	/// <summary>
+	/// Mailbox message list captured from mailGetAll responses.
+	/// </summary>
+	public List<MailMessage>? MailMessages { get; set; }
+
+	/// <summary>
+	/// Mail reward claim rows captured from mailCollect/mailFarm responses.
+	/// </summary>
+	public List<MailReward>? MailRewards { get; set; }
+
+	/// <summary>
+	/// Airship (zeppelin) gift claim events captured from zeppelinGiftGet responses.
+	/// </summary>
+	public List<AirshipGift>? AirshipGifts { get; set; }
+
 	// === Hero Upgrade Tracking ===
 
 	/// <summary>
@@ -301,6 +316,9 @@ public class ImportCounts {
 	public int ExpeditionBattles { get; set; }
 	public int ResourceTransactions { get; set; }
 	public int GuildActivities { get; set; }
+	public int MailMessages { get; set; }
+	public int MailRewards { get; set; }
+	public int AirshipGifts { get; set; }
 
 	// === Hero Upgrade Tracking ===
 	public int HeroLevelUpgrades { get; set; }
@@ -360,6 +378,9 @@ public class DatabaseStats {
 	public int TotalExpeditionBattles { get; set; }
 	public int TotalResourceTransactions { get; set; }
 	public int TotalGuildActivities { get; set; }
+	public int TotalMailMessages { get; set; }
+	public int TotalMailRewards { get; set; }
+	public int TotalAirshipGifts { get; set; }
 
 	// === Hero Upgrade Tracking ===
 	public int TotalHeroLevelUpgrades { get; set; }
@@ -393,7 +414,7 @@ public class DatabaseStats {
 								TotalHeroes + TotalTitans + TotalPets + TotalInventorySnapshots +
 								TotalQuestCompletions + TotalMissionProgress + TotalShopPurchases +
 								TotalTowerProgress + TotalExpeditionBattles + TotalResourceTransactions +
-								TotalGuildActivities +
+								TotalGuildActivities + TotalMailMessages + TotalMailRewards + TotalAirshipGifts +
 								TotalHeroLevelUpgrades + TotalHeroStarUpgrades + TotalHeroColorUpgrades +
 								TotalHeroSkillUpgrades + TotalHeroArtifactUpgrades + TotalHeroGlyphUpgrades +
 								TotalHeroSkinUpgrades +

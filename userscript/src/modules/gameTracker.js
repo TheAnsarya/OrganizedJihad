@@ -123,6 +123,7 @@ import {
 } from './trackers/GameTrackerResponseLifecycleHelpers.js';
 import { compressHeroBatch, compressTitanBatch } from './heroCompression.js';
 import { resolveHeroName, resolveTitanElement } from './heroNames.js';
+import { yieldToMainThread } from './helpers/cooperativeScheduler.js';
 
 /**
  * Reference to the real page window — bypasses TamperMonkey's sandbox.
@@ -182,6 +183,10 @@ class GameTracker {
 		this.originalFetch = null;
 		this.apiUrl = '';
 		this.requestHistory = {};
+		/** @type {number} Yield cadence for long response batches */
+		this._cooperativeYieldEvery = 6;
+		/** @type {() => Promise<void>} Shared cooperative yield callback */
+		this._cooperativeYield = yieldToMainThread;
 
 		// ── Tracking category toggles (#27) ──────────────────────────────
 		// Per-category enable/disable. Default: all enabled.

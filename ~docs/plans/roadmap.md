@@ -50,7 +50,7 @@
 - [ ] Hero power progression timelines
 - [ ] Team composition analysis (best teams for arena)
 - [ ] Guild member activity scoring
-- [ ] Automated daily report generation
+- [x] Automated daily report generation (#381)
 - [ ] Export reports as PDF/CSV
 
 ### Phase 11 — Polish & Quality (Planned)

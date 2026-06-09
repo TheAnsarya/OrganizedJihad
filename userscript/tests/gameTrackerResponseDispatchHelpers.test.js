@@ -72,6 +72,39 @@ describe('GameTrackerResponseDispatchHelpers', () => {
 		expect(result.dispatched).toEqual([]);
 	});
 
+	test('dispatchSortedResults performs cooperative yields on large batches', async () => {
+		const handler = jest.fn(async () => {});
+		const cooperativeYield = jest.fn(async () => {});
+		const tracker = {
+			_handlerRegistry: new Map([
+				['userGetInfo', [{ handler, label: 'user', dependsOn: [], category: 'player' }]],
+			]),
+			_trackingPrefs: { player: true },
+			_logError: jest.fn(async () => {}),
+			_cooperativeYieldEvery: 2,
+			_cooperativeYield: cooperativeYield,
+		};
+
+		const sortedResults = [
+			{ ident: 'a', result: { response: { ok: 1 } } },
+			{ ident: 'b', result: { response: { ok: 1 } } },
+			{ ident: 'c', result: { response: { ok: 1 } } },
+			{ ident: 'd', result: { response: { ok: 1 } } },
+		];
+		const callMap = {
+			a: 'userGetInfo',
+			b: 'userGetInfo',
+			c: 'userGetInfo',
+			d: 'userGetInfo',
+		};
+		const callArgs = { a: {}, b: {}, c: {}, d: {} };
+
+		await dispatchSortedResults(tracker, sortedResults, callMap, callArgs);
+
+		expect(handler).toHaveBeenCalledTimes(4);
+		expect(cooperativeYield).toHaveBeenCalledTimes(2);
+	});
+
 	test('maybeCaptureApiSample stores sample and evicts oldest when capped', () => {
 		const tracker = {
 			_apiSamples: new Map([['old', { keep: false }]]),

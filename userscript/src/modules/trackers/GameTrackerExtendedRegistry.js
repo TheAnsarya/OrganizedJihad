@@ -330,9 +330,43 @@ export function registerPhase12Handlers(tracker) {
 		});
 	}, 'trackTitanStoneExchange', { category: 'economy' });
 
-	tracker.registerHandler('zeppelinGiftGet', async (_call, _args, data) => {
+	tracker.registerHandler('zeppelinGiftGet', async (_call, args, data) => {
+		const timestamp = new Date().toISOString();
+		const rewardsPayload = data?.reward || data?.rewards || data || {};
+		const rewardRows = tracker._normalizeRewards(rewardsPayload);
+		const numericPlayerId = Number(await tracker.storage.getMetadata('currentPlayerId')) || 0;
+		const giftId = String(args?.id || args?.giftId || `${Date.now()}`);
+
+		const giftRecord = {
+			giftId,
+			sourceType: 'zeppelinGiftGet',
+			timestamp,
+			playerId: numericPlayerId,
+			rewardSummaryText: `${rewardRows.length} reward row(s)`,
+			rewards: rewardRows,
+		};
+
+		const existing = (await tracker.storage.getMetadata('airshipData', null)) || {};
+		const existingGifts = Array.isArray(existing.gifts) ? existing.gifts : [];
+		await tracker.storage.setMetadata('airshipData', {
+			playerId: numericPlayerId,
+			lastUpdate: Date.now(),
+			lastGift: giftRecord,
+			gifts: [giftRecord, ...existingGifts].slice(0, 200),
+		});
+
+		for (const reward of rewardRows) {
+			if (reward.itemType === 'gold' && reward.quantity > 0) {
+				await tracker.trackResourceTransaction('gold', reward.quantity, 'airship', `zeppelin_gift:${giftId}`);
+			}
+			if (reward.itemType === 'starmoney' && reward.quantity > 0) {
+				await tracker.trackResourceTransaction('emeralds', reward.quantity, 'airship', `zeppelin_gift:${giftId}`);
+			}
+		}
+
 		await tracker._logActivity('reward', 'Zeppelin gift collected', {
-			reward: data.reward || data,
+			reward: rewardsPayload,
+			airshipGiftId: giftId,
 		});
 	}, 'trackZeppelinGift', { category: 'economy' });
 

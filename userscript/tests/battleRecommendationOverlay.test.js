@@ -55,7 +55,10 @@ describe('BattleRecommendationOverlay', () => {
 	});
 
 	it('should auto-show hidden overlay when arena combat context arrives', async () => {
-		const prefs = makePrefStorage({ battleRecommendationOverlayVisible: false });
+		const prefs = makePrefStorage({
+			battleRecommendationOverlayVisible: false,
+			battleRecommendationOverlayAutoShow: true,
+		});
 		const overlay = new BattleRecommendationOverlay(makeIdbStorage(), prefs);
 		overlay.init();
 
@@ -135,6 +138,7 @@ describe('BattleRecommendationOverlay', () => {
 
 		global.fetch
 			.mockResolvedValueOnce({ ok: true, json: async () => ({ recommendations: [] }) })
+			.mockResolvedValueOnce({ ok: true, json: async () => ({ recommendations: [] }) })
 			.mockResolvedValueOnce({ ok: true, json: async () => ({ recommendations: [{ teamPreview: 'Fallback Team', estimatedWinProbability: 0.7, confidenceScore: 0.6, finalScore: 0.72, sampleSize: 8 }] }) });
 
 		await overlay.onApiProcessed({
@@ -142,9 +146,10 @@ describe('BattleRecommendationOverlay', () => {
 		});
 		await flushScheduledRefresh();
 
-		expect(global.fetch).toHaveBeenCalledTimes(2);
-		expect(global.fetch.mock.calls[1][0]).toContain('/api/sync/teams/recommendations');
-		expect(global.fetch.mock.calls[1][0]).toContain('objective=offense');
+		expect(global.fetch).toHaveBeenCalledTimes(3);
+		expect(global.fetch.mock.calls[1][0]).toContain('/api/sync/battles/recommendations');
+		expect(global.fetch.mock.calls[2][0]).toContain('/api/sync/teams/recommendations');
+		expect(global.fetch.mock.calls[2][0]).toContain('objective=offense');
 
 		overlay.destroy();
 	});
@@ -215,6 +220,106 @@ describe('BattleRecommendationOverlay', () => {
 
 		const bodyText = document.querySelector('#oj-bro-body')?.textContent || '';
 		expect(bodyText).toContain('Sparse historical arena data; using engine-backed simulated recommendations.');
+
+		overlay.destroy();
+	});
+
+	it('should render hero avatar icons from recommendation team preview names', async () => {
+		const idb = makeIdbStorage({
+			arenaEnemies: [{ userId: 79, name: 'Avatar Target', power: 300000 }],
+		});
+		const overlay = new BattleRecommendationOverlay(idb, makePrefStorage());
+		overlay.init();
+
+		global.fetch.mockResolvedValue({
+			ok: true,
+			json: async () => ({
+				recommendations: [{
+					teamPreview: 'Galahad, Astaroth, Thea, Keira, Faceless',
+					weightedWinRate: 0.66,
+					confidence: 0.59,
+					score: 0.69,
+					battles: 14,
+				}],
+			}),
+		});
+
+		await overlay.onApiProcessed({
+			calls: [{ name: 'arenaAttack', args: { enemyUserId: 79 } }],
+		});
+		await flushScheduledRefresh();
+
+		const icons = document.querySelectorAll('.oj-bro-team-icon');
+		expect(icons.length).toBeGreaterThanOrEqual(5);
+		expect(icons[0].getAttribute('src')).toContain('hero_icons');
+
+		overlay.destroy();
+	});
+
+	it('should render quality and source tags on recommendation cards', async () => {
+		const idb = makeIdbStorage({
+			arenaEnemies: [{ userId: 82, name: 'Tag Target', power: 355000 }],
+		});
+		const overlay = new BattleRecommendationOverlay(idb, makePrefStorage());
+		overlay.init();
+
+		global.fetch.mockResolvedValue({
+			ok: true,
+			json: async () => ({
+				recommendations: [{
+					teamPreview: 'Astaroth, Galahad, Keira, Thea, Faceless',
+					weightedWinRate: 0.72,
+					confidence: 0.76,
+					score: 0.74,
+					battles: 34,
+					simulatedWinProbability: 0.71,
+					simulationRuns: 1800,
+					sourceType: 'engine',
+				}],
+			}),
+		});
+
+		await overlay.onApiProcessed({
+			calls: [{ name: 'arenaAttack', args: { enemyUserId: 82 } }],
+		});
+		await flushScheduledRefresh();
+
+		const tagsText = document.querySelector('.oj-bro-tags')?.textContent || '';
+		expect(tagsText).toContain('High confidence');
+		expect(tagsText).toContain('Strong sample');
+		expect(tagsText).toContain('Simulator');
+		expect(tagsText).toContain('Engine fallback');
+
+		overlay.destroy();
+	});
+
+	it('should apply payload sourceType to recommendation tags when card source is absent', async () => {
+		const idb = makeIdbStorage({
+			grandArenaEnemies: [{ userId: 83, name: 'Source Target', teams: [{ power: 220000 }, { power: 225000 }, { power: 230000 }] }],
+		});
+		const overlay = new BattleRecommendationOverlay(idb, makePrefStorage());
+		overlay.init();
+
+		global.fetch.mockResolvedValue({
+			ok: true,
+			json: async () => ({
+				recommendations: [{
+					teamPreview: 'Astaroth, Galahad, Keira, Thea, Faceless',
+					weightedWinRate: 0.62,
+					confidence: 0.49,
+					score: 0.65,
+					battles: 12,
+				}],
+			}),
+		});
+
+		await overlay.onApiProcessed({
+			calls: [{ name: 'grandArenaAttack', args: { enemyUserId: 83 } }],
+		});
+		await flushScheduledRefresh();
+
+		const tagsText = document.querySelector('.oj-bro-tags')?.textContent || '';
+		expect(tagsText).toContain('Battle history');
 
 		overlay.destroy();
 	});
@@ -985,6 +1090,29 @@ describe('BattleRecommendationOverlay', () => {
 
 		const body = document.querySelector('#oj-bro-body')?.textContent || '';
 		expect(body).toContain('Stable');
+
+		overlay.destroy();
+	});
+
+	it('should not enter backoff when API responds successfully with empty recommendations', async () => {
+		const idb = makeIdbStorage({ arenaEnemies: [{ userId: 11, name: 'Sparse', power: 120000 }] });
+		const overlay = new BattleRecommendationOverlay(idb, makePrefStorage());
+		overlay.init();
+
+		global.fetch
+			.mockResolvedValueOnce({ ok: true, json: async () => ({ recommendations: [] }) })
+			.mockResolvedValueOnce({ ok: true, json: async () => ({ recommendations: [] }) })
+			.mockResolvedValueOnce({ ok: true, json: async () => ({ recommendations: [] }) });
+
+		await overlay.onApiProcessed({ calls: [{ name: 'arenaAttack', args: { enemyUserId: 11 } }] });
+		await flushScheduledRefresh();
+
+		expect(global.fetch).toHaveBeenCalledTimes(3);
+		expect(overlay._dataHealth).toBe('live');
+		expect(overlay._renderHealthBadge()).toContain('Live data');
+
+		const hint = document.querySelector('#oj-bro-hints')?.textContent || '';
+		expect(hint).toContain('API connected');
 
 		overlay.destroy();
 	});

@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.ComponentModel;
 
 namespace OrganizedJihad.Installer.Cli;
 
@@ -214,10 +215,13 @@ internal sealed class InstallerWorkflow {
 	}
 
 	private void InstallApiPayload() {
+		var repositoryRoot = ResolveRepositoryRoot();
 		var sourceCandidates = new[] {
+			Path.Combine(repositoryRoot, "artifacts", "api-publish-win-x64"),
+			Path.Combine(repositoryRoot, "api", "bin", "Release", "net10.0", "win-x64", "publish"),
 			Path.Combine(_baseDir, "bundled", "api"),
 			Path.Combine(_baseDir, "api"),
-			Path.GetFullPath(Path.Combine(_baseDir, "..", "..", "..", "api", "bin", "Release", "net10.0", "win-x64", "publish")),
+			Path.GetFullPath(Path.Combine(_baseDir, "..", "..", "..", "..", "..", "api", "bin", "Release", "net10.0", "win-x64", "publish")),
 		};
 
 		LogDirectoryCandidates("API payload source", sourceCandidates);
@@ -227,11 +231,19 @@ internal sealed class InstallerWorkflow {
 		CopyDirectory(source, destination);
 		LogDirectorySnapshot("API payload destination", destination, maxEntries: 12);
 
-		var runtimeHostSource = ResolveOptionalDirectoryCandidate(
+		var runtimeHostSourceCandidates = new[] {
+			Path.Combine(repositoryRoot, "artifacts", "runtime-host-publish-win-x64"),
+			Path.Combine(repositoryRoot, "api", "OrganizedJihad.Api.TrayHost", "bin", "Release", "net10.0-windows10.0.19041.0", "win-x64", "publish"),
+			Path.GetFullPath(Path.Combine(_baseDir, "..", "..", "..", "..", "..", "api", "OrganizedJihad.Api.TrayHost", "bin", "Release", "net10.0-windows10.0.19041.0", "win-x64", "publish")),
 			Path.Combine(_baseDir, "bundled", "runtime-host"),
 			Path.Combine(_baseDir, "bundled", "api-tray"),
 			Path.Combine(_baseDir, "runtime-host"),
-			Path.Combine(_baseDir, "api-tray"));
+			Path.Combine(_baseDir, "api-tray"),
+		};
+
+		LogDirectoryCandidates("Runtime host payload source", runtimeHostSourceCandidates);
+		var runtimeHostSource = ResolveOptionalDirectoryCandidate(
+			runtimeHostSourceCandidates);
 		if (string.IsNullOrWhiteSpace(runtimeHostSource)) {
 			Console.WriteLine("[OJ Installer.Cli] Runtime host payload not found in known bundle locations.");
 		}
@@ -284,9 +296,13 @@ internal sealed class InstallerWorkflow {
 		var runtimeHostDir = Path.Combine(_options.InstallRoot, "runtime-host");
 		var runtimeHostExe = ResolveExecutable(Path.Combine(runtimeHostDir, "OrganizedJihad.Api.TrayHost"));
 		if (!string.IsNullOrWhiteSpace(runtimeHostExe) && !string.IsNullOrWhiteSpace(apiExecutable)) {
-			StartBackgroundProcess(runtimeHostExe, $"--api-executable \"{apiExecutable}\" --api-url \"{_options.ApiUrl}\" --working-directory \"{apiDir}\"", runtimeHostDir);
-			Console.WriteLine("[OJ Installer.Cli] Runtime host started.");
-			return;
+			try {
+				StartBackgroundProcess(runtimeHostExe, $"--api-executable \"{apiExecutable}\" --api-url \"{_options.ApiUrl}\" --working-directory \"{apiDir}\"", runtimeHostDir);
+				Console.WriteLine("[OJ Installer.Cli] Runtime host started.");
+				return;
+			} catch (Exception ex) when (ex is Win32Exception || ex is InvalidOperationException) {
+				Console.WriteLine($"[OJ Installer.Cli] Runtime host launch failed ({ex.GetType().Name}: {ex.Message}). Falling back to direct API launch mode.");
+			}
 		}
 		if (!string.IsNullOrWhiteSpace(runtimeHostExe) && string.IsNullOrWhiteSpace(apiExecutable)) {
 			Console.WriteLine("[OJ Installer.Cli] Runtime host payload found, but API executable is missing. Falling back to direct launch mode.");
@@ -562,12 +578,27 @@ internal sealed class InstallerWorkflow {
 	}
 
 	private static string? ResolveExecutable(string pathWithoutExtension) {
-		var candidates = new[] {
-			pathWithoutExtension + ".exe",
-			pathWithoutExtension,
-		};
+		string[] candidates;
+		if (OperatingSystem.IsWindows()) {
+			candidates = [pathWithoutExtension + ".exe"];
+		} else {
+			candidates = [pathWithoutExtension + ".exe", pathWithoutExtension];
+		}
 
 		return candidates.FirstOrDefault(File.Exists);
+	}
+
+	private string ResolveRepositoryRoot() {
+		var current = new DirectoryInfo(_baseDir);
+		while (current is not null) {
+			if (File.Exists(Path.Combine(current.FullName, "OrganizedJihad.sln"))) {
+				return current.FullName;
+			}
+
+			current = current.Parent;
+		}
+
+		return Path.GetFullPath(Path.Combine(_baseDir, "..", "..", "..", "..", ".."));
 	}
 
 	private static void CopyDirectory(string source, string destination) {
