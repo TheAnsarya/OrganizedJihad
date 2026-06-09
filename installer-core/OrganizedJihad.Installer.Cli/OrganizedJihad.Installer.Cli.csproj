@@ -5,15 +5,10 @@
 		<Nullable>enable</Nullable>
 		<ImplicitUsings>enable</ImplicitUsings>
 		<AssemblyName>OrganizedJihad.Installer.Cli</AssemblyName>
+		<IncludeBundlePayloadInPublish>true</IncludeBundlePayloadInPublish>
 	</PropertyGroup>
 
-	<ItemGroup Condition="Exists('..\..\installer-ui\bundle-payload')">
-		<Content Include="..\..\installer-ui\bundle-payload\*.*">
-			<Link>%(Filename)%(Extension)</Link>
-			<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-			<CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
-			<ExcludeFromSingleFile>false</ExcludeFromSingleFile>
-		</Content>
+	<ItemGroup Condition="Exists('..\..\installer-ui\bundle-payload') and '$(IncludeBundlePayloadInPublish)' != 'false'">
 		<Content Include="..\..\installer-ui\bundle-payload\**\*">
 			<Link>%(RecursiveDir)%(Filename)%(Extension)</Link>
 			<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>

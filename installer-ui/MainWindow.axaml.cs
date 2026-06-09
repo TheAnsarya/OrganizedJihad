@@ -14,6 +14,8 @@ using System.Linq;
 using Microsoft.Win32;
 using System.Runtime.Versioning;
 using System.Text;
+using System.Text.Json;
+using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using System.Reflection;
 
@@ -76,6 +78,7 @@ public partial class MainWindow : Window {
 	private readonly string _buildMarker;
 	private readonly HashSet<Control> _hoveredControls = new();
 	private readonly HashSet<Control> _pressedControls = new();
+	private double _installProgressPercent;
 
 	public MainWindow() {
 		InitializeComponent();
@@ -112,6 +115,8 @@ public partial class MainWindow : Window {
 		ResetLogViewToTopLeft();
 
 		RefreshTampermonkeyStatus(logResult: true);
+		SetInstallProgress(0, "Install progress: idle");
+		_ = RefreshVersionTelemetryAsync(logResult: true);
 
 		UpdateQuickActionState();
 	}
@@ -259,6 +264,10 @@ public partial class MainWindow : Window {
 			openUserscriptDiagnostics);
 		var installSucceeded = await RunInstallProcessAsync(installerCliPath, cliArgs, maxRuntime);
 
+		if (installSucceeded) {
+			SetInstallProgress(100, "Install progress: completed");
+		}
+
 		if (installApi && installSucceeded && runInstallHealthCheck) {
 			await ProbeApiUiEndpointsAsync(apiUrl);
 		}
@@ -275,6 +284,7 @@ public partial class MainWindow : Window {
 		}
 
 		RefreshTampermonkeyStatus(logResult: false);
+		await RefreshVersionTelemetryAsync(logResult: true);
 	}
 
 	private static string BuildInstallerCliArguments(string installRoot, string apiUrl, bool installApi, bool installUserscript, bool openTampermonkeySetup, string? browserArg, bool runInstallHealthCheck, bool firstRunDiagnostics, bool openUserscriptDiagnostics) {
@@ -774,6 +784,7 @@ public partial class MainWindow : Window {
 	private async Task<bool> RunInstallProcessAsync(string shell, string args, TimeSpan maxRuntime) {
 		_isInstalling = true;
 		UpdateQuickActionState();
+		SetInstallProgress(2, "Install progress: launching installer engine");
 
 		_currentLogFilePath = CreateInstallLogFilePath();
 		LogPathTextBlock.Text = $"Log: {_currentLogFilePath}";
@@ -801,6 +812,7 @@ public partial class MainWindow : Window {
 
 			process.OutputDataReceived += (_, eventArgs) => {
 				if (!string.IsNullOrWhiteSpace(eventArgs.Data)) {
+					ApplyProgressFromInstallerLogLine(eventArgs.Data);
 					if (eventArgs.Data.Contains("[OJ Installer.Cli] Installation complete.", StringComparison.Ordinal)) {
 						completionMarkerSeen = true;
 						completionMarkerAtUtc = DateTime.UtcNow;
@@ -852,6 +864,7 @@ public partial class MainWindow : Window {
 					} catch {
 						// Best effort only.
 					}
+					SetInstallProgress(_installProgressPercent, "Install progress: timed out");
 					SetStatus("Status: Installer timed out.");
 					AppendLog($"[Installer UI] Installer timed out after {Math.Ceiling(maxRuntime.TotalSeconds)} seconds and was stopped to restore UI control.");
 					return false;
@@ -863,20 +876,232 @@ public partial class MainWindow : Window {
 			if (process.ExitCode == 0) {
 				SetStatus("Status: Install complete.");
 				AppendLog("[Installer UI] Installation succeeded.");
+				SetInstallProgress(100, "Install progress: completed");
 				return true;
 			} else {
 				SetStatus($"Status: Installer failed (exit {process.ExitCode}).");
 				AppendLog($"[Installer UI] Installation failed with exit code {process.ExitCode}.");
+				SetInstallProgress(_installProgressPercent, $"Install progress: failed (exit {process.ExitCode})");
 				return false;
 			}
 		} catch (Exception ex) {
 			SetStatus("Status: Installer crashed.");
 			AppendLog($"[Installer UI] Exception: {ex.Message}");
+			SetInstallProgress(_installProgressPercent, "Install progress: crashed");
 			return false;
 		} finally {
 			_isInstalling = false;
 			UpdateQuickActionState();
 		}
+	}
+
+	private void ApplyProgressFromInstallerLogLine(string line) {
+		if (line.Contains("Starting cross-platform install workflow", StringComparison.OrdinalIgnoreCase)) {
+			SetInstallProgress(6, "Install progress: workflow started");
+			return;
+		}
+
+		if (line.Contains("Stopped legacy process", StringComparison.OrdinalIgnoreCase)) {
+			SetInstallProgress(14, "Install progress: stopping existing processes");
+			return;
+		}
+
+		if (line.Contains("Installing API payload", StringComparison.OrdinalIgnoreCase) || line.Contains("API payload source", StringComparison.OrdinalIgnoreCase)) {
+			SetInstallProgress(28, "Install progress: staging API payload");
+			return;
+		}
+
+		if (line.Contains("API payload installed to", StringComparison.OrdinalIgnoreCase)) {
+			SetInstallProgress(58, "Install progress: API payload installed");
+			return;
+		}
+
+		if (line.Contains("Runtime host payload", StringComparison.OrdinalIgnoreCase) || line.Contains("Runtime host destination", StringComparison.OrdinalIgnoreCase)) {
+			SetInstallProgress(72, "Install progress: staging runtime host");
+			return;
+		}
+
+		if (line.Contains("Runtime host started", StringComparison.OrdinalIgnoreCase)
+			|| line.Contains("API started directly", StringComparison.OrdinalIgnoreCase)
+			|| line.Contains("API started via dotnet", StringComparison.OrdinalIgnoreCase)) {
+			SetInstallProgress(84, "Install progress: API process started");
+			return;
+		}
+
+		if (line.Contains("Userscript payload installed to", StringComparison.OrdinalIgnoreCase)) {
+			SetInstallProgress(90, "Install progress: userscript installed");
+			return;
+		}
+
+		if (line.Contains("API health endpoint reachable", StringComparison.OrdinalIgnoreCase)) {
+			SetInstallProgress(96, "Install progress: API health check passed");
+			return;
+		}
+
+		if (line.Contains("Installation complete", StringComparison.OrdinalIgnoreCase)) {
+			SetInstallProgress(100, "Install progress: completed");
+		}
+	}
+
+	private void SetInstallProgress(double percent, string statusText) {
+		var normalized = Math.Clamp(percent, 0, 100);
+		if (normalized < _installProgressPercent) {
+			normalized = _installProgressPercent;
+		}
+
+		_installProgressPercent = normalized;
+		Dispatcher.UIThread.Post(() => {
+			InstallProgressBar.Value = normalized;
+			InstallProgressTextBlock.Text = statusText;
+		});
+	}
+
+	private async Task RefreshVersionTelemetryAsync(bool logResult) {
+		try {
+			var installRoot = InstallRootTextBox.Text?.Trim() ?? string.Empty;
+			var apiUrl = ApiUrlTextBox.Text?.Trim() ?? string.Empty;
+
+			var installableUserscript = ResolveInstallableUserscriptVersion() ?? "unknown";
+			var installableApi = ResolveInstallableApiVersion() ?? "unknown";
+
+			var installedUserscriptPath = Path.Combine(installRoot, "userscript", "organized-jihad.user.js");
+			var currentUserscript = ResolveUserscriptVersionFromFile(installedUserscriptPath) ?? "not installed";
+			var currentApi = "unreachable";
+
+			if (!string.IsNullOrWhiteSpace(apiUrl) && Uri.TryCreate(apiUrl, UriKind.Absolute, out var _)) {
+				var runtimeSnapshot = await TryFetchRuntimeVersionsAsync(apiUrl);
+				if (runtimeSnapshot is not null) {
+					currentApi = BuildApiVersionLabel(runtimeSnapshot.Value.ApiVersion, runtimeSnapshot.Value.ApiInformationalVersion);
+					if (!string.IsNullOrWhiteSpace(runtimeSnapshot.Value.UserscriptVersion)) {
+						currentUserscript = runtimeSnapshot.Value.UserscriptVersion;
+					}
+				}
+			}
+
+			Dispatcher.UIThread.Post(() => {
+				CurrentApiVersionTextBlock.Text = currentApi;
+				InstallableApiVersionTextBlock.Text = installableApi;
+				CurrentUserscriptVersionTextBlock.Text = currentUserscript;
+				InstallableUserscriptVersionTextBlock.Text = installableUserscript;
+			});
+
+			if (logResult) {
+				AppendLog($"[Installer UI] Version check: current API={currentApi}; installable API={installableApi}; current userscript={currentUserscript}; installable userscript={installableUserscript}.");
+			}
+		} catch (Exception ex) {
+			if (logResult) {
+				AppendLog($"[Installer UI] Version check failed: {ex.Message}");
+			}
+		}
+	}
+
+	private static string BuildApiVersionLabel(string? version, string? informational) {
+		var normalizedVersion = string.IsNullOrWhiteSpace(version) ? "unknown" : version.Trim();
+		if (string.IsNullOrWhiteSpace(informational)) {
+			return normalizedVersion;
+		}
+
+		return $"{normalizedVersion} ({informational.Trim()})";
+	}
+
+	private static string? ResolveInstallableUserscriptVersion() {
+		var baseDir = AppContext.BaseDirectory;
+		var candidates = new[] {
+			Path.Combine(baseDir, "organized-jihad.user.js"),
+			Path.Combine(baseDir, "bundle-payload", "organized-jihad.user.js"),
+			Path.Combine(baseDir, "installer-cli", "organized-jihad.user.js"),
+			Path.Combine(baseDir, "..", "bundle-payload", "organized-jihad.user.js"),
+			Path.Combine(baseDir, "..", "..", "bundle-payload", "organized-jihad.user.js"),
+		};
+
+		foreach (var candidate in candidates) {
+			var resolved = SafeGetFullPath(candidate);
+			if (string.IsNullOrWhiteSpace(resolved) || !File.Exists(resolved)) {
+				continue;
+			}
+
+			var version = ResolveUserscriptVersionFromFile(resolved);
+			if (!string.IsNullOrWhiteSpace(version)) {
+				return version;
+			}
+		}
+
+		return null;
+	}
+
+	private static string? ResolveInstallableApiVersion() {
+		var baseDir = AppContext.BaseDirectory;
+		var candidates = new[] {
+			Path.Combine(baseDir, "bundled", "runtime-host", "OrganizedJihad.Api.TrayHost.exe"),
+			Path.Combine(baseDir, "bundle-payload", "bundled", "runtime-host", "OrganizedJihad.Api.TrayHost.exe"),
+			Path.Combine(baseDir, "installer-cli", "bundled", "runtime-host", "OrganizedJihad.Api.TrayHost.exe"),
+			Path.Combine(baseDir, "..", "bundle-payload", "bundled", "runtime-host", "OrganizedJihad.Api.TrayHost.exe"),
+			Path.Combine(baseDir, "..", "..", "bundle-payload", "bundled", "runtime-host", "OrganizedJihad.Api.TrayHost.exe"),
+			Path.Combine(baseDir, "bundled", "api", "OrganizedJihad.Api.exe"),
+			Path.Combine(baseDir, "bundled", "api", "OrganizedJihad.Api"),
+		};
+
+		foreach (var candidate in candidates) {
+			var resolved = SafeGetFullPath(candidate);
+			if (string.IsNullOrWhiteSpace(resolved) || !File.Exists(resolved)) {
+				continue;
+			}
+
+			try {
+				var info = FileVersionInfo.GetVersionInfo(resolved);
+				var label = BuildApiVersionLabel(info.FileVersion, info.ProductVersion);
+				if (!string.IsNullOrWhiteSpace(label)) {
+					return label;
+				}
+			} catch {
+				// Best effort version display.
+			}
+		}
+
+		return null;
+	}
+
+	private static string? ResolveUserscriptVersionFromFile(string userscriptPath) {
+		if (string.IsNullOrWhiteSpace(userscriptPath) || !File.Exists(userscriptPath)) {
+			return null;
+		}
+
+		var regex = new Regex("@version\\s+([0-9]+\\.[0-9]+\\.[0-9]+)", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+		foreach (var line in File.ReadLines(userscriptPath).Take(60)) {
+			var match = regex.Match(line);
+			if (match.Success) {
+				return match.Groups[1].Value;
+			}
+		}
+
+		return null;
+	}
+
+	private static string? SafeGetFullPath(string path) {
+		try {
+			return Path.GetFullPath(path);
+		} catch {
+			return null;
+		}
+	}
+
+	private static async Task<(string? ApiVersion, string? ApiInformationalVersion, string? UserscriptVersion)?> TryFetchRuntimeVersionsAsync(string apiUrl) {
+		var runtimeUrl = apiUrl.TrimEnd('/') + "/ui/runtime-versions";
+		using var client = new HttpClient { Timeout = TimeSpan.FromSeconds(4) };
+		using var response = await client.GetAsync(runtimeUrl);
+		if (!response.IsSuccessStatusCode) {
+			return null;
+		}
+
+		await using var stream = await response.Content.ReadAsStreamAsync();
+		using var json = await JsonDocument.ParseAsync(stream);
+		var root = json.RootElement;
+
+		return (
+			ApiVersion: root.TryGetProperty("apiVersion", out var apiVersion) ? apiVersion.GetString() : null,
+			ApiInformationalVersion: root.TryGetProperty("apiInformationalVersion", out var apiInformationalVersion) ? apiInformationalVersion.GetString() : null,
+			UserscriptVersion: root.TryGetProperty("userscriptVersion", out var userscriptVersion) ? userscriptVersion.GetString() : null
+		);
 	}
 
 	private bool EnsureElevatedUiContext(bool elevationRequired) {
@@ -1458,6 +1683,7 @@ public partial class MainWindow : Window {
 		OpenInstallRootButton.IsEnabled = !_isInstalling;
 		OpenSetupGuideButton.IsEnabled = !_isInstalling;
 		OpenLogFolderButton.IsEnabled = !_isInstalling;
+		RefreshVersionsButton.IsEnabled = !_isInstalling;
 		BrowserComboBox.IsEnabled = !_isInstalling;
 		ApiUrlTextBox.IsEnabled = !_isInstalling;
 		InstallRootTextBox.IsEnabled = !_isInstalling;
@@ -1475,6 +1701,7 @@ public partial class MainWindow : Window {
 		ApplyStepButtonVisual(OpenInstallRootButton);
 		ApplyStepButtonVisual(OpenSetupGuideButton);
 		ApplyStepButtonVisual(OpenLogFolderButton);
+		ApplyStepButtonVisual(RefreshVersionsButton);
 		ApplyToggleButtonVisual(OpenTampermonkeySetupCheckBox);
 		ApplyToggleButtonVisual(FirstRunDiagnosticsCheckBox);
 		ApplyToggleButtonVisual(OpenDiagnosticsCheckBox);
@@ -1554,5 +1781,15 @@ public partial class MainWindow : Window {
 		}
 
 		SetStatus("Status: Diagnostics pages opened.");
+	}
+
+	private async void OnRefreshVersionsClick(object? sender, RoutedEventArgs e) {
+		if (_isInstalling) {
+			return;
+		}
+
+		SetStatus("Status: Refreshing version visibility...");
+		await RefreshVersionTelemetryAsync(logResult: true);
+		SetStatus("Status: Version visibility refreshed.");
 	}
 }

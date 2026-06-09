@@ -216,9 +216,12 @@ internal sealed class InstallerWorkflow {
 
 	private void InstallApiPayload() {
 		var repositoryRoot = ResolveRepositoryRoot();
+		var extractionRoot = Path.GetFullPath(Path.Combine(_baseDir, ".."));
 		var sourceCandidates = new[] {
 			Path.Combine(_baseDir, "bundled", "api"),
+			Path.Combine(extractionRoot, "bundled", "api"),
 			Path.Combine(_baseDir, "api"),
+			Path.Combine(extractionRoot, "api"),
 			Path.GetFullPath(Path.Combine(_baseDir, "..", "..", "..", "..", "..", "api", "bin", "Release", "net10.0", "win-x64", "publish")),
 			Path.Combine(repositoryRoot, "artifacts", "api-publish-win-x64"),
 			Path.Combine(repositoryRoot, "api", "bin", "Release", "net10.0", "win-x64", "publish"),
@@ -228,14 +231,20 @@ internal sealed class InstallerWorkflow {
 
 		var source = ResolveDirectoryCandidate(sourceCandidates);
 		var destination = Path.Combine(_options.InstallRoot, "api");
+		Console.WriteLine("[OJ Installer.Cli] Installing API payload...");
 		CopyDirectory(source, destination);
+		Console.WriteLine("[OJ Installer.Cli] API payload copy completed.");
 		LogDirectorySnapshot("API payload destination", destination, maxEntries: 12);
 
 		var runtimeHostSourceCandidates = new[] {
 			Path.Combine(_baseDir, "bundled", "runtime-host"),
+			Path.Combine(extractionRoot, "bundled", "runtime-host"),
 			Path.Combine(_baseDir, "bundled", "api-tray"),
+			Path.Combine(extractionRoot, "bundled", "api-tray"),
 			Path.Combine(_baseDir, "runtime-host"),
+			Path.Combine(extractionRoot, "runtime-host"),
 			Path.Combine(_baseDir, "api-tray"),
+			Path.Combine(extractionRoot, "api-tray"),
 			Path.Combine(repositoryRoot, "artifacts", "runtime-host-publish-win-x64"),
 			Path.Combine(repositoryRoot, "api", "OrganizedJihad.Api.TrayHost", "bin", "Release", "net10.0-windows10.0.19041.0", "win-x64", "publish"),
 			Path.GetFullPath(Path.Combine(_baseDir, "..", "..", "..", "..", "..", "api", "OrganizedJihad.Api.TrayHost", "bin", "Release", "net10.0-windows10.0.19041.0", "win-x64", "publish")),
@@ -249,7 +258,9 @@ internal sealed class InstallerWorkflow {
 		}
 		if (!string.IsNullOrWhiteSpace(runtimeHostSource)) {
 			var runtimeHostDestination = Path.Combine(_options.InstallRoot, "runtime-host");
+			Console.WriteLine("[OJ Installer.Cli] Installing runtime host payload...");
 			CopyDirectory(runtimeHostSource, runtimeHostDestination);
+			Console.WriteLine("[OJ Installer.Cli] Runtime host payload copy completed.");
 			LogDirectorySnapshot("Runtime host destination", runtimeHostDestination, maxEntries: 8);
 		}
 
@@ -259,7 +270,7 @@ internal sealed class InstallerWorkflow {
 	private void InstallUserscriptPayload() {
 		var userscriptDir = Path.Combine(_options.InstallRoot, "userscript");
 		Directory.CreateDirectory(userscriptDir);
-		var extractionRoot = Directory.GetParent(_baseDir)?.FullName ?? _baseDir;
+		var extractionRoot = Path.GetFullPath(Path.Combine(_baseDir, ".."));
 
 		var sourceUserscript = ResolveFileCandidate(
 			Path.Combine(_baseDir, "organized-jihad.user.js"),
@@ -277,6 +288,9 @@ internal sealed class InstallerWorkflow {
 		}
 
 		var screenshots = ResolveOptionalDirectoryCandidate(Path.Combine(_baseDir, "guide-screenshots"));
+		if (string.IsNullOrWhiteSpace(screenshots)) {
+			screenshots = ResolveOptionalDirectoryCandidate(Path.Combine(extractionRoot, "guide-screenshots"));
+		}
 		if (!string.IsNullOrWhiteSpace(screenshots)) {
 			CopyDirectory(screenshots, Path.Combine(userscriptDir, "guide-screenshots"));
 		}
@@ -285,6 +299,7 @@ internal sealed class InstallerWorkflow {
 	}
 
 	private void StartApiRuntime() {
+		Console.WriteLine("[OJ Installer.Cli] Starting API runtime...");
 		var apiDir = Path.Combine(_options.InstallRoot, "api");
 		var apiExecutable = ResolveExecutable(Path.Combine(apiDir, "OrganizedJihad.Api"));
 		var apiAssembly = ResolveOptionalFileCandidate(Path.Combine(apiDir, "OrganizedJihad.Api.dll"));
@@ -580,7 +595,7 @@ internal sealed class InstallerWorkflow {
 	private static string? ResolveExecutable(string pathWithoutExtension) {
 		string[] candidates;
 		if (OperatingSystem.IsWindows()) {
-			candidates = [pathWithoutExtension + ".exe"];
+			candidates = [pathWithoutExtension + ".exe", pathWithoutExtension];
 		} else {
 			candidates = [pathWithoutExtension + ".exe", pathWithoutExtension];
 		}

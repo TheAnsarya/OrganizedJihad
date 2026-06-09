@@ -547,7 +547,7 @@ internal sealed class ReleasePipeline {
 		RunDotnetPublish(runtimeHostProject, $"-f {runtimeHostTfm} -c {_options.Configuration} -r {runtime} --self-contained true -o \"{runtimeHostOut}\"");
 		PrunePublishPayload(runtimeHostOut);
 
-		RunDotnetPublish(installerCliProject, $"-c {_options.Configuration} -r {runtime} --self-contained true -o \"{installerCliOut}\"");
+		RunDotnetPublish(installerCliProject, $"-c {_options.Configuration} -r {runtime} --self-contained true -p:IncludeBundlePayloadInPublish=false -o \"{installerCliOut}\"");
 		PrunePublishPayload(installerCliOut);
 
 		CopyBundleSupportAssets();

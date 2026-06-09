@@ -408,6 +408,28 @@
 
 			<Border BorderThickness="1" CornerRadius="6" Padding="10" Background="#3a143c">
 				<StackPanel Spacing="8">
+					<Grid ColumnDefinitions="*,Auto">
+						<TextBlock Text="Version Visibility" FontWeight="SemiBold" />
+						<Button x:Name="RefreshVersionsButton" Classes="compact-button" Grid.Column="1" Content="Refresh Versions" Click="OnRefreshVersionsClick" />
+					</Grid>
+					<Grid ColumnDefinitions="220,*" RowDefinitions="Auto,Auto,Auto,Auto">
+						<TextBlock Grid.Row="0" Grid.Column="0" Text="Current API version" Opacity="0.9" />
+						<TextBlock x:Name="CurrentApiVersionTextBlock" Grid.Row="0" Grid.Column="1" Text="(checking...)" TextWrapping="Wrap" />
+
+						<TextBlock Grid.Row="1" Grid.Column="0" Margin="0,4,0,0" Text="Installable API version" Opacity="0.9" />
+						<TextBlock x:Name="InstallableApiVersionTextBlock" Grid.Row="1" Grid.Column="1" Margin="0,4,0,0" Text="(checking...)" TextWrapping="Wrap" />
+
+						<TextBlock Grid.Row="2" Grid.Column="0" Margin="0,4,0,0" Text="Current userscript version" Opacity="0.9" />
+						<TextBlock x:Name="CurrentUserscriptVersionTextBlock" Grid.Row="2" Grid.Column="1" Margin="0,4,0,0" Text="(checking...)" TextWrapping="Wrap" />
+
+						<TextBlock Grid.Row="3" Grid.Column="0" Margin="0,4,0,0" Text="Installable userscript version" Opacity="0.9" />
+						<TextBlock x:Name="InstallableUserscriptVersionTextBlock" Grid.Row="3" Grid.Column="1" Margin="0,4,0,0" Text="(checking...)" TextWrapping="Wrap" />
+					</Grid>
+				</StackPanel>
+			</Border>
+
+			<Border BorderThickness="1" CornerRadius="6" Padding="10" Background="#3a143c">
+				<StackPanel Spacing="8">
 					<TextBlock Text="Quick Actions (run now)" FontWeight="SemiBold" />
 					<Grid ColumnDefinitions="280,*" RowDefinitions="Auto,Auto,Auto">
 						<Button x:Name="ActionOpenTampermonkeySetupButton" Classes="compact-button" Grid.Row="0" Grid.Column="0" Content="Open Tampermonkey Setup Now" Click="OnActionOpenTampermonkeySetupClick" />
@@ -434,6 +456,11 @@
 					FontFamily="Consolas"
 					Text="Ready. Choose components, then click Install Ecosystem." />
 			</Border>
+
+			<StackPanel Spacing="4">
+				<ProgressBar x:Name="InstallProgressBar" Minimum="0" Maximum="100" Value="0" Height="14" />
+				<TextBlock x:Name="InstallProgressTextBlock" Text="Install progress: idle" Opacity="0.86" />
+			</StackPanel>
 
 			<Grid ColumnDefinitions="*,Auto,Auto" RowDefinitions="Auto">
 				<TextBlock x:Name="StatusTextBlock" VerticalAlignment="Center" Text="Status: Idle" />
